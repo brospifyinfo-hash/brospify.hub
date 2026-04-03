@@ -4,17 +4,13 @@ import { getAllProdukte, addProdukt, updateProdukt, deleteProdukt } from "@/lib/
 
 async function requireAdmin() {
   const session = await getSession();
-  if (!session.isLoggedIn || !session.isAdmin) {
-    return false;
-  }
-  return true;
+  return session.isLoggedIn && session.isAdmin;
 }
 
 export async function GET() {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
-
   try {
     const produkte = await getAllProdukte();
     return NextResponse.json({ produkte });
@@ -28,18 +24,23 @@ export async function POST(req: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
-
   try {
     const body = await req.json();
+    const extra = {
+      stats: body.stats || undefined,
+      finances: body.finances || undefined,
+      images: body.images || undefined,
+    };
     await addProdukt({
-      id: body.id || String(Date.now()),
-      sku: body.sku,
-      monat: body.monat,
-      titel: body.titel,
-      bildUrl: body.bildUrl || body.bild_url || "",
-      beschreibung: body.beschreibung,
-      preis: body.preis,
-      aliExpressLink: body.aliExpressLink || body.aliexpress_link || "",
+      id: body.id || `prod_${Date.now()}`,
+      sku: body.sku || "",
+      monat: body.monat || "",
+      titel: body.title || body.titel || "",
+      bildUrl: body.images?.[0] || body.bildUrl || "",
+      beschreibung: body.description || body.beschreibung || "",
+      preis: String(body.finances?.recommendedSellPrice || body.preis || ""),
+      aliExpressLink: body.links?.aliexpressLink || body.aliExpressLink || "",
+      extra,
     });
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -52,21 +53,26 @@ export async function PUT(req: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
-
   try {
     const body = await req.json();
     if (!body.rowIndex) {
       return NextResponse.json({ error: "rowIndex fehlt" }, { status: 400 });
     }
+    const extra = {
+      stats: body.stats || body.extra?.stats || undefined,
+      finances: body.finances || body.extra?.finances || undefined,
+      images: body.images || body.extra?.images || undefined,
+    };
     await updateProdukt(body.rowIndex, {
       id: body.id,
-      sku: body.sku,
-      monat: body.monat,
-      titel: body.titel,
-      bildUrl: body.bildUrl || body.bild_url || "",
-      beschreibung: body.beschreibung,
-      preis: body.preis,
-      aliExpressLink: body.aliExpressLink || body.aliexpress_link || "",
+      sku: body.sku || "",
+      monat: body.monat || "",
+      titel: body.title || body.titel || "",
+      bildUrl: body.images?.[0] || body.extra?.images?.[0] || body.bildUrl || "",
+      beschreibung: body.description || body.beschreibung || "",
+      preis: String(body.finances?.recommendedSellPrice || body.extra?.finances?.recommendedSellPrice || body.preis || ""),
+      aliExpressLink: body.links?.aliexpressLink || body.aliExpressLink || "",
+      extra,
     });
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -79,12 +85,9 @@ export async function DELETE(req: NextRequest) {
   if (!(await requireAdmin())) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
-
   try {
     const { rowIndex } = await req.json();
-    if (!rowIndex) {
-      return NextResponse.json({ error: "rowIndex fehlt" }, { status: 400 });
-    }
+    if (!rowIndex) return NextResponse.json({ error: "rowIndex fehlt" }, { status: 400 });
     await deleteProdukt(rowIndex);
     return NextResponse.json({ success: true });
   } catch (error) {

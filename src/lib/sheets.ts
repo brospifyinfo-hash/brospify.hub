@@ -43,7 +43,7 @@ export interface Kunde {
 
 function rowToKunde(row: string[], index: number): Kunde {
   return {
-    rowIndex: index + 2, // +2 because sheets are 1-indexed and row 1 is header
+    rowIndex: index + 2,
     shopifyToken: row[0] || "",
     lizenzschluessel: row[1] || "",
     status: row[2] || "",
@@ -105,7 +105,27 @@ export async function updateKundeFields(
 
 // ─── PRODUKTE (Tab 2) ──────────────────────────────────────────
 // Columns: A=ID, B=SKU, C=Monat, D=Titel, E=Bild_URL,
-//          F=Beschreibung, G=Preis, H=AliExpress_Link
+//          F=Beschreibung, G=Preis, H=AliExpress_Link, I=Extra_JSON
+
+export interface ProduktStats {
+  trendScore: number;
+  viralScore: number;
+  impulseBuyFactor: number;
+  problemSolverIndex: number;
+  marketSaturation: number;
+}
+
+export interface ProduktFinances {
+  buyPrice: number;
+  recommendedSellPrice: number;
+  profitMargin: number;
+}
+
+export interface ProduktExtra {
+  stats?: ProduktStats;
+  finances?: ProduktFinances;
+  images?: string[];
+}
 
 export interface Produkt {
   rowIndex: number;
@@ -117,6 +137,16 @@ export interface Produkt {
   beschreibung: string;
   preis: string;
   aliExpressLink: string;
+  extra: ProduktExtra;
+}
+
+function parseExtra(raw: string): ProduktExtra {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
 }
 
 function rowToProdukt(row: string[], index: number): Produkt {
@@ -130,6 +160,7 @@ function rowToProdukt(row: string[], index: number): Produkt {
     beschreibung: row[5] || "",
     preis: row[6] || "",
     aliExpressLink: row[7] || "",
+    extra: parseExtra(row[8] || ""),
   };
 }
 
@@ -137,7 +168,7 @@ export async function getAllProdukte(): Promise<Produkt[]> {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A2:H",
+    range: "Produkte!A2:I",
   });
   const rows = res.data.values || [];
   return rows.map((row, i) => rowToProdukt(row, i));
@@ -148,24 +179,27 @@ export async function getProdukteBysku(sku: string): Promise<Produkt[]> {
   return all.filter((p) => p.sku === sku);
 }
 
+function produktToRow(produkt: Omit<Produkt, "rowIndex">): string[] {
+  return [
+    produkt.id,
+    produkt.sku,
+    produkt.monat,
+    produkt.titel,
+    produkt.bildUrl,
+    produkt.beschreibung,
+    produkt.preis,
+    produkt.aliExpressLink,
+    JSON.stringify(produkt.extra || {}),
+  ];
+}
+
 export async function addProdukt(produkt: Omit<Produkt, "rowIndex">): Promise<void> {
   const sheets = getSheets();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A:H",
+    range: "Produkte!A:I",
     valueInputOption: "RAW",
-    requestBody: {
-      values: [[
-        produkt.id,
-        produkt.sku,
-        produkt.monat,
-        produkt.titel,
-        produkt.bildUrl,
-        produkt.beschreibung,
-        produkt.preis,
-        produkt.aliExpressLink,
-      ]],
-    },
+    requestBody: { values: [produktToRow(produkt)] },
   });
 }
 
@@ -176,20 +210,9 @@ export async function updateProdukt(
   const sheets = getSheets();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `Produkte!A${rowIndex}:H${rowIndex}`,
+    range: `Produkte!A${rowIndex}:I${rowIndex}`,
     valueInputOption: "RAW",
-    requestBody: {
-      values: [[
-        produkt.id,
-        produkt.sku,
-        produkt.monat,
-        produkt.titel,
-        produkt.bildUrl,
-        produkt.beschreibung,
-        produkt.preis,
-        produkt.aliExpressLink,
-      ]],
-    },
+    requestBody: { values: [produktToRow(produkt)] },
   });
 }
 
@@ -197,19 +220,10 @@ export async function bulkAddProdukte(
   produkte: Omit<Produkt, "rowIndex">[]
 ): Promise<void> {
   const sheets = getSheets();
-  const values = produkte.map((p) => [
-    p.id,
-    p.sku,
-    p.monat,
-    p.titel,
-    p.bildUrl,
-    p.beschreibung,
-    p.preis,
-    p.aliExpressLink,
-  ]);
+  const values = produkte.map((p) => produktToRow(p));
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A:H",
+    range: "Produkte!A:I",
     valueInputOption: "RAW",
     requestBody: { values },
   });
@@ -217,11 +231,10 @@ export async function bulkAddProdukte(
 
 export async function deleteProdukt(rowIndex: number): Promise<void> {
   const sheets = getSheets();
-  // Clear the row
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `Produkte!A${rowIndex}:H${rowIndex}`,
+    range: `Produkte!A${rowIndex}:I${rowIndex}`,
     valueInputOption: "RAW",
-    requestBody: { values: [["", "", "", "", "", "", "", ""]] },
+    requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
   });
 }

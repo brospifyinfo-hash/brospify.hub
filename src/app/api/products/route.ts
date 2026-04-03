@@ -15,7 +15,7 @@ export async function GET() {
 
     const produkte = await getProdukteBysku(session.sku);
 
-    // Group by month and sort descending
+    // Group by month
     const grouped: Record<string, typeof produkte> = {};
     for (const p of produkte) {
       if (!p.monat) continue;
@@ -31,9 +31,14 @@ export async function GET() {
       return mb - ma;
     });
 
+    // Sort products within each month by trendScore descending
     const result = sortedMonths.map((monat) => ({
       monat,
-      produkte: grouped[monat],
+      produkte: grouped[monat].sort((a, b) => {
+        const scoreA = a.extra?.stats?.trendScore ?? 0;
+        const scoreB = b.extra?.stats?.trendScore ?? 0;
+        return scoreB - scoreA;
+      }),
     }));
 
     return NextResponse.json({ charts: result });

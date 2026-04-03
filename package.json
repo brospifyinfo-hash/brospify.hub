@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@vercel/blob": "^2.3.3",
+    "framer-motion": "^12.38.0",
     "googleapis": "^171.4.0",
     "iron-session": "^8.0.4",
     "lucide-react": "^1.7.0",
@@ -27,4 +29,3 @@
     "typescript": "^5"
   }
 }
-
