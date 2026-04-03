@@ -14,13 +14,8 @@ import {
   Settings,
   AlertCircle,
   Store,
-  Shield,
-  Key,
-  Globe,
-  ChevronRight,
-  Info,
-  SkipForward,
-  Package,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 interface Produkt {
@@ -60,30 +55,6 @@ function formatMonth(monat: string): string {
   return `Charts ${name} ${yyyy}`;
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
-  const [copied, setCopied] = useState(false);
-  function handleCopy() {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-  return (
-    <div className="flex items-center gap-2 bg-zinc-800/80 border border-zinc-700 rounded-xl px-4 py-3">
-      <div className="flex-1 min-w-0">
-        <div className="text-[11px] text-zinc-500 uppercase tracking-wider mb-0.5">{label}</div>
-        <div className="text-sm text-zinc-200 font-mono truncate">{text}</div>
-      </div>
-      <button onClick={handleCopy} className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition text-xs font-medium">
-        {copied ? (
-          <><Check className="w-3.5 h-3.5 text-emerald-400" /><span className="text-emerald-400">Kopiert</span></>
-        ) : (
-          <><Copy className="w-3.5 h-3.5 text-zinc-400" /><span className="text-zinc-300">Kopieren</span></>
-        )}
-      </button>
-    </div>
-  );
-}
-
 export default function DashboardPage() {
   const router = useRouter();
   const [charts, setCharts] = useState<MonthChart[]>([]);
@@ -98,13 +69,10 @@ export default function DashboardPage() {
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
+  const [accessToken, setAccessToken] = useState("");
+  const [showToken, setShowToken] = useState(false);
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState("");
-  const [expandedStep, setExpandedStep] = useState<number | null>(null);
-
-  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
 
   const loadProducts = useCallback(async () => {
     try {
@@ -174,7 +142,7 @@ export default function DashboardPage() {
   }
 
   async function connectShop() {
-    if (!shopDomain.trim() || !clientId.trim() || !clientSecret.trim()) {
+    if (!shopDomain.trim() || !accessToken.trim()) {
       setConnectError("Bitte fülle alle Felder aus.");
       return;
     }
@@ -187,8 +155,7 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           shopDomain: shopDomain.trim(),
-          clientId: clientId.trim(),
-          clientSecret: clientSecret.trim(),
+          accessToken: accessToken.trim(),
         }),
       });
       const data = await res.json();
@@ -198,23 +165,13 @@ export default function DashboardPage() {
       }
       setHasShopifyToken(true);
       setShowSettings(false);
-      setClientId("");
-      setClientSecret("");
+      setAccessToken("");
     } catch {
       setConnectError("Verbindungsfehler.");
     } finally {
       setConnectLoading(false);
     }
   }
-
-  const instructions = [
-    { num: 1, text: "Klicke in deinem Shopify-Admin links im Menü auf 'Apps' und dann auf den Button 'Apps im Dev Dashboard erstellen'." },
-    { num: 2, text: "Im neuen Fenster klicke oben rechts auf 'App erstellen' und nenne sie 'brospify'." },
-    { num: 3, text: "Klicke links im Menü auf 'Versionen' und dann auf 'Neue Version'." },
-    { num: 4, text: "Konfiguration ausfüllen:", details: true },
-    { num: 5, text: "Klicke oben rechts auf 'Veröffentlichen' und bestätige." },
-    { num: 6, text: "Gehe nun links auf 'Einstellungen'. Kopiere die 'Client-ID' und den 'Schlüssel' (Secret) in die Felder unten." },
-  ];
 
   if (loading) {
     return (
@@ -418,7 +375,7 @@ export default function DashboardPage() {
       {/* Settings Modal */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md relative">
             <button
               onClick={() => {
                 setShowSettings(false);
@@ -446,53 +403,11 @@ export default function DashboardPage() {
               </div>
             )}
 
-            {/* Instructions */}
-            <div className="space-y-2 mb-5">
-              <h4 className="text-sm font-medium text-zinc-300">
-                Anleitung: Custom App erstellen
-              </h4>
-              {instructions.map((inst) => (
-                <div key={inst.num}>
-                  <button
-                    onClick={() => setExpandedStep(expandedStep === inst.num ? null : inst.num)}
-                    className="w-full flex items-start gap-2.5 text-left"
-                  >
-                    <div className="w-6 h-6 rounded-md bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
-                      <span className="text-[10px] font-bold text-indigo-400">{inst.num}</span>
-                    </div>
-                    <p className="text-xs text-zinc-400 leading-relaxed flex-1">{inst.text}</p>
-                    {inst.details && (
-                      <ChevronRight className={`w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5 transition-transform ${expandedStep === inst.num ? "rotate-90" : ""}`} />
-                    )}
-                  </button>
-                  {inst.details && expandedStep === inst.num && (
-                    <div className="ml-8 mt-2 space-y-2">
-                      <p className="text-xs text-zinc-400"><strong className="text-zinc-300">'App-URL'</strong>: Füge unsere Hub-URL ein</p>
-                      <p className="text-xs text-amber-400">WICHTIG: Entferne den Haken bei 'App in den Shopify-Adminbereich einbetten'.</p>
-                      <p className="text-xs text-zinc-400"><strong className="text-zinc-300">'Bereiche'</strong>: Füge die benötigten Rechte ein</p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            <div className="space-y-2 mb-5">
-              <CopyButton text={appUrl || "https://brospify-hub.vercel.app"} label="Unsere Hub-URL" />
-              <CopyButton text="read_products, write_products" label="Benötigte Bereiche" />
-            </div>
-
-            <div className="relative mb-5">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-zinc-800"></div>
-              </div>
-              <div className="relative flex justify-center text-xs">
-                <span className="px-3 bg-zinc-900 text-zinc-500">Deine Shopify-Daten</span>
-              </div>
-            </div>
-
             <div className="space-y-3 mb-5">
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Shop Domain</label>
+                <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
+                  Shop Domain
+                </label>
                 <input
                   type="text"
                   value={shopDomain}
@@ -502,24 +417,29 @@ export default function DashboardPage() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Client-ID</label>
-                <input
-                  type="text"
-                  value={clientId}
-                  onChange={(e) => setClientId(e.target.value)}
-                  placeholder="z.B. a1b2c3d4e5f6..."
-                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Schlüssel (Client Secret)</label>
-                <input
-                  type="password"
-                  value={clientSecret}
-                  onChange={(e) => setClientSecret(e.target.value)}
-                  placeholder="z.B. shpss_..."
-                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
-                />
+                <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
+                  Admin API Access Token
+                </label>
+                <div className="relative">
+                  <input
+                    type={showToken ? "text" : "password"}
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                    placeholder="shpat_..."
+                    className="w-full px-4 py-2.5 pr-12 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken(!showToken)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition"
+                  >
+                    {showToken ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
 

@@ -23,18 +23,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Parse stored credentials: "clientId|clientSecret" format
-    const tokenData = kunde.shopifyToken;
-    let accessToken = tokenData;
-
-    // If it contains a pipe, it's the new clientId|secret format
-    // We need to use the client secret as the access token for custom apps
-    if (tokenData.includes("|")) {
-      const parts = tokenData.split("|");
-      // For Shopify custom apps created via Admin, the client secret
-      // serves as the Admin API access token
-      accessToken = parts[1];
-    }
+    const accessToken = kunde.shopifyToken;
 
     // Find product
     const allProdukte = await getAllProdukte();
