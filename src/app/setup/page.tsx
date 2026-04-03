@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 
 interface SessionInfo {
+  isLoggedIn: boolean;
+  isAdmin: boolean;
   setupStep1Done: boolean;
   setupStep2Done: boolean;
   shopDomain: string | null;
@@ -46,12 +48,16 @@ function SetupContent() {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data: SessionInfo) => {
+        if (!data.isLoggedIn || data.isAdmin) {
+          router.replace("/");
+          return;
+        }
         setSession(data);
         setStep1Done(data.setupStep1Done);
         setStep2Done(data.setupStep2Done);
         if (data.shopDomain) setShopDomain(data.shopDomain);
       });
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const errorParam = searchParams.get("error");
@@ -111,24 +117,6 @@ function SetupContent() {
     );
   }
 
-  const steps = [
-    {
-      icon: Store,
-      title: "Shopify Store verbinden",
-      done: step1Done,
-    },
-    {
-      icon: Package,
-      title: "Fulfillment Automatisierung",
-      done: step2Done,
-    },
-    {
-      icon: Rocket,
-      title: "Dashboard freischalten",
-      done: false,
-    },
-  ];
-
   return (
     <div className="min-h-screen flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-2xl">
@@ -162,7 +150,7 @@ function SetupContent() {
                 <div className="text-xs text-zinc-500 uppercase tracking-wider">
                   Schritt 1
                 </div>
-                <h2 className="font-semibold">{steps[0].title}</h2>
+                <h2 className="font-semibold">Shopify Store verbinden</h2>
               </div>
             </div>
 
@@ -223,7 +211,7 @@ function SetupContent() {
                 <div className="text-xs text-zinc-500 uppercase tracking-wider">
                   Schritt 2
                 </div>
-                <h2 className="font-semibold">{steps[1].title}</h2>
+                <h2 className="font-semibold">Fulfillment Automatisierung</h2>
               </div>
             </div>
 
@@ -270,7 +258,7 @@ function SetupContent() {
                 <div className="text-xs text-zinc-500 uppercase tracking-wider">
                   Schritt 3
                 </div>
-                <h2 className="font-semibold">{steps[2].title}</h2>
+                <h2 className="font-semibold">Dashboard freischalten</h2>
               </div>
             </div>
 
@@ -279,7 +267,7 @@ function SetupContent() {
               disabled={!step1Done || !step2Done}
               className={`w-full py-3 rounded-xl font-medium transition text-sm flex items-center justify-center gap-2 ${
                 step1Done && step2Done
-                  ? "bg-indigo-600 hover:bg-indigo-500"
+                  ? "bg-indigo-600 hover:bg-indigo-500 cursor-pointer"
                   : "bg-zinc-800 text-zinc-500 cursor-not-allowed"
               }`}
             >
