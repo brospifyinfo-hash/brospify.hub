@@ -18,9 +18,22 @@ export async function POST(req: NextRequest) {
     const kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde || !kunde.shopifyToken || !kunde.shopDomain) {
       return NextResponse.json(
-        { error: "Shop ist nicht verbunden. Bitte zuerst das Setup abschließen." },
+        { error: "Shop ist nicht verbunden. Bitte zuerst in den Einstellungen verbinden." },
         { status: 400 }
       );
+    }
+
+    // Parse stored credentials: "clientId|clientSecret" format
+    const tokenData = kunde.shopifyToken;
+    let accessToken = tokenData;
+
+    // If it contains a pipe, it's the new clientId|secret format
+    // We need to use the client secret as the access token for custom apps
+    if (tokenData.includes("|")) {
+      const parts = tokenData.split("|");
+      // For Shopify custom apps created via Admin, the client secret
+      // serves as the Admin API access token
+      accessToken = parts[1];
     }
 
     // Find product
@@ -37,7 +50,7 @@ export async function POST(req: NextRequest) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Shopify-Access-Token": kunde.shopifyToken,
+          "X-Shopify-Access-Token": accessToken,
         },
         body: JSON.stringify({
           product: {
@@ -61,9 +74,9 @@ export async function POST(req: NextRequest) {
       const errorText = await shopifyRes.text();
       console.error("Shopify import error:", errorText);
 
-      if (shopifyRes.status === 401) {
+      if (shopifyRes.status === 401 || shopifyRes.status === 403) {
         return NextResponse.json(
-          { error: "Shopify-Token ist abgelaufen. Bitte verbinde deinen Shop erneut." },
+          { error: "Shopify-Zugang ungültig. Bitte aktualisiere deine Verbindungsdaten in den Einstellungen." },
           { status: 401 }
         );
       }

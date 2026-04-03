@@ -9,6 +9,7 @@ export interface SessionData {
   shopDomain?: string;
   shopifyToken?: string;
   setupStep1Done?: boolean;
+  setupStep1Skipped?: boolean;
   setupStep2Done?: boolean;
 }
 

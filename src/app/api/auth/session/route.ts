@@ -9,6 +9,8 @@ export async function GET() {
     sku: session.sku || null,
     shopDomain: session.shopDomain || null,
     setupStep1Done: session.setupStep1Done || false,
+    setupStep1Skipped: session.setupStep1Skipped || false,
     setupStep2Done: session.setupStep2Done || false,
+    hasShopifyToken: !!session.shopifyToken,
   });
 }
