@@ -14,8 +14,7 @@ import {
   Settings,
   AlertCircle,
   Store,
-  Eye,
-  EyeOff,
+  ChevronRight,
 } from "lucide-react";
 
 interface Produkt {
@@ -55,6 +54,37 @@ function formatMonth(monat: string): string {
   return `Charts ${name} ${yyyy}`;
 }
 
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="flex items-center gap-2 bg-zinc-800/80 border border-zinc-700 rounded-xl px-3 py-2">
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">
+          {label}
+        </div>
+        <div className="text-xs text-zinc-200 font-mono truncate">{text}</div>
+      </div>
+      <button
+        onClick={handleCopy}
+        className="shrink-0 flex items-center gap-1 px-2 py-1 bg-zinc-700 hover:bg-zinc-600 rounded-lg transition text-xs font-medium"
+      >
+        {copied ? (
+          <Check className="w-3 h-3 text-emerald-400" />
+        ) : (
+          <Copy className="w-3 h-3 text-zinc-400" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const router = useRouter();
   const [charts, setCharts] = useState<MonthChart[]>([]);
@@ -69,10 +99,13 @@ export default function DashboardPage() {
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
-  const [accessToken, setAccessToken] = useState("");
-  const [showToken, setShowToken] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
   const [connectLoading, setConnectLoading] = useState(false);
   const [connectError, setConnectError] = useState("");
+
+  const appUrl =
+    typeof window !== "undefined" ? window.location.origin : "";
 
   const loadProducts = useCallback(async () => {
     try {
@@ -142,7 +175,7 @@ export default function DashboardPage() {
   }
 
   async function connectShop() {
-    if (!shopDomain.trim() || !accessToken.trim()) {
+    if (!shopDomain.trim() || !clientId.trim() || !clientSecret.trim()) {
       setConnectError("Bitte fülle alle Felder aus.");
       return;
     }
@@ -155,20 +188,20 @@ export default function DashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           shopDomain: shopDomain.trim(),
-          accessToken: accessToken.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setConnectError(data.error || "Fehler beim Verbinden.");
+        setConnectLoading(false);
         return;
       }
-      setHasShopifyToken(true);
-      setShowSettings(false);
-      setAccessToken("");
+      // Redirect to Shopify OAuth
+      window.location.href = data.authUrl;
     } catch {
       setConnectError("Verbindungsfehler.");
-    } finally {
       setConnectLoading(false);
     }
   }
@@ -372,10 +405,10 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {/* Settings Modal */}
+      {/* Settings Modal - Shopify verbinden via OAuth */}
       {showSettings && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md relative">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => {
                 setShowSettings(false);
@@ -403,6 +436,37 @@ export default function DashboardPage() {
               </div>
             )}
 
+            {/* Mini instructions */}
+            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 mb-4">
+              <p className="text-xs text-zinc-400 mb-2">Falls du noch keine App erstellt hast, folge der Anleitung im Setup. Du brauchst:</p>
+              <ul className="text-xs text-zinc-500 space-y-1">
+                <li className="flex items-start gap-1.5">
+                  <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-indigo-400" />
+                  <span>Deine <strong className="text-zinc-300">Shop Domain</strong></span>
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <ChevronRight className="w-3 h-3 mt-0.5 shrink-0 text-indigo-400" />
+                  <span><strong className="text-zinc-300">Client-ID</strong> und <strong className="text-zinc-300">Schlüssel</strong> aus dem Dev Dashboard</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Copy fields for app config */}
+            <div className="space-y-2 mb-4">
+              <CopyButton
+                text={appUrl || "https://brospify-hub.vercel.app"}
+                label="Hub-URL (für App-URL)"
+              />
+              <CopyButton
+                text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`}
+                label="Redirect-URL (für Weiterleitungs-URLs)"
+              />
+              <CopyButton
+                text="read_products, write_products"
+                label="Benötigte Bereiche"
+              />
+            </div>
+
             <div className="space-y-3 mb-5">
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
@@ -418,28 +482,27 @@ export default function DashboardPage() {
               </div>
               <div>
                 <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
-                  Admin API Access Token
+                  Client-ID
                 </label>
-                <div className="relative">
-                  <input
-                    type={showToken ? "text" : "password"}
-                    value={accessToken}
-                    onChange={(e) => setAccessToken(e.target.value)}
-                    placeholder="shpat_..."
-                    className="w-full px-4 py-2.5 pr-12 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowToken(!showToken)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition"
-                  >
-                    {showToken ? (
-                      <EyeOff className="w-4 h-4" />
-                    ) : (
-                      <Eye className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
+                <input
+                  type="text"
+                  value={clientId}
+                  onChange={(e) => setClientId(e.target.value)}
+                  placeholder="z.B. a1b2c3d4e5f6..."
+                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
+                  Schlüssel (Client Secret)
+                </label>
+                <input
+                  type="password"
+                  value={clientSecret}
+                  onChange={(e) => setClientSecret(e.target.value)}
+                  placeholder="z.B. shpss_..."
+                  className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
+                />
               </div>
             </div>
 

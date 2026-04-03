@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, updateKundeFields } from "@/lib/sheets";
+import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,9 +9,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
-    const { shopDomain, accessToken } = await req.json();
+    const { shopDomain, clientId, clientSecret } = await req.json();
 
-    if (!shopDomain || !accessToken) {
+    if (!shopDomain || !clientId || !clientSecret) {
       return NextResponse.json(
         { error: "Bitte fülle alle Felder aus." },
         { status: 400 }
@@ -24,56 +24,32 @@ export async function POST(req: NextRequest) {
       domain = domain.replace(/\.myshopify\.com$/, "") + ".myshopify.com";
     }
 
-    const token = accessToken.trim();
-
-    // Verify the token works by making a test API call
-    try {
-      const testRes = await fetch(
-        `https://${domain}/admin/api/2024-01/shop.json`,
-        {
-          headers: {
-            "X-Shopify-Access-Token": token,
-          },
-        }
-      );
-      if (!testRes.ok) {
-        return NextResponse.json(
-          { error: "Der Access Token ist ungültig oder die Domain stimmt nicht. Bitte überprüfe deine Eingaben." },
-          { status: 400 }
-        );
-      }
-    } catch {
-      return NextResponse.json(
-        { error: "Konnte keine Verbindung zu deinem Shop herstellen. Überprüfe die Domain." },
-        { status: 400 }
-      );
-    }
-
-    // Save token to column A and domain to column D
-    const kunde = await findKundeByKey(session.lizenzschluessel);
-    if (!kunde) {
-      return NextResponse.json(
-        { error: "Kunde nicht gefunden." },
-        { status: 404 }
-      );
-    }
-
-    await updateKundeFields(kunde.rowIndex, [
-      { column: "A", value: token },
-      { column: "D", value: domain },
-    ]);
-
-    // Update session
+    // Store customer's credentials in session for the callback
     session.shopDomain = domain;
-    session.shopifyToken = token;
-    session.setupStep1Done = true;
+    session.customerClientId = clientId.trim();
+    session.customerClientSecret = clientSecret.trim();
+
+    const nonce = crypto.randomBytes(16).toString("hex");
+    session.oauthNonce = nonce;
     await session.save();
 
-    return NextResponse.json({ success: true, domain });
+    // Build Shopify OAuth authorize URL using the CUSTOMER'S client_id
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://brospify-hub.vercel.app";
+    const redirectUri = `${appUrl}/api/auth/shopify/callback`;
+    const scopes = "read_products,write_products";
+
+    const authUrl =
+      `https://${domain}/admin/oauth/authorize` +
+      `?client_id=${encodeURIComponent(clientId.trim())}` +
+      `&scope=${encodeURIComponent(scopes)}` +
+      `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+      `&state=${nonce}`;
+
+    return NextResponse.json({ authUrl });
   } catch (error) {
     console.error("Connect error:", error);
     return NextResponse.json(
-      { error: "Fehler beim Speichern der Verbindungsdaten." },
+      { error: "Fehler beim Starten der Verbindung." },
       { status: 500 }
     );
   }

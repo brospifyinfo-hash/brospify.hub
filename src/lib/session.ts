@@ -8,6 +8,9 @@ export interface SessionData {
   sku?: string;
   shopDomain?: string;
   shopifyToken?: string;
+  customerClientId?: string;
+  customerClientSecret?: string;
+  oauthNonce?: string;
   setupStep1Done?: boolean;
   setupStep1Skipped?: boolean;
   setupStep2Done?: boolean;

@@ -18,8 +18,6 @@ import {
   SkipForward,
   X,
   Info,
-  Eye,
-  EyeOff,
 } from "lucide-react";
 
 interface SessionInfo {
@@ -89,8 +87,8 @@ function SetupContent() {
   const [step1Done, setStep1Done] = useState(false);
   const [step2Done, setStep2Done] = useState(false);
   const [shopDomain, setShopDomain] = useState("");
-  const [accessToken, setAccessToken] = useState("");
-  const [showToken, setShowToken] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showSkipModal, setShowSkipModal] = useState(false);
@@ -116,8 +114,16 @@ function SetupContent() {
 
   useEffect(() => {
     const errorParam = searchParams.get("error");
-    if (errorParam) {
+    if (errorParam === "oauth_failed") {
+      setError("Shopify-Verbindung fehlgeschlagen. Bitte überprüfe deine Daten und versuche es erneut.");
+    } else if (errorParam === "token_failed") {
+      setError("Token-Austausch fehlgeschlagen. Bitte überprüfe Client-ID und Schlüssel.");
+    } else if (errorParam) {
       setError("Verbindung fehlgeschlagen. Bitte versuche es erneut.");
+    }
+    const step = searchParams.get("step");
+    if (step === "1done") {
+      setStep1Done(true);
     }
   }, [searchParams]);
 
@@ -126,8 +132,12 @@ function SetupContent() {
       setError("Bitte gib deine Shop-Domain ein.");
       return;
     }
-    if (!accessToken.trim()) {
-      setError("Bitte gib den Admin API Access Token ein.");
+    if (!clientId.trim()) {
+      setError("Bitte gib die Client-ID ein.");
+      return;
+    }
+    if (!clientSecret.trim()) {
+      setError("Bitte gib den Schlüssel (Client Secret) ein.");
       return;
     }
     setLoading(true);
@@ -139,18 +149,20 @@ function SetupContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           shopDomain: shopDomain.trim(),
-          accessToken: accessToken.trim(),
+          clientId: clientId.trim(),
+          clientSecret: clientSecret.trim(),
         }),
       });
       const data = await res.json();
       if (!res.ok) {
         setError(data.error || "Fehler beim Verbinden.");
+        setLoading(false);
         return;
       }
-      setStep1Done(true);
+      // Redirect to Shopify OAuth
+      window.location.href = data.authUrl;
     } catch {
       setError("Verbindungsfehler. Bitte versuche es erneut.");
-    } finally {
       setLoading(false);
     }
   }
@@ -244,75 +256,103 @@ function SetupContent() {
                 {/* Instructions */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-medium text-zinc-300 mb-3">
-                    Anleitung: Custom App in deinem Shop erstellen
+                    Anleitung: App im Dev Dashboard erstellen
                   </h3>
 
                   <div className="space-y-2.5">
-                    {/* Step 1 */}
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-indigo-400">1</span>
                       </div>
                       <p className="text-sm text-zinc-300 leading-relaxed">
-                        Öffne deinen <strong className="text-white">Shopify-Admin</strong> und klicke links im Menü auf <strong className="text-white">&apos;Einstellungen&apos;</strong> und dann auf <strong className="text-white">&apos;Apps und Vertriebskanäle&apos;</strong>.
+                        Klicke in deinem Shopify-Admin links im Menü auf <strong className="text-white">&apos;Apps&apos;</strong> und dann auf den Button <strong className="text-white">&apos;Apps im Dev Dashboard erstellen&apos;</strong>.
                       </p>
                     </div>
 
-                    {/* Step 2 */}
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-indigo-400">2</span>
                       </div>
                       <p className="text-sm text-zinc-300 leading-relaxed">
-                        Klicke oben auf <strong className="text-white">&apos;Apps entwickeln&apos;</strong> und dann auf <strong className="text-white">&apos;App erstellen&apos;</strong>. Nenne die App <strong className="text-white">&apos;brospify&apos;</strong>.
+                        Im neuen Fenster klicke oben rechts auf <strong className="text-white">&apos;App erstellen&apos;</strong> und nenne sie <strong className="text-white">&apos;brospify&apos;</strong>.
                       </p>
                     </div>
 
-                    {/* Step 3 */}
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-indigo-400">3</span>
                       </div>
                       <p className="text-sm text-zinc-300 leading-relaxed">
-                        Klicke auf <strong className="text-white">&apos;Admin-API-Bereiche konfigurieren&apos;</strong>. Suche und aktiviere die Bereiche unten. Klicke dann auf <strong className="text-white">&apos;Speichern&apos;</strong>.
+                        Klicke links im Menü auf <strong className="text-white">&apos;Versionen&apos;</strong> und dann auf <strong className="text-white">&apos;Neue Version&apos;</strong>.
                       </p>
                     </div>
 
-                    {/* Step 4 */}
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-indigo-400">4</span>
                       </div>
-                      <p className="text-sm text-zinc-300 leading-relaxed">
-                        Klicke auf <strong className="text-white">&apos;App installieren&apos;</strong> und bestätige mit <strong className="text-white">&apos;Installieren&apos;</strong>.
-                      </p>
+                      <div className="flex-1">
+                        <p className="text-sm text-zinc-300 leading-relaxed mb-2">
+                          Konfiguration ausfüllen:
+                        </p>
+                        <ul className="space-y-1.5 text-sm text-zinc-400">
+                          <li className="flex items-start gap-2">
+                            <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-400" />
+                            <span><strong className="text-zinc-300">&apos;App-URL&apos;</strong>: Füge unsere Hub-URL ein (siehe Copy-Feld unten)</span>
+                          </li>
+                          <li>
+                            <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-400/5 border border-amber-400/10 rounded-lg px-3 py-2 mt-1 mb-1">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>WICHTIG: Entferne den Haken bei &apos;App in den Shopify-Adminbereich einbetten&apos;.</span>
+                            </div>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-400" />
+                            <span><strong className="text-zinc-300">&apos;Bereiche&apos;</strong>: Füge die Rechte ein (siehe Copy-Feld unten)</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <ChevronRight className="w-3.5 h-3.5 mt-0.5 shrink-0 text-indigo-400" />
+                            <span><strong className="text-zinc-300">&apos;Weiterleitungs-URLs&apos;</strong>: Füge die Redirect-URL ein (siehe Copy-Feld unten)</span>
+                          </li>
+                        </ul>
+                      </div>
                     </div>
 
-                    {/* Step 5 */}
                     <div className="flex items-start gap-3">
                       <div className="w-7 h-7 rounded-lg bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
                         <span className="text-xs font-bold text-indigo-400">5</span>
                       </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-zinc-300 leading-relaxed">
-                          Nach der Installation siehst du den <strong className="text-white">&apos;Admin API Access Token&apos;</strong>. Klicke auf <strong className="text-white">&apos;Token anzeigen&apos;</strong> und kopiere ihn sofort.
-                        </p>
-                        <div className="flex items-center gap-2 text-xs text-amber-400/80 bg-amber-400/5 border border-amber-400/10 rounded-lg px-3 py-2 mt-2">
-                          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                          <span>
-                            WICHTIG: Der Token wird nur EINMAL angezeigt! Kopiere ihn sofort.
-                          </span>
-                        </div>
+                      <p className="text-sm text-zinc-300 leading-relaxed">
+                        Klicke oben rechts auf <strong className="text-white">&apos;Veröffentlichen&apos;</strong> und bestätige.
+                      </p>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-600/20 flex items-center justify-center shrink-0 mt-0.5">
+                        <span className="text-xs font-bold text-indigo-400">6</span>
                       </div>
+                      <p className="text-sm text-zinc-300 leading-relaxed">
+                        Gehe nun links auf <strong className="text-white">&apos;Einstellungen&apos;</strong>. Kopiere die <strong className="text-white">&apos;Client-ID&apos;</strong> und den <strong className="text-white">&apos;Schlüssel&apos;</strong> (Secret) in die Felder unten.
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Copy Field for Scopes */}
-                <CopyButton
-                  text="read_products, write_products"
-                  label="Benötigte API-Bereiche (für Schritt 3)"
-                />
+                {/* Copy Fields */}
+                <div className="space-y-2">
+                  <CopyButton
+                    text={appUrl || "https://brospify-hub.vercel.app"}
+                    label="Unsere Hub-URL (für App-URL)"
+                  />
+                  <CopyButton
+                    text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`}
+                    label="Redirect-URL (für Weiterleitungs-URLs)"
+                  />
+                  <CopyButton
+                    text="read_products, write_products"
+                    label="Benötigte Bereiche"
+                  />
+                </div>
 
                 {/* Divider */}
                 <div className="relative">
@@ -342,28 +382,27 @@ function SetupContent() {
                   </div>
                   <div>
                     <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
-                      Admin API Access Token
+                      Client-ID
                     </label>
-                    <div className="relative">
-                      <input
-                        type={showToken ? "text" : "password"}
-                        value={accessToken}
-                        onChange={(e) => setAccessToken(e.target.value)}
-                        placeholder="shpat_..."
-                        className="w-full px-4 py-2.5 pr-12 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowToken(!showToken)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition"
-                      >
-                        {showToken ? (
-                          <EyeOff className="w-4 h-4" />
-                        ) : (
-                          <Eye className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      value={clientId}
+                      onChange={(e) => setClientId(e.target.value)}
+                      placeholder="z.B. a1b2c3d4e5f6..."
+                      className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-zinc-400 mb-1.5 font-medium">
+                      Schlüssel (Client Secret)
+                    </label>
+                    <input
+                      type="password"
+                      value={clientSecret}
+                      onChange={(e) => setClientSecret(e.target.value)}
+                      placeholder="z.B. shpss_..."
+                      className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm font-mono"
+                    />
                   </div>
                 </div>
 

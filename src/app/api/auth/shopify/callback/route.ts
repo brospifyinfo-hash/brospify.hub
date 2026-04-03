@@ -11,16 +11,28 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const code = searchParams.get("code");
+    const state = searchParams.get("state");
 
     if (!code) {
       return NextResponse.redirect(new URL("/setup?error=no_code", req.url));
     }
 
-    const domain = session.shopDomain;
-    const clientId = process.env.SHOPIFY_CLIENT_ID!;
-    const clientSecret = process.env.SHOPIFY_CLIENT_SECRET!;
+    // Verify state/nonce
+    if (session.oauthNonce && state !== session.oauthNonce) {
+      return NextResponse.redirect(new URL("/setup?error=invalid_state", req.url));
+    }
 
-    // Exchange code for access token
+    const domain = session.shopDomain;
+
+    // Use the customer's own client_id and client_secret from the session
+    const clientId = session.customerClientId;
+    const clientSecret = session.customerClientSecret;
+
+    if (!clientId || !clientSecret) {
+      return NextResponse.redirect(new URL("/setup?error=missing_credentials", req.url));
+    }
+
+    // Exchange code for access token using customer's credentials
     const tokenRes = await fetch(`https://${domain}/admin/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,7 +44,8 @@ export async function GET(req: NextRequest) {
     });
 
     if (!tokenRes.ok) {
-      console.error("Token exchange failed:", await tokenRes.text());
+      const errText = await tokenRes.text();
+      console.error("Token exchange failed:", errText);
       return NextResponse.redirect(new URL("/setup?error=token_failed", req.url));
     }
 
@@ -40,6 +53,7 @@ export async function GET(req: NextRequest) {
     const accessToken = tokenData.access_token;
 
     // Save token and domain to Google Sheets
+    // Store "clientId|clientSecret" in column A alongside the access token
     const kunde = await findKundeByKey(session.lizenzschluessel);
     if (kunde) {
       await updateKundeFields(kunde.rowIndex, [
@@ -48,15 +62,18 @@ export async function GET(req: NextRequest) {
       ]);
     }
 
-    // Update session
+    // Update session - clear temporary OAuth data
     session.shopifyToken = accessToken;
     session.shopDomain = domain;
     session.setupStep1Done = true;
+    session.customerClientId = undefined;
+    session.customerClientSecret = undefined;
+    session.oauthNonce = undefined;
     await session.save();
 
-    return NextResponse.redirect(new URL("/setup?step=2", req.url));
+    return NextResponse.redirect(new URL("/setup?step=1done", req.url));
   } catch (error) {
     console.error("Shopify callback error:", error);
-    return NextResponse.redirect(new URL("/setup?error=callback_failed", req.url));
+    return NextResponse.redirect(new URL("/setup?error=oauth_failed", req.url));
   }
 }
