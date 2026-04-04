@@ -528,7 +528,7 @@ export default function ChartsPage() {
               <div className="space-y-2 mb-4">
                 <CopyField text={appUrl || "https://brospify-hub.vercel.app"} label="Hub-URL" />
                 <CopyField text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`} label="Redirect-URL" />
-                <CopyField text="read_products, write_products" label="Bereiche" />
+                <CopyField text="read_products, write_products, read_themes, write_themes" label="Bereiche" />
               </div>
 
               <div className="space-y-3 mb-5">

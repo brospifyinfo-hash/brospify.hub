@@ -513,7 +513,7 @@ export default function DashboardPage() {
               <div className="space-y-2 mb-4">
                 <CopyField text={appUrl || "https://brospify-hub.vercel.app"} label="Hub-URL" />
                 <CopyField text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`} label="Redirect-URL" />
-                <CopyField text="read_products, write_products" label="Bereiche" />
+                <CopyField text="read_products, write_products, read_themes, write_themes" label="Bereiche" />
               </div>
               <div className="space-y-3 mb-5">
                 <div><label className="block text-xs text-zinc-400 mb-1.5 font-medium">Shop Domain</label><input type="text" value={shopDomain} onChange={e => setShopDomain(e.target.value)} placeholder="dein-shop.myshopify.com" className="w-full px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-white placeholder-zinc-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition text-sm" /></div>
