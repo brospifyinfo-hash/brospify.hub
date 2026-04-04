@@ -44,7 +44,15 @@ export async function POST(req: NextRequest) {
     session.setupStep2Done = false;
     await session.save();
 
-    return NextResponse.json({ redirect: "/setup" });
+    // Check if customer already completed onboarding (has Shopify token)
+    if (kunde.shopifyToken) {
+      session.hasShopifyConnection = true;
+      session.onboardingDone = true;
+      await session.save();
+      return NextResponse.json({ redirect: "/home" });
+    }
+
+    return NextResponse.json({ redirect: "/onboarding" });
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(

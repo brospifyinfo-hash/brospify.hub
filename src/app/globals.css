@@ -1,21 +1,81 @@
 @import "tailwindcss";
 
+:root {
+  --accent: #95BF47;
+  --accent-hover: #86ad3f;
+  --accent-light: rgba(149, 191, 71, 0.15);
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-bg-strong: rgba(255, 255, 255, 0.08);
+}
+
 body {
   min-height: 100vh;
-  background: #09090b;
+  background: #050505;
   color: #fafafa;
 }
 
-::-webkit-scrollbar {
-  width: 6px;
+/* Animated gradient background for auth pages */
+.bg-mesh {
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(149, 191, 71, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 20%, rgba(149, 191, 71, 0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 80%, rgba(100, 140, 50, 0.04) 0%, transparent 50%),
+    #050505;
 }
-::-webkit-scrollbar-track {
-  background: transparent;
+
+/* Glass card */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
 }
-::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border-radius: 3px;
+
+.glass-strong {
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(30px);
+  -webkit-backdrop-filter: blur(30px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
+
+/* Accent button */
+.btn-accent {
+  background: var(--accent);
+  color: #000;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
+.btn-accent:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 24px rgba(149, 191, 71, 0.25);
+}
+.btn-accent:disabled {
+  opacity: 0.5;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Glass input */
+.input-glass {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  transition: all 0.2s ease;
+}
+.input-glass:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(149, 191, 71, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+}
+.input-glass::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }

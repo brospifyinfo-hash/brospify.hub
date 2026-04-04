@@ -11,6 +11,8 @@ export interface SessionData {
   customerClientId?: string;
   customerClientSecret?: string;
   oauthNonce?: string;
+  hasShopifyConnection?: boolean;
+  onboardingDone?: boolean;
   setupStep1Done?: boolean;
   setupStep1Skipped?: boolean;
   setupStep2Done?: boolean;

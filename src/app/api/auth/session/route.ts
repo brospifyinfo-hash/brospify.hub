@@ -12,5 +12,7 @@ export async function GET() {
     setupStep1Skipped: session.setupStep1Skipped || false,
     setupStep2Done: session.setupStep2Done || false,
     hasShopifyToken: !!session.shopifyToken,
+    hasShopifyConnection: session.hasShopifyConnection || false,
+    onboardingDone: session.onboardingDone || false,
   });
 }
