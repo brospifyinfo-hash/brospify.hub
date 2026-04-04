@@ -71,31 +71,77 @@ Antworte NUR mit einem JSON-Objekt in exakt diesem Format (kein Markdown, kein C
 
     console.log("[AI-Optimize] Calling Gemini for product:", produktId);
 
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 2048,
-          },
-        }),
-      }
-    );
+    // Models to try in order (fallback chain)
+    const MODELS = [
+      "gemini-2.0-flash",
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-8b",
+    ];
 
-    if (!geminiRes.ok) {
-      const errText = await geminiRes.text();
-      console.error("[AI-Optimize] Gemini error:", geminiRes.status, errText);
+    const requestBody = JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 2048,
+      },
+    });
+
+    let geminiData = null;
+    let lastError = "";
+
+    for (const model of MODELS) {
+      // Retry up to 3 times per model with exponential backoff
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt > 0) {
+          const delay = Math.min(1000 * Math.pow(2, attempt), 8000);
+          console.log(`[AI-Optimize] Retry ${attempt} for ${model}, waiting ${delay}ms...`);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+
+        try {
+          const geminiRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: requestBody,
+            }
+          );
+
+          if (geminiRes.ok) {
+            geminiData = await geminiRes.json();
+            console.log(`[AI-Optimize] Success with model: ${model} (attempt ${attempt + 1})`);
+            break;
+          }
+
+          if (geminiRes.status === 429) {
+            const errText = await geminiRes.text();
+            console.warn(`[AI-Optimize] Rate limited (429) on ${model}, attempt ${attempt + 1}:`, errText.substring(0, 200));
+            lastError = `Rate-Limit bei ${model}`;
+            continue; // retry same model
+          }
+
+          // Other error — skip to next model
+          const errText = await geminiRes.text();
+          console.error(`[AI-Optimize] Error ${geminiRes.status} on ${model}:`, errText.substring(0, 200));
+          lastError = `Fehler ${geminiRes.status} bei ${model}`;
+          break; // don't retry non-429 errors, try next model
+        } catch (fetchErr) {
+          console.error(`[AI-Optimize] Fetch error on ${model}:`, fetchErr);
+          lastError = `Netzwerkfehler bei ${model}`;
+          break;
+        }
+      }
+      if (geminiData) break; // success — stop trying models
+    }
+
+    if (!geminiData) {
       return NextResponse.json(
-        { error: `Gemini API Fehler (${geminiRes.status}). Versuche es erneut.` },
-        { status: 500 }
+        { error: `KI-Optimierung fehlgeschlagen: ${lastError}. Das Gemini API Rate-Limit wurde erreicht. Warte 1 Minute und versuche es erneut.` },
+        { status: 429 }
       );
     }
 
-    const geminiData = await geminiRes.json();
     const rawText =
       geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
