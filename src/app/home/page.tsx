@@ -49,8 +49,9 @@ export default function HomePage() {
           return;
         }
         setSession(sess);
-        // Get latest 3 products
-        const allProducts = prods.flatMap?.((m: { produkte: Produkt[] }) => m.produkte) || [];
+        // Get latest 3 products - API returns { charts: [...] }
+        const charts = prods.charts || [];
+        const allProducts = charts.flatMap((m: { produkte: Produkt[] }) => m.produkte) || [];
         setNeueProdukte(allProducts.slice(0, 3));
         setLoading(false);
       })
@@ -108,16 +109,16 @@ export default function HomePage() {
           <motion.div
             variants={item}
             onClick={() => router.push("/charts")}
-            className="glass rounded-2xl p-6 cursor-pointer group hover:border-[#95BF47]/30 border border-white/10 transition-all duration-300"
+            className="glass rounded-2xl p-6 cursor-pointer border border-white/10"
           >
-            <div className="w-12 h-12 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mb-4 group-hover:bg-[#95BF47]/20 transition-colors">
+            <div className="w-12 h-12 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mb-4">
               <BarChart3 className="w-6 h-6 text-[#95BF47]" />
             </div>
             <h3 className="text-lg font-bold mb-1">Winning Charts</h3>
             <p className="text-zinc-400 text-sm mb-4">
               Entdecke die besten Produkte des Monats mit Analysen &amp; Rankings.
             </p>
-            <div className="flex items-center gap-2 text-[#95BF47] text-sm font-medium group-hover:gap-3 transition-all">
+            <div className="flex items-center gap-2 text-[#95BF47] text-sm font-medium">
               <span>Charts &ouml;ffnen</span>
               <ArrowRight className="w-4 h-4" />
             </div>
@@ -127,16 +128,16 @@ export default function HomePage() {
           <motion.div
             variants={item}
             onClick={() => router.push("/themes")}
-            className="glass rounded-2xl p-6 cursor-pointer group hover:border-[#95BF47]/30 border border-white/10 transition-all duration-300"
+            className="glass rounded-2xl p-6 cursor-pointer border border-white/10"
           >
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4 group-hover:bg-purple-500/20 transition-colors">
+            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4">
               <Palette className="w-6 h-6 text-purple-400" />
             </div>
             <h3 className="text-lg font-bold mb-1">Themes</h3>
             <p className="text-zinc-400 text-sm mb-4">
               Lade das aktuelle Shopify-Theme herunter oder pushe es direkt.
             </p>
-            <div className="flex items-center gap-2 text-purple-400 text-sm font-medium group-hover:gap-3 transition-all">
+            <div className="flex items-center gap-2 text-purple-400 text-sm font-medium">
               <span>Themes ansehen</span>
               <ArrowRight className="w-4 h-4" />
             </div>

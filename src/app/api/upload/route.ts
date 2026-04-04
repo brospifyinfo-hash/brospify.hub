@@ -16,17 +16,22 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Keine Datei." }, { status: 400 });
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      return NextResponse.json({ error: "Nur Bilder erlaubt." }, { status: 400 });
+    // Allow images and zip files
+    const isImage = file.type.startsWith("image/");
+    const isZip = file.type === "application/zip" || file.type === "application/x-zip-compressed" || file.name.endsWith(".zip");
+
+    if (!isImage && !isZip) {
+      return NextResponse.json({ error: "Nur Bilder und ZIP-Dateien erlaubt." }, { status: 400 });
     }
 
-    // Max 5MB
-    if (file.size > 5 * 1024 * 1024) {
-      return NextResponse.json({ error: "Max. 5MB pro Bild." }, { status: 400 });
+    // Max 50MB for zip, 5MB for images
+    const maxSize = isZip ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return NextResponse.json({ error: `Max. ${isZip ? "50" : "5"}MB pro Datei.` }, { status: 400 });
     }
 
-    const blob = await put(`products/${Date.now()}-${file.name}`, file, {
+    const folder = isZip ? "themes" : "products";
+    const blob = await put(`${folder}/${Date.now()}-${file.name}`, file, {
       access: "public",
     });
 

@@ -48,8 +48,6 @@ body {
 }
 .btn-accent:hover {
   background: var(--accent-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 8px 24px rgba(149, 191, 71, 0.25);
 }
 .btn-accent:disabled {
   opacity: 0.5;

@@ -25,6 +25,11 @@ import {
   PieChart,
   DollarSign,
   Link2,
+  Settings,
+  Store,
+  Globe,
+  Key,
+  Shield,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -142,19 +147,37 @@ function ImageSlideshow({ images }: { images: string[] }) {
       </AnimatePresence>
       {images.length > 1 && (
         <>
-          <button onClick={() => setIdx((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 glass rounded-full transition hover:bg-white/10">
+          <button onClick={() => setIdx((i) => (i - 1 + images.length) % images.length)} className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 rounded-full">
             <ChevronLeft className="w-4 h-4" />
           </button>
-          <button onClick={() => setIdx((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 glass rounded-full transition hover:bg-white/10">
+          <button onClick={() => setIdx((i) => (i + 1) % images.length)} className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-black/50 rounded-full">
             <ChevronRight className="w-4 h-4" />
           </button>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
             {images.map((_, i) => (
-              <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full transition ${i === idx ? "bg-white" : "bg-white/30"}`} />
+              <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full ${i === idx ? "bg-white" : "bg-white/30"}`} />
             ))}
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Copy Field ──────────────────────────────────────────────────
+
+function CopyField({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl px-3 py-2">
+      <div className="flex-1 min-w-0">
+        <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">{label}</div>
+        <div className="text-xs text-zinc-200 font-mono truncate">{text}</div>
+      </div>
+      <button onClick={() => { navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
+        className="shrink-0 flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-xs">
+        {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
+      </button>
     </div>
   );
 }
@@ -172,6 +195,16 @@ export default function ChartsPage() {
   const [error, setError] = useState("");
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
 
+  // Settings modal state
+  const [showSettings, setShowSettings] = useState(false);
+  const [shopDomain, setShopDomain] = useState("");
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectError, setConnectError] = useState("");
+
+  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
+
   const loadProducts = useCallback(async () => {
     try {
       const res = await fetch("/api/products");
@@ -186,6 +219,7 @@ export default function ChartsPage() {
     fetch("/api/auth/session").then(r => r.json()).then(data => {
       if (!data.isLoggedIn) { router.push("/"); return; }
       setHasShopifyToken(data.hasShopifyToken || false);
+      if (data.shopDomain) setShopDomain(data.shopDomain);
     });
     loadProducts();
   }, [loadProducts, router]);
@@ -207,6 +241,17 @@ export default function ChartsPage() {
     finally { setImportingId(null); }
   }
 
+  async function connectShop() {
+    if (!shopDomain.trim() || !clientId.trim() || !clientSecret.trim()) { setConnectError("Bitte alle Felder ausfüllen."); return; }
+    setConnectLoading(true); setConnectError("");
+    try {
+      const res = await fetch("/api/setup/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shopDomain: shopDomain.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim() }) });
+      const data = await res.json();
+      if (!res.ok) { setConnectError(data.error || "Fehler."); setConnectLoading(false); return; }
+      window.location.href = data.authUrl;
+    } catch { setConnectError("Verbindungsfehler."); setConnectLoading(false); }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-mesh flex items-center justify-center">
@@ -222,39 +267,46 @@ export default function ChartsPage() {
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
-      {/* Ambient glow */}
-      <div className="fixed top-40 left-10 w-72 h-72 bg-[#95BF47]/8 rounded-full blur-[100px] pointer-events-none" />
-      <div className="fixed bottom-20 right-20 w-80 h-80 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
-
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-            <BarChart3 className="w-8 h-8 text-[#95BF47]" />
-            Winning Product Charts
-          </h1>
-          <p className="text-zinc-400">
-            Die besten Dropshipping-Produkte mit Rankings, Analysen &amp; 1-Klick Import.
-          </p>
-        </motion.div>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+              <BarChart3 className="w-8 h-8 text-[#95BF47]" />
+              Winning Product Charts
+            </h1>
+            <p className="text-zinc-400">
+              Die besten Dropshipping-Produkte mit Rankings, Analysen &amp; 1-Klick Import.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowSettings(true)}
+            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400"
+            title="Einstellungen"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
+        </div>
 
         {/* No Token Banner */}
         {!hasShopifyToken && (
-          <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-3 glass border border-amber-500/20 text-amber-300 px-5 py-4 rounded-xl mb-8">
+          <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 px-5 py-4 rounded-xl mb-8">
             <AlertCircle className="w-5 h-5 shrink-0" />
             <div className="flex-1">
               <p className="text-sm font-medium">Shopify nicht verbunden</p>
-              <p className="text-xs text-amber-400/70 mt-0.5">1-Klick-Import deaktiviert. Verbinde deinen Shop unter Setup.</p>
+              <p className="text-xs text-amber-400/70 mt-0.5">1-Klick-Import deaktiviert. Verbinde deinen Shop in den Einstellungen.</p>
             </div>
-            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-4 py-2 rounded-lg text-sm font-medium">Verbinden</button>
-          </motion.div>
+            <button onClick={() => setShowSettings(true)} className="shrink-0 btn-accent px-4 py-2 rounded-lg text-sm font-medium">Verbinden</button>
+          </div>
         )}
 
-        {error && <div className="flex items-center gap-2 text-red-400 text-sm glass border border-red-500/20 px-4 py-3 rounded-xl mb-6"><AlertCircle className="w-4 h-4" /><span>{error}</span></div>}
+        {error && (
+          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-500/20 px-4 py-3 rounded-xl mb-6">
+            <AlertCircle className="w-4 h-4" />
+            <span>{error}</span>
+            <button onClick={() => setError("")} className="ml-auto"><X className="w-4 h-4" /></button>
+          </div>
+        )}
 
         {charts.length === 0 ? (
           <div className="text-center py-20">
@@ -266,11 +318,11 @@ export default function ChartsPage() {
           <div className="space-y-12">
             {charts.map((chart) => (
               <section key={chart.monat}>
-                <motion.h2 initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="text-xl font-bold mb-6 flex items-center gap-3">
+                <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
                   <div className="p-2 bg-[#95BF47]/10 rounded-lg border border-[#95BF47]/20"><TrendingUp className="w-5 h-5 text-[#95BF47]" /></div>
                   {formatMonth(chart.monat)}
                   <span className="text-sm font-normal text-zinc-500 ml-auto">{chart.produkte.length} Produkte</span>
-                </motion.h2>
+                </h2>
 
                 <div className="space-y-2">
                   {chart.produkte.map((produkt, idx) => {
@@ -279,15 +331,12 @@ export default function ChartsPage() {
                     const isTop3 = rank <= 3;
 
                     return (
-                      <motion.div
+                      <div
                         key={produkt.id}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: idx * 0.06, duration: 0.4, ease: "easeOut" }}
-                        className={`group flex items-center gap-4 border rounded-xl px-4 py-3 transition-all duration-300 hover:scale-[1.01] backdrop-blur-md ${
+                        className={`flex items-center gap-4 border rounded-xl px-4 py-3 backdrop-blur-md ${
                           isTop3
                             ? `${style.bg} ${style.border} ${style.glow}`
-                            : "border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/20"
+                            : "border-white/10 bg-white/[0.03]"
                         }`}
                       >
                         {/* Rank */}
@@ -332,7 +381,7 @@ export default function ChartsPage() {
                         <div className="flex items-center gap-2 shrink-0">
                           <button
                             onClick={() => setInfoModal({ open: true, produkt })}
-                            className="px-3 py-2 text-sm text-zinc-400 hover:text-white glass hover:bg-white/10 border border-white/10 rounded-lg transition flex items-center gap-1.5"
+                            className="px-3 py-2 text-sm text-zinc-400 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1.5"
                           >
                             <Info className="w-4 h-4" />
                             <span className="hidden sm:inline">Info</span>
@@ -341,18 +390,18 @@ export default function ChartsPage() {
                             <button
                               onClick={() => handleImport(produkt)}
                               disabled={importingId === produkt.id}
-                              className="btn-accent px-4 py-2 text-sm font-medium rounded-lg transition flex items-center gap-1.5 disabled:opacity-50"
+                              className="btn-accent px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5 disabled:opacity-50"
                             >
                               {importingId === produkt.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Rocket className="w-4 h-4" /><span className="hidden sm:inline">Import</span></>}
                             </button>
                           ) : (
-                            <div className="px-4 py-2 text-sm text-zinc-500 glass border border-white/10 rounded-lg flex items-center gap-1.5">
+                            <div className="px-4 py-2 text-sm text-zinc-500 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1.5">
                               <AlertCircle className="w-4 h-4" />
                               <span className="hidden sm:inline">Nicht verbunden</span>
                             </div>
                           )}
                         </div>
-                      </motion.div>
+                      </div>
                     );
                   })}
                 </div>
@@ -367,14 +416,13 @@ export default function ChartsPage() {
         {infoModal.open && p && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={() => setInfoModal({ open: false, produkt: null })}>
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="glass-strong border border-white/10 rounded-2xl w-full max-w-xl relative max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl relative max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <button onClick={() => setInfoModal({ open: false, produkt: null })} className="absolute top-4 right-4 z-10 p-1.5 glass hover:bg-white/10 rounded-full transition"><X className="w-4 h-4" /></button>
+              <button onClick={() => setInfoModal({ open: false, produkt: null })} className="absolute top-4 right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
 
               <div className="p-4 pb-0"><ImageSlideshow images={allImages} /></div>
 
@@ -397,7 +445,7 @@ export default function ChartsPage() {
                 )}
 
                 {p.extra?.finances && (
-                  <div className="glass border border-white/10 rounded-xl p-4 space-y-3">
+                  <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
                     <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-400" />Marge &amp; Finanzen</h4>
                     <div className="grid grid-cols-3 gap-3">
                       <div className="text-center">
@@ -417,13 +465,13 @@ export default function ChartsPage() {
                 )}
 
                 {p.aliExpressLink && (
-                  <a href={p.aliExpressLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-orange-400 hover:text-orange-300 transition">
-                    <Link2 className="w-4 h-4" />AliExpress Supplier &ouml;ffnen<ExternalLink className="w-3 h-3" />
+                  <a href={p.aliExpressLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-orange-400">
+                    <Link2 className="w-4 h-4" />AliExpress Supplier öffnen<ExternalLink className="w-3 h-3" />
                   </a>
                 )}
 
-                <p className="text-[11px] text-zinc-600 leading-relaxed border-t border-white/10 pt-4">
-                  Hinweis: Alle dargestellten Metriken, Margen und Scores basieren auf unseren internen Marktanalysen und aktuellen E-Commerce-Trends. Da der Markt dynamisch ist, k&ouml;nnen reale Einkaufspreise, Verf&uuml;gbarkeiten und die Marks&auml;ttigung variieren. Diese Daten dienen als strategische Empfehlung und stellen keine Garantie f&uuml;r spezifische Ums&auml;tze oder Profite dar.
+                <p className="text-[11px] text-zinc-600 leading-relaxed border-t border-zinc-800 pt-4">
+                  Hinweis: Alle dargestellten Metriken, Margen und Scores basieren auf unseren internen Marktanalysen und aktuellen E-Commerce-Trends. Da der Markt dynamisch ist, können reale Einkaufspreise, Verfügbarkeiten und die Marktsättigung variieren. Diese Daten dienen als strategische Empfehlung und stellen keine Garantie für spezifische Umsätze oder Profite dar.
                 </p>
               </div>
             </motion.div>
@@ -435,26 +483,78 @@ export default function ChartsPage() {
       <AnimatePresence>
         {successModal.open && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="glass-strong border border-white/10 rounded-2xl p-6 w-full max-w-md relative">
-              <button onClick={() => setSuccessModal({ open: false, aliExpressLink: "" })} className="absolute top-4 right-4 text-zinc-500 hover:text-white transition"><X className="w-5 h-5" /></button>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md relative">
+              <button onClick={() => setSuccessModal({ open: false, aliExpressLink: "" })} className="absolute top-4 right-4 text-zinc-500"><X className="w-5 h-5" /></button>
               <div className="text-center mb-6">
-                <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: "spring", delay: 0.1 }} className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/10 mb-4"><Check className="w-7 h-7 text-emerald-400" /></motion.div>
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/10 mb-4"><Check className="w-7 h-7 text-emerald-400" /></div>
                 <h3 className="text-lg font-bold">Produkt erfolgreich importiert!</h3>
-                <p className="text-zinc-400 text-sm mt-2">Kopiere den Link und f&uuml;ge ihn in DSers ein:</p>
+                <p className="text-zinc-400 text-sm mt-2">Kopiere den Link und füge ihn in DSers ein:</p>
               </div>
               {successModal.aliExpressLink && (
                 <>
-                  <div className="flex items-center gap-2 glass border border-white/10 rounded-xl p-3">
+                  <div className="flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-xl p-3">
                     <input type="text" value={successModal.aliExpressLink} readOnly className="flex-1 bg-transparent text-sm text-zinc-300 outline-none truncate" />
-                    <button onClick={() => { navigator.clipboard.writeText(successModal.aliExpressLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="shrink-0 p-2 hover:bg-white/10 rounded-lg transition">
+                    <button onClick={() => { navigator.clipboard.writeText(successModal.aliExpressLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="shrink-0 p-2 rounded-lg">
                       {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-zinc-400" />}
                     </button>
                   </div>
-                  <a href={successModal.aliExpressLink} target="_blank" rel="noopener noreferrer" className="mt-3 w-full py-2.5 glass hover:bg-white/10 border border-white/10 rounded-xl font-medium transition text-sm flex items-center justify-center gap-2 text-zinc-300">
-                    <ExternalLink className="w-4 h-4" />Link &ouml;ffnen
+                  <a href={successModal.aliExpressLink} target="_blank" rel="noopener noreferrer" className="mt-3 w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-zinc-300">
+                    <ExternalLink className="w-4 h-4" />Link öffnen
                   </a>
                 </>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── SETTINGS MODAL ───────────────────────────────────── */}
+      <AnimatePresence>
+        {showSettings && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => { setShowSettings(false); setConnectError(""); }}>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+              <button onClick={() => { setShowSettings(false); setConnectError(""); }} className="absolute top-4 right-4 text-zinc-500"><X className="w-5 h-5" /></button>
+              <div className="mb-5">
+                <h3 className="text-lg font-bold flex items-center gap-2"><Settings className="w-5 h-5 text-[#95BF47]" />Einstellungen</h3>
+                <p className="text-zinc-400 text-sm mt-1">Shopify-Verbindung verwalten.</p>
+              </div>
+
+              {hasShopifyToken && (
+                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
+                  <Check className="w-4 h-4" />Shop verbunden{shopDomain ? `: ${shopDomain}` : ""}
+                </div>
+              )}
+
+              <div className="space-y-2 mb-4">
+                <CopyField text={appUrl || "https://brospify-hub.vercel.app"} label="Hub-URL" />
+                <CopyField text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`} label="Redirect-URL" />
+                <CopyField text="read_products, write_products" label="Bereiche" />
+              </div>
+
+              <div className="space-y-3 mb-5">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Shop Domain</label>
+                  <input type="text" value={shopDomain} onChange={e => setShopDomain(e.target.value)} placeholder="dein-shop.myshopify.com" className="input-glass w-full px-4 py-2.5 rounded-xl text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Client-ID</label>
+                  <input type="text" value={clientId} onChange={e => setClientId(e.target.value)} placeholder="a1b2c3d4e5f6..." className="input-glass w-full px-4 py-2.5 rounded-xl text-sm font-mono" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Schlüssel (Client Secret)</label>
+                  <input type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="shpss_..." className="input-glass w-full px-4 py-2.5 rounded-xl text-sm font-mono" />
+                </div>
+              </div>
+
+              {connectError && (
+                <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 px-4 py-3 rounded-xl mb-4">
+                  <AlertCircle className="w-4 h-4 shrink-0" /><span>{connectError}</span>
+                </div>
+              )}
+
+              <button onClick={connectShop} disabled={connectLoading} className="w-full py-3 btn-accent rounded-xl text-sm flex items-center justify-center gap-2">
+                {connectLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Store className="w-4 h-4" />Shop verbinden</>}
+              </button>
             </motion.div>
           </motion.div>
         )}

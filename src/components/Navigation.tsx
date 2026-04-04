@@ -55,7 +55,7 @@ export default function Navigation() {
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <Link href="/home" className="flex items-center gap-3 group">
-              <div className="w-9 h-9 rounded-xl bg-[#95BF47]/20 border border-[#95BF47]/30 flex items-center justify-center group-hover:bg-[#95BF47]/30 transition-colors">
+              <div className="w-9 h-9 rounded-xl bg-[#95BF47]/20 border border-[#95BF47]/30 flex items-center justify-center">
                 <Crown className="w-5 h-5 text-[#95BF47]" />
               </div>
               <span className="text-lg font-bold hidden sm:block">

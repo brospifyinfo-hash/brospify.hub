@@ -56,15 +56,10 @@ export default function OnboardingPage() {
             initial={{ opacity: 0, x: -30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.2 }}
-            whileHover={{ scale: 1.02, y: -4 }}
-            whileTap={{ scale: 0.98 }}
             onClick={() => handleChoice("quick")}
             disabled={loading !== null}
-            className="glass-strong rounded-2xl p-8 text-left group cursor-pointer border border-white/10 hover:border-[#95BF47]/30 transition-all duration-300 relative overflow-hidden disabled:opacity-70"
+            className="glass-strong rounded-2xl p-8 text-left cursor-pointer border border-white/10 relative overflow-hidden disabled:opacity-70"
           >
-            {/* Hover glow */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#95BF47]/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-
             <div className="relative z-10">
               <div className="w-16 h-16 rounded-2xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mb-6">
                 <Eye className="w-8 h-8 text-[#95BF47]" />
@@ -88,7 +83,7 @@ export default function OnboardingPage() {
                 </li>
               </ul>
 
-              <div className="flex items-center gap-2 text-[#95BF47] font-semibold group-hover:gap-3 transition-all">
+              <div className="flex items-center gap-2 text-[#95BF47] font-semibold ">
                 {loading === "quick" ? (
                   <div className="w-5 h-5 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
                 ) : (
@@ -106,14 +101,10 @@ export default function OnboardingPage() {
             initial={{ opacity: 0, x: 30 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            whileHover={{ scale: 1.02, y: -4 }}
-            whileTap={{ scale: 0.98 }}
             onClick={() => handleChoice("full")}
             disabled={loading !== null}
-            className="glass-strong rounded-2xl p-8 text-left group cursor-pointer border border-[#95BF47]/30 hover:border-[#95BF47]/50 transition-all duration-300 relative overflow-hidden disabled:opacity-70"
+            className="glass-strong rounded-2xl p-8 text-left cursor-pointer border border-[#95BF47]/30 relative overflow-hidden disabled:opacity-70"
           >
-            {/* Accent glow */}
-            <div className="absolute inset-0 bg-gradient-to-br from-[#95BF47]/10 to-transparent opacity-50 group-hover:opacity-100 transition-opacity duration-500" />
 
             {/* Recommended badge */}
             <div className="absolute top-4 right-4 bg-[#95BF47]/20 border border-[#95BF47]/30 text-[#95BF47] text-xs font-bold px-3 py-1 rounded-full">
@@ -143,7 +134,7 @@ export default function OnboardingPage() {
                 </li>
               </ul>
 
-              <div className="flex items-center gap-2 text-[#95BF47] font-semibold group-hover:gap-3 transition-all">
+              <div className="flex items-center gap-2 text-[#95BF47] font-semibold ">
                 {loading === "full" ? (
                   <div className="w-5 h-5 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
                 ) : (
