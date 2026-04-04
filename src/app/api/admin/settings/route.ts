@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { put } from "@vercel/blob";
+import { put, list } from "@vercel/blob";
+
+export const dynamic = "force-dynamic";
 
 // Settings stored as JSON in Vercel Blob
 const SETTINGS_KEY = "brospifyhub-settings.json";
@@ -15,30 +17,45 @@ interface AppSettings {
 
 async function getSettings(): Promise<AppSettings> {
   try {
-    const res = await fetch(
-      `${process.env.BLOB_STORE_URL || ""}/${SETTINGS_KEY}`,
-      { cache: "no-store" }
-    );
-    if (res.ok) return await res.json();
-  } catch {
-    // ignore - return defaults
+    // Use list() to find the settings blob by prefix — no manual URL needed
+    const { blobs } = await list({ prefix: SETTINGS_KEY, limit: 1 });
+    if (blobs.length > 0 && blobs[0].url) {
+      console.log("[Settings] Found blob:", blobs[0].url);
+      const res = await fetch(blobs[0].url, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        console.log("[Settings] Loaded:", JSON.stringify(data));
+        return data;
+      }
+    }
+    console.log("[Settings] No settings blob found");
+  } catch (err) {
+    console.error("[Settings] getSettings error:", err);
   }
   return {};
 }
 
-async function saveSettings(settings: AppSettings): Promise<void> {
-  await put(SETTINGS_KEY, JSON.stringify(settings), {
+async function saveSettings(settings: AppSettings): Promise<string> {
+  console.log("[Settings] Saving:", JSON.stringify(settings));
+  const blob = await put(SETTINGS_KEY, JSON.stringify(settings), {
     access: "public",
     addRandomSuffix: false,
   });
+  console.log("[Settings] Saved to:", blob.url);
+  return blob.url;
 }
 
 // GET - anyone logged in can read settings
 export async function GET() {
   try {
+    const session = await getSession();
+    if (!session.isLoggedIn) {
+      return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
+    }
     const settings = await getSettings();
     return NextResponse.json(settings);
-  } catch {
+  } catch (err) {
+    console.error("[Settings] GET error:", err);
     return NextResponse.json({});
   }
 }
@@ -52,7 +69,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+    console.log("[Settings] POST body:", JSON.stringify(body));
+
     const current = await getSettings();
+    console.log("[Settings] Current settings:", JSON.stringify(current));
 
     const updated: AppSettings = {
       ...current,
@@ -63,10 +83,11 @@ export async function POST(req: NextRequest) {
       ...(body.themeVersion !== undefined && { themeVersion: body.themeVersion }),
     };
 
+    console.log("[Settings] Updated settings:", JSON.stringify(updated));
     await saveSettings(updated);
     return NextResponse.json(updated);
   } catch (error) {
-    console.error("Settings save error:", error);
+    console.error("[Settings] Save error:", error);
     return NextResponse.json(
       { error: "Fehler beim Speichern" },
       { status: 500 }
