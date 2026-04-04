@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Palette,
   Download,
@@ -13,6 +13,8 @@ import {
   Loader2,
   FileArchive,
   Info,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -33,7 +35,7 @@ export default function ThemesPage() {
   const [settings, setSettings] = useState<ThemeSettings>({});
   const [loading, setLoading] = useState(true);
   const [pushing, setPushing] = useState(false);
-  const [pushDone, setPushDone] = useState(false);
+  const [pushResult, setPushResult] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
     Promise.all([
@@ -54,14 +56,27 @@ export default function ThemesPage() {
 
   async function handlePushTheme() {
     setPushing(true);
+    setPushResult(null);
     try {
       const res = await fetch("/api/themes/push", { method: "POST" });
-      if (res.ok) {
-        setPushDone(true);
-        setTimeout(() => setPushDone(false), 3000);
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setPushResult({
+          type: "success",
+          message: `Theme "${data.theme?.name || "Brospify Premium Theme"}" wurde erfolgreich installiert! Du findest es in deinem Shopify-Backend unter "Online Store > Themes".`,
+        });
+      } else {
+        setPushResult({
+          type: "error",
+          message: data.error || "Theme konnte nicht installiert werden.",
+        });
       }
     } catch {
-      // ignore
+      setPushResult({
+        type: "error",
+        message: "Verbindung fehlgeschlagen. Bitte versuche es erneut.",
+      });
     }
     setPushing(false);
   }
@@ -95,6 +110,32 @@ export default function ThemesPage() {
           </p>
         </motion.div>
 
+        {/* Result Toast */}
+        <AnimatePresence>
+          {pushResult && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className={`flex items-start gap-3 px-5 py-4 rounded-xl mb-6 border ${
+                pushResult.type === "success"
+                  ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                  : "bg-red-500/10 border-red-500/20 text-red-300"
+              }`}
+            >
+              {pushResult.type === "success" ? (
+                <Check className="w-5 h-5 shrink-0 mt-0.5" />
+              ) : (
+                <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+              )}
+              <p className="text-sm flex-1">{pushResult.message}</p>
+              <button onClick={() => setPushResult(null)} className="shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Theme Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -122,7 +163,7 @@ export default function ThemesPage() {
               </p>
 
               <div className="flex flex-wrap gap-3">
-                {/* Download Button - always visible */}
+                {/* Download Button */}
                 {settings.themeFileUrl ? (
                   <a
                     href={settings.themeFileUrl}
@@ -139,22 +180,17 @@ export default function ThemesPage() {
                   </div>
                 )}
 
-                {/* Push Button - only if Shopify connected */}
+                {/* Push to Shopify Button */}
                 {session.hasShopifyConnection && settings.themeFileUrl && (
                   <button
                     onClick={handlePushTheme}
-                    disabled={pushing || pushDone}
-                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all disabled:opacity-70"
+                    disabled={pushing}
+                    className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold border border-purple-500/30 bg-purple-500/10 text-purple-400 hover:bg-purple-500/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
                   >
-                    {pushDone ? (
-                      <>
-                        <Check className="w-5 h-5" />
-                        Gepusht!
-                      </>
-                    ) : pushing ? (
+                    {pushing ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin" />
-                        Pushe Theme...
+                        <span>Theme wird installiert...</span>
                       </>
                     ) : (
                       <>
@@ -165,6 +201,17 @@ export default function ThemesPage() {
                   </button>
                 )}
               </div>
+
+              {/* Push info text while loading */}
+              {pushing && (
+                <motion.p
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="text-zinc-500 text-xs mt-3"
+                >
+                  Shopify entpackt und installiert das Theme. Das kann ca. 1 Minute dauern &mdash; bitte warte...
+                </motion.p>
+              )}
             </div>
           </div>
         </motion.div>
