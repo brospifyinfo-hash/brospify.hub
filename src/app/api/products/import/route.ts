@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
-    const { produktId } = await req.json();
+    const { produktId, optimizedTitle, optimizedBodyHtml } = await req.json();
     if (!produktId) {
       return NextResponse.json({ error: "Keine Produkt-ID angegeben" }, { status: 400 });
     }
@@ -64,8 +64,8 @@ export async function POST(req: NextRequest) {
         },
         body: JSON.stringify({
           product: {
-            title: produkt.titel,
-            body_html: produkt.beschreibung || "",
+            title: optimizedTitle || produkt.titel,
+            body_html: optimizedBodyHtml || produkt.beschreibung || "",
             variants: [
               {
                 price: produkt.preis || "0",

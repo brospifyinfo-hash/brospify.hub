@@ -14,6 +14,7 @@ import {
   X,
   Crown,
   Cog,
+  Scale,
 } from "lucide-react";
 
 interface SessionInfo {
@@ -26,6 +27,7 @@ const NAV_ITEMS = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/charts", label: "Charts", icon: BarChart3 },
   { href: "/themes", label: "Themes", icon: Palette },
+  { href: "/legal", label: "Legal", icon: Scale },
 ];
 
 export default function Navigation() {

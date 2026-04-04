@@ -227,7 +227,7 @@ export default function AdminPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
   const [activeTab, setActiveTab] = useState<"products" | "settings">("products");
-  const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "" });
+  const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [themeUploading, setThemeUploading] = useState(false);
   const themeFileRef = useRef<HTMLInputElement>(null);
@@ -252,6 +252,11 @@ export default function AdminPage() {
         themeFileUrl: data.themeFileUrl || "",
         themeFileName: data.themeFileName || "",
         themeVersion: data.themeVersion || "",
+        brandPrimary: data.brandPrimary || "",
+        brandAccent: data.brandAccent || "#95BF47",
+        typography: data.typography || "Inter",
+        toneOfVoice: data.toneOfVoice || "",
+        themeChangelog: data.themeChangelog || "",
       });
     }).catch(() => {});
   }, []);
@@ -425,6 +430,54 @@ export default function AdminPage() {
                 {settingsData.themeFileUrl && <span className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Hochgeladen</span>}
               </div>
               <input type="text" value={settingsData.themeFileUrl} onChange={e => setSettingsData({ ...settingsData, themeFileUrl: e.target.value })} placeholder="Oder direkte URL zur Theme-Datei" className="input-glass w-full text-xs font-mono" />
+            </div>
+
+            {/* Brand Kit */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><Crown className="w-5 h-5 text-amber-400" />Brand-Kit</h3>
+              <p className="text-zinc-400 text-sm">Definiere deine Markenidentität. Diese Werte werden beim Theme-Push automatisch übernommen.</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Primärfarbe</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" value={settingsData.brandPrimary || "#000000"} onChange={e => setSettingsData({...settingsData, brandPrimary: e.target.value})} className="w-10 h-10 rounded-lg border border-zinc-700 cursor-pointer bg-transparent" />
+                    <input type="text" value={settingsData.brandPrimary} onChange={e => setSettingsData({...settingsData, brandPrimary: e.target.value})} placeholder="#000000" className="input-glass flex-1" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Akzentfarbe</label>
+                  <div className="flex gap-2 items-center">
+                    <input type="color" value={settingsData.brandAccent || "#95BF47"} onChange={e => setSettingsData({...settingsData, brandAccent: e.target.value})} className="w-10 h-10 rounded-lg border border-zinc-700 cursor-pointer bg-transparent" />
+                    <input type="text" value={settingsData.brandAccent} onChange={e => setSettingsData({...settingsData, brandAccent: e.target.value})} placeholder="#95BF47" className="input-glass flex-1" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Typografie</label>
+                <select value={settingsData.typography} onChange={e => setSettingsData({...settingsData, typography: e.target.value})} className="input-glass w-full">
+                  <option value="Inter">Inter</option>
+                  <option value="Montserrat">Montserrat</option>
+                  <option value="Playfair Display">Playfair Display</option>
+                  <option value="Roboto">Roboto</option>
+                  <option value="Open Sans">Open Sans</option>
+                  <option value="Poppins">Poppins</option>
+                  <option value="Lato">Lato</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Tone of Voice */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><Zap className="w-5 h-5 text-purple-400" />Tone of Voice (KI-Anweisung)</h3>
+              <p className="text-zinc-400 text-sm">Beschreibe den Tonfall für KI-generierte Produkttexte. Z.B. &quot;Locker, modern, Gen-Z, mit Emojis&quot;</p>
+              <textarea value={settingsData.toneOfVoice} onChange={e => setSettingsData({...settingsData, toneOfVoice: e.target.value})} rows={3} placeholder="z.B. Professionell aber locker, deutsche Sprache, Vertrauen aufbauen, Emojis sparsam einsetzen..." className="input-glass w-full resize-none" />
+            </div>
+
+            {/* Theme Changelog */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" />Theme Changelog</h3>
+              <p className="text-zinc-400 text-sm">Versionsinformationen die Kunden auf der Theme-Seite sehen.</p>
+              <textarea value={settingsData.themeChangelog} onChange={e => setSettingsData({...settingsData, themeChangelog: e.target.value})} rows={4} placeholder={"v1.0.0 \u2014 Initiales Release\nv1.1.0 \u2014 Neue Produktseite, schnellere Ladezeit..."} className="input-glass w-full resize-none font-mono text-xs" />
             </div>
 
             <button onClick={saveSettings} disabled={settingsLoading} className="btn-accent px-6 py-3 rounded-xl font-semibold flex items-center gap-2">

@@ -13,6 +13,11 @@ interface AppSettings {
   themeFileUrl?: string;
   themeFileName?: string;
   themeVersion?: string;
+  brandPrimary?: string;
+  brandAccent?: string;
+  typography?: string;
+  toneOfVoice?: string;
+  themeChangelog?: string;
 }
 
 async function getSettings(): Promise<AppSettings> {
@@ -81,6 +86,11 @@ export async function POST(req: NextRequest) {
       ...(body.themeFileUrl !== undefined && { themeFileUrl: body.themeFileUrl }),
       ...(body.themeFileName !== undefined && { themeFileName: body.themeFileName }),
       ...(body.themeVersion !== undefined && { themeVersion: body.themeVersion }),
+      ...(body.brandPrimary !== undefined && { brandPrimary: body.brandPrimary }),
+      ...(body.brandAccent !== undefined && { brandAccent: body.brandAccent }),
+      ...(body.typography !== undefined && { typography: body.typography }),
+      ...(body.toneOfVoice !== undefined && { toneOfVoice: body.toneOfVoice }),
+      ...(body.themeChangelog !== undefined && { themeChangelog: body.themeChangelog }),
     };
 
     console.log("[Settings] Updated settings:", JSON.stringify(updated));

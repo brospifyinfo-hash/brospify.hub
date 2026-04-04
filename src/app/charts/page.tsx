@@ -25,11 +25,8 @@ import {
   PieChart,
   DollarSign,
   Link2,
-  Settings,
-  Store,
-  Globe,
-  Key,
-  Shield,
+  Sparkles,
+  ArrowRight,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -195,15 +192,12 @@ export default function ChartsPage() {
   const [error, setError] = useState("");
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
 
-  // Settings modal state
-  const [showSettings, setShowSettings] = useState(false);
-  const [shopDomain, setShopDomain] = useState("");
-  const [clientId, setClientId] = useState("");
-  const [clientSecret, setClientSecret] = useState("");
-  const [connectLoading, setConnectLoading] = useState(false);
-  const [connectError, setConnectError] = useState("");
-
-  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
+  // AI Import Modal
+  const [aiModal, setAiModal] = useState<{ open: boolean; produkt: Produkt | null }>({ open: false, produkt: null });
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<{ title: string; body_html: string; tags?: string } | null>(null);
+  const [aiImporting, setAiImporting] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   const loadProducts = useCallback(async () => {
     try {
@@ -219,7 +213,6 @@ export default function ChartsPage() {
     fetch("/api/auth/session").then(r => r.json()).then(data => {
       if (!data.isLoggedIn) { router.push("/"); return; }
       setHasShopifyToken(data.hasShopifyToken || false);
-      if (data.shopDomain) setShopDomain(data.shopDomain);
     });
     loadProducts();
   }, [loadProducts, router]);
@@ -239,17 +232,6 @@ export default function ChartsPage() {
       setSuccessModal({ open: true, aliExpressLink: data.aliExpressLink || produkt.aliExpressLink || "" });
     } catch { setError("Import fehlgeschlagen."); }
     finally { setImportingId(null); }
-  }
-
-  async function connectShop() {
-    if (!shopDomain.trim() || !clientId.trim() || !clientSecret.trim()) { setConnectError("Bitte alle Felder ausfüllen."); return; }
-    setConnectLoading(true); setConnectError("");
-    try {
-      const res = await fetch("/api/setup/connect", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ shopDomain: shopDomain.trim(), clientId: clientId.trim(), clientSecret: clientSecret.trim() }) });
-      const data = await res.json();
-      if (!res.ok) { setConnectError(data.error || "Fehler."); setConnectLoading(false); return; }
-      window.location.href = data.authUrl;
-    } catch { setConnectError("Verbindungsfehler."); setConnectLoading(false); }
   }
 
   if (loading) {
@@ -279,13 +261,6 @@ export default function ChartsPage() {
               Die besten Dropshipping-Produkte mit Rankings, Analysen &amp; 1-Klick Import.
             </p>
           </div>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="p-2.5 rounded-xl bg-white/5 border border-white/10 text-zinc-400"
-            title="Einstellungen"
-          >
-            <Settings className="w-5 h-5" />
-          </button>
         </div>
 
         {/* No Token Banner */}
@@ -296,7 +271,7 @@ export default function ChartsPage() {
               <p className="text-sm font-medium">Shopify nicht verbunden</p>
               <p className="text-xs text-amber-400/70 mt-0.5">1-Klick-Import deaktiviert. Verbinde deinen Shop in den Einstellungen.</p>
             </div>
-            <button onClick={() => setShowSettings(true)} className="shrink-0 btn-accent px-4 py-2 rounded-lg text-sm font-medium">Verbinden</button>
+            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-4 py-2 rounded-lg text-sm font-medium">Verbinden</button>
           </div>
         )}
 
@@ -388,11 +363,10 @@ export default function ChartsPage() {
                           </button>
                           {hasShopifyToken ? (
                             <button
-                              onClick={() => handleImport(produkt)}
-                              disabled={importingId === produkt.id}
-                              className="btn-accent px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5 disabled:opacity-50"
+                              onClick={() => { setAiModal({ open: true, produkt }); setAiResult(null); setAiError(""); }}
+                              className="btn-accent px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5"
                             >
-                              {importingId === produkt.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Rocket className="w-4 h-4" /><span className="hidden sm:inline">Import</span></>}
+                              <Rocket className="w-4 h-4" /><span className="hidden sm:inline">Import</span>
                             </button>
                           ) : (
                             <div className="px-4 py-2 text-sm text-zinc-500 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1.5">
@@ -479,6 +453,142 @@ export default function ChartsPage() {
         )}
       </AnimatePresence>
 
+      {/* ─── AI IMPORT MODAL ─────────────────────────────────── */}
+      <AnimatePresence>
+        {aiModal.open && aiModal.produkt && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={() => { if (!aiLoading && !aiImporting) setAiModal({ open: false, produkt: null }); }}>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 10 }}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg relative max-h-[90vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => { if (!aiLoading && !aiImporting) setAiModal({ open: false, produkt: null }); }} className="absolute top-4 right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
+
+              <div className="p-6 space-y-5">
+                {/* Product Preview */}
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl bg-white/5 overflow-hidden shrink-0">
+                    {aiModal.produkt.bildUrl ? <img src={aiModal.produkt.bildUrl} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ShoppingBag className="w-6 h-6" /></div>}
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold truncate">{aiResult?.title || aiModal.produkt.titel}</h3>
+                    <p className="text-sm text-[#95BF47] font-semibold">{aiModal.produkt.extra?.finances?.recommendedSellPrice || aiModal.produkt.preis}&euro;</p>
+                  </div>
+                </div>
+
+                {aiError && (
+                  <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />{aiError}
+                  </div>
+                )}
+
+                {/* AI Result Preview */}
+                {aiResult && (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium text-purple-400">
+                      <Sparkles className="w-4 h-4" />KI-optimierter Text
+                    </div>
+                    <div className="bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 max-h-60 overflow-y-auto">
+                      <h4 className="font-bold text-sm mb-2">{aiResult.title}</h4>
+                      <div className="text-xs text-zinc-400 leading-relaxed prose-invert" dangerouslySetInnerHTML={{ __html: aiResult.body_html }} />
+                    </div>
+                    {aiResult.tags && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {aiResult.tags.split(",").map((tag, i) => (
+                          <span key={i} className="px-2 py-0.5 bg-purple-500/10 text-purple-300 text-[10px] rounded-full">{tag.trim()}</span>
+                        ))}
+                      </div>
+                    )}
+                    <button
+                      onClick={async () => {
+                        setAiImporting(true); setAiError("");
+                        try {
+                          const res = await fetch("/api/products/import", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ produktId: aiModal.produkt!.id, optimizedTitle: aiResult.title, optimizedBodyHtml: aiResult.body_html }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) { setAiError(data.error || "Import fehlgeschlagen"); return; }
+                          setAiModal({ open: false, produkt: null });
+                          setSuccessModal({ open: true, aliExpressLink: data.aliExpressLink || aiModal.produkt!.aliExpressLink || "" });
+                        } catch { setAiError("Import fehlgeschlagen."); }
+                        finally { setAiImporting(false); }
+                      }}
+                      disabled={aiImporting}
+                      className="w-full btn-accent py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {aiImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Rocket className="w-4 h-4" />KI-Text importieren</>}
+                    </button>
+                  </div>
+                )}
+
+                {/* Action Buttons (before AI result) */}
+                {!aiResult && (
+                  <div className="space-y-3">
+                    <button
+                      onClick={async () => {
+                        setAiLoading(true); setAiError("");
+                        try {
+                          const res = await fetch("/api/products/ai-optimize", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ produktId: aiModal.produkt!.id }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) { setAiError(data.error || "KI-Optimierung fehlgeschlagen"); return; }
+                          setAiResult(data.optimized);
+                        } catch { setAiError("Verbindung fehlgeschlagen."); }
+                        finally { setAiLoading(false); }
+                      }}
+                      disabled={aiLoading || aiImporting}
+                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2.5 bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600/30 transition disabled:opacity-50"
+                    >
+                      {aiLoading ? (
+                        <><Loader2 className="w-5 h-5 animate-spin" />KI analysiert Produkt...</>
+                      ) : (
+                        <><Sparkles className="w-5 h-5" />KI-Optimierung<ArrowRight className="w-4 h-4" /></>
+                      )}
+                    </button>
+
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800" /></div>
+                      <div className="relative flex justify-center text-xs"><span className="px-3 bg-zinc-900 text-zinc-600">oder</span></div>
+                    </div>
+
+                    <button
+                      onClick={async () => {
+                        setAiImporting(true); setAiError("");
+                        try {
+                          const res = await fetch("/api/products/import", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ produktId: aiModal.produkt!.id }),
+                          });
+                          const data = await res.json();
+                          if (!res.ok) { setAiError(data.error || "Import fehlgeschlagen"); return; }
+                          setAiModal({ open: false, produkt: null });
+                          setSuccessModal({ open: true, aliExpressLink: data.aliExpressLink || aiModal.produkt!.aliExpressLink || "" });
+                        } catch { setAiError("Import fehlgeschlagen."); }
+                        finally { setAiImporting(false); }
+                      }}
+                      disabled={aiLoading || aiImporting}
+                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2.5 glass border border-white/10 text-zinc-300 hover:bg-white/5 transition disabled:opacity-50"
+                    >
+                      {aiImporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Rocket className="w-5 h-5" />Direkt-Import (Skip AI)</>}
+                    </button>
+
+                    <p className="text-[10px] text-zinc-600 text-center">KI-Optimierung nutzt Gemini AI, um Titel &amp; Beschreibung verkaufsstark zu formulieren.</p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* ─── SUCCESS MODAL ────────────────────────────────────── */}
       <AnimatePresence>
         {successModal.open && (
@@ -508,57 +618,6 @@ export default function ChartsPage() {
         )}
       </AnimatePresence>
 
-      {/* ─── SETTINGS MODAL ───────────────────────────────────── */}
-      <AnimatePresence>
-        {showSettings && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4" onClick={() => { setShowSettings(false); setConnectError(""); }}>
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-lg relative max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-              <button onClick={() => { setShowSettings(false); setConnectError(""); }} className="absolute top-4 right-4 text-zinc-500"><X className="w-5 h-5" /></button>
-              <div className="mb-5">
-                <h3 className="text-lg font-bold flex items-center gap-2"><Settings className="w-5 h-5 text-[#95BF47]" />Einstellungen</h3>
-                <p className="text-zinc-400 text-sm mt-1">Shopify-Verbindung verwalten.</p>
-              </div>
-
-              {hasShopifyToken && (
-                <div className="flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-3 rounded-xl mb-4 text-sm">
-                  <Check className="w-4 h-4" />Shop verbunden{shopDomain ? `: ${shopDomain}` : ""}
-                </div>
-              )}
-
-              <div className="space-y-2 mb-4">
-                <CopyField text={appUrl || "https://brospify-hub.vercel.app"} label="Hub-URL" />
-                <CopyField text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`} label="Redirect-URL" />
-                <CopyField text="read_products, write_products, read_themes, write_themes" label="Bereiche" />
-              </div>
-
-              <div className="space-y-3 mb-5">
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Shop Domain</label>
-                  <input type="text" value={shopDomain} onChange={e => setShopDomain(e.target.value)} placeholder="dein-shop.myshopify.com" className="input-glass w-full px-4 py-2.5 rounded-xl text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Client-ID</label>
-                  <input type="text" value={clientId} onChange={e => setClientId(e.target.value)} placeholder="a1b2c3d4e5f6..." className="input-glass w-full px-4 py-2.5 rounded-xl text-sm font-mono" />
-                </div>
-                <div>
-                  <label className="block text-xs text-zinc-400 mb-1.5 font-medium">Schlüssel (Client Secret)</label>
-                  <input type="password" value={clientSecret} onChange={e => setClientSecret(e.target.value)} placeholder="shpss_..." className="input-glass w-full px-4 py-2.5 rounded-xl text-sm font-mono" />
-                </div>
-              </div>
-
-              {connectError && (
-                <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 px-4 py-3 rounded-xl mb-4">
-                  <AlertCircle className="w-4 h-4 shrink-0" /><span>{connectError}</span>
-                </div>
-              )}
-
-              <button onClick={connectShop} disabled={connectLoading} className="w-full py-3 btn-accent rounded-xl text-sm flex items-center justify-center gap-2">
-                {connectLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Store className="w-4 h-4" />Shop verbinden</>}
-              </button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }

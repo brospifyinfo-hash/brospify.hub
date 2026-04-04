@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     // Build Shopify OAuth authorize URL using the CUSTOMER'S client_id
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://brospify-hub.vercel.app";
     const redirectUri = `${appUrl}/api/auth/shopify/callback`;
-    const scopes = "read_products,write_products,read_themes,write_themes";
+    const scopes = "read_products,write_products,read_themes,write_themes,read_content,write_content,write_legal_policies";
 
     const authUrl =
       `https://${domain}/admin/oauth/authorize` +

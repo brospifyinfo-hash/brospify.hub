@@ -27,6 +27,7 @@ interface ThemeSettings {
   themeFileUrl?: string;
   themeFileName?: string;
   themeVersion?: string;
+  themeChangelog?: string;
 }
 
 export default function ThemesPage() {
@@ -215,6 +216,22 @@ export default function ThemesPage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Changelog */}
+        {settings.themeChangelog && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="glass-strong rounded-2xl p-6 border border-white/10 mb-6"
+          >
+            <h3 className="font-bold mb-3 flex items-center gap-2">
+              <Info className="w-5 h-5 text-[#95BF47]" />
+              Changelog
+            </h3>
+            <pre className="text-sm text-zinc-400 whitespace-pre-wrap font-sans leading-relaxed">{settings.themeChangelog}</pre>
+          </motion.div>
+        )}
 
         {/* Connect CTA for non-connected users */}
         {!session.hasShopifyConnection && (
