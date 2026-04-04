@@ -261,7 +261,7 @@ export default function ChartsPage() {
   }
 
   const p = infoModal.produkt;
-  const allImages = p ? [p.bildUrl, ...(p.extra?.images || [])].filter(Boolean) : [];
+  const allImages = p ? [...new Set([p.bildUrl, ...(p.extra?.images || [])].filter(Boolean))] : [];
 
   return (
     <div className="min-h-screen bg-mesh">

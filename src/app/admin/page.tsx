@@ -100,13 +100,16 @@ function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs
 
       {/* Thumbnails */}
       {images.length > 0 && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-3">
           {images.map((url, i) => (
-            <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-zinc-700 group">
+            <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-white/20 bg-white/5">
               <img src={url} alt="" className="w-full h-full object-cover" />
+              {i === 0 && (
+                <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-center text-[#95BF47] py-0.5 font-medium">Hauptbild</span>
+              )}
               <button
                 onClick={() => onChange(images.filter((_, idx) => idx !== i))}
-                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 border border-red-400 rounded-full flex items-center justify-center shadow-lg"
               >
                 <X className="w-3 h-3 text-white" />
               </button>
@@ -242,10 +245,13 @@ export default function AdminPage() {
   }
 
   function produktToEdit(p: Produkt): EditProduct {
+    // Deduplicate: bildUrl is also stored as first element of extra.images
+    const allImgs = [p.bildUrl, ...(p.extra?.images || [])].filter(Boolean);
+    const uniqueImgs = [...new Set(allImgs)];
     return {
       rowIndex: p.rowIndex, id: p.id, sku: p.sku, monat: p.monat, titel: p.titel,
       beschreibung: p.beschreibung, aliExpressLink: p.aliExpressLink,
-      images: [p.bildUrl, ...(p.extra?.images || [])].filter(Boolean),
+      images: uniqueImgs,
       stats: p.extra?.stats || { ...EMPTY.stats },
       finances: p.extra?.finances || { ...EMPTY.finances },
     };
