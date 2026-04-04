@@ -55,16 +55,23 @@ const SKU_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
 
 // ─── Drop Zone ───────────────────────────────────────────────────
 
-function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs: string[]) => void }) {
+function ImageDropZone({ images, onAdd, onRemove }: {
+  images: string[];
+  onAdd: (newUrls: string[]) => void;
+  onRemove: (index: number) => void;
+}) {
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   async function uploadFiles(files: FileList | File[]) {
     const fileArr = Array.from(files).filter(f => f.type.startsWith("image/"));
     if (!fileArr.length) return;
     setUploading(true);
-    const newUrls: string[] = [];
+    setUploadError("");
+    const successUrls: string[] = [];
+    let failCount = 0;
     for (const file of fileArr) {
       try {
         const fd = new FormData();
@@ -72,16 +79,31 @@ function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs
         const res = await fetch("/api/upload", { method: "POST", body: fd });
         if (res.ok) {
           const data = await res.json();
-          newUrls.push(data.url);
+          if (data.url && typeof data.url === "string" && data.url.startsWith("http")) {
+            successUrls.push(data.url);
+            console.log("[ImageDropZone] Upload OK:", data.url);
+          } else {
+            console.error("[ImageDropZone] Upload returned invalid URL:", data);
+            failCount++;
+          }
         } else {
-          // Fallback: use object URL for preview (won't persist but shows in UI)
-          newUrls.push(URL.createObjectURL(file));
+          const errText = await res.text();
+          console.error("[ImageDropZone] Upload failed:", res.status, errText);
+          failCount++;
         }
-      } catch {
-        newUrls.push(URL.createObjectURL(file));
+      } catch (err) {
+        console.error("[ImageDropZone] Upload exception:", err);
+        failCount++;
       }
     }
-    onChange([...images, ...newUrls]);
+    if (successUrls.length > 0) {
+      // Use onAdd to let parent merge with latest state via functional updater
+      onAdd(successUrls);
+    }
+    if (failCount > 0) {
+      setUploadError(`${failCount} Bild(er) konnten nicht hochgeladen werden.`);
+      setTimeout(() => setUploadError(""), 5000);
+    }
     setUploading(false);
   }
 
@@ -96,19 +118,26 @@ function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs
 
   return (
     <div className="space-y-3">
-      <label className="block text-xs text-zinc-400 font-medium">Bilder</label>
+      <label className="block text-xs text-zinc-400 font-medium">Bilder ({images.length})</label>
+
+      {uploadError && (
+        <div className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2 flex items-center gap-2">
+          <AlertCircle className="w-3 h-3 shrink-0" />
+          {uploadError}
+        </div>
+      )}
 
       {/* Thumbnails */}
       {images.length > 0 && (
         <div className="flex flex-wrap gap-3">
           {images.map((url, i) => (
-            <div key={i} className="relative w-20 h-20 rounded-xl overflow-hidden border border-white/20 bg-white/5">
+            <div key={`${i}-${url.slice(-20)}`} className="relative w-20 h-20 rounded-xl overflow-hidden border border-white/20 bg-white/5">
               <img src={url} alt="" className="w-full h-full object-cover" />
               {i === 0 && (
                 <span className="absolute bottom-0 left-0 right-0 bg-black/60 text-[9px] text-center text-[#95BF47] py-0.5 font-medium">Hauptbild</span>
               )}
               <button
-                onClick={() => onChange(images.filter((_, idx) => idx !== i))}
+                onClick={() => onRemove(i)}
                 className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 border border-red-400 rounded-full flex items-center justify-center shadow-lg"
               >
                 <X className="w-3 h-3 text-white" />
@@ -131,7 +160,10 @@ function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs
         }`}
       >
         {uploading ? (
-          <Loader2 className="w-6 h-6 animate-spin text-indigo-400 mx-auto" />
+          <div className="flex flex-col items-center gap-2">
+            <Loader2 className="w-6 h-6 animate-spin text-indigo-400" />
+            <p className="text-xs text-zinc-400">Wird hochgeladen...</p>
+          </div>
         ) : (
           <>
             <ImagePlus className={`w-8 h-8 mx-auto mb-2 ${dragging ? "text-indigo-400" : "text-zinc-600"}`} />
@@ -139,7 +171,7 @@ function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs
             <p className="text-xs text-zinc-600 mt-1">PNG, JPG, WebP – max. 5MB</p>
           </>
         )}
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => e.target.files && uploadFiles(e.target.files)} />
+        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={e => { if (e.target.files) uploadFiles(e.target.files); e.target.value = ""; }} />
       </div>
 
       {/* URL Input */}
@@ -151,7 +183,10 @@ function ImageDropZone({ images, onChange }: { images: string[]; onChange: (imgs
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               const val = (e.target as HTMLInputElement).value.trim();
-              if (val) { onChange([...images, val]); (e.target as HTMLInputElement).value = ""; }
+              if (val && val.startsWith("http")) {
+                onAdd([val]);
+                (e.target as HTMLInputElement).value = "";
+              }
             }
           }}
         />
@@ -264,16 +299,22 @@ export default function AdminPage() {
     if (!editProduct) return;
     setSaving(true); setError("");
     try {
+      const images = editProduct.images.filter(u => u && typeof u === "string" && u.startsWith("http"));
       const body = {
         ...(isNew ? {} : { rowIndex: editProduct.rowIndex }),
         id: editProduct.id || `prod_${Date.now()}`,
         sku: editProduct.sku, monat: editProduct.monat,
         titel: editProduct.titel, beschreibung: editProduct.beschreibung,
         aliExpressLink: editProduct.aliExpressLink,
-        bildUrl: editProduct.images[0] || "",
+        bildUrl: images[0] || "",
         preis: String(editProduct.finances.recommendedSellPrice || ""),
-        extra: { stats: editProduct.stats, finances: editProduct.finances, images: editProduct.images },
+        extra: { stats: editProduct.stats, finances: editProduct.finances, images },
       };
+      console.log("=== PAYLOAD VOR DEM SENDEN ===");
+      console.log("images:", JSON.stringify(images));
+      console.log("extra:", JSON.stringify(body.extra));
+      console.log("bildUrl:", body.bildUrl);
+      console.log("full body:", JSON.stringify(body));
       const res = await fetch("/api/admin/products", { method: isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       if (!res.ok) { const d = await res.json(); setError(d.error); return; }
       setEditModal(false); setEditProduct(null);
@@ -460,7 +501,24 @@ export default function AdminPage() {
                 <div><label className="block text-xs text-zinc-400 mb-1">AliExpress Link</label><input type="text" value={editProduct.aliExpressLink} onChange={e => setEditProduct({ ...editProduct, aliExpressLink: e.target.value })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
 
                 {/* Image Drop Zone */}
-                <ImageDropZone images={editProduct.images} onChange={imgs => setEditProduct({ ...editProduct, images: imgs })} />
+                <ImageDropZone
+                  images={editProduct.images}
+                  onAdd={(newUrls) => {
+                    console.log("[ImageDropZone] onAdd called with:", newUrls);
+                    setEditProduct(prev => {
+                      if (!prev) return prev;
+                      const merged = [...prev.images, ...newUrls];
+                      console.log("[ImageDropZone] New images state:", merged);
+                      return { ...prev, images: merged };
+                    });
+                  }}
+                  onRemove={(index) => {
+                    setEditProduct(prev => {
+                      if (!prev) return prev;
+                      return { ...prev, images: prev.images.filter((_, idx) => idx !== index) };
+                    });
+                  }}
+                />
 
                 {/* Finances */}
                 <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">

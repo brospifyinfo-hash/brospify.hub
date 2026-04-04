@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, addProdukt, updateProdukt, deleteProdukt } from "@/lib/sheets";
 
+export const dynamic = "force-dynamic";
+
 async function requireAdmin() {
   const session = await getSession();
   return session.isLoggedIn && session.isAdmin;
@@ -25,20 +27,41 @@ export async function GET() {
 // Bulk import sends:        { stats, finances, images, ... }
 // We must handle BOTH formats.
 
-function extractExtra(body: Record<string, unknown>): {
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * Build the extra JSON object from the request body.
+ * Admin UI sends:   { extra: { stats, finances, images }, ... }
+ * Bulk import sends: { stats, finances, images, ... }
+ * We handle BOTH by checking body.extra first, then top-level.
+ */
+function buildExtra(body: Record<string, unknown>): {
   stats?: { trendScore: number; viralScore: number; impulseBuyFactor: number; problemSolverIndex: number; marketSaturation: number };
   finances?: { buyPrice: number; recommendedSellPrice: number; profitMargin: number };
   images?: string[];
 } {
-  const extra = body.extra as Record<string, unknown> | undefined;
-  /* eslint-disable @typescript-eslint/no-explicit-any */
-  return {
-    stats: (body.stats || extra?.stats || undefined) as any,
-    finances: (body.finances || extra?.finances || undefined) as any,
-    images: (body.images || extra?.images || undefined) as any,
-  };
-  /* eslint-enable @typescript-eslint/no-explicit-any */
+  const nested = body.extra as Record<string, unknown> | undefined;
+
+  // Stats: prefer nested, fall back to top-level
+  const stats = (nested?.stats || body.stats || undefined) as any;
+
+  // Finances: prefer nested, fall back to top-level
+  const finances = (nested?.finances || body.finances || undefined) as any;
+
+  // Images: prefer nested, fall back to top-level — ensure it's a real array of strings
+  let rawImages = nested?.images || body.images;
+  let images: string[] | undefined;
+  if (Array.isArray(rawImages) && rawImages.length > 0) {
+    images = rawImages.filter((u: any) => typeof u === "string" && u.length > 0);
+    if (images.length === 0) images = undefined;
+  }
+
+  console.log("[buildExtra] nested?.images:", JSON.stringify(nested?.images));
+  console.log("[buildExtra] body.images:", JSON.stringify(body.images));
+  console.log("[buildExtra] final images:", JSON.stringify(images));
+
+  return { stats, finances, images };
 }
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function extractBildUrl(body: Record<string, unknown>): string {
   const extra = body.extra as Record<string, unknown> | undefined;
@@ -61,11 +84,16 @@ export async function POST(req: NextRequest) {
   }
   try {
     const body = await req.json();
-    const extra = extractExtra(body);
+
+    // Build extra: prefer body.extra (from admin UI), fall back to top-level fields (bulk import)
+    const extra = buildExtra(body);
     const bildUrl = extractBildUrl(body);
     const preis = extractPreis(body);
 
-    console.log("[Admin POST] extra:", JSON.stringify(extra));
+    console.log("=== [Admin POST] BACKEND EMPFANGEN ===");
+    console.log("[Admin POST] body.extra:", JSON.stringify(body.extra));
+    console.log("[Admin POST] built extra:", JSON.stringify(extra));
+    console.log("[Admin POST] extra.images:", JSON.stringify(extra.images));
     console.log("[Admin POST] bildUrl:", bildUrl, "preis:", preis);
 
     await addProdukt({
@@ -95,12 +123,18 @@ export async function PUT(req: NextRequest) {
     if (!body.rowIndex) {
       return NextResponse.json({ error: "rowIndex fehlt" }, { status: 400 });
     }
-    const extra = extractExtra(body);
+
+    // Build extra: prefer body.extra (from admin UI), fall back to top-level fields (bulk import)
+    const extra = buildExtra(body);
     const bildUrl = extractBildUrl(body);
     const preis = extractPreis(body);
 
-    console.log("[Admin PUT] row:", body.rowIndex, "extra:", JSON.stringify(extra));
-    console.log("[Admin PUT] row:", body.rowIndex, "bildUrl:", bildUrl, "preis:", preis);
+    console.log("=== [Admin PUT] BACKEND EMPFANGEN ===");
+    console.log("[Admin PUT] row:", body.rowIndex);
+    console.log("[Admin PUT] body.extra:", JSON.stringify(body.extra));
+    console.log("[Admin PUT] built extra:", JSON.stringify(extra));
+    console.log("[Admin PUT] extra.images:", JSON.stringify(extra.images));
+    console.log("[Admin PUT] bildUrl:", bildUrl, "preis:", preis);
 
     await updateProdukt(body.rowIndex, {
       id: body.id,
