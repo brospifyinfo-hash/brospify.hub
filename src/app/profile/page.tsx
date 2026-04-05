@@ -1,0 +1,330 @@
+"use client";
+
+import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import {
+  User,
+  Store,
+  Palette,
+  Scale,
+  Save,
+  Loader2,
+  Check,
+  AlertCircle,
+  X,
+  Key,
+  Globe,
+  Upload,
+  ImagePlus,
+  Zap,
+} from "lucide-react";
+import Navigation from "@/components/Navigation";
+
+interface Profile {
+  shopify_credentials?: { clientId?: string; clientSecret?: string };
+  brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
+  legal_data?: { firmenname?: string; inhaber?: string; strasse?: string; plz?: string; stadt?: string; land?: string; email?: string; telefon?: string; ustId?: string; handelsregister?: string };
+  ai_usage?: { month: string; count: number };
+}
+
+export default function ProfilePage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [shopDomain, setShopDomain] = useState("");
+  const [kundenEmail, setKundenEmail] = useState("");
+  const [hasShopifyToken, setHasShopifyToken] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoRef = useRef<HTMLInputElement>(null);
+
+  // Form state
+  const [credentials, setCredentials] = useState({ clientId: "", clientSecret: "" });
+  const [brandKit, setBrandKit] = useState({ logoUrl: "", primaryColor: "#000000", accentColor: "#95BF47", toneOfVoice: "" });
+  const [legalData, setLegalData] = useState({ firmenname: "", inhaber: "", strasse: "", plz: "", stadt: "", land: "Deutschland", email: "", telefon: "", ustId: "", handelsregister: "" });
+  const [aiUsage, setAiUsage] = useState({ month: "", count: 0 });
+
+  useEffect(() => {
+    fetch("/api/profile")
+      .then((r) => {
+        if (r.status === 401) { router.push("/"); return null; }
+        return r.json();
+      })
+      .then((data) => {
+        if (!data) return;
+        const p: Profile = data.profile || {};
+        setShopDomain(data.shopDomain || "");
+        setKundenEmail(data.kundenEmail || "");
+        setHasShopifyToken(data.hasShopifyToken || false);
+        setCredentials({
+          clientId: p.shopify_credentials?.clientId || "",
+          clientSecret: p.shopify_credentials?.clientSecret || "",
+        });
+        setBrandKit({
+          logoUrl: p.brand_kit?.logoUrl || "",
+          primaryColor: p.brand_kit?.primaryColor || "#000000",
+          accentColor: p.brand_kit?.accentColor || "#95BF47",
+          toneOfVoice: p.brand_kit?.toneOfVoice || "",
+        });
+        setLegalData({
+          firmenname: p.legal_data?.firmenname || "",
+          inhaber: p.legal_data?.inhaber || "",
+          strasse: p.legal_data?.strasse || "",
+          plz: p.legal_data?.plz || "",
+          stadt: p.legal_data?.stadt || "",
+          land: p.legal_data?.land || "Deutschland",
+          email: p.legal_data?.email || "",
+          telefon: p.legal_data?.telefon || "",
+          ustId: p.legal_data?.ustId || "",
+          handelsregister: p.legal_data?.handelsregister || "",
+        });
+        setAiUsage(p.ai_usage || { month: "", count: 0 });
+        setLoading(false);
+      })
+      .catch(() => router.push("/"));
+  }, [router]);
+
+  async function handleSave() {
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      const res = await fetch("/api/profile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopify_credentials: credentials,
+          brand_kit: brandKit,
+          legal_data: legalData,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Fehler"); return; }
+      setSuccess("Profil gespeichert!");
+      setTimeout(() => setSuccess(""), 3000);
+    } catch { setError("Speichern fehlgeschlagen."); }
+    finally { setSaving(false); }
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) setBrandKit((prev) => ({ ...prev, logoUrl: data.url }));
+      }
+    } catch { /* ignore */ }
+    finally { setLogoUploading(false); }
+  }
+
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const aiUsedThisMonth = aiUsage.month === currentMonth ? aiUsage.count : 0;
+  const aiRemaining = 3 - aiUsedThisMonth;
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-mesh flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-mesh">
+      <Navigation />
+
+      <div className="fixed top-40 left-10 w-72 h-72 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
+            <User className="w-8 h-8 text-indigo-400" />
+            Mein Profil
+          </h1>
+          <p className="text-zinc-400">Deine Shopify-Verbindung, Markenidentität und rechtliche Daten.</p>
+          {kundenEmail && <p className="text-xs text-zinc-600 mt-1">{kundenEmail} &bull; {shopDomain || "Kein Shop verbunden"}</p>}
+        </motion.div>
+
+        {/* Toasts */}
+        {error && (
+          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 px-4 py-3 rounded-xl mb-4">
+            <AlertCircle className="w-4 h-4 shrink-0" /><span>{error}</span>
+            <button onClick={() => setError("")} className="ml-auto"><X className="w-4 h-4" /></button>
+          </div>
+        )}
+        {success && (
+          <div className="flex items-center gap-2 text-emerald-400 text-sm bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 rounded-xl mb-4">
+            <Check className="w-4 h-4 shrink-0" /><span>{success}</span>
+          </div>
+        )}
+
+        <div className="space-y-6">
+          {/* ── Card 1: Shopify API ─────────────────── */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+            className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+            <h2 className="font-bold flex items-center gap-2">
+              <Store className="w-5 h-5 text-[#95BF47]" />
+              Shopify API Verbindung
+            </h2>
+            <div className="flex items-center gap-2 text-xs">
+              {hasShopifyToken ? (
+                <span className="text-emerald-400 flex items-center gap-1"><Check className="w-3 h-3" />Shop verbunden: {shopDomain}</span>
+              ) : (
+                <span className="text-amber-400 flex items-center gap-1"><AlertCircle className="w-3 h-3" />Nicht verbunden</span>
+              )}
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1 flex items-center gap-1"><Key className="w-3 h-3" />Client-ID</label>
+                <input type="text" value={credentials.clientId} onChange={(e) => setCredentials((p) => ({ ...p, clientId: e.target.value }))} placeholder="Shopify Client-ID" className="input-glass w-full font-mono text-xs" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1 flex items-center gap-1"><Key className="w-3 h-3" />Client Secret</label>
+                <input type="password" value={credentials.clientSecret} onChange={(e) => setCredentials((p) => ({ ...p, clientSecret: e.target.value }))} placeholder="Shopify Client Secret" className="input-glass w-full font-mono text-xs" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1 flex items-center gap-1"><Globe className="w-3 h-3" />Shop Domain</label>
+              <input type="text" value={shopDomain} disabled className="input-glass w-full text-xs opacity-60" />
+              <p className="text-[10px] text-zinc-600 mt-1">Die Domain wird über den Verbindungsprozess gesetzt. Gehe dafür zu Einstellungen.</p>
+            </div>
+          </motion.div>
+
+          {/* ── Card 2: Brand Kit ──────────────────── */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
+            className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+            <h2 className="font-bold flex items-center gap-2">
+              <Palette className="w-5 h-5 text-purple-400" />
+              Brand-Kit
+            </h2>
+            <p className="text-zinc-400 text-xs">Deine Markenidentität für KI-generierte Texte und Theme-Anpassungen.</p>
+
+            {/* Logo */}
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Logo</label>
+              <div className="flex items-center gap-3">
+                {brandKit.logoUrl ? (
+                  <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-white/20 bg-white/5">
+                    <img src={brandKit.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                    <button onClick={() => setBrandKit((p) => ({ ...p, logoUrl: "" }))} className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center shadow-lg"><X className="w-3 h-3 text-white" /></button>
+                  </div>
+                ) : (
+                  <button onClick={() => logoRef.current?.click()} disabled={logoUploading} className="w-16 h-16 rounded-xl border-2 border-dashed border-zinc-700 flex items-center justify-center text-zinc-600 hover:border-zinc-500 transition">
+                    {logoUploading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ImagePlus className="w-5 h-5" />}
+                  </button>
+                )}
+                <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={(e) => { if (e.target.files?.[0]) uploadLogo(e.target.files[0]); e.target.value = ""; }} />
+                <input type="text" value={brandKit.logoUrl} onChange={(e) => setBrandKit((p) => ({ ...p, logoUrl: e.target.value }))} placeholder="Oder Logo-URL einfügen..." className="input-glass flex-1 text-xs" />
+              </div>
+            </div>
+
+            {/* Colors */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Primärfarbe</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={brandKit.primaryColor} onChange={(e) => setBrandKit((p) => ({ ...p, primaryColor: e.target.value }))} className="w-10 h-10 rounded-lg border border-zinc-700 cursor-pointer bg-transparent" />
+                  <input type="text" value={brandKit.primaryColor} onChange={(e) => setBrandKit((p) => ({ ...p, primaryColor: e.target.value }))} className="input-glass flex-1 text-xs font-mono" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Akzentfarbe</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={brandKit.accentColor} onChange={(e) => setBrandKit((p) => ({ ...p, accentColor: e.target.value }))} className="w-10 h-10 rounded-lg border border-zinc-700 cursor-pointer bg-transparent" />
+                  <input type="text" value={brandKit.accentColor} onChange={(e) => setBrandKit((p) => ({ ...p, accentColor: e.target.value }))} className="input-glass flex-1 text-xs font-mono" />
+                </div>
+              </div>
+            </div>
+
+            {/* Tone of Voice */}
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1 flex items-center gap-1"><Zap className="w-3 h-3" />Tone of Voice (KI-Anweisung)</label>
+              <textarea value={brandKit.toneOfVoice} onChange={(e) => setBrandKit((p) => ({ ...p, toneOfVoice: e.target.value }))} rows={2} placeholder="z.B. Locker, modern, Gen-Z, mit Emojis..." className="input-glass w-full resize-none text-xs" />
+            </div>
+
+            {/* AI Usage */}
+            <div className="flex items-center gap-2 text-xs text-zinc-500 border-t border-white/5 pt-3">
+              <Zap className="w-3.5 h-3.5 text-purple-400" />
+              KI-Optimierungen diesen Monat: <strong className="text-zinc-300">{aiUsedThisMonth}/3</strong>
+              {aiRemaining > 0 ? (
+                <span className="text-emerald-400">({aiRemaining} verbleibend)</span>
+              ) : (
+                <span className="text-red-400">(Limit erreicht)</span>
+              )}
+            </div>
+          </motion.div>
+
+          {/* ── Card 3: Legal Data ─────────────────── */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
+            className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+            <h2 className="font-bold flex items-center gap-2">
+              <Scale className="w-5 h-5 text-blue-400" />
+              Rechtliche Daten
+            </h2>
+            <p className="text-zinc-400 text-xs">Diese Daten werden für das DACH-Sicherheitspaket (Impressum, AGB etc.) verwendet.</p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Firmenname</label>
+                <input type="text" value={legalData.firmenname} onChange={(e) => setLegalData((p) => ({ ...p, firmenname: e.target.value }))} className="input-glass w-full text-xs" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Inhaber</label>
+                <input type="text" value={legalData.inhaber} onChange={(e) => setLegalData((p) => ({ ...p, inhaber: e.target.value }))} className="input-glass w-full text-xs" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Straße</label>
+              <input type="text" value={legalData.strasse} onChange={(e) => setLegalData((p) => ({ ...p, strasse: e.target.value }))} className="input-glass w-full text-xs" />
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <input type="text" value={legalData.plz} onChange={(e) => setLegalData((p) => ({ ...p, plz: e.target.value }))} placeholder="PLZ" className="input-glass text-xs" />
+              <input type="text" value={legalData.stadt} onChange={(e) => setLegalData((p) => ({ ...p, stadt: e.target.value }))} placeholder="Stadt" className="input-glass col-span-2 text-xs" />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Land</label>
+              <select value={legalData.land} onChange={(e) => setLegalData((p) => ({ ...p, land: e.target.value }))} className="input-glass w-full text-xs">
+                <option value="Deutschland">Deutschland</option>
+                <option value="Österreich">Österreich</option>
+                <option value="Schweiz">Schweiz</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">E-Mail</label>
+                <input type="email" value={legalData.email} onChange={(e) => setLegalData((p) => ({ ...p, email: e.target.value }))} className="input-glass w-full text-xs" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Telefon</label>
+                <input type="tel" value={legalData.telefon} onChange={(e) => setLegalData((p) => ({ ...p, telefon: e.target.value }))} className="input-glass w-full text-xs" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">USt-IdNr.</label>
+                <input type="text" value={legalData.ustId} onChange={(e) => setLegalData((p) => ({ ...p, ustId: e.target.value }))} placeholder="DE123456789" className="input-glass w-full text-xs" />
+              </div>
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Handelsregister</label>
+                <input type="text" value={legalData.handelsregister} onChange={(e) => setLegalData((p) => ({ ...p, handelsregister: e.target.value }))} placeholder="HRB 12345" className="input-glass w-full text-xs" />
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Save Button */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+            <button onClick={handleSave} disabled={saving} className="w-full btn-accent py-3.5 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50">
+              {saving ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" />Profil speichern</>}
+            </button>
+          </motion.div>
+        </div>
+      </div>
+    </div>
+  );
+}

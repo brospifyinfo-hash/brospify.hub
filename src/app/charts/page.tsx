@@ -580,7 +580,7 @@ export default function ChartsPage() {
                       {aiImporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Rocket className="w-5 h-5" />Direkt-Import (Skip AI)</>}
                     </button>
 
-                    <p className="text-[10px] text-zinc-600 text-center">KI-Optimierung nutzt Gemini AI, um Titel &amp; Beschreibung verkaufsstark zu formulieren.</p>
+                    <p className="text-[10px] text-zinc-600 text-center">KI-Optimierung nutzt DeepSeek AI, um Titel &amp; Beschreibung verkaufsstark zu formulieren. (3x pro Monat verfügbar)</p>
                   </div>
                 )}
               </div>

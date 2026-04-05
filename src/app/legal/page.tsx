@@ -59,14 +59,31 @@ export default function LegalPage() {
   } | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/session")
-      .then((r) => r.json())
-      .then((s) => {
-        if (!s.isLoggedIn) { router.push("/"); return; }
-        setHasShopify(!!s.hasShopifyConnection);
-        setLoading(false);
-      })
-      .catch(() => router.push("/"));
+    Promise.all([
+      fetch("/api/auth/session").then((r) => r.json()),
+      fetch("/api/profile").then((r) => r.ok ? r.json() : null).catch(() => null),
+    ]).then(([sess, profileData]) => {
+      if (!sess.isLoggedIn) { router.push("/"); return; }
+      setHasShopify(!!sess.hasShopifyConnection);
+      // Pre-fill from profile legal_data
+      if (profileData?.profile?.legal_data) {
+        const ld = profileData.profile.legal_data;
+        setForm((prev) => ({
+          ...prev,
+          firmenname: ld.firmenname || prev.firmenname,
+          inhaber: ld.inhaber || prev.inhaber,
+          strasse: ld.strasse || prev.strasse,
+          plz: ld.plz || prev.plz,
+          stadt: ld.stadt || prev.stadt,
+          land: ld.land || prev.land,
+          email: ld.email || prev.email,
+          telefon: ld.telefon || prev.telefon,
+          ustId: ld.ustId || prev.ustId,
+          handelsregister: ld.handelsregister || prev.handelsregister,
+        }));
+      }
+      setLoading(false);
+    }).catch(() => router.push("/"));
   }, [router]);
 
   function updateField<K extends keyof LegalForm>(key: K, value: LegalForm[K]) {

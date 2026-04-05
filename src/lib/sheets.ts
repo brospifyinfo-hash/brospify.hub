@@ -26,7 +26,14 @@ const SHEET_ID = () => {
 
 // ─── KUNDEN (Tab 1) ────────────────────────────────────────────
 // Columns: A=Shopify_Token, B=Lizensschlüssel, C=Status, D=Shop Domain,
-//          E=Kunden-Email, F=Bestellnummer, G=charge, H=suplied, I=SKU
+//          E=Kunden-Email, F=Bestellnummer, G=charge, H=suplied, I=SKU, J=Profil_JSON
+
+export interface KundeProfile {
+  shopify_credentials?: { clientId?: string; clientSecret?: string };
+  brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
+  legal_data?: { firmenname?: string; inhaber?: string; strasse?: string; plz?: string; stadt?: string; land?: string; email?: string; telefon?: string; ustId?: string; handelsregister?: string };
+  ai_usage?: { month: string; count: number };
+}
 
 export interface Kunde {
   rowIndex: number;
@@ -39,6 +46,12 @@ export interface Kunde {
   charge: string;
   suplied: string;
   sku: string;
+  profile: KundeProfile;
+}
+
+function parseProfile(raw: string): KundeProfile {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
 }
 
 function rowToKunde(row: string[], index: number): Kunde {
@@ -53,6 +66,7 @@ function rowToKunde(row: string[], index: number): Kunde {
     charge: row[6] || "",
     suplied: row[7] || "",
     sku: row[8] || "",
+    profile: parseProfile(row[9] || ""),
   };
 }
 
@@ -60,10 +74,30 @@ export async function getAllKunden(): Promise<Kunde[]> {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: "Kunden!A2:I",
+    range: "Kunden!A2:J",
   });
   const rows = res.data.values || [];
   return rows.map((row, i) => rowToKunde(row, i));
+}
+
+export async function getKundeProfile(rowIndex: number): Promise<KundeProfile> {
+  const sheets = getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `Kunden!J${rowIndex}`,
+  });
+  const raw = res.data.values?.[0]?.[0] || "";
+  return parseProfile(raw);
+}
+
+export async function updateKundeProfile(rowIndex: number, profile: KundeProfile): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Kunden!J${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[JSON.stringify(profile)]] },
+  });
 }
 
 export async function findKundeByKey(key: string): Promise<Kunde | null> {

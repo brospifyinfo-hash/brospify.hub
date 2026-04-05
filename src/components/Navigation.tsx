@@ -13,8 +13,8 @@ import {
   Menu,
   X,
   Crown,
-  Cog,
   Scale,
+  User,
 } from "lucide-react";
 
 interface SessionInfo {
@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { href: "/charts", label: "Charts", icon: BarChart3 },
   { href: "/themes", label: "Themes", icon: Palette },
   { href: "/legal", label: "Legal", icon: Scale },
+  { href: "/profile", label: "Profil", icon: User },
 ];
 
 export default function Navigation() {
@@ -111,20 +112,6 @@ export default function Navigation() {
 
             {/* Right Side */}
             <div className="flex items-center gap-3">
-              {/* Settings button for customers */}
-              {!session.isAdmin && (
-                <Link
-                  href="/setup"
-                  className={`hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-all duration-200 ${
-                    pathname === "/setup"
-                      ? "text-[#95BF47] bg-[#95BF47]/10"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
-                  }`}
-                  title="Shop-Einstellungen"
-                >
-                  <Cog className="w-4 h-4" />
-                </Link>
-              )}
               <button
                 onClick={handleLogout}
                 className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
@@ -182,21 +169,6 @@ export default function Navigation() {
                 >
                   <Settings className="w-5 h-5" />
                   Admin
-                </Link>
-              )}
-
-              {!session.isAdmin && (
-                <Link
-                  href="/setup"
-                  onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                    pathname === "/setup"
-                      ? "text-[#95BF47] bg-[#95BF47]/10"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
-                  }`}
-                >
-                  <Cog className="w-5 h-5" />
-                  Einstellungen
                 </Link>
               )}
 
