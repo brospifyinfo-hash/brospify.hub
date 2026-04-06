@@ -19,7 +19,8 @@ import {
   Plus,
   Truck,
   RotateCcw,
-  X,
+  Upload,
+  AlertCircle,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -72,10 +73,11 @@ function ColorField({ label, value, onChange }: { label: string; value: string; 
 }
 
 // ─── Main Page ───────────────────────────────────────────
-export default function CheckoutCustomizerPage() {
+export default function CartOptimizerPage() {
   const router = useRouter();
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
+  const [shopConnected, setShopConnected] = useState(false);
 
   // Trust badges
   const [paypal, setPaypal] = useState(true);
@@ -88,21 +90,93 @@ export default function CheckoutCustomizerPage() {
   const [cartTimer, setCartTimer] = useState(false);
   const [stickyAtc, setStickyAtc] = useState(true);
   const [crossSell, setCrossSell] = useState(false);
+  const [freeShippingBar, setFreeShippingBar] = useState(true);
+  const [freeShippingThreshold, setFreeShippingThreshold] = useState(50);
 
   // Design
   const [accentColor, setAccentColor] = useState("#95BF47");
   const [bgColor, setBgColor] = useState("#ffffff");
   const [font, setFont] = useState("Inter");
 
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState("");
+  const [pushing, setPushing] = useState(false);
+  const [pushMsg, setPushMsg] = useState("");
+
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data) => {
         if (!data.isLoggedIn) { router.push("/"); return; }
+        setShopConnected(!!(data.hasShopifyToken || data.hasShopifyConnection));
+        // Load saved settings
+        fetch("/api/checkout/settings")
+          .then((r) => r.json())
+          .then((res) => {
+            if (res.settings) {
+              const s = res.settings;
+              if (s.paypal !== undefined) setPaypal(s.paypal);
+              if (s.klarna !== undefined) setKlarna(s.klarna);
+              if (s.visa !== undefined) setVisa(s.visa);
+              if (s.guarantee !== undefined) setGuarantee(s.guarantee);
+              if (s.secureCheckout !== undefined) setSecureCheckout(s.secureCheckout);
+              if (s.cartTimer !== undefined) setCartTimer(s.cartTimer);
+              if (s.stickyAtc !== undefined) setStickyAtc(s.stickyAtc);
+              if (s.crossSell !== undefined) setCrossSell(s.crossSell);
+              if (s.freeShippingBar !== undefined) setFreeShippingBar(s.freeShippingBar);
+              if (s.freeShippingThreshold !== undefined) setFreeShippingThreshold(s.freeShippingThreshold);
+              if (s.accentColor) setAccentColor(s.accentColor);
+              if (s.bgColor) setBgColor(s.bgColor);
+              if (s.font) setFont(s.font);
+            }
+          })
+          .catch(() => {});
         setLoading(false);
       })
       .catch(() => router.push("/"));
   }, [router]);
+
+  const de = t.nav.home !== "Home";
+
+  function handleSave() {
+    setSaving(true);
+    setSaveMsg("");
+    fetch("/api/checkout/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paypal, klarna, visa, guarantee, secureCheckout, cartTimer, stickyAtc, crossSell, freeShippingBar, freeShippingThreshold, accentColor, bgColor, font }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        setSaveMsg(res.ok ? (de ? "Gespeichert!" : "Saved!") : "Error");
+        setTimeout(() => setSaveMsg(""), 2000);
+      })
+      .catch(() => setSaveMsg("Error"))
+      .finally(() => setSaving(false));
+  }
+
+  function handlePushToTheme() {
+    setPushing(true);
+    setPushMsg("");
+    fetch("/api/cart/push", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paypal, klarna, visa, guarantee, secureCheckout, cartTimer, freeShippingBar, freeShippingThreshold, accentColor }),
+    })
+      .then((r) => r.json())
+      .then((res) => {
+        if (res.ok) {
+          setPushMsg(de
+            ? "Snippet hochgeladen! F\u00FCge {% render 'brospify-cart-enhancements' %} in dein Cart-Template ein."
+            : "Snippet uploaded! Add {% render 'brospify-cart-enhancements' %} to your cart template."
+          );
+        } else {
+          setPushMsg(res.error || "Error");
+        }
+      })
+      .catch(() => setPushMsg("Error"))
+      .finally(() => setPushing(false));
+  }
 
   if (loading) {
     return (
@@ -112,8 +186,6 @@ export default function CheckoutCustomizerPage() {
     );
   }
 
-  const de = t.nav.home !== "Home";
-
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
@@ -122,11 +194,25 @@ export default function CheckoutCustomizerPage() {
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
             <ShoppingCart className="w-8 h-8 text-purple-400" />
-            Checkout Customizer
+            {de ? "Warenkorb Optimierer" : "Cart Optimizer"}
           </h1>
           <p className="text-zinc-400">
-            {de ? "Passe Trust-Badges, Urgency-Elemente und das Design deines Checkouts an." : "Customize trust badges, urgency elements and checkout design."}
+            {de ? "Trust Badges, Timer & Conversion-Elemente f\u00FCr deinen Warenkorb." : "Trust badges, timers & conversion elements for your cart page."}
           </p>
+        </motion.div>
+
+        {/* Info Banner */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="glass rounded-xl border border-indigo-500/20 p-4 mb-6 flex items-start gap-3"
+        >
+          <AlertCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
+          <div className="text-xs text-zinc-400">
+            {de
+              ? "Shopify sperrt Checkout-Anpassungen f\u00FCr Standard-Merchants. Dieses Tool optimiert stattdessen deinen Warenkorb (Cart) \u00FCber die Theme Asset API. Die Elemente werden als Liquid-Snippet in dein Theme gepusht."
+              : "Shopify locks checkout customization for non-Plus merchants. This tool optimizes your cart page instead via the Theme Asset API. Elements are pushed as a Liquid snippet into your theme."}
+          </div>
         </motion.div>
 
         <div className="grid lg:grid-cols-5 gap-8">
@@ -144,8 +230,8 @@ export default function CheckoutCustomizerPage() {
                 <Toggle on={paypal} onChange={setPaypal} label="PayPal" desc={de ? "Zahlungssymbol anzeigen" : "Show payment icon"} />
                 <Toggle on={klarna} onChange={setKlarna} label="Klarna" desc={de ? "Ratenzahlung-Badge" : "Installment badge"} />
                 <Toggle on={visa} onChange={setVisa} label="Visa / Mastercard" desc={de ? "Kreditkarten-Symbole" : "Credit card icons"} />
-                <Toggle on={guarantee} onChange={setGuarantee} label={de ? "30 Tage Geld-zur\u00FCck" : "30 Day Money-Back"} desc={de ? "Garantie-Siegel anzeigen" : "Show guarantee seal"} />
-                <Toggle on={secureCheckout} onChange={setSecureCheckout} label={de ? "Sicherer Checkout" : "Secure Checkout"} desc="SSL Lock Badge" />
+                <Toggle on={guarantee} onChange={setGuarantee} label={de ? "30 Tage Geld-zur\u00FCck" : "30 Day Money-Back"} desc={de ? "Garantie-Siegel" : "Guarantee seal"} />
+                <Toggle on={secureCheckout} onChange={setSecureCheckout} label="SSL Secure" desc={de ? "SSL-Siegel anzeigen" : "Show SSL badge"} />
               </div>
             </motion.div>
 
@@ -157,9 +243,23 @@ export default function CheckoutCustomizerPage() {
                 Urgency & Conversion
               </h3>
               <div className="divide-y divide-white/5">
-                <Toggle on={cartTimer} onChange={setCartTimer} label="Cart Timer" desc={de ? "Countdown im Warenkorb (15:00)" : "Countdown in cart (15:00)"} />
-                <Toggle on={stickyAtc} onChange={setStickyAtc} label="Sticky Add-to-Cart" desc={de ? "Feste Kaufleiste am unteren Rand" : "Fixed buy bar at the bottom"} />
-                <Toggle on={crossSell} onChange={setCrossSell} label={de ? "Kunden kauften auch" : "Customers also bought"} desc="Cross-Sell Section" />
+                <Toggle on={cartTimer} onChange={setCartTimer} label="Cart Timer" desc={de ? "15-Minuten-Countdown im Warenkorb" : "15-minute countdown in cart"} />
+                <Toggle on={freeShippingBar} onChange={setFreeShippingBar} label={de ? "Kostenloser Versand Fortschritt" : "Free Shipping Progress"} desc={de ? "Fortschrittsbalken im Warenkorb" : "Progress bar in cart"} />
+                {freeShippingBar && (
+                  <div className="py-3">
+                    <label className="block text-xs text-zinc-400 mb-1.5">{de ? "Grenze (EUR)" : "Threshold (EUR)"}</label>
+                    <input
+                      type="number"
+                      value={freeShippingThreshold}
+                      onChange={(e) => setFreeShippingThreshold(Number(e.target.value))}
+                      className="input-glass w-full text-sm"
+                      min={0}
+                      step={5}
+                    />
+                  </div>
+                )}
+                <Toggle on={stickyAtc} onChange={setStickyAtc} label="Sticky Add-to-Cart" desc={de ? "Feste Kaufleiste am unteren Rand" : "Fixed buy bar at bottom"} />
+                <Toggle on={crossSell} onChange={setCrossSell} label={de ? "Kunden kauften auch" : "Customers also bought"} desc="Cross-Sell" />
               </div>
             </motion.div>
 
@@ -192,6 +292,50 @@ export default function CheckoutCustomizerPage() {
                 </select>
               </div>
             </motion.div>
+
+            {/* Save Button */}
+            <motion.button
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2 }}
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full py-3.5 rounded-xl font-bold text-sm bg-[#95BF47] text-black hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {saving ? (
+                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              ) : (
+                <Check className="w-4 h-4" />
+              )}
+              {saving ? (de ? "Speichern..." : "Saving...") : (de ? "Einstellungen speichern" : "Save Settings")}
+            </motion.button>
+            {saveMsg && (
+              <p className={`text-center text-xs ${saveMsg === "Error" ? "text-red-400" : "text-emerald-400"}`}>{saveMsg}</p>
+            )}
+
+            {/* Push to Theme Button */}
+            {shopConnected && (
+              <>
+                <motion.button
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.25 }}
+                  onClick={handlePushToTheme}
+                  disabled={pushing}
+                  className="w-full py-3.5 rounded-xl font-bold text-sm bg-indigo-500 text-white hover:brightness-110 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {pushing ? (
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  {pushing ? (de ? "Wird hochgeladen..." : "Pushing...") : (de ? "Snippet in Theme pushen" : "Push Snippet to Theme")}
+                </motion.button>
+                {pushMsg && (
+                  <p className={`text-center text-xs ${pushMsg.includes("Error") || pushMsg.includes("error") ? "text-red-400" : "text-emerald-400"}`}>{pushMsg}</p>
+                )}
+              </>
+            )}
           </div>
 
           {/* ═══════ RIGHT: Live Preview ═══════ */}
@@ -208,18 +352,18 @@ export default function CheckoutCustomizerPage() {
                   <div className="w-3 h-3 rounded-full bg-red-500/60" />
                   <div className="w-3 h-3 rounded-full bg-amber-500/60" />
                   <div className="w-3 h-3 rounded-full bg-emerald-500/60" />
-                  <span className="text-xs text-zinc-500 ml-2">checkout-preview.myshopify.com</span>
+                  <span className="text-xs text-zinc-500 ml-2">{de ? "warenkorb-vorschau" : "cart-preview"}.myshopify.com</span>
                 </div>
 
-                {/* Checkout Mockup */}
+                {/* Cart Mockup */}
                 <div
                   className="p-6 space-y-5 transition-all duration-300"
                   style={{ backgroundColor: bgColor, fontFamily: font, color: bgColor === "#ffffff" ? "#111" : "#fff" }}
                 >
                   {/* Header */}
                   <div className="flex items-center justify-between pb-4 border-b" style={{ borderColor: bgColor === "#ffffff" ? "#e5e7eb" : "rgba(255,255,255,0.1)" }}>
-                    <h3 className="text-lg font-bold" style={{ fontFamily: font }}>Checkout</h3>
-                    <Lock className="w-4 h-4" style={{ color: accentColor }} />
+                    <h3 className="text-lg font-bold" style={{ fontFamily: font }}>{de ? "Warenkorb" : "Your Cart"}</h3>
+                    <span className="text-xs opacity-50">1 {de ? "Artikel" : "item"}</span>
                   </div>
 
                   {/* Cart Timer */}
@@ -227,13 +371,27 @@ export default function CheckoutCustomizerPage() {
                     <motion.div
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }}
                       className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium"
                       style={{ backgroundColor: `${accentColor}15`, color: accentColor }}
                     >
                       <Clock className="w-4 h-4" />
                       {de ? "Reserviert f\u00FCr dich:" : "Reserved for you:"} <span className="font-bold">14:59</span>
                     </motion.div>
+                  )}
+
+                  {/* Free Shipping Progress Bar */}
+                  {freeShippingBar && (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium" style={{ color: accentColor }}>
+                        {de ? `Noch ${(freeShippingThreshold - 49.99).toFixed(2)} \u20AC bis zum kostenlosen Versand!` : `${(freeShippingThreshold - 49.99).toFixed(2)} \u20AC away from free shipping!`}
+                      </p>
+                      <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: bgColor === "#ffffff" ? "#e5e7eb" : "rgba(255,255,255,0.08)" }}>
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{ backgroundColor: accentColor, width: `${Math.min(100, (49.99 / freeShippingThreshold) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
                   )}
 
                   {/* Product */}
@@ -332,7 +490,7 @@ export default function CheckoutCustomizerPage() {
                       style={{ backgroundColor: accentColor, color: "#000" }}
                     >
                       <Lock className="w-4 h-4" />
-                      {de ? "Jetzt kaufen" : "Buy Now"}
+                      {de ? "Zur Kasse" : "Checkout"}
                       <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
@@ -356,7 +514,7 @@ export default function CheckoutCustomizerPage() {
                         className="px-4 py-2 rounded-lg text-xs font-bold shrink-0"
                         style={{ backgroundColor: accentColor, color: "#000" }}
                       >
-                        {de ? "In den Warenkorb" : "Add to Cart"}
+                        {de ? "Zur Kasse" : "Checkout"}
                       </button>
                     </motion.div>
                   )}
@@ -364,7 +522,7 @@ export default function CheckoutCustomizerPage() {
               </div>
 
               <p className="text-[10px] text-zinc-600 text-center mt-3">
-                {de ? "Die Vorschau aktualisiert sich sofort bei jeder \u00C4nderung." : "Preview updates instantly with every change."}
+                {de ? "Vorschau aktualisiert sich sofort. Nutze 'Snippet pushen' um \u00C4nderungen live zu schalten." : "Preview updates instantly. Use 'Push Snippet' to go live."}
               </p>
             </div>
           </motion.div>

@@ -16,6 +16,7 @@ import {
   ShoppingCart,
   Activity,
   Crown,
+  ExternalLink,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -24,14 +25,20 @@ interface SessionInfo {
   isLoggedIn: boolean;
   isAdmin: boolean;
   hasShopifyConnection: boolean;
+  hasShopifyToken: boolean;
   shopDomain?: string;
 }
 
 interface KPI {
   revenue: number;
+  revenueMonth?: number;
   visitors: number;
   sessions: number;
   conversionRate: number;
+  ordersToday: number;
+  ordersThisMonth: number;
+  aov: number;
+  error?: string;
 }
 
 interface Produkt {
@@ -64,11 +71,11 @@ export default function HomePage() {
         const allProducts = charts.flatMap((m: { produkte: Produkt[] }) => m.produkte) || [];
         setNeueProdukte(allProducts.slice(0, 3));
 
-        // If Shopify connected, fetch KPIs
+        // Fetch KPIs if Shopify connected
         if (sess.hasShopifyToken || sess.hasShopifyConnection) {
           fetch("/api/shopify/kpi")
             .then((r) => r.ok ? r.json() : null)
-            .then((data) => { if (data) setKpi(data); })
+            .then((data) => { if (data && !data.error) setKpi(data); })
             .catch(() => {});
         }
 
@@ -85,7 +92,9 @@ export default function HomePage() {
     );
   }
 
+  const de = t.nav.home !== "Home";
   const shopDomain = session.shopDomain || "";
+  const shopConnected = session.hasShopifyConnection || session.hasShopifyToken;
 
   const container = {
     hidden: { opacity: 0 },
@@ -98,7 +107,7 @@ export default function HomePage() {
 
   const kpiCards = [
     {
-      label: t.nav.home === "Home" ? "Today's Revenue" : "Heutiger Umsatz",
+      label: de ? "Heutiger Umsatz" : "Today's Revenue",
       value: kpi ? `${kpi.revenue.toLocaleString("de-DE", { minimumFractionDigits: 2 })} \u20AC` : "\u2014",
       icon: DollarSign,
       color: "text-[#95BF47]",
@@ -107,16 +116,16 @@ export default function HomePage() {
       highlight: true,
     },
     {
-      label: t.nav.home === "Home" ? "Live Visitors" : "Live Besucher",
-      value: kpi ? kpi.visitors.toString() : "\u2014",
-      icon: Eye,
+      label: de ? "Bestellungen (Monat)" : "Orders (Month)",
+      value: kpi ? kpi.ordersThisMonth.toLocaleString("de-DE") : "\u2014",
+      icon: ShoppingCart,
       color: "text-indigo-400",
       bg: "bg-indigo-500/10",
       border: "border-indigo-500/20",
     },
     {
-      label: t.nav.home === "Home" ? "Sessions" : "Sitzungen",
-      value: kpi ? kpi.sessions.toLocaleString("de-DE") : "\u2014",
+      label: "AOV",
+      value: kpi ? `${kpi.aov.toLocaleString("de-DE", { minimumFractionDigits: 2 })} \u20AC` : "\u2014",
       icon: Activity,
       color: "text-purple-400",
       bg: "bg-purple-500/10",
@@ -144,54 +153,69 @@ export default function HomePage() {
         {/* Welcome */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <h1 className="text-3xl md:text-4xl font-bold mb-2">
-            {t.nav.home === "Home" ? "Welcome back" : "Willkommen zur\u00FCck"} <span className="text-[#95BF47]">{"\u{1F44B}"}</span>
+            {de ? "Willkommen zur\u00FCck" : "Welcome back"} <span className="text-[#95BF47]">{"\u{1F44B}"}</span>
           </h1>
           <p className="text-zinc-400">
-            {t.nav.home === "Home" ? "Your dashboard \u2014 everything at a glance." : "Dein Dashboard \u2014 alles Wichtige auf einen Blick."}
+            {de ? "Dein Dashboard \u2014 alles Wichtige auf einen Blick." : "Your dashboard \u2014 everything at a glance."}
           </p>
         </motion.div>
 
-        {/* ─── Phone Mockup + KPIs ─────────────────── */}
+        {/* ─── Live Shop Preview + KPIs ──────────────── */}
         <div className="grid lg:grid-cols-5 gap-8 mb-10">
-          {/* Phone Mockup */}
+          {/* Live Shop Preview Card (replaces iframe) */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
             className="lg:col-span-2 flex justify-center"
           >
-            <div className="relative w-[280px]">
-              {/* iPhone Frame */}
-              <div className="relative rounded-[3rem] border-[6px] border-zinc-700/80 bg-zinc-900 shadow-2xl shadow-black/50 overflow-hidden">
-                {/* Notch */}
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[120px] h-[28px] bg-zinc-900 rounded-b-2xl z-10" />
-
-                {/* Screen */}
-                <div className="aspect-[9/19.5] bg-white overflow-hidden">
-                  {shopDomain ? (
-                    <iframe
-                      src={`https://${shopDomain}`}
-                      className="w-[375px] h-[812px] origin-top-left border-0"
-                      style={{ transform: "scale(0.747)", transformOrigin: "top left" }}
-                      title="Shop Preview"
-                      sandbox="allow-scripts allow-same-origin"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-100 text-zinc-400 px-8 text-center">
-                      <Store className="w-10 h-10 mb-3 text-zinc-300" />
-                      <p className="text-sm font-medium text-zinc-500">
-                        {t.nav.home === "Home" ? "Connect your Shopify store to see a live preview" : "Verbinde deinen Shopify-Store f\u00FCr eine Live-Vorschau"}
-                      </p>
+            <div className="w-full max-w-[320px]">
+              <div className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl text-center">
+                {/* Store visual */}
+                <div className="relative w-full aspect-[9/16] rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/5 mb-5 overflow-hidden flex items-center justify-center">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                  <div className="relative z-10 flex flex-col items-center gap-3">
+                    <div className="w-16 h-16 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
+                      <Store className="w-8 h-8 text-[#95BF47]" />
                     </div>
-                  )}
+                    {shopDomain ? (
+                      <>
+                        <p className="text-sm font-semibold text-white">{shopDomain}</p>
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                          <span className="text-xs text-emerald-400">Live</span>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-sm text-zinc-500 px-4">
+                        {de ? "Kein Shop verbunden" : "No shop connected"}
+                      </p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Home indicator bar */}
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-[100px] h-[4px] bg-zinc-600 rounded-full" />
+                {/* CTA Button */}
+                {shopDomain ? (
+                  <button
+                    onClick={() => window.open(`https://${shopDomain}`, "_blank", "noopener,noreferrer")}
+                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-[#95BF47] text-black hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                    {de ? "Live Shop Vorschau \u00F6ffnen" : "Open Live Shop Preview"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => router.push("/setup")}
+                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-white/10 text-white hover:bg-white/15 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Store className="w-4 h-4" />
+                    {de ? "Shop verbinden" : "Connect Shop"}
+                  </button>
+                )}
               </div>
 
-              {/* Glow behind phone */}
-              <div className="absolute -inset-8 bg-[#95BF47]/5 rounded-full blur-3xl pointer-events-none -z-10" />
+              {/* Glow */}
+              <div className="w-40 h-40 bg-[#95BF47]/5 rounded-full blur-3xl mx-auto -mt-16 pointer-events-none" />
             </div>
           </motion.div>
 
@@ -220,7 +244,30 @@ export default function HomePage() {
               </motion.div>
             ))}
 
-            {/* Shopify Status Mini */}
+            {/* Monthly Revenue */}
+            {kpi && kpi.revenueMonth !== undefined && (
+              <motion.div
+                variants={item}
+                className="col-span-2 glass rounded-2xl border border-white/10 p-4 flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#95BF47]/10 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-[#95BF47]" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-sm">{de ? "Monatsumsatz" : "Monthly Revenue"}</p>
+                    <p className="text-[#95BF47] text-lg font-bold">
+                      {kpi.revenueMonth.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right text-xs text-zinc-500">
+                  {kpi.ordersThisMonth} {de ? "Bestellungen" : "orders"}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Shopify Status */}
             <motion.div
               variants={item}
               className="col-span-2 glass rounded-2xl border border-white/10 p-4 flex items-center justify-between"
@@ -231,22 +278,22 @@ export default function HomePage() {
                 </div>
                 <div>
                   <p className="font-semibold text-sm">Shopify Status</p>
-                  {session.hasShopifyConnection ? (
+                  {shopConnected ? (
                     <p className="text-emerald-400 text-xs flex items-center gap-1.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {t.nav.home === "Home" ? "Connected" : "Verbunden"}
+                      {de ? "Verbunden" : "Connected"} {shopDomain && `\u2014 ${shopDomain}`}
                     </p>
                   ) : (
-                    <p className="text-zinc-500 text-xs">{t.nav.home === "Home" ? "Not connected" : "Nicht verbunden"}</p>
+                    <p className="text-zinc-500 text-xs">{de ? "Nicht verbunden" : "Not connected"}</p>
                   )}
                 </div>
               </div>
-              {!session.hasShopifyConnection && (
+              {!shopConnected && (
                 <button
                   onClick={() => router.push("/setup")}
                   className="btn-accent px-4 py-2 rounded-xl text-xs font-semibold"
                 >
-                  {t.nav.home === "Home" ? "Connect" : "Verbinden"}
+                  {de ? "Verbinden" : "Connect"}
                 </button>
               )}
             </motion.div>
@@ -270,10 +317,10 @@ export default function HomePage() {
             </div>
             <h3 className="text-lg font-bold mb-1">Winning Charts</h3>
             <p className="text-zinc-400 text-sm mb-4">
-              {t.nav.home === "Home" ? "Discover the best products with analytics & rankings." : "Entdecke die besten Produkte mit Analysen & Rankings."}
+              {de ? "Entdecke die besten Produkte mit Analysen & Rankings." : "Discover the best products with analytics & rankings."}
             </p>
             <div className="flex items-center gap-2 text-[#95BF47] text-sm font-medium group-hover:gap-3 transition-all">
-              <span>{t.nav.home === "Home" ? "Open Charts" : "Charts \u00F6ffnen"}</span>
+              <span>{de ? "Charts \u00F6ffnen" : "Open Charts"}</span>
               <ArrowRight className="w-4 h-4" />
             </div>
           </motion.div>
@@ -286,12 +333,12 @@ export default function HomePage() {
             <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4">
               <ShoppingCart className="w-6 h-6 text-purple-400" />
             </div>
-            <h3 className="text-lg font-bold mb-1">Checkout Customizer</h3>
+            <h3 className="text-lg font-bold mb-1">{de ? "Warenkorb Optimierer" : "Cart Optimizer"}</h3>
             <p className="text-zinc-400 text-sm mb-4">
-              {t.nav.home === "Home" ? "Customize trust badges, timers & cross-sells." : "Trust Badges, Timer & Cross-Sells anpassen."}
+              {de ? "Trust Badges, Timer & Cross-Sells f\u00FCr deinen Warenkorb." : "Trust badges, timers & cross-sells for your cart."}
             </p>
             <div className="flex items-center gap-2 text-purple-400 text-sm font-medium group-hover:gap-3 transition-all">
-              <span>{t.nav.home === "Home" ? "Customize" : "Anpassen"}</span>
+              <span>{de ? "Anpassen" : "Customize"}</span>
               <ArrowRight className="w-4 h-4" />
             </div>
           </motion.div>
@@ -306,10 +353,10 @@ export default function HomePage() {
             </div>
             <h3 className="text-lg font-bold mb-1">Analytics & Insights</h3>
             <p className="text-zinc-400 text-sm mb-4">
-              {t.nav.home === "Home" ? "Deep store analytics, funnels & top products." : "Tiefe Store-Analysen, Funnels & Top-Produkte."}
+              {de ? "Tiefe Store-Analysen, Funnels & Top-Produkte." : "Deep store analytics, funnels & top products."}
             </p>
             <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium group-hover:gap-3 transition-all">
-              <span>{t.nav.home === "Home" ? "View Analytics" : "Analytics anzeigen"}</span>
+              <span>{de ? "Analytics anzeigen" : "View Analytics"}</span>
               <ArrowRight className="w-4 h-4" />
             </div>
           </motion.div>
@@ -325,10 +372,10 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold flex items-center gap-2">
                 <Sparkles className="w-5 h-5 text-[#95BF47]" />
-                {t.nav.home === "Home" ? "New Products" : "Neue Produkte"}
+                {de ? "Neue Produkte" : "New Products"}
               </h2>
               <button onClick={() => router.push("/charts")} className="text-sm text-[#95BF47] hover:underline">
-                {t.nav.home === "Home" ? "View all" : "Alle anzeigen"} &rarr;
+                {de ? "Alle anzeigen" : "View all"} &rarr;
               </button>
             </div>
 

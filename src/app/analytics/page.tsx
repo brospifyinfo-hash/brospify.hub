@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -12,157 +12,60 @@ import {
   CreditCard,
   Package,
   ExternalLink,
-  ChevronDown,
 } from "lucide-react";
+import {
+  AreaChart,
+  Area,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
 
-// ─── Spline Chart (SVG) ─────────────────────────────────
-function SplineChart({ data, color, height = 200 }: { data: number[]; color: string; height?: number }) {
-  const max = Math.max(...data, 1);
-  const min = Math.min(...data, 0);
-  const range = max - min || 1;
-  const w = 100;
-  const h = 100;
-  const [hover, setHover] = useState<number | null>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+// ─── Types ──────────────────────────────────────────────
+interface AnalyticsData {
+  revenueTimeline: { date: string; amount: number }[];
+  totalRevenue: number;
+  revenueChange: number;
+  trafficSources: { label: string; value: number; color: string }[];
+  topProducts: { title: string; revenue: number; quantity: number; image: string }[];
+  funnel: { visitors: number; addToCart: number; checkout: number; purchased: number };
+  orderCount: number;
+  aov: number;
+  days: number;
+}
 
-  const points = data.map((v, i) => ({
-    x: (i / (data.length - 1)) * w,
-    y: h - ((v - min) / range) * (h * 0.85) - h * 0.05,
-    value: v,
-  }));
-
-  // Build smooth spline path using Catmull-Rom
-  function catmullRom(pts: { x: number; y: number }[]) {
-    if (pts.length < 2) return "";
-    let d = `M ${pts[0].x},${pts[0].y}`;
-    for (let i = 0; i < pts.length - 1; i++) {
-      const p0 = pts[i - 1] || pts[i];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[i + 2] || p2;
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
-      d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
-    }
-    return d;
-  }
-
-  const linePath = catmullRom(points);
-  const areaPath = `${linePath} L ${w},${h} L 0,${h} Z`;
-
-  function handleMouseMove(e: React.MouseEvent<SVGSVGElement>) {
-    if (!svgRef.current) return;
-    const rect = svgRef.current.getBoundingClientRect();
-    const xRatio = (e.clientX - rect.left) / rect.width;
-    const idx = Math.round(xRatio * (data.length - 1));
-    setHover(Math.max(0, Math.min(data.length - 1, idx)));
-  }
-
+// ─── Custom Tooltip ─────────────────────────────────────
+function RevenueTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
+  if (!active || !payload?.length) return null;
   return (
-    <div className="relative" style={{ height }}>
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${w} ${h}`}
-        preserveAspectRatio="none"
-        className="w-full h-full"
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHover(null)}
-      >
-        <defs>
-          <linearGradient id="spline-grad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-            <stop offset="100%" stopColor={color} stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        <path d={areaPath} fill="url(#spline-grad)" />
-        <path d={linePath} fill="none" stroke={color} strokeWidth="0.8" strokeLinecap="round" />
-        {/* Hover dot */}
-        {hover !== null && points[hover] && (
-          <>
-            <line x1={points[hover].x} y1={0} x2={points[hover].x} y2={h} stroke={color} strokeWidth="0.3" strokeDasharray="1.5" opacity="0.4" />
-            <circle cx={points[hover].x} cy={points[hover].y} r="1.5" fill={color} stroke="#000" strokeWidth="0.4" />
-          </>
-        )}
-      </svg>
-      {/* Tooltip */}
-      {hover !== null && points[hover] && (
-        <div
-          className="absolute top-2 px-3 py-1.5 rounded-lg text-xs font-bold pointer-events-none glass-strong border border-white/10 whitespace-nowrap"
-          style={{ left: `${(hover / (data.length - 1)) * 100}%`, transform: "translateX(-50%)" }}
-        >
-          {points[hover].value.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
-        </div>
-      )}
+    <div className="glass-strong rounded-xl border border-white/10 px-4 py-2.5 backdrop-blur-xl shadow-2xl">
+      <p className="text-[10px] text-zinc-500 mb-0.5">{label}</p>
+      <p className="text-sm font-bold text-[#95BF47]">
+        {payload[0].value.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
+      </p>
     </div>
   );
 }
 
-// ─── Donut Chart (SVG) ───────────────────────────────────
-function DonutChart({ segments }: { segments: { label: string; value: number; color: string }[] }) {
-  const total = segments.reduce((s, seg) => s + seg.value, 0) || 1;
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-  let cumAngle = -90;
-
-  function describeArc(startAngle: number, endAngle: number, r: number, R: number) {
-    const start1 = polarToCart(R, startAngle);
-    const end1 = polarToCart(R, endAngle);
-    const start2 = polarToCart(r, endAngle);
-    const end2 = polarToCart(r, startAngle);
-    const large = endAngle - startAngle > 180 ? 1 : 0;
-    return `M ${start1.x} ${start1.y} A ${R} ${R} 0 ${large} 1 ${end1.x} ${end1.y} L ${start2.x} ${start2.y} A ${r} ${r} 0 ${large} 0 ${end2.x} ${end2.y} Z`;
-  }
-
-  function polarToCart(r: number, angle: number) {
-    const rad = (angle * Math.PI) / 180;
-    return { x: 50 + r * Math.cos(rad), y: 50 + r * Math.sin(rad) };
-  }
-
+function BarTooltip({ active, payload }: { active?: boolean; payload?: { payload: { title: string; revenue: number; quantity: number } }[] }) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
   return (
-    <div className="flex items-center gap-6">
-      <svg viewBox="0 0 100 100" className="w-40 h-40 shrink-0">
-        {segments.map((seg, i) => {
-          const angle = (seg.value / total) * 360;
-          const startAngle = cumAngle;
-          const endAngle = cumAngle + angle;
-          cumAngle = endAngle;
-          const isHover = hoverIdx === i;
-          return (
-            <path
-              key={i}
-              d={describeArc(startAngle + 0.5, endAngle - 0.5, 28, isHover ? 46 : 42)}
-              fill={seg.color}
-              opacity={hoverIdx !== null && !isHover ? 0.4 : 1}
-              className="transition-all duration-200 cursor-pointer"
-              onMouseEnter={() => setHoverIdx(i)}
-              onMouseLeave={() => setHoverIdx(null)}
-            />
-          );
-        })}
-        <circle cx="50" cy="50" r="24" fill="#0a0a0a" />
-        {hoverIdx !== null && (
-          <text x="50" y="52" textAnchor="middle" className="fill-white text-[7px] font-bold">
-            {((segments[hoverIdx].value / total) * 100).toFixed(0)}%
-          </text>
-        )}
-      </svg>
-      <div className="space-y-2 flex-1 min-w-0">
-        {segments.map((seg, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-2 text-xs cursor-pointer"
-            onMouseEnter={() => setHoverIdx(i)}
-            onMouseLeave={() => setHoverIdx(null)}
-          >
-            <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
-            <span className="text-zinc-400 truncate flex-1">{seg.label}</span>
-            <span className="font-bold text-white">{((seg.value / total) * 100).toFixed(0)}%</span>
-          </div>
-        ))}
-      </div>
+    <div className="glass-strong rounded-xl border border-white/10 px-4 py-2.5 backdrop-blur-xl shadow-2xl max-w-[200px]">
+      <p className="text-xs font-semibold text-white truncate mb-0.5">{d.title}</p>
+      <p className="text-sm font-bold text-[#95BF47]">
+        {d.revenue.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
+      </p>
+      <p className="text-[10px] text-zinc-500">{d.quantity}x sold</p>
     </div>
   );
 }
@@ -202,46 +105,40 @@ function FunnelStep({ label, value, total, color, icon: Icon, delay }: {
   );
 }
 
-// ─── Demo Data ───────────────────────────────────────────
-const DEMO_REVENUE = [
-  120, 180, 95, 210, 340, 280, 420, 390, 510, 480, 620, 580, 750, 690, 820,
-  780, 910, 850, 1020, 980, 1100, 1050, 1180, 1120, 1290, 1250, 1380, 1320, 1450, 1400,
-];
-
-const DEMO_TRAFFIC = [
-  { label: "Direct", value: 38, color: "#95BF47" },
-  { label: "Google / Organic", value: 27, color: "#6366f1" },
-  { label: "Social Media", value: 18, color: "#a855f7" },
-  { label: "Paid Ads", value: 12, color: "#f59e0b" },
-  { label: "Referral", value: 5, color: "#ec4899" },
-];
-
-const DEMO_PRODUCTS = [
-  { name: "Ergonomic Posture Belt", img: "", revenue: 4280, margin: 68 },
-  { name: "LED Galaxy Projector", img: "", revenue: 3150, margin: 72 },
-  { name: "Smart Massage Gun Pro", img: "", revenue: 2890, margin: 61 },
-  { name: "Portable Blender 2.0", img: "", revenue: 2340, margin: 65 },
-  { name: "Magnetic Phone Mount", img: "", revenue: 1920, margin: 74 },
-];
-
-const DEMO_FUNNEL = { visitors: 12400, addToCart: 3720, checkout: 1488, purchased: 744 };
-
 // ─── Main Page ───────────────────────────────────────────
 export default function AnalyticsPage() {
   const router = useRouter();
   const { t } = useI18n();
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState("30d");
+  const [shopConnected, setShopConnected] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [fetchingAnalytics, setFetchingAnalytics] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data) => {
         if (!data.isLoggedIn) { router.push("/"); return; }
+        const connected = !!(data.hasShopifyToken || data.hasShopifyConnection);
+        setShopConnected(connected);
         setLoading(false);
       })
       .catch(() => router.push("/"));
   }, [router]);
+
+  // Fetch analytics when connected and dateRange changes
+  useEffect(() => {
+    if (!shopConnected || loading) return;
+    setFetchingAnalytics(true);
+    fetch(`/api/shopify/analytics?range=${dateRange}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (!data.error) setAnalyticsData(data);
+      })
+      .catch(() => {})
+      .finally(() => setFetchingAnalytics(false));
+  }, [shopConnected, dateRange, loading]);
 
   if (loading) {
     return (
@@ -252,6 +149,22 @@ export default function AnalyticsPage() {
   }
 
   const de = t.nav.home !== "Home";
+
+  const totalRevenue = analyticsData?.totalRevenue || 0;
+  const revenueChange = analyticsData?.revenueChange || 0;
+  const trafficSources = analyticsData?.trafficSources || [];
+  const topProducts = analyticsData?.topProducts || [];
+  const funnel = analyticsData?.funnel || { visitors: 0, addToCart: 0, checkout: 0, purchased: 0 };
+  const orderCount = analyticsData?.orderCount || 0;
+  const aov = analyticsData?.aov || 0;
+
+  // Format timeline data for recharts
+  const chartData = (analyticsData?.revenueTimeline || []).map((d) => ({
+    date: d.date.slice(5), // "MM-DD"
+    amount: d.amount,
+  }));
+
+  const rangeLabel = dateRange === "7d" ? (de ? "Letzte 7 Tage" : "Last 7 days") : dateRange === "90d" ? (de ? "Letzte 90 Tage" : "Last 90 days") : (de ? "Letzte 30 Tage" : "Last 30 days");
 
   return (
     <div className="min-h-screen bg-mesh">
@@ -272,7 +185,6 @@ export default function AnalyticsPage() {
             </p>
           </div>
 
-          {/* Date Picker */}
           <div className="relative">
             <select
               value={dateRange}
@@ -287,145 +199,286 @@ export default function AnalyticsPage() {
           </div>
         </motion.div>
 
-        {/* ─── Revenue Chart ──────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="glass-strong rounded-2xl border border-white/10 p-6 mb-6 backdrop-blur-xl"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="font-bold flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-[#95BF47]" />
-                {de ? "Umsatzentwicklung" : "Revenue Trend"}
-              </h2>
-              <p className="text-xs text-zinc-500 mt-0.5">
-                {de ? "Letzte 30 Tage" : "Last 30 days"}
-              </p>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-[#95BF47]">
-                {DEMO_REVENUE.reduce((a, b) => a + b, 0).toLocaleString("de-DE")} &euro;
-              </p>
-              <p className="text-xs text-emerald-400 flex items-center gap-1 justify-end">
-                <TrendingUp className="w-3 h-3" /> +23.4%
-              </p>
-            </div>
-          </div>
-          <SplineChart data={DEMO_REVENUE} color="#95BF47" height={220} />
-          <div className="flex justify-between text-[10px] text-zinc-600 mt-2 px-1">
-            <span>1. {de ? "Apr" : "Apr"}</span>
-            <span>10.</span>
-            <span>20.</span>
-            <span>30.</span>
-          </div>
-        </motion.div>
-
-        {/* ─── Two Column: Donut + Funnel ─────────── */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-6">
-          {/* Traffic Sources */}
+        {/* Not connected banner */}
+        {!shopConnected && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl"
+            className="glass-strong rounded-2xl border border-amber-500/20 p-5 mb-6 backdrop-blur-xl flex items-center gap-4"
           >
-            <h2 className="font-bold mb-5 flex items-center gap-2">
-              <Eye className="w-5 h-5 text-indigo-400" />
-              {de ? "Traffic-Quellen" : "Traffic Sources"}
-            </h2>
-            <DonutChart segments={DEMO_TRAFFIC} />
-          </motion.div>
-
-          {/* Conversion Funnel */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl"
-          >
-            <h2 className="font-bold mb-5 flex items-center gap-2">
-              <ShoppingCart className="w-5 h-5 text-purple-400" />
-              Conversion Funnel
-            </h2>
-            <div className="space-y-4">
-              <FunnelStep label={de ? "Besucher" : "Visitors"} value={DEMO_FUNNEL.visitors} total={DEMO_FUNNEL.visitors} color="#6366f1" icon={Eye} delay={0.2} />
-              <FunnelStep label="Add to Cart" value={DEMO_FUNNEL.addToCart} total={DEMO_FUNNEL.visitors} color="#a855f7" icon={ShoppingCart} delay={0.3} />
-              <FunnelStep label="Checkout" value={DEMO_FUNNEL.checkout} total={DEMO_FUNNEL.visitors} color="#f59e0b" icon={CreditCard} delay={0.4} />
-              <FunnelStep label={de ? "Gekauft" : "Purchased"} value={DEMO_FUNNEL.purchased} total={DEMO_FUNNEL.visitors} color="#95BF47" icon={Package} delay={0.5} />
+            <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center shrink-0">
+              <ExternalLink className="w-5 h-5 text-amber-400" />
             </div>
-            <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
-              <span className="text-zinc-500">Overall Conversion</span>
-              <span className="font-bold text-[#95BF47]">{((DEMO_FUNNEL.purchased / DEMO_FUNNEL.visitors) * 100).toFixed(1)}%</span>
+            <div className="flex-1">
+              <p className="font-bold text-sm">{de ? "Shopify nicht verbunden" : "Shopify not connected"}</p>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {de ? "Verbinde deinen Shop im Profil, um Echtzeit-Analytics zu sehen." : "Connect your shop in Profile to see real-time analytics."}
+              </p>
             </div>
+            <button onClick={() => router.push("/profile")} className="px-4 py-2 rounded-xl bg-[#95BF47] text-black text-xs font-bold shrink-0">
+              {de ? "Verbinden" : "Connect"}
+            </button>
           </motion.div>
-        </div>
+        )}
 
-        {/* ─── Top 5 Products ─────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl"
-        >
-          <h2 className="font-bold mb-5 flex items-center gap-2">
-            <Package className="w-5 h-5 text-amber-400" />
-            Top 5 Winning Products
-          </h2>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-zinc-500 border-b border-white/5">
-                  <th className="pb-3 pl-2">#</th>
-                  <th className="pb-3">{de ? "Produkt" : "Product"}</th>
-                  <th className="pb-3 text-right">{de ? "Umsatz" : "Revenue"}</th>
-                  <th className="pb-3 text-right">{de ? "Marge" : "Margin"}</th>
-                  <th className="pb-3 text-right">{de ? "Trend" : "Trend"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {DEMO_PRODUCTS.map((prod, i) => (
-                  <motion.tr
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.25 + i * 0.05 }}
-                    className="border-b border-white/[0.03] hover:bg-white/[0.02] transition"
-                  >
-                    <td className="py-3.5 pl-2 text-zinc-500 font-mono text-xs">{i + 1}</td>
-                    <td className="py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center shrink-0">
-                          <Package className="w-4 h-4 text-zinc-500" />
+        {/* Loading */}
+        {fetchingAnalytics && (
+          <div className="flex items-center justify-center py-16">
+            <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {!fetchingAnalytics && (
+          <>
+            {/* ─── KPI Summary Row ─────────────────────── */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {[
+                { label: de ? "Umsatz" : "Revenue", value: `${totalRevenue.toLocaleString("de-DE", { minimumFractionDigits: 2 })} \u20AC`, icon: DollarSign, color: "#95BF47" },
+                { label: de ? "Bestellungen" : "Orders", value: orderCount.toLocaleString("de-DE"), icon: ShoppingCart, color: "#6366f1" },
+                { label: "AOV", value: `${aov.toLocaleString("de-DE", { minimumFractionDigits: 2 })} \u20AC`, icon: CreditCard, color: "#f59e0b" },
+                { label: "Conversion", value: funnel.visitors > 0 ? `${((funnel.purchased / funnel.visitors) * 100).toFixed(1)}%` : "\u2014", icon: Eye, color: "#a855f7" },
+              ].map((kpi, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.05 + i * 0.03 }}
+                  className="glass-strong rounded-xl border border-white/10 p-5 backdrop-blur-xl"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${kpi.color}15` }}>
+                      <kpi.icon className="w-4 h-4" style={{ color: kpi.color }} />
+                    </div>
+                    <span className="text-[11px] text-zinc-500">{kpi.label}</span>
+                  </div>
+                  <p className="text-xl font-bold">{kpi.value}</p>
+                </motion.div>
+              ))}
+            </div>
+
+            {/* ─── Revenue Area Chart (Recharts) ─────────── */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1 }}
+              className="glass-strong rounded-2xl border border-white/10 p-6 mb-6 backdrop-blur-xl"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-bold text-lg flex items-center gap-2">
+                    <DollarSign className="w-5 h-5 text-[#95BF47]" />
+                    {de ? "Umsatzentwicklung" : "Revenue Trend"}
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">{rangeLabel}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-[#95BF47]">
+                    {totalRevenue.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
+                  </p>
+                  {revenueChange !== 0 && (
+                    <p className={`text-xs flex items-center gap-1 justify-end ${revenueChange >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                      <TrendingUp className={`w-3 h-3 ${revenueChange < 0 ? "rotate-180" : ""}`} />
+                      {revenueChange >= 0 ? "+" : ""}{revenueChange.toFixed(1)}% vs. {de ? "Vorperiode" : "prev. period"}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {chartData.length > 1 ? (
+                <ResponsiveContainer width="100%" height={260}>
+                  <AreaChart data={chartData} margin={{ top: 5, right: 5, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#95BF47" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="#95BF47" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fill: "#71717a", fontSize: 10 }}
+                      axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
+                      tickLine={false}
+                      interval={Math.max(0, Math.floor(chartData.length / 6))}
+                    />
+                    <YAxis
+                      tick={{ fill: "#71717a", fontSize: 10 }}
+                      axisLine={false}
+                      tickLine={false}
+                      tickFormatter={(v: number) => `${v.toLocaleString("de-DE")} \u20AC`}
+                    />
+                    <Tooltip content={<RevenueTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="amount"
+                      stroke="#95BF47"
+                      strokeWidth={2.5}
+                      fill="url(#revenueGrad)"
+                      animationDuration={1200}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[260px] flex items-center justify-center text-zinc-600 text-sm">
+                  {de ? "Keine Umsatzdaten vorhanden." : "No revenue data available."}
+                </div>
+              )}
+            </motion.div>
+
+            {/* ─── Two Column: Traffic Donut + Funnel ──── */}
+            <div className="grid lg:grid-cols-2 gap-6 mb-6">
+              {/* Traffic Sources - Recharts PieChart */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl"
+              >
+                <h2 className="font-bold mb-5 flex items-center gap-2">
+                  <Eye className="w-5 h-5 text-indigo-400" />
+                  {de ? "Traffic-Quellen" : "Traffic Sources"}
+                </h2>
+                {trafficSources.length > 0 ? (
+                  <div className="flex items-center gap-6">
+                    <ResponsiveContainer width={160} height={160}>
+                      <PieChart>
+                        <Pie
+                          data={trafficSources}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={38}
+                          outerRadius={65}
+                          paddingAngle={3}
+                          dataKey="value"
+                          animationDuration={800}
+                        >
+                          {trafficSources.map((entry, i) => (
+                            <Cell key={i} fill={entry.color} stroke="transparent" />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-2.5 flex-1 min-w-0">
+                      {trafficSources.map((seg, i) => (
+                        <div key={i} className="flex items-center gap-2 text-xs">
+                          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: seg.color }} />
+                          <span className="text-zinc-400 truncate flex-1">{seg.label}</span>
+                          <span className="font-bold text-white">{seg.value}%</span>
                         </div>
-                        <span className="font-medium truncate max-w-[200px]">{prod.name}</span>
-                      </div>
-                    </td>
-                    <td className="py-3.5 text-right font-bold text-[#95BF47]">
-                      {prod.revenue.toLocaleString("de-DE")} &euro;
-                    </td>
-                    <td className="py-3.5 text-right">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400">
-                        {prod.margin}%
-                      </span>
-                    </td>
-                    <td className="py-3.5 text-right">
-                      <TrendingUp className="w-4 h-4 text-emerald-400 inline" />
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-zinc-600 py-8 text-center">{de ? "Keine Daten." : "No data."}</p>
+                )}
+              </motion.div>
 
-        {/* Disclaimer */}
-        <p className="text-[10px] text-zinc-600 text-center mt-6">
-          {de
-            ? "Demo-Daten. Verbinde deinen Shopify-Store f\u00FCr Echtzeit-Analytics."
-            : "Demo data. Connect your Shopify store for real-time analytics."}
-        </p>
+              {/* Conversion Funnel */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl"
+              >
+                <h2 className="font-bold mb-5 flex items-center gap-2">
+                  <ShoppingCart className="w-5 h-5 text-purple-400" />
+                  Conversion Funnel
+                </h2>
+                <div className="space-y-4">
+                  <FunnelStep label={de ? "Besucher" : "Visitors"} value={funnel.visitors} total={funnel.visitors} color="#6366f1" icon={Eye} delay={0.25} />
+                  <FunnelStep label="Add to Cart" value={funnel.addToCart} total={funnel.visitors} color="#a855f7" icon={ShoppingCart} delay={0.3} />
+                  <FunnelStep label="Checkout" value={funnel.checkout} total={funnel.visitors} color="#f59e0b" icon={CreditCard} delay={0.35} />
+                  <FunnelStep label={de ? "Gekauft" : "Purchased"} value={funnel.purchased} total={funnel.visitors} color="#95BF47" icon={Package} delay={0.4} />
+                </div>
+                <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between text-xs">
+                  <span className="text-zinc-500">Overall Conversion</span>
+                  <span className="font-bold text-[#95BF47]">
+                    {funnel.visitors > 0 ? ((funnel.purchased / funnel.visitors) * 100).toFixed(1) : "0.0"}%
+                  </span>
+                </div>
+              </motion.div>
+            </div>
+
+            {/* ─── Top Products Bar Chart (Recharts) ───── */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.25 }}
+              className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl"
+            >
+              <h2 className="font-bold mb-5 flex items-center gap-2">
+                <Package className="w-5 h-5 text-amber-400" />
+                Top {de ? "Produkte" : "Products"}
+              </h2>
+              {topProducts.length > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart
+                      data={topProducts.map((p) => ({ ...p, shortTitle: p.title.length > 18 ? p.title.slice(0, 18) + "..." : p.title }))}
+                      margin={{ top: 5, right: 5, left: -10, bottom: 5 }}
+                    >
+                      <defs>
+                        <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#95BF47" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="#95BF47" stopOpacity={0.4} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                      <XAxis
+                        dataKey="shortTitle"
+                        tick={{ fill: "#71717a", fontSize: 10 }}
+                        axisLine={{ stroke: "rgba(255,255,255,0.06)" }}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tick={{ fill: "#71717a", fontSize: 10 }}
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={(v: number) => `${v.toLocaleString("de-DE")} \u20AC`}
+                      />
+                      <Tooltip content={<BarTooltip />} cursor={{ fill: "rgba(255,255,255,0.03)" }} />
+                      <Bar dataKey="revenue" fill="url(#barGrad)" radius={[6, 6, 0, 0]} animationDuration={1000} />
+                    </BarChart>
+                  </ResponsiveContainer>
+
+                  {/* Product list below chart */}
+                  <div className="mt-4 space-y-2">
+                    {topProducts.map((prod, i) => (
+                      <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-white/[0.02] transition">
+                        <span className="text-zinc-600 font-mono text-xs w-5">{i + 1}</span>
+                        {prod.image ? (
+                          <img src={prod.image} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-lg bg-zinc-800 flex items-center justify-center shrink-0">
+                            <Package className="w-3.5 h-3.5 text-zinc-600" />
+                          </div>
+                        )}
+                        <span className="text-sm truncate flex-1">{prod.title}</span>
+                        <span className="text-sm font-bold text-[#95BF47]">
+                          {prod.revenue.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
+                        </span>
+                        <span className="text-xs text-zinc-500">{prod.quantity}x</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-zinc-600 py-8 text-center">
+                  {de ? "Keine Produktdaten vorhanden." : "No product data available."}
+                </p>
+              )}
+            </motion.div>
+
+            {/* Footer */}
+            {shopConnected && analyticsData && (
+              <p className="text-[10px] text-zinc-600 text-center mt-6">
+                {de
+                  ? `Basierend auf ${orderCount} Bestellungen der ${rangeLabel.toLowerCase()}.`
+                  : `Based on ${orderCount} orders from the ${rangeLabel.toLowerCase()}.`}
+              </p>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

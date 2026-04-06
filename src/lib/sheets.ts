@@ -28,11 +28,28 @@ const SHEET_ID = () => {
 // Columns: A=Shopify_Token, B=Lizensschlüssel, C=Status, D=Shop Domain,
 //          E=Kunden-Email, F=Bestellnummer, G=charge, H=suplied, I=SKU, J=Profil_JSON
 
+export interface CheckoutSettings {
+  paypal?: boolean;
+  klarna?: boolean;
+  visa?: boolean;
+  guarantee?: boolean;
+  secureCheckout?: boolean;
+  cartTimer?: boolean;
+  stickyAtc?: boolean;
+  crossSell?: boolean;
+  freeShippingBar?: boolean;
+  freeShippingThreshold?: number;
+  accentColor?: string;
+  bgColor?: string;
+  font?: string;
+}
+
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
   brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
   legal_data?: { firmenname?: string; inhaber?: string; strasse?: string; plz?: string; stadt?: string; land?: string; email?: string; telefon?: string; ustId?: string; handelsregister?: string };
   ai_usage?: { month: string; count: number };
+  checkout_settings?: CheckoutSettings;
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
 }
