@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findKundeByKey } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile } from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
@@ -42,17 +42,22 @@ export async function POST(req: NextRequest) {
     session.shopifyToken = kunde.shopifyToken || undefined;
     session.setupStep1Done = !!kunde.shopifyToken;
     session.setupStep2Done = false;
-    await session.save();
 
-    // Check if customer already completed onboarding (has Shopify token)
     if (kunde.shopifyToken) {
       session.hasShopifyConnection = true;
       session.onboardingDone = true;
-      await session.save();
-      return NextResponse.json({ redirect: "/home" });
+    }
+    await session.save();
+
+    // Check onboarding status from Profil_JSON
+    const profile = await getKundeProfile(kunde.rowIndex);
+
+    // First login flow: language → guided tour → home
+    if (!profile.hasCompletedOnboarding) {
+      return NextResponse.json({ redirect: "/language" });
     }
 
-    return NextResponse.json({ redirect: "/onboarding" });
+    return NextResponse.json({ redirect: "/home" });
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getAllKunden } from "@/lib/sheets";
+import { getAllKunden, getKundeProfile } from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -17,9 +17,21 @@ export async function GET(req: NextRequest) {
 
     const email = authSession.user.email.toLowerCase();
     const kunden = await getAllKunden();
-    const kunde = kunden.find(
+
+    // Match by kunden email OR by linked Google email in Profil_JSON
+    let kunde = kunden.find(
       (k) => k.kundenEmail.toLowerCase() === email
     );
+
+    if (!kunde) {
+      // Check if any customer has linked this Google email
+      for (const k of kunden) {
+        if (k.profile?.linkedGoogleEmail?.toLowerCase() === email) {
+          kunde = k;
+          break;
+        }
+      }
+    }
 
     if (!kunde) {
       return NextResponse.redirect(
@@ -48,15 +60,11 @@ export async function GET(req: NextRequest) {
 
     await session.save();
 
-    // Check locale cookie — if not set, go to language selection
-    const locale = req.cookies.get("locale")?.value;
-    if (!locale) {
-      return NextResponse.redirect(new URL("/language", req.url));
-    }
+    // Check onboarding status from Profil_JSON
+    const profile = await getKundeProfile(kunde.rowIndex);
 
-    // Check if first visit (no onboarding done)
-    if (!kunde.shopifyToken && !session.onboardingDone) {
-      return NextResponse.redirect(new URL("/welcome", req.url));
+    if (!profile.hasCompletedOnboarding) {
+      return NextResponse.redirect(new URL("/language", req.url));
     }
 
     return NextResponse.redirect(new URL("/home", req.url));

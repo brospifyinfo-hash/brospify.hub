@@ -33,6 +33,8 @@ export interface KundeProfile {
   brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
   legal_data?: { firmenname?: string; inhaber?: string; strasse?: string; plz?: string; stadt?: string; land?: string; email?: string; telefon?: string; ustId?: string; handelsregister?: string };
   ai_usage?: { month: string; count: number };
+  hasCompletedOnboarding?: boolean;
+  linkedGoogleEmail?: string;
 }
 
 export interface Kunde {

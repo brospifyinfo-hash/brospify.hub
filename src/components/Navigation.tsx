@@ -16,6 +16,7 @@ import {
   Scale,
   User,
 } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface SessionInfo {
   isLoggedIn: boolean;
@@ -24,16 +25,17 @@ interface SessionInfo {
 }
 
 const NAV_ITEMS = [
-  { href: "/home", label: "Home", icon: Home },
-  { href: "/charts", label: "Charts", icon: BarChart3 },
-  { href: "/themes", label: "Themes", icon: Palette },
-  { href: "/legal", label: "Legal", icon: Scale },
-  { href: "/profile", label: "Profil", icon: User },
+  { href: "/home", labelKey: "home" as const, icon: Home },
+  { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
+  { href: "/themes", labelKey: "themes" as const, icon: Palette },
+  { href: "/legal", labelKey: "legal" as const, icon: Scale },
+  { href: "/profile", labelKey: "profile" as const, icon: User },
 ];
 
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -82,7 +84,7 @@ export default function Navigation() {
                     }`}
                   >
                     <item.icon className="w-4 h-4" />
-                    {item.label}
+                    {t.nav[item.labelKey]}
                     {isActive && (
                       <motion.div
                         layoutId="nav-indicator"
@@ -105,7 +107,7 @@ export default function Navigation() {
                   }`}
                 >
                   <Settings className="w-4 h-4" />
-                  Admin
+                  {t.nav.admin}
                 </Link>
               )}
             </div>
@@ -117,7 +119,7 @@ export default function Navigation() {
                 className="hidden md:flex items-center gap-2 px-4 py-2 rounded-xl text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
               >
                 <LogOut className="w-4 h-4" />
-                Logout
+                {t.nav.logout}
               </button>
 
               {/* Mobile Menu Button */}
@@ -156,7 +158,7 @@ export default function Navigation() {
                     }`}
                   >
                     <item.icon className="w-5 h-5" />
-                    {item.label}
+                    {t.nav[item.labelKey]}
                   </Link>
                 );
               })}
@@ -168,7 +170,7 @@ export default function Navigation() {
                   className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5"
                 >
                   <Settings className="w-5 h-5" />
-                  Admin
+                  {t.nav.admin}
                 </Link>
               )}
 
@@ -177,7 +179,7 @@ export default function Navigation() {
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
               >
                 <LogOut className="w-5 h-5" />
-                Logout
+                {t.nav.logout}
               </button>
             </div>
           </motion.div>

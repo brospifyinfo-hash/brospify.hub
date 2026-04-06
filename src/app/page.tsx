@@ -4,34 +4,42 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { KeyRound, Loader2, AlertCircle, Crown, ChevronDown } from "lucide-react";
-
-const ERROR_MAP: Record<string, string> = {
-  no_email: "Google-Konto ohne E-Mail. Bitte versuche es erneut.",
-  no_license: "Keine Lizenz für diese E-Mail gefunden. Kontaktiere deinen Account Manager.",
-  server: "Serverfehler. Bitte versuche es erneut.",
-};
+import { KeyRound, Loader2, AlertCircle, Crown } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 export default function LoginPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-mesh flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" /></div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-mesh flex items-center justify-center">
+          <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
+        </div>
+      }
+    >
       <LoginContent />
     </Suspense>
   );
 }
 
 function LoginContent() {
+  const { t } = useI18n();
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
-  const [showAdmin, setShowAdmin] = useState(false);
   const router = useRouter();
   const params = useSearchParams();
   const urlError = params.get("error");
 
+  const ERROR_MAP: Record<string, string> = {
+    no_email: t.login.errorNoEmail,
+    no_license: t.login.errorNoLicense,
+    server: t.login.errorServer,
+  };
+
   async function handleKeyLogin(e: React.FormEvent) {
     e.preventDefault();
+    if (!key.trim()) { setError(t.login.errorInvalidKey); return; }
     setError("");
     setLoading(true);
     try {
@@ -43,8 +51,11 @@ function LoginContent() {
       const data = await res.json();
       if (!res.ok) { setError(data.error); return; }
       router.push(data.redirect);
-    } catch { setError("Verbindungsfehler."); }
-    finally { setLoading(false); }
+    } catch {
+      setError(t.login.errorConnection);
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleGoogleLogin() {
@@ -75,14 +86,29 @@ function LoginContent() {
           <h1 className="text-3xl font-bold tracking-tight">
             brospify <span className="text-[#95BF47]">hub</span>
           </h1>
-          <p className="text-white/40 mt-2">Dein Managed Dropshipping Dashboard</p>
+          <p className="text-white/40 mt-2">{t.login.title}</p>
         </div>
 
-        {/* Google Sign-In */}
-        <div className="glass rounded-2xl p-6 space-y-4">
+        <div className="glass rounded-2xl p-6 space-y-5 backdrop-blur-xl">
+          {/* Error */}
+          <AnimatePresence>
+            {displayError && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-500/20 px-4 py-3 rounded-xl overflow-hidden"
+              >
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{displayError}</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Option A: Google */}
           <button
             onClick={handleGoogleLogin}
-            disabled={googleLoading}
+            disabled={googleLoading || loading}
             className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl bg-white text-zinc-900 font-semibold text-sm hover:bg-zinc-100 transition disabled:opacity-60"
           >
             {googleLoading ? (
@@ -95,62 +121,53 @@ function LoginContent() {
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
               </svg>
             )}
-            {googleLoading ? "Wird verbunden..." : "Mit Google anmelden"}
+            {googleLoading ? t.login.googleConnecting : t.login.googleButton}
           </button>
 
-          {displayError && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 px-4 py-3 rounded-xl">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{displayError}</span>
-            </motion.div>
-          )}
-
-          {/* Admin Toggle */}
-          <div className="pt-2 border-t border-white/5">
-            <button
-              onClick={() => setShowAdmin(!showAdmin)}
-              className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-600 hover:text-zinc-400 transition py-1"
-            >
-              <KeyRound className="w-3 h-3" />
-              Admin-Zugang
-              <ChevronDown className={`w-3 h-3 transition-transform ${showAdmin ? "rotate-180" : ""}`} />
-            </button>
-
-            <AnimatePresence>
-              {showAdmin && (
-                <motion.form
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: "auto", opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden"
-                  onSubmit={handleKeyLogin}
-                >
-                  <div className="pt-3 space-y-3">
-                    <input
-                      type="text"
-                      value={key}
-                      onChange={(e) => setKey(e.target.value)}
-                      placeholder="Lizenzschlüssel eingeben"
-                      className="input-glass w-full px-4 py-3 rounded-xl text-sm"
-                      disabled={loading}
-                    />
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="btn-accent w-full py-2.5 rounded-xl text-sm flex items-center justify-center gap-2"
-                    >
-                      {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Admin Login"}
-                    </button>
-                  </div>
-                </motion.form>
-              )}
-            </AnimatePresence>
+          {/* Divider */}
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10" />
+            </div>
+            <div className="relative flex justify-center text-xs">
+              <span className="px-3 bg-transparent text-zinc-500 backdrop-blur-sm">
+                {t.login.divider}
+              </span>
+            </div>
           </div>
+
+          {/* Option B: License Key */}
+          <form onSubmit={handleKeyLogin} className="space-y-3">
+            <label className="block text-xs text-zinc-400 font-medium flex items-center gap-1.5">
+              <KeyRound className="w-3.5 h-3.5" />
+              {t.login.licenseLabel}
+            </label>
+            <input
+              type="text"
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
+              placeholder={t.login.licensePlaceholder}
+              className="input-glass w-full"
+              disabled={loading || googleLoading}
+            />
+            <button
+              type="submit"
+              disabled={loading || googleLoading}
+              className="btn-accent w-full py-3 rounded-xl text-sm flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <KeyRound className="w-4 h-4" />
+                  {t.login.licenseButton}
+                </>
+              )}
+            </button>
+          </form>
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-8">
-          Deine E-Mail muss mit einer aktiven Lizenz verknüpft sein.
-        </p>
+        <p className="text-center text-white/20 text-xs mt-8">{t.login.footer}</p>
       </motion.div>
     </div>
   );

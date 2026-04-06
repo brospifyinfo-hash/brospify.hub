@@ -4,19 +4,21 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Globe, Crown, ArrowRight } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 const LANGUAGES = [
-  { code: "de", label: "Deutsch", flag: "🇩🇪", desc: "Dashboard auf Deutsch nutzen" },
-  { code: "en", label: "English", flag: "🇬🇧", desc: "Use dashboard in English" },
+  { code: "de" as const, label: "Deutsch", flag: "\ud83c\udde9\ud83c\uddea", desc: "Dashboard auf Deutsch nutzen" },
+  { code: "en" as const, label: "English", flag: "\ud83c\uddec\ud83c\udde7", desc: "Use dashboard in English" },
 ];
 
 export default function LanguagePage() {
   const router = useRouter();
+  const { setLocale } = useI18n();
   const [selected, setSelected] = useState<string | null>(null);
 
-  function handleSelect(code: string) {
+  function handleSelect(code: "de" | "en") {
     setSelected(code);
-    document.cookie = `locale=${code};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
+    setLocale(code);
     setTimeout(() => router.push("/welcome"), 400);
   }
 
@@ -44,12 +46,12 @@ export default function LanguagePage() {
         </div>
 
         {/* Language Card */}
-        <div className="glass rounded-2xl p-8 space-y-6">
+        <div className="glass rounded-2xl p-8 space-y-6 backdrop-blur-xl">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 mb-3">
               <Globe className="w-6 h-6 text-indigo-400" />
             </div>
-            <h2 className="text-xl font-bold">Sprache wählen</h2>
+            <h2 className="text-xl font-bold">Sprache w&auml;hlen</h2>
             <p className="text-sm text-zinc-500 mt-1">Choose your language</p>
           </div>
 
@@ -71,14 +73,18 @@ export default function LanguagePage() {
                   <div className="font-semibold">{lang.label}</div>
                   <div className="text-xs text-zinc-500">{lang.desc}</div>
                 </div>
-                <ArrowRight className={`w-5 h-5 transition-colors ${selected === lang.code ? "text-[#95BF47]" : "text-zinc-600"}`} />
+                <ArrowRight
+                  className={`w-5 h-5 transition-colors ${
+                    selected === lang.code ? "text-[#95BF47]" : "text-zinc-600"
+                  }`}
+                />
               </motion.button>
             ))}
           </div>
         </div>
 
         <p className="text-center text-white/20 text-xs mt-8">
-          Du kannst die Sprache später in den Einstellungen ändern.
+          Du kannst die Sprache sp&auml;ter in den Einstellungen &auml;ndern.
         </p>
       </motion.div>
     </div>
