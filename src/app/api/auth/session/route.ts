@@ -14,5 +14,8 @@ export async function GET() {
     hasShopifyToken: !!session.shopifyToken,
     hasShopifyConnection: session.hasShopifyConnection || false,
     onboardingDone: session.onboardingDone || false,
+    googleName: session.googleName || null,
+    googleEmail: session.googleEmail || null,
+    googleImage: session.googleImage || null,
   });
 }

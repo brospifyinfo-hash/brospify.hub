@@ -14,9 +14,6 @@ import {
   ChevronRight,
   ChevronLeft,
   Rocket,
-  Crown,
-  Medal,
-  Award,
   Info,
   BarChart3,
   Zap,
@@ -80,11 +77,7 @@ function formatMonth(monat: string): string {
   return `Charts ${MONTH_NAMES[mm] || mm} ${yyyy}`;
 }
 
-const RANK_STYLES: Record<number, { bg: string; border: string; text: string; glow: string; icon: typeof Crown }> = {
-  1: { bg: "bg-amber-500/10", border: "border-amber-500/30", text: "text-amber-400", glow: "shadow-amber-500/20 shadow-lg", icon: Crown },
-  2: { bg: "bg-slate-300/10", border: "border-slate-400/30", text: "text-slate-300", glow: "shadow-slate-400/15 shadow-lg", icon: Medal },
-  3: { bg: "bg-orange-700/10", border: "border-orange-600/30", text: "text-orange-400", glow: "shadow-orange-500/15 shadow-lg", icon: Award },
-};
+// Uniform styling — no aggressive top-3 highlighting
 
 // ─── Stat Bar Component ──────────────────────────────────────────
 
@@ -275,6 +268,17 @@ export default function ChartsPage() {
           </div>
         )}
 
+        {/* Strategy Banner */}
+        <div className="flex items-start gap-3 bg-indigo-500/8 border border-indigo-500/15 text-indigo-300 px-5 py-4 rounded-xl mb-6">
+          <Sparkles className="w-5 h-5 shrink-0 mt-0.5 text-indigo-400" />
+          <div>
+            <p className="text-sm font-medium">Pro-Tipp</p>
+            <p className="text-xs text-indigo-300/70 mt-0.5">
+              Denke daran &ndash; die beliebtesten Produkte haben oft die h&ouml;chste Konkurrenz. Suche nach Nischen!
+            </p>
+          </div>
+        </div>
+
         {error && (
           <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-500/20 px-4 py-3 rounded-xl mb-6">
             <AlertCircle className="w-4 h-4" />
@@ -302,25 +306,15 @@ export default function ChartsPage() {
                 <div className="space-y-2">
                   {chart.produkte.map((produkt, idx) => {
                     const rank = idx + 1;
-                    const style = RANK_STYLES[rank];
-                    const isTop3 = rank <= 3;
 
                     return (
                       <div
                         key={produkt.id}
-                        className={`flex items-center gap-4 border rounded-xl px-4 py-3 backdrop-blur-md ${
-                          isTop3
-                            ? `${style.bg} ${style.border} ${style.glow}`
-                            : "border-white/10 bg-white/[0.03]"
-                        }`}
+                        className="flex items-center gap-4 border border-white/10 bg-white/[0.03] rounded-xl px-4 py-3 backdrop-blur-md hover:bg-white/[0.06] transition"
                       >
                         {/* Rank */}
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${isTop3 ? style.bg : "bg-white/5"}`}>
-                          {isTop3 ? (
-                            <style.icon className={`w-5 h-5 ${style.text}`} />
-                          ) : (
-                            <span className="text-sm font-bold text-zinc-500">{rank}</span>
-                          )}
+                        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white/5">
+                          <span className="text-sm font-bold text-zinc-400">{rank}</span>
                         </div>
 
                         {/* Thumbnail */}
@@ -334,7 +328,7 @@ export default function ChartsPage() {
 
                         {/* Title & Stats */}
                         <div className="flex-1 min-w-0">
-                          <h3 className={`font-semibold text-sm truncate ${isTop3 ? "text-white" : "text-zinc-200"}`}>{produkt.titel}</h3>
+                          <h3 className="font-semibold text-sm truncate text-zinc-200">{produkt.titel}</h3>
                           <div className="flex items-center gap-3 mt-0.5">
                             <span className="text-lg font-bold text-[#95BF47]">{produkt.extra?.finances?.recommendedSellPrice || produkt.preis}&euro;</span>
                             {produkt.extra?.stats?.trendScore && (

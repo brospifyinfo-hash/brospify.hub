@@ -18,6 +18,8 @@ import {
   Upload,
   ImagePlus,
   Zap,
+  Crown,
+  CreditCard,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -38,6 +40,7 @@ export default function ProfilePage() {
   const [kundenEmail, setKundenEmail] = useState("");
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [googleProfile, setGoogleProfile] = useState<{ name?: string; email?: string; image?: string } | null>(null);
   const logoRef = useRef<HTMLInputElement>(null);
 
   // Form state
@@ -47,6 +50,13 @@ export default function ProfilePage() {
   const [aiUsage, setAiUsage] = useState({ month: "", count: 0 });
 
   useEffect(() => {
+    // Fetch Google session info
+    fetch("/api/auth/session").then(r => r.json()).then(data => {
+      if (data.googleName || data.googleEmail || data.googleImage) {
+        setGoogleProfile({ name: data.googleName, email: data.googleEmail, image: data.googleImage });
+      }
+    }).catch(() => {});
+
     fetch("/api/profile")
       .then((r) => {
         if (r.status === 401) { router.push("/"); return null; }
@@ -165,6 +175,55 @@ export default function ProfilePage() {
         )}
 
         <div className="space-y-6">
+          {/* ── Card 0: Google Profile + Subscription ── */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.02 }}
+            className="glass-strong rounded-2xl border border-white/10 p-6">
+            <div className="flex items-start gap-5">
+              {/* Avatar */}
+              <div className="shrink-0">
+                {googleProfile?.image ? (
+                  <img src={googleProfile.image} alt="" className="w-20 h-20 rounded-2xl border-2 border-white/10 object-cover" />
+                ) : (
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 border border-white/10 flex items-center justify-center">
+                    <User className="w-10 h-10 text-zinc-500" />
+                  </div>
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold truncate">{googleProfile?.name || kundenEmail || "Kunde"}</h2>
+                <p className="text-sm text-zinc-400 truncate">{googleProfile?.email || kundenEmail}</p>
+                {shopDomain && <p className="text-xs text-zinc-600 mt-0.5">{shopDomain}</p>}
+
+                {/* Subscription Badge */}
+                <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/20">
+                  <Crown className="w-4 h-4 text-[#95BF47]" />
+                  <span className="text-sm font-semibold text-[#95BF47]">Aktives Abo</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Subscription Details */}
+            <div className="mt-5 grid grid-cols-3 gap-3">
+              <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 text-center">
+                <CreditCard className="w-4 h-4 text-zinc-500 mx-auto mb-1" />
+                <div className="text-xs text-zinc-500">Plan</div>
+                <div className="text-sm font-bold text-white mt-0.5">Managed</div>
+              </div>
+              <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 text-center">
+                <Zap className="w-4 h-4 text-purple-400 mx-auto mb-1" />
+                <div className="text-xs text-zinc-500">KI-Credits</div>
+                <div className="text-sm font-bold text-white mt-0.5">{aiRemaining}/3</div>
+              </div>
+              <div className="bg-white/[0.03] border border-white/5 rounded-xl p-3 text-center">
+                <Store className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
+                <div className="text-xs text-zinc-500">Shop</div>
+                <div className="text-sm font-bold text-white mt-0.5">{hasShopifyToken ? "Aktiv" : "—"}</div>
+              </div>
+            </div>
+          </motion.div>
+
           {/* ── Card 1: Shopify API ─────────────────── */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
             className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">

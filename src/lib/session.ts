@@ -16,6 +16,9 @@ export interface SessionData {
   setupStep1Done?: boolean;
   setupStep1Skipped?: boolean;
   setupStep2Done?: boolean;
+  googleName?: string;
+  googleEmail?: string;
+  googleImage?: string;
 }
 
 const sessionOptions = {
