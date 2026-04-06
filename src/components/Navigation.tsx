@@ -15,6 +15,8 @@ import {
   Crown,
   Scale,
   User,
+  ShoppingCart,
+  TrendingUp,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -27,8 +29,9 @@ interface SessionInfo {
 const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home },
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
+  { href: "/checkout", labelKey: "checkout" as const, icon: ShoppingCart },
+  { href: "/analytics", labelKey: "analytics" as const, icon: TrendingUp },
   { href: "/themes", labelKey: "themes" as const, icon: Palette },
-  { href: "/legal", labelKey: "legal" as const, icon: Scale },
   { href: "/profile", labelKey: "profile" as const, icon: User },
 ];
 
