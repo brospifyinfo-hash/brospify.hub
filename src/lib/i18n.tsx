@@ -1,49 +1,95 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
-import de from "@/lib/dictionaries/de.json";
-import en from "@/lib/dictionaries/en.json";
+import { createContext, useContext, ReactNode } from "react";
 
-type Dict = typeof de;
-type Locale = "de" | "en";
+const de = {
+  nav: {
+    home: "Home",
+    charts: "Winning Charts",
+    chats: "Community",
+    legal: "Rechtstexte",
+    themes: "Themes",
+    profile: "Profil",
+    admin: "Admin",
+    logout: "Abmelden",
+  },
+  login: {
+    title: "Managed Dropshipping Dashboard",
+    errorNoEmail: "Keine E-Mail in deinem Google-Konto gefunden.",
+    errorNoLicense: "Kein Lizenzschlüssel mit dieser E-Mail verknüpft.",
+    errorServer: "Serverfehler. Bitte versuche es erneut.",
+    errorInvalidKey: "Bitte gib deinen Lizenzschlüssel ein.",
+    errorConnection: "Verbindungsfehler. Bitte versuche es erneut.",
+    googleConnecting: "Verbinde...",
+    googleButton: "Mit Google anmelden",
+    divider: "oder",
+    licenseLabel: "Lizenzschlüssel",
+    licensePlaceholder: "Dein 32-stelliger Schlüssel",
+    licenseButton: "Einloggen",
+    footer: "\u00A9 2025 BrospifyHub. Alle Rechte vorbehalten.",
+  },
+  profile: {
+    title: "Einstellungen",
+    subtitle: "Verwalte dein Profil und deine Shop-Verbindung.",
+    saved: "Änderungen gespeichert",
+    googleLinked: "Google verknüpft",
+    activeSub: "Aktives Abo",
+    plan: "Tarif",
+    aiCredits: "KI-Credits",
+    shop: "Shop",
+    active: "Aktiv",
+    linkGoogle: "Google-Konto verknüpfen",
+    shopifyTitle: "Shopify API",
+    shopConnected: "Verbunden",
+    shopNotConnected: "Nicht verbunden",
+    clientId: "Client-ID",
+    clientSecret: "Client Secret",
+    shopDomain: "Shop Domain",
+    shopDomainHint: "Wird beim Setup automatisch gesetzt.",
+    legalTitle: "Rechtsdaten",
+    legalDesc: "Deine Firmendaten für automatische Rechtstexte.",
+    companyName: "Firmenname",
+    owner: "Inhaber",
+    street: "Straße",
+    zip: "PLZ",
+    city: "Stadt",
+    country: "Land",
+    email: "E-Mail",
+    phone: "Telefon",
+    vatId: "USt-IdNr.",
+    tradeRegister: "Handelsregister",
+    save: "Speichern",
+    aiUsage: "KI-Nutzung diesen Monat",
+    aiRemaining: "übrig",
+    aiLimitReached: "Limit erreicht",
+  },
+  tour: {
+    welcome: "Willkommen bei BrospifyHub!",
+    welcomeDesc: "Dein Managed Dropshipping Dashboard. Lass uns einen kurzen Rundgang machen.",
+    stepNav: "Navigation",
+    stepNavDesc: "Hier findest du alle wichtigen Bereiche deines Dashboards.",
+    stepCharts: "Winning Charts",
+    stepChartsDesc: "Entdecke die besten Dropshipping-Produkte mit Analysen & 1-Klick Import.",
+    stepThemes: "Themes",
+    stepThemesDesc: "Lade das optimierte Shopify-Theme herunter oder pushe es direkt.",
+    stepProfile: "Profil",
+    stepProfileDesc: "Verwalte dein Profil, Shopify-Verbindung und Firmendaten.",
+    stepOf: "von",
+    skip: "Überspringen",
+    next: "Weiter",
+    finish: "Los geht's!",
+  },
+};
 
-const DICTIONARIES: Record<Locale, Dict> = { de, en };
+type Translations = typeof de;
 
-interface I18nCtx {
-  locale: Locale;
-  t: Dict;
-  setLocale: (l: Locale) => void;
-}
-
-const I18nContext = createContext<I18nCtx>({
-  locale: "de",
-  t: de,
-  setLocale: () => {},
-});
+const I18nContext = createContext<Translations>(de);
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>("de");
-
-  // Read cookie on mount
-  useEffect(() => {
-    const match = document.cookie.match(/(?:^|;\s*)locale=(\w+)/);
-    if (match && (match[1] === "de" || match[1] === "en")) {
-      setLocaleState(match[1] as Locale);
-    }
-  }, []);
-
-  const setLocale = useCallback((l: Locale) => {
-    setLocaleState(l);
-    document.cookie = `locale=${l};path=/;max-age=${60 * 60 * 24 * 365};samesite=lax`;
-  }, []);
-
-  return (
-    <I18nContext.Provider value={{ locale, t: DICTIONARIES[locale], setLocale }}>
-      {children}
-    </I18nContext.Provider>
-  );
+  return <I18nContext.Provider value={de}>{children}</I18nContext.Provider>;
 }
 
 export function useI18n() {
-  return useContext(I18nContext);
+  const t = useContext(I18nContext);
+  return { t };
 }

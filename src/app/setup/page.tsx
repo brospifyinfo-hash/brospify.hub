@@ -346,7 +346,7 @@ function SetupContent() {
                 <div className="space-y-2">
                   <CopyButton text={appUrl || "https://brospify-hub.vercel.app"} label="Unsere Hub-URL (für App-URL)" />
                   <CopyButton text={`${appUrl || "https://brospify-hub.vercel.app"}/api/auth/shopify/callback`} label="Redirect-URL (für Weiterleitungs-URLs)" />
-                  <CopyButton text="read_products, write_products, read_themes, write_themes, read_content, write_content, write_legal_policies" label="Benötigte Bereiche" />
+                  <CopyButton text="read_products, write_products, read_themes, write_themes, read_content, write_content, write_legal_policies, read_files, write_files" label="Benötigte Bereiche" />
                 </div>
 
                 {/* Divider */}

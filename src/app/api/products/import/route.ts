@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, getAllProdukte } from "@/lib/sheets";
+import { findKundeByKey, getAllProdukte, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -100,6 +100,15 @@ export async function POST(req: NextRequest) {
 
     const shopifyData = await shopifyRes.json();
     console.log("[Import] Success! Shopify product ID:", shopifyData.product?.id);
+
+    // Update onboarding checklist
+    try {
+      const profile = await getKundeProfile(kunde.rowIndex);
+      await updateKundeProfile(kunde.rowIndex, {
+        ...profile,
+        onboarding_checklist: { ...profile.onboarding_checklist, product_imported: true },
+      });
+    } catch (e) { console.error("[Import] Checklist update failed:", e); }
 
     return NextResponse.json({
       success: true,

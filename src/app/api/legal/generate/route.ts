@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -269,6 +269,17 @@ export async function POST(req: NextRequest) {
       menuCreated,
       policiesSet,
     });
+
+    // Update onboarding checklist
+    if (createdPages.length > 0) {
+      try {
+        const profile = await getKundeProfile(kunde.rowIndex);
+        await updateKundeProfile(kunde.rowIndex, {
+          ...profile,
+          onboarding_checklist: { ...profile.onboarding_checklist, legal_texts_generated: true },
+        });
+      } catch (e) { console.error("[Legal] Checklist update failed:", e); }
+    }
 
     return NextResponse.json({
       success: true,

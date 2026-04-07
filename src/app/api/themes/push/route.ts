@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 import { list } from "@vercel/blob";
 
 export const dynamic = "force-dynamic";
@@ -113,6 +113,15 @@ export async function POST() {
     // 5. Success — Shopify accepted the theme upload
     const theme = responseData?.theme;
     console.log("[ThemePush] Success! Theme ID:", theme?.id, "Role:", theme?.role);
+
+    // Update onboarding checklist
+    try {
+      const profile = await getKundeProfile(kunde.rowIndex);
+      await updateKundeProfile(kunde.rowIndex, {
+        ...profile,
+        onboarding_checklist: { ...profile.onboarding_checklist, theme_pushed: true },
+      });
+    } catch (e) { console.error("[ThemePush] Checklist update failed:", e); }
 
     return NextResponse.json({
       success: true,

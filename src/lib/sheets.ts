@@ -44,6 +44,13 @@ export interface CheckoutSettings {
   font?: string;
 }
 
+export interface OnboardingChecklist {
+  setup_complete?: boolean;
+  product_imported?: boolean;
+  legal_texts_generated?: boolean;
+  theme_pushed?: boolean;
+}
+
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
   brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
@@ -52,6 +59,7 @@ export interface KundeProfile {
   checkout_settings?: CheckoutSettings;
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
+  onboarding_checklist?: OnboardingChecklist;
 }
 
 export interface Kunde {
@@ -289,5 +297,168 @@ export async function deleteProdukt(rowIndex: number): Promise<void> {
     range: `Produkte!A${rowIndex}:I${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
+  });
+}
+
+// ─── CHATS (Tab 3) ────────────────────────────────────────────────
+// Columns: A=ID, B=Name, C=Description, D=CreatedAt, E=CreatedBy,
+//          F=AllowCustomerMessages, G=Status
+
+export interface ChatRoom {
+  rowIndex: number;
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  createdBy: string;
+  allowCustomerMessages: boolean;
+  status: string;
+}
+
+function rowToChatRoom(row: string[], index: number): ChatRoom {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    name: row[1] || "",
+    description: row[2] || "",
+    createdAt: row[3] || "",
+    createdBy: row[4] || "",
+    allowCustomerMessages: row[5] === "true",
+    status: row[6] || "active",
+  };
+}
+
+export async function getAllChatRooms(): Promise<ChatRoom[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Chats!A2:G",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToChatRoom(row, i)).filter((r) => r.id && r.status === "active");
+  } catch {
+    return [];
+  }
+}
+
+export async function addChatRoom(room: Omit<ChatRoom, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Chats!A:G",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        room.id, room.name, room.description, room.createdAt,
+        room.createdBy, String(room.allowCustomerMessages), room.status,
+      ]],
+    },
+  });
+}
+
+export async function updateChatRoom(rowIndex: number, room: Omit<ChatRoom, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Chats!A${rowIndex}:G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        room.id, room.name, room.description, room.createdAt,
+        room.createdBy, String(room.allowCustomerMessages), room.status,
+      ]],
+    },
+  });
+}
+
+// ─── NACHRICHTEN (Tab 4) ──────────────────────────────────────────
+// Columns: A=ID, B=ChatID, C=SenderType, D=SenderID, E=SenderName,
+//          F=Content, G=ImageUrl, H=ImageBgColor, I=Status, J=CreatedAt
+
+export interface ChatMessage {
+  rowIndex: number;
+  id: string;
+  chatId: string;
+  senderType: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  imageUrl: string;
+  imageBgColor: string;
+  messageStatus: string;
+  createdAt: string;
+}
+
+function rowToChatMessage(row: string[], index: number): ChatMessage {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    chatId: row[1] || "",
+    senderType: row[2] || "",
+    senderId: row[3] || "",
+    senderName: row[4] || "",
+    content: row[5] || "",
+    imageUrl: row[6] || "",
+    imageBgColor: row[7] || "",
+    messageStatus: row[8] || "approved",
+    createdAt: row[9] || "",
+  };
+}
+
+export async function getChatMessages(chatId: string, includeHidden = false): Promise<ChatMessage[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Nachrichten!A2:J",
+    });
+    const rows = res.data.values || [];
+    return rows
+      .map((row, i) => rowToChatMessage(row, i))
+      .filter((m) => m.id && m.chatId === chatId && (includeHidden || m.messageStatus !== "hidden"));
+  } catch {
+    return [];
+  }
+}
+
+export async function getAllPendingMessages(): Promise<ChatMessage[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Nachrichten!A2:J",
+    });
+    const rows = res.data.values || [];
+    return rows
+      .map((row, i) => rowToChatMessage(row, i))
+      .filter((m) => m.id && m.messageStatus === "pending");
+  } catch {
+    return [];
+  }
+}
+
+export async function addChatMessage(msg: Omit<ChatMessage, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Nachrichten!A:J",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        msg.id, msg.chatId, msg.senderType, msg.senderId, msg.senderName,
+        msg.content, msg.imageUrl, msg.imageBgColor, msg.messageStatus, msg.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function updateMessageStatus(rowIndex: number, status: string): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Nachrichten!I${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[status]] },
   });
 }

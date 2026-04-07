@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
     // Get tone of voice from customer profile or fallback
     const toneOfVoice = profile.brand_kit?.toneOfVoice || "Professionell, vertrauenswürdig, auf Deutsch";
 
-    // Build prompt
+    // Build prompt — MUST generate a high-converting title
     const prompt = `Du bist ein erfahrener E-Commerce-Copywriter für den deutschen Markt.
 
 PRODUKT-ROHDATEN:
@@ -65,11 +65,14 @@ Preis: ${produkt.preis}€
 TONFALL-ANWEISUNG: ${toneOfVoice}
 
 AUFGABE:
-Erstelle einen verkaufsstarken Shopify-Produkteintrag auf Deutsch.
+Erstelle einen hoch-konvertierenden Shopify-Produkteintrag auf Deutsch.
+Der "title" ist EXTREM WICHTIG — er wird als Produktname in Shopify verwendet.
+Er muss: verkaufsstark, emotional, neugierig machend und SEO-optimiert sein.
+Nutze Power-Wörter, Zahlen oder Nutzenversprechen im Titel.
 
 Antworte NUR mit einem JSON-Objekt in exakt diesem Format (kein Markdown, kein Codeblock):
 {
-  "title": "Optimierter Produkttitel (max 70 Zeichen)",
+  "title": "Hoch-konvertierender Produkttitel (max 70 Zeichen, verkaufsstark!)",
   "body_html": "<div>..Verkaufsstarke HTML-Beschreibung mit <ul><li>Bullet Points</li></ul>, Vorteilen, Trust-Elementen. Nutze <strong>, <em>, <br> Tags. Max 800 Wörter..</div>",
   "seo_title": "SEO-Titel (max 60 Zeichen)",
   "seo_description": "Meta-Beschreibung (max 155 Zeichen)",

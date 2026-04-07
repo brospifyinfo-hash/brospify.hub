@@ -4,22 +4,17 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
-  DollarSign,
-  Eye,
-  MousePointerClick,
-  TrendingUp,
-  ArrowRight,
-  BarChart3,
-  Palette,
   Store,
+  Package,
+  Scale,
+  Palette,
+  Check,
+  ChevronRight,
   Sparkles,
-  ShoppingCart,
-  Activity,
   Crown,
-  ExternalLink,
+  Rocket,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
-import { useI18n } from "@/lib/i18n";
 
 interface SessionInfo {
   isLoggedIn: boolean;
@@ -29,56 +24,79 @@ interface SessionInfo {
   shopDomain?: string;
 }
 
-interface KPI {
-  revenue: number;
-  revenueMonth?: number;
-  visitors: number;
-  sessions: number;
-  conversionRate: number;
-  ordersToday: number;
-  ordersThisMonth: number;
-  aov: number;
-  error?: string;
+interface Checklist {
+  setup_complete?: boolean;
+  product_imported?: boolean;
+  legal_texts_generated?: boolean;
+  theme_pushed?: boolean;
 }
 
-interface Produkt {
-  id: string;
-  titel: string;
-  bildUrl: string;
-  monat: string;
-  extra: {
-    stats?: { trendScore: number };
-  };
-}
+const STEPS = [
+  {
+    key: "setup_complete" as const,
+    title: "Shopify verbinden",
+    description: "Verknüpfe deinen Shopify-Store, um alle Funktionen freizuschalten.",
+    icon: Store,
+    color: "#95BF47",
+    href: "/setup",
+    ctaText: "Shop verbinden",
+  },
+  {
+    key: "product_imported" as const,
+    title: "Produkt importieren",
+    description: "Importiere dein erstes Winning Product mit einem Klick in deinen Shop.",
+    icon: Package,
+    color: "#8B5CF6",
+    href: "/charts",
+    ctaText: "Zu den Charts",
+  },
+  {
+    key: "legal_texts_generated" as const,
+    title: "Rechtstexte generieren",
+    description: "Erstelle DACH-konforme Rechtstexte und pushe sie direkt in deinen Shop.",
+    icon: Scale,
+    color: "#3B82F6",
+    href: "/legal",
+    ctaText: "Rechtstexte erstellen",
+  },
+  {
+    key: "theme_pushed" as const,
+    title: "Theme installieren",
+    description: "Installiere das Premium-Theme für maximale Conversion in deinem Shop.",
+    icon: Palette,
+    color: "#EC4899",
+    href: "/themes",
+    ctaText: "Theme installieren",
+  },
+];
 
 export default function HomePage() {
   const router = useRouter();
-  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
-  const [neueProdukte, setNeueProdukte] = useState<Produkt[]>([]);
-  const [kpi, setKpi] = useState<KPI | null>(null);
+  const [checklist, setChecklist] = useState<Checklist>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       fetch("/api/auth/session").then((r) => r.json()),
-      fetch("/api/products").then((r) => r.json()),
+      fetch("/api/profile").then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ])
-      .then(([sess, prods]) => {
-        if (!sess.isLoggedIn) { router.push("/"); return; }
+      .then(([sess, profileData]) => {
+        if (!sess.isLoggedIn) {
+          router.push("/");
+          return;
+        }
         setSession(sess);
-        const charts = prods.charts || [];
-        const allProducts = charts.flatMap((m: { produkte: Produkt[] }) => m.produkte) || [];
-        setNeueProdukte(allProducts.slice(0, 3));
 
-        // Fetch KPIs if Shopify connected
+        const profile = profileData?.profile || {};
+        const cl = profile.onboarding_checklist || {};
+
+        // Auto-detect setup completion from session
         if (sess.hasShopifyToken || sess.hasShopifyConnection) {
-          fetch("/api/shopify/kpi")
-            .then((r) => r.ok ? r.json() : null)
-            .then((data) => { if (data && !data.error) setKpi(data); })
-            .catch(() => {});
+          cl.setup_complete = true;
         }
 
+        setChecklist(cl);
         setLoading(false);
       })
       .catch(() => router.push("/"));
@@ -92,321 +110,230 @@ export default function HomePage() {
     );
   }
 
-  const de = t.nav.home !== "Home";
-  const shopDomain = session.shopDomain || "";
-  const shopConnected = session.hasShopifyConnection || session.hasShopifyToken;
+  const completedCount = STEPS.filter((s) => checklist[s.key]).length;
+  const progress = (completedCount / STEPS.length) * 100;
+  const allDone = completedCount === STEPS.length;
 
   const container = {
     hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.08 } },
+    show: { opacity: 1, transition: { staggerChildren: 0.1, delayChildren: 0.2 } },
   };
   const item = {
-    hidden: { opacity: 0, y: 20 },
-    show: { opacity: 1, y: 0 },
+    hidden: { opacity: 0, y: 24 },
+    show: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 300, damping: 24 } },
   };
-
-  const kpiCards = [
-    {
-      label: de ? "Heutiger Umsatz" : "Today's Revenue",
-      value: kpi ? `${kpi.revenue.toLocaleString("de-DE", { minimumFractionDigits: 2 })} \u20AC` : "\u2014",
-      icon: DollarSign,
-      color: "text-[#95BF47]",
-      bg: "bg-[#95BF47]/10",
-      border: "border-[#95BF47]/20",
-      highlight: true,
-    },
-    {
-      label: de ? "Bestellungen (Monat)" : "Orders (Month)",
-      value: kpi ? kpi.ordersThisMonth.toLocaleString("de-DE") : "\u2014",
-      icon: ShoppingCart,
-      color: "text-indigo-400",
-      bg: "bg-indigo-500/10",
-      border: "border-indigo-500/20",
-    },
-    {
-      label: "AOV",
-      value: kpi ? `${kpi.aov.toLocaleString("de-DE", { minimumFractionDigits: 2 })} \u20AC` : "\u2014",
-      icon: Activity,
-      color: "text-purple-400",
-      bg: "bg-purple-500/10",
-      border: "border-purple-500/20",
-    },
-    {
-      label: "Conversion Rate",
-      value: kpi ? `${kpi.conversionRate.toFixed(2)}%` : "\u2014",
-      icon: MousePointerClick,
-      color: "text-emerald-400",
-      bg: "bg-emerald-500/10",
-      border: "border-emerald-500/20",
-    },
-  ];
 
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
-      {/* Ambient glow */}
-      <div className="fixed top-20 right-10 w-80 h-80 bg-[#95BF47]/8 rounded-full blur-[100px] pointer-events-none" />
+      {/* Ambient glows */}
+      <div className="fixed top-20 right-10 w-72 h-72 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-10 w-60 h-60 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Welcome */}
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <h1 className="text-3xl md:text-4xl font-bold mb-2">
-            {de ? "Willkommen zur\u00FCck" : "Welcome back"} <span className="text-[#95BF47]">{"\u{1F44B}"}</span>
-          </h1>
-          <p className="text-zinc-400">
-            {de ? "Dein Dashboard \u2014 alles Wichtige auf einen Blick." : "Your dashboard \u2014 everything at a glance."}
+      <div className="max-w-2xl mx-auto px-4 sm:px-6 py-6 md:py-10">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-11 h-11 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
+              <Crown className="w-6 h-6 text-[#95BF47]" />
+            </div>
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold">
+                {allDone ? "Alles erledigt!" : "Willkommen"}{" "}
+                <span className="text-[#95BF47]">{allDone ? "\u{1F389}" : "\u{1F44B}"}</span>
+              </h1>
+              <p className="text-zinc-400 text-sm">
+                {allDone
+                  ? "Dein Shop ist vollständig eingerichtet."
+                  : "Richte deinen Shop in 4 einfachen Schritten ein."}
+              </p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Progress Bar */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="glass-strong rounded-2xl border border-white/10 p-5 mb-6"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#95BF47]" />
+              <span className="text-sm font-semibold">Setup-Fortschritt</span>
+            </div>
+            <span className="text-sm font-bold text-[#95BF47]">
+              {completedCount}/{STEPS.length}
+            </span>
+          </div>
+          <div className="h-3 bg-white/5 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full rounded-full bg-gradient-to-r from-[#95BF47] to-[#B8D96E]"
+              initial={{ width: 0 }}
+              animate={{ width: `${progress}%` }}
+              transition={{ duration: 1, ease: "easeOut", delay: 0.3 }}
+            />
+          </div>
+          <p className="text-xs text-zinc-500 mt-2">
+            {allDone
+              ? "Perfekt! Du kannst jetzt loslegen."
+              : `Noch ${STEPS.length - completedCount} ${STEPS.length - completedCount === 1 ? "Schritt" : "Schritte"} bis zum Start.`}
           </p>
         </motion.div>
 
-        {/* ─── Live Shop Preview + KPIs ──────────────── */}
-        <div className="grid lg:grid-cols-5 gap-8 mb-10">
-          {/* Live Shop Preview Card (replaces iframe) */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="lg:col-span-2 flex justify-center"
-          >
-            <div className="w-full max-w-[320px]">
-              <div className="glass-strong rounded-2xl border border-white/10 p-6 backdrop-blur-xl text-center">
-                {/* Store visual */}
-                <div className="relative w-full aspect-[9/16] rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-white/5 mb-5 overflow-hidden flex items-center justify-center">
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                  <div className="relative z-10 flex flex-col items-center gap-3">
-                    <div className="w-16 h-16 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
-                      <Store className="w-8 h-8 text-[#95BF47]" />
-                    </div>
-                    {shopDomain ? (
-                      <>
-                        <p className="text-sm font-semibold text-white">{shopDomain}</p>
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          <span className="text-xs text-emerald-400">Live</span>
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-sm text-zinc-500 px-4">
-                        {de ? "Kein Shop verbunden" : "No shop connected"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* CTA Button */}
-                {shopDomain ? (
-                  <button
-                    onClick={() => window.open(`https://${shopDomain}`, "_blank", "noopener,noreferrer")}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-[#95BF47] text-black hover:brightness-110 transition-all flex items-center justify-center gap-2"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                    {de ? "Live Shop Vorschau \u00F6ffnen" : "Open Live Shop Preview"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => router.push("/setup")}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-white/10 text-white hover:bg-white/15 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Store className="w-4 h-4" />
-                    {de ? "Shop verbinden" : "Connect Shop"}
-                  </button>
-                )}
-              </div>
-
-              {/* Glow */}
-              <div className="w-40 h-40 bg-[#95BF47]/5 rounded-full blur-3xl mx-auto -mt-16 pointer-events-none" />
-            </div>
-          </motion.div>
-
-          {/* KPI Cards */}
-          <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="lg:col-span-3 grid grid-cols-2 gap-4 content-start"
-          >
-            {kpiCards.map((card) => (
-              <motion.div
-                key={card.label}
-                variants={item}
-                className={`glass-strong rounded-2xl border ${card.border} p-5 backdrop-blur-xl ${
-                  card.highlight ? "ring-1 ring-[#95BF47]/20" : ""
-                }`}
-              >
-                <div className={`w-10 h-10 rounded-xl ${card.bg} flex items-center justify-center mb-3`}>
-                  <card.icon className={`w-5 h-5 ${card.color}`} />
-                </div>
-                <p className="text-xs text-zinc-500 mb-1">{card.label}</p>
-                <p className={`text-2xl font-bold ${card.highlight ? "text-[#95BF47]" : "text-white"}`}>
-                  {card.value}
-                </p>
-              </motion.div>
-            ))}
-
-            {/* Monthly Revenue */}
-            {kpi && kpi.revenueMonth !== undefined && (
-              <motion.div
-                variants={item}
-                className="col-span-2 glass rounded-2xl border border-white/10 p-4 flex items-center justify-between"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#95BF47]/10 flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-[#95BF47]" />
-                  </div>
-                  <div>
-                    <p className="font-semibold text-sm">{de ? "Monatsumsatz" : "Monthly Revenue"}</p>
-                    <p className="text-[#95BF47] text-lg font-bold">
-                      {kpi.revenueMonth.toLocaleString("de-DE", { minimumFractionDigits: 2 })} &euro;
-                    </p>
-                  </div>
-                </div>
-                <div className="text-right text-xs text-zinc-500">
-                  {kpi.ordersThisMonth} {de ? "Bestellungen" : "orders"}
-                </div>
-              </motion.div>
-            )}
-
-            {/* Shopify Status */}
-            <motion.div
-              variants={item}
-              className="col-span-2 glass rounded-2xl border border-white/10 p-4 flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                  <Store className="w-5 h-5 text-emerald-400" />
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">Shopify Status</p>
-                  {shopConnected ? (
-                    <p className="text-emerald-400 text-xs flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {de ? "Verbunden" : "Connected"} {shopDomain && `\u2014 ${shopDomain}`}
-                    </p>
-                  ) : (
-                    <p className="text-zinc-500 text-xs">{de ? "Nicht verbunden" : "Not connected"}</p>
-                  )}
-                </div>
-              </div>
-              {!shopConnected && (
-                <button
-                  onClick={() => router.push("/setup")}
-                  className="btn-accent px-4 py-2 rounded-xl text-xs font-semibold"
-                >
-                  {de ? "Verbinden" : "Connect"}
-                </button>
-              )}
-            </motion.div>
-          </motion.div>
-        </div>
-
-        {/* ─── Quick Actions ──────────────────────── */}
+        {/* Checklist Steps */}
         <motion.div
           variants={container}
           initial="hidden"
           animate="show"
-          className="grid md:grid-cols-3 gap-5 mb-10"
+          className="space-y-3"
         >
-          <motion.div
-            variants={item}
-            onClick={() => router.push("/charts")}
-            className="glass rounded-2xl p-6 cursor-pointer border border-white/10 hover:border-[#95BF47]/20 transition-all group"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mb-4">
-              <BarChart3 className="w-6 h-6 text-[#95BF47]" />
-            </div>
-            <h3 className="text-lg font-bold mb-1">Winning Charts</h3>
-            <p className="text-zinc-400 text-sm mb-4">
-              {de ? "Entdecke die besten Produkte mit Analysen & Rankings." : "Discover the best products with analytics & rankings."}
-            </p>
-            <div className="flex items-center gap-2 text-[#95BF47] text-sm font-medium group-hover:gap-3 transition-all">
-              <span>{de ? "Charts \u00F6ffnen" : "Open Charts"}</span>
-              <ArrowRight className="w-4 h-4" />
-            </div>
-          </motion.div>
+          {STEPS.map((step, idx) => {
+            const done = !!checklist[step.key];
+            const isNext = !done && STEPS.slice(0, idx).every((s) => checklist[s.key]);
 
-          <motion.div
-            variants={item}
-            onClick={() => router.push("/checkout")}
-            className="glass rounded-2xl p-6 cursor-pointer border border-white/10 hover:border-purple-500/20 transition-all group"
-          >
-            <div className="w-12 h-12 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center mb-4">
-              <ShoppingCart className="w-6 h-6 text-purple-400" />
-            </div>
-            <h3 className="text-lg font-bold mb-1">{de ? "Warenkorb Optimierer" : "Cart Optimizer"}</h3>
-            <p className="text-zinc-400 text-sm mb-4">
-              {de ? "Trust Badges, Timer & Cross-Sells f\u00FCr deinen Warenkorb." : "Trust badges, timers & cross-sells for your cart."}
-            </p>
-            <div className="flex items-center gap-2 text-purple-400 text-sm font-medium group-hover:gap-3 transition-all">
-              <span>{de ? "Anpassen" : "Customize"}</span>
-              <ArrowRight className="w-4 h-4" />
-            </div>
-          </motion.div>
+            return (
+              <motion.div
+                key={step.key}
+                variants={item}
+                className={`group relative rounded-2xl border backdrop-blur-md transition-all duration-300 overflow-hidden ${
+                  done
+                    ? "border-emerald-500/25 bg-emerald-500/[0.04]"
+                    : isNext
+                    ? "border-white/15 bg-white/[0.06] hover:border-white/25"
+                    : "border-white/8 bg-white/[0.02] opacity-60"
+                }`}
+              >
+                {/* Active glow for next step */}
+                {isNext && (
+                  <div
+                    className="absolute -inset-px rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{
+                      background: `linear-gradient(135deg, ${step.color}15, transparent 60%)`,
+                    }}
+                  />
+                )}
 
-          <motion.div
-            variants={item}
-            onClick={() => router.push("/analytics")}
-            className="glass rounded-2xl p-6 cursor-pointer border border-white/10 hover:border-emerald-500/20 transition-all group"
-          >
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4">
-              <TrendingUp className="w-6 h-6 text-emerald-400" />
-            </div>
-            <h3 className="text-lg font-bold mb-1">Analytics & Insights</h3>
-            <p className="text-zinc-400 text-sm mb-4">
-              {de ? "Tiefe Store-Analysen, Funnels & Top-Produkte." : "Deep store analytics, funnels & top products."}
-            </p>
-            <div className="flex items-center gap-2 text-emerald-400 text-sm font-medium group-hover:gap-3 transition-all">
-              <span>{de ? "Analytics anzeigen" : "View Analytics"}</span>
-              <ArrowRight className="w-4 h-4" />
-            </div>
-          </motion.div>
+                <div className="relative p-4 md:p-5 flex items-start gap-4">
+                  {/* Step Number / Check */}
+                  <div className="shrink-0 mt-0.5">
+                    <motion.div
+                      className={`w-10 h-10 md:w-11 md:h-11 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                        done
+                          ? "bg-emerald-500/20 border border-emerald-500/30"
+                          : `border`
+                      }`}
+                      style={
+                        done
+                          ? undefined
+                          : { backgroundColor: `${step.color}15`, borderColor: `${step.color}30` }
+                      }
+                      animate={done ? { scale: [1, 1.15, 1] } : {}}
+                      transition={{ duration: 0.4 }}
+                    >
+                      {done ? (
+                        <motion.div
+                          initial={{ scale: 0, rotate: -45 }}
+                          animate={{ scale: 1, rotate: 0 }}
+                          transition={{ type: "spring", stiffness: 500, damping: 15 }}
+                        >
+                          <Check className="w-5 h-5 text-emerald-400" />
+                        </motion.div>
+                      ) : (
+                        <step.icon className="w-5 h-5" style={{ color: step.color }} />
+                      )}
+                    </motion.div>
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">
+                        Schritt {idx + 1}
+                      </span>
+                      {done && (
+                        <motion.span
+                          initial={{ opacity: 0, x: -8 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          className="text-[10px] font-bold uppercase tracking-widest text-emerald-400"
+                        >
+                          Erledigt
+                        </motion.span>
+                      )}
+                    </div>
+                    <h3
+                      className={`font-semibold text-sm md:text-base transition-all ${
+                        done ? "text-zinc-400 line-through decoration-emerald-500/40" : "text-white"
+                      }`}
+                    >
+                      {step.title}
+                    </h3>
+                    <p className="text-xs md:text-sm text-zinc-500 mt-0.5 leading-relaxed">
+                      {step.description}
+                    </p>
+
+                    {/* CTA Button */}
+                    {!done && (
+                      <motion.button
+                        onClick={() => router.push(step.href)}
+                        className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs md:text-sm font-semibold transition-all ${
+                          isNext
+                            ? "text-black hover:brightness-110"
+                            : "bg-white/5 border border-white/10 text-zinc-400 hover:bg-white/10"
+                        }`}
+                        style={isNext ? { backgroundColor: step.color } : undefined}
+                        whileHover={{ scale: 1.02 }}
+                        whileTap={{ scale: 0.98 }}
+                      >
+                        {step.ctaText}
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </motion.button>
+                    )}
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
         </motion.div>
 
-        {/* ─── Neue Produkte Section ──────────────── */}
-        {neueProdukte.length > 0 && (
+        {/* All Done CTA */}
+        {allDone && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.6 }}
+            className="mt-8"
           >
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-[#95BF47]" />
-                {de ? "Neue Produkte" : "New Products"}
-              </h2>
-              <button onClick={() => router.push("/charts")} className="text-sm text-[#95BF47] hover:underline">
-                {de ? "Alle anzeigen" : "View all"} &rarr;
-              </button>
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {neueProdukte.map((p, i) => (
-                <motion.div
-                  key={p.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 + i * 0.1 }}
-                  className="glass rounded-xl p-4 border border-white/10 hover:border-[#95BF47]/20 transition-all"
+            <div className="glass-strong rounded-2xl border border-[#95BF47]/20 p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center mx-auto mb-4">
+                <Rocket className="w-7 h-7 text-[#95BF47]" />
+              </div>
+              <h3 className="text-lg font-bold mb-2">Dein Shop ist startklar!</h3>
+              <p className="text-zinc-400 text-sm mb-5">
+                Alle Schritte abgeschlossen. Entdecke jetzt neue Produkte oder besuche die Community.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => router.push("/charts")}
+                  className="btn-accent px-6 py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2"
                 >
-                  <div className="flex items-start gap-4">
-                    {p.bildUrl && (
-                      <div className="w-16 h-16 rounded-lg overflow-hidden bg-white/5 shrink-0">
-                        <img src={p.bildUrl} alt={p.titel} className="w-full h-full object-cover" />
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h3 className="font-semibold text-sm truncate">{p.titel}</h3>
-                      <p className="text-zinc-500 text-xs mt-1">{p.monat}</p>
-                      {p.extra?.stats?.trendScore && (
-                        <div className="flex items-center gap-1 mt-2">
-                          <TrendingUp className="w-3 h-3 text-[#95BF47]" />
-                          <span className="text-xs text-[#95BF47] font-medium">Trend {p.extra.stats.trendScore}%</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              ))}
+                  <Package className="w-4 h-4" />
+                  Winning Charts
+                </button>
+                <button
+                  onClick={() => router.push("/chats")}
+                  className="glass px-6 py-3 rounded-xl font-semibold text-sm text-zinc-300 hover:bg-white/10 transition flex items-center justify-center gap-2"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Community
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
