@@ -13,7 +13,6 @@ import {
   Menu,
   X,
   Crown,
-  Scale,
   User,
   MessageCircle,
 } from "lucide-react";
@@ -29,7 +28,6 @@ const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home },
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
   { href: "/chats", labelKey: "chats" as const, icon: MessageCircle },
-  { href: "/legal", labelKey: "legal" as const, icon: Scale },
   { href: "/themes", labelKey: "themes" as const, icon: Palette },
   { href: "/profile", labelKey: "profile" as const, icon: User },
 ];

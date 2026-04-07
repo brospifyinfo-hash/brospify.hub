@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MessageCircle,
+  Hash,
   Plus,
   Send,
   Download,
@@ -19,15 +19,30 @@ import {
   Clock,
   Eye,
   EyeOff,
-  ChevronLeft,
+  ChevronDown,
   Store,
+  Menu as MenuIcon,
+  MessageCircle,
+  HelpCircle,
+  Sparkles,
+  Palette,
+  ArrowLeft,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
+/* ─── Category Definitions ─────────────────────────────────────── */
+const CATEGORIES = [
+  { id: "general", name: "General", icon: MessageCircle },
+  { id: "creatives", name: "Creatives", icon: Palette },
+  { id: "qa", name: "Q&A", icon: HelpCircle },
+];
+
+/* ─── Types ────────────────────────────────────────────────────── */
 interface ChatRoom {
   id: string;
   name: string;
   description: string;
+  category: string;
   allowCustomerMessages: boolean;
   status: string;
 }
@@ -52,6 +67,7 @@ interface SessionInfo {
   lizenzschluessel?: string;
 }
 
+/* ─── Page ─────────────────────────────────────────────────────── */
 export default function ChatsPage() {
   const router = useRouter();
   const [session, setSession] = useState<SessionInfo | null>(null);
@@ -73,10 +89,11 @@ export default function ChatsPage() {
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [newRoomName, setNewRoomName] = useState("");
   const [newRoomDesc, setNewRoomDesc] = useState("");
+  const [newRoomCategory, setNewRoomCategory] = useState("general");
   const [newRoomAllowMsgs, setNewRoomAllowMsgs] = useState(false);
   const [creatingRoom, setCreatingRoom] = useState(false);
 
-  // Admin: create image post
+  // Admin: image post
   const [showImagePost, setShowImagePost] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -88,16 +105,37 @@ export default function ChatsPage() {
   // Push to Shopify
   const [pushingId, setPushingId] = useState<string | null>(null);
 
-  // Mobile state
-  const [showRoomList, setShowRoomList] = useState(true);
+  // Sidebar & categories
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({
+    general: true,
+    creatives: true,
+    qa: true,
+  });
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  /* ─── Derived: rooms grouped by category ───────────────────── */
+  const roomsByCategory = useMemo(() => {
+    const grouped: Record<string, ChatRoom[]> = {};
+    for (const cat of CATEGORIES) grouped[cat.id] = [];
+    for (const room of rooms) {
+      const catId = room.category && grouped[room.category] ? room.category : "general";
+      grouped[catId].push(room);
+    }
+    return grouped;
+  }, [rooms]);
+
+  /* ─── Data Fetching ────────────────────────────────────────── */
   const loadRooms = useCallback(async () => {
     try {
       const res = await fetch("/api/chats");
       if (!res.ok) return;
       const data = await res.json();
       setRooms(data.rooms || []);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
   const loadMessages = useCallback(async (chatId: string) => {
@@ -107,8 +145,11 @@ export default function ChatsPage() {
       if (!res.ok) return;
       const data = await res.json();
       setMessages(data.messages || []);
-    } catch { /* ignore */ }
-    finally { setMessagesLoading(false); }
+    } catch {
+      /* ignore */
+    } finally {
+      setMessagesLoading(false);
+    }
   }, []);
 
   const loadPending = useCallback(async () => {
@@ -117,14 +158,20 @@ export default function ChatsPage() {
       if (!res.ok) return;
       const data = await res.json();
       setPendingMessages(data.messages || []);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, []);
 
+  /* ─── Effects ──────────────────────────────────────────────── */
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())
       .then((data) => {
-        if (!data.isLoggedIn) { router.push("/"); return; }
+        if (!data.isLoggedIn) {
+          router.push("/");
+          return;
+        }
         setSession(data);
         setLoading(false);
       })
@@ -139,14 +186,23 @@ export default function ChatsPage() {
   }, [session, loadRooms, loadPending]);
 
   useEffect(() => {
-    if (selectedRoom) {
-      loadMessages(selectedRoom.id);
-      setShowRoomList(false);
-    }
+    if (selectedRoom) loadMessages(selectedRoom.id);
   }, [selectedRoom, loadMessages]);
+
+  useEffect(() => {
+    if (messages.length > 0) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
+
+  /* ─── Handlers ─────────────────────────────────────────────── */
+  function toggleCategory(catId: string) {
+    setExpandedCats((prev) => ({ ...prev, [catId]: !prev[catId] }));
+  }
 
   function selectRoom(room: ChatRoom) {
     setSelectedRoom(room);
+    setSidebarOpen(false);
     setError("");
     setSuccess("");
   }
@@ -158,43 +214,62 @@ export default function ChatsPage() {
       const res = await fetch("/api/chats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newRoomName, description: newRoomDesc, allowCustomerMessages: newRoomAllowMsgs }),
+        body: JSON.stringify({
+          name: newRoomName,
+          description: newRoomDesc,
+          category: newRoomCategory,
+          allowCustomerMessages: newRoomAllowMsgs,
+        }),
       });
       if (res.ok) {
         setShowCreateRoom(false);
         setNewRoomName("");
         setNewRoomDesc("");
+        setNewRoomCategory("general");
         setNewRoomAllowMsgs(false);
         await loadRooms();
-        setSuccess("Raum erstellt!");
+        setSuccess("Kanal erstellt!");
         setTimeout(() => setSuccess(""), 3000);
+      } else {
+        const data = await res.json();
+        setError(data.error || "Fehler beim Erstellen.");
       }
-    } catch { setError("Fehler beim Erstellen."); }
-    finally { setCreatingRoom(false); }
+    } catch {
+      setError("Fehler beim Erstellen.");
+    } finally {
+      setCreatingRoom(false);
+    }
   }
 
   async function handleSendMessage() {
-    if (!selectedRoom || (!newMessage.trim())) return;
+    if (!selectedRoom || !newMessage.trim()) return;
     setSending(true);
     try {
       const res = await fetch("/api/chats/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId: selectedRoom.id, content: newMessage, senderName }),
+        body: JSON.stringify({
+          chatId: selectedRoom.id,
+          content: newMessage,
+          senderName,
+        }),
       });
       if (res.ok) {
         setNewMessage("");
         await loadMessages(selectedRoom.id);
         if (!session?.isAdmin) {
-          setSuccess("Nachricht gesendet! Sie wird nach Freigabe sichtbar.");
+          setSuccess("Nachricht gesendet! Wird nach Freigabe sichtbar.");
           setTimeout(() => setSuccess(""), 4000);
         }
       } else {
         const data = await res.json();
         setError(data.error || "Fehler beim Senden.");
       }
-    } catch { setError("Senden fehlgeschlagen."); }
-    finally { setSending(false); }
+    } catch {
+      setError("Senden fehlgeschlagen.");
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -211,22 +286,23 @@ export default function ChatsPage() {
     if (!selectedRoom || !imageFile) return;
     setUploadingImage(true);
     try {
-      // Upload image via /api/upload
       const fd = new FormData();
       fd.append("file", imageFile);
       const uploadRes = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!uploadRes.ok) { setError("Bild-Upload fehlgeschlagen."); setUploadingImage(false); return; }
+      if (!uploadRes.ok) {
+        setError("Bild-Upload fehlgeschlagen.");
+        setUploadingImage(false);
+        return;
+      }
       const uploadData = await uploadRes.json();
-      const imageUrl = uploadData.url;
 
-      // Create message with image
       const res = await fetch("/api/chats/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId: selectedRoom.id,
           content: imageCaption,
-          imageUrl,
+          imageUrl: uploadData.url,
           imageBgColor: imageFile.type === "image/png" ? imageBgColor : "",
         }),
       });
@@ -239,11 +315,18 @@ export default function ChatsPage() {
         setSuccess("Bild-Post erstellt!");
         setTimeout(() => setSuccess(""), 3000);
       }
-    } catch { setError("Fehler beim Erstellen des Posts."); }
-    finally { setUploadingImage(false); }
+    } catch {
+      setError("Fehler beim Erstellen des Posts.");
+    } finally {
+      setUploadingImage(false);
+    }
   }
 
-  async function handleModerate(messageId: string, chatId: string, status: string) {
+  async function handleModerate(
+    messageId: string,
+    chatId: string,
+    status: string
+  ) {
     try {
       const res = await fetch("/api/chats/messages", {
         method: "PUT",
@@ -254,7 +337,9 @@ export default function ChatsPage() {
         await loadPending();
         if (selectedRoom) await loadMessages(selectedRoom.id);
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   async function handlePushToShopify(msg: ChatMessage) {
@@ -264,7 +349,10 @@ export default function ChatsPage() {
       const res = await fetch("/api/chats/push-to-shopify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrl: msg.imageUrl, alt: msg.content || "Community Bild" }),
+        body: JSON.stringify({
+          imageUrl: msg.imageUrl,
+          alt: msg.content || "Community Bild",
+        }),
       });
       const data = await res.json();
       if (res.ok) {
@@ -273,8 +361,11 @@ export default function ChatsPage() {
       } else {
         setError(data.error || "Push fehlgeschlagen.");
       }
-    } catch { setError("Verbindung fehlgeschlagen."); }
-    finally { setPushingId(null); }
+    } catch {
+      setError("Verbindung fehlgeschlagen.");
+    } finally {
+      setPushingId(null);
+    }
   }
 
   function handleDownload(imageUrl: string, filename?: string) {
@@ -288,317 +379,573 @@ export default function ChatsPage() {
     document.body.removeChild(a);
   }
 
+  /* ─── Loading State ────────────────────────────────────────── */
   if (loading || !session) {
     return (
       <div className="min-h-screen bg-mesh flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
+          <p className="text-[11px] text-zinc-600 tracking-widest uppercase">
+            Lade Community...
+          </p>
+        </div>
       </div>
     );
   }
 
   const isAdmin = session.isAdmin;
 
+  /* ─── Sidebar Content (shared between desktop & mobile) ──── */
+  const renderSidebar = (mobile = false) => (
+    <>
+      {/* Community Header */}
+      <div className={`p-4 border-b border-white/[0.06] ${mobile ? "" : ""}`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#95BF47]/20 to-[#95BF47]/5 border border-[#95BF47]/15 flex items-center justify-center">
+              <Sparkles className="w-4 h-4 text-[#95BF47]" />
+            </div>
+            <div>
+              <h2 className="text-[13px] font-bold text-zinc-100 tracking-tight">
+                Community
+              </h2>
+              <p className="text-[10px] text-zinc-600">
+                {rooms.length} {rooms.length === 1 ? "Kanal" : "Kanäle"}
+              </p>
+            </div>
+          </div>
+          {isAdmin && (
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
+              onClick={() => setShowCreateRoom(true)}
+              className="p-2 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/15 text-[#95BF47] hover:bg-[#95BF47]/20 transition"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </motion.button>
+          )}
+        </div>
+
+        {/* Pending moderation badge */}
+        {isAdmin && pendingMessages.length > 0 && (
+          <div className="mt-3 text-[11px] bg-amber-500/10 border border-amber-500/10 text-amber-400/80 px-3 py-2 rounded-lg flex items-center gap-2">
+            <Clock className="w-3 h-3 shrink-0" />
+            <span>
+              {pendingMessages.length} Nachricht
+              {pendingMessages.length > 1 ? "en" : ""} warten auf Freigabe
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Categories & Channels */}
+      <div className="flex-1 overflow-y-auto py-3">
+        {CATEGORIES.map((cat) => {
+          const catRooms = roomsByCategory[cat.id] || [];
+          return (
+            <div key={cat.id} className="mb-1">
+              {/* Category Header */}
+              <button
+                onClick={() => toggleCategory(cat.id)}
+                className="w-full flex items-center gap-1.5 px-3 py-1.5 group"
+              >
+                <ChevronDown
+                  className={`w-2.5 h-2.5 text-zinc-600 transition-transform duration-200 ${
+                    !expandedCats[cat.id] ? "-rotate-90" : ""
+                  }`}
+                />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-500 group-hover:text-zinc-300 transition">
+                  {cat.name}
+                </span>
+                {catRooms.length > 0 && (
+                  <span className="text-[10px] text-zinc-700 ml-auto tabular-nums">
+                    {catRooms.length}
+                  </span>
+                )}
+              </button>
+
+              {/* Channel List */}
+              <AnimatePresence initial={false}>
+                {expandedCats[cat.id] && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2, ease: "easeInOut" }}
+                    className="overflow-hidden"
+                  >
+                    {catRooms.length === 0 ? (
+                      <p className="px-8 py-1.5 text-[10px] text-zinc-700 italic">
+                        Keine Kanäle
+                      </p>
+                    ) : (
+                      <div className="px-1.5 space-y-[2px]">
+                        {catRooms.map((room) => {
+                          const isSelected = selectedRoom?.id === room.id;
+                          return (
+                            <button
+                              key={room.id}
+                              onClick={() => selectRoom(room)}
+                              className={`
+                                w-full flex items-center gap-2 px-2.5 py-[7px] rounded-md text-[13px] transition-all duration-150 group/ch
+                                ${
+                                  isSelected
+                                    ? "bg-white/[0.08] text-white"
+                                    : "text-zinc-500 hover:text-zinc-200 hover:bg-white/[0.04]"
+                                }
+                              `}
+                            >
+                              <Hash
+                                className={`w-4 h-4 shrink-0 transition ${
+                                  isSelected
+                                    ? "text-[#95BF47]"
+                                    : "opacity-40 group-hover/ch:opacity-70"
+                                }`}
+                              />
+                              <span className="truncate font-medium">
+                                {room.name}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  /* ═══════════════════════════════════════════════════════════════ */
+  /* RENDER                                                         */
+  /* ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="min-h-screen bg-mesh flex flex-col">
       <Navigation />
 
-      {/* Toasts */}
+      {/* ─── Toasts ──────────────────────────────────────────── */}
       <AnimatePresence>
         {(error || success) && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
+            initial={{ opacity: 0, y: -12 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            className={`fixed top-16 md:top-20 left-4 right-4 md:left-auto md:right-6 md:w-96 z-50 px-4 py-3 rounded-xl border text-sm flex items-center gap-2 ${
-              error ? "bg-red-500/10 border-red-500/20 text-red-300" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+            exit={{ opacity: 0, y: -12 }}
+            className={`fixed top-[4.5rem] right-4 left-4 md:left-auto md:w-[380px] z-50 px-4 py-3 rounded-xl border text-[13px] flex items-center gap-2.5 backdrop-blur-2xl shadow-xl ${
+              error
+                ? "bg-red-500/10 border-red-500/15 text-red-300"
+                : "bg-emerald-500/10 border-emerald-500/15 text-emerald-300"
             }`}
           >
-            {error ? <AlertCircle className="w-4 h-4 shrink-0" /> : <Check className="w-4 h-4 shrink-0" />}
-            <span className="flex-1">{error || success}</span>
-            <button onClick={() => { setError(""); setSuccess(""); }}><X className="w-4 h-4" /></button>
+            {error ? (
+              <AlertCircle className="w-4 h-4 shrink-0" />
+            ) : (
+              <Check className="w-4 h-4 shrink-0" />
+            )}
+            <span className="flex-1 text-xs">{error || success}</span>
+            <button
+              onClick={() => {
+                setError("");
+                setSuccess("");
+              }}
+              className="p-0.5 hover:bg-white/10 rounded transition"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="flex-1 flex flex-col md:flex-row max-w-7xl mx-auto w-full">
-        {/* Sidebar / Room List */}
-        <div className={`${showRoomList ? "block" : "hidden md:block"} w-full md:w-72 lg:w-80 border-r border-white/5 flex flex-col`}>
-          <div className="p-4 border-b border-white/5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-bold flex items-center gap-2">
-                <MessageCircle className="w-5 h-5 text-[#95BF47]" />
-                Community
-              </h2>
-              {isAdmin && (
-                <button
-                  onClick={() => setShowCreateRoom(true)}
-                  className="p-2 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 text-[#95BF47] hover:bg-[#95BF47]/20 transition"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+      {/* ─── Main Layout ─────────────────────────────────────── */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Desktop Sidebar */}
+        <aside className="hidden md:flex w-[260px] lg:w-[280px] shrink-0 flex-col bg-[#080808]/80 backdrop-blur-2xl border-r border-white/[0.06]">
+          {renderSidebar()}
+        </aside>
 
-            {/* Pending badge for admin */}
-            {isAdmin && pendingMessages.length > 0 && (
-              <div className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-300 px-3 py-2 rounded-lg flex items-center gap-2">
-                <Clock className="w-3.5 h-3.5" />
-                {pendingMessages.length} Nachricht{pendingMessages.length > 1 ? "en" : ""} warten auf Freigabe
-              </div>
-            )}
+        {/* Mobile Sidebar Overlay */}
+        <AnimatePresence>
+          {sidebarOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/70 backdrop-blur-sm z-30 md:hidden"
+                onClick={() => setSidebarOpen(false)}
+              />
+              <motion.aside
+                initial={{ x: -280 }}
+                animate={{ x: 0 }}
+                exit={{ x: -280 }}
+                transition={{ type: "spring", damping: 28, stiffness: 320 }}
+                className="fixed inset-y-0 left-0 w-[280px] z-40 md:hidden bg-[#080808] border-r border-white/[0.06] flex flex-col pt-14"
+              >
+                {renderSidebar(true)}
+              </motion.aside>
+            </>
+          )}
+        </AnimatePresence>
+
+        {/* Mobile: Full-width channel list when no room selected */}
+        {!selectedRoom && (
+          <div className="flex md:hidden flex-1 flex-col bg-[#080808]/40">
+            {renderSidebar(true)}
           </div>
+        )}
 
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {rooms.length === 0 ? (
-              <div className="text-center py-10 text-zinc-500 text-sm">
-                {isAdmin ? "Erstelle deinen ersten Chat-Raum." : "Noch keine Chat-Räume vorhanden."}
-              </div>
-            ) : (
-              rooms.map((room) => (
-                <button
-                  key={room.id}
-                  onClick={() => selectRoom(room)}
-                  className={`w-full text-left p-3 rounded-xl transition-all ${
-                    selectedRoom?.id === room.id
-                      ? "bg-[#95BF47]/10 border border-[#95BF47]/20"
-                      : "hover:bg-white/5 border border-transparent"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                      <MessageCircle className="w-4 h-4 text-zinc-400" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-sm truncate">{room.name}</p>
-                      {room.description && (
-                        <p className="text-xs text-zinc-500 truncate">{room.description}</p>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Main Chat Area */}
-        <div className={`${!showRoomList ? "flex" : "hidden md:flex"} flex-1 flex-col min-w-0`}>
+        {/* ─── Chat Area ───────────────────────────────────────── */}
+        <div
+          className={`${selectedRoom ? "flex" : "hidden md:flex"} flex-1 flex-col min-w-0`}
+        >
           {selectedRoom ? (
             <>
-              {/* Room Header */}
-              <div className="p-4 border-b border-white/5 flex items-center gap-3">
+              {/* Channel Header */}
+              <div className="h-12 md:h-[52px] flex items-center gap-2.5 px-4 border-b border-white/[0.06] bg-black/20 backdrop-blur-md shrink-0">
                 <button
-                  onClick={() => { setShowRoomList(true); setSelectedRoom(null); }}
-                  className="md:hidden p-1.5 rounded-lg hover:bg-white/5"
+                  onClick={() => setSidebarOpen(true)}
+                  className="md:hidden p-1.5 -ml-1 rounded-lg hover:bg-white/5 text-zinc-400 transition"
                 >
-                  <ChevronLeft className="w-5 h-5" />
+                  <MenuIcon className="w-5 h-5" />
                 </button>
+                <button
+                  onClick={() => setSelectedRoom(null)}
+                  className="md:hidden p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 transition"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                <div className="hidden md:flex items-center justify-center w-7 h-7 rounded-md bg-white/[0.04]">
+                  <Hash className="w-4 h-4 text-zinc-500" />
+                </div>
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-bold truncate">{selectedRoom.name}</h3>
+                  <h3 className="font-semibold text-sm truncate">
+                    {selectedRoom.name}
+                  </h3>
                   {selectedRoom.description && (
-                    <p className="text-xs text-zinc-500 truncate">{selectedRoom.description}</p>
+                    <p className="text-[11px] text-zinc-600 truncate hidden sm:block">
+                      {selectedRoom.description}
+                    </p>
                   )}
                 </div>
                 {isAdmin && (
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.95 }}
                     onClick={() => setShowImagePost(true)}
-                    className="btn-accent px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-1.5"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/15 text-[#95BF47] text-xs font-semibold hover:bg-[#95BF47]/20 transition"
                   >
                     <ImageIcon className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Bild posten</span>
-                  </button>
+                  </motion.button>
                 )}
               </div>
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div className="flex-1 overflow-y-auto">
                 {messagesLoading ? (
-                  <div className="flex justify-center py-10">
-                    <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+                  <div className="flex justify-center py-20">
+                    <Loader2 className="w-6 h-6 animate-spin text-zinc-700" />
                   </div>
                 ) : messages.length === 0 ? (
-                  <div className="text-center py-10 text-zinc-500 text-sm">
-                    Noch keine Nachrichten in diesem Raum.
+                  <div className="flex flex-col items-center justify-center h-full px-4 py-16">
+                    <div className="w-14 h-14 rounded-2xl bg-white/[0.03] border border-white/[0.06] flex items-center justify-center mb-4">
+                      <Hash className="w-7 h-7 text-zinc-800" />
+                    </div>
+                    <p className="text-sm font-semibold text-zinc-400 mb-1">
+                      Willkommen in #{selectedRoom.name}
+                    </p>
+                    <p className="text-xs text-zinc-700 text-center max-w-[280px]">
+                      {isAdmin
+                        ? "Poste das erste Bild oder eine Nachricht in diesem Kanal."
+                        : "Noch keine Nachrichten in diesem Kanal."}
+                    </p>
                   </div>
                 ) : (
-                  messages.map((msg) => (
-                    <motion.div
-                      key={msg.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className={`${
-                        msg.messageStatus === "pending" ? "opacity-60 border-l-2 border-amber-500/50 pl-3" : ""
-                      } ${msg.messageStatus === "hidden" ? "opacity-40" : ""}`}
-                    >
-                      {/* Admin badge */}
-                      <div className="flex items-center gap-2 mb-2">
-                        {msg.senderType === "admin" ? (
-                          <div className="flex items-center gap-1.5 text-xs">
-                            <Crown className="w-3.5 h-3.5 text-[#95BF47]" />
-                            <span className="font-semibold text-[#95BF47]">BrospifyHub</span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-1.5 text-xs text-zinc-400">
-                            <Shield className="w-3.5 h-3.5" />
-                            <span>{msg.senderName}</span>
-                          </div>
-                        )}
-                        <span className="text-[10px] text-zinc-600">
-                          {new Date(msg.createdAt).toLocaleDateString("de-DE", {
-                            day: "2-digit", month: "2-digit", year: "numeric",
-                            hour: "2-digit", minute: "2-digit",
-                          })}
-                        </span>
-                        {msg.messageStatus === "pending" && (
-                          <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded">Wartet</span>
-                        )}
-                        {msg.messageStatus === "hidden" && (
-                          <span className="text-[10px] bg-red-500/20 text-red-300 px-1.5 py-0.5 rounded">Versteckt</span>
-                        )}
-                      </div>
+                  <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
+                    {messages.map((msg, i) => {
+                      const isAdminMsg = msg.senderType === "admin";
+                      const isPending = msg.messageStatus === "pending";
+                      const isHidden = msg.messageStatus === "hidden";
 
-                      {/* Image Post */}
-                      {msg.imageUrl && (
-                        <div
-                          className="rounded-xl overflow-hidden mb-2 max-w-lg"
-                          style={{
-                            backgroundColor: msg.imageBgColor || "#111111",
+                      return (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 14 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{
+                            delay: Math.min(i * 0.04, 0.3),
+                            duration: 0.35,
                           }}
+                          className={`group relative ${isPending ? "opacity-60" : ""} ${isHidden ? "opacity-30" : ""}`}
                         >
-                          <div className="p-3 md:p-4 flex items-center justify-center">
-                            <img
-                              src={msg.imageUrl}
-                              alt={msg.content || "Bild"}
-                              className="max-w-full max-h-80 object-contain rounded-lg"
-                            />
-                          </div>
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-2 px-3 md:px-4 pb-3">
-                            <button
-                              onClick={() => handleDownload(msg.imageUrl)}
-                              className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-white/10 hover:bg-white/15 transition text-xs font-medium"
+                          {/* Sender Row */}
+                          <div className="flex items-center gap-2.5 mb-2">
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                                isAdminMsg
+                                  ? "bg-gradient-to-br from-[#95BF47]/25 to-[#95BF47]/5 border border-[#95BF47]/20"
+                                  : "bg-white/[0.05] border border-white/[0.08]"
+                              }`}
                             >
-                              <Download className="w-3.5 h-3.5" />
-                              Herunterladen
-                            </button>
-                            {!isAdmin && session.hasShopifyToken !== false && (
-                              <button
-                                onClick={() => handlePushToShopify(msg)}
-                                disabled={pushingId === msg.id}
-                                className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg bg-[#95BF47]/20 border border-[#95BF47]/30 text-[#95BF47] hover:bg-[#95BF47]/30 transition text-xs font-medium disabled:opacity-50"
-                              >
-                                {pushingId === msg.id ? (
-                                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                  <Store className="w-3.5 h-3.5" />
-                                )}
-                                Zu Shopify
-                              </button>
+                              {isAdminMsg ? (
+                                <Crown className="w-3.5 h-3.5 text-[#95BF47]" />
+                              ) : (
+                                <Shield className="w-3 h-3 text-zinc-500" />
+                              )}
+                            </div>
+                            <span
+                              className={`text-[13px] font-semibold ${
+                                isAdminMsg ? "text-[#95BF47]" : "text-zinc-400"
+                              }`}
+                            >
+                              {isAdminMsg ? "BrospifyHub" : msg.senderName}
+                            </span>
+                            <span className="text-[10px] text-zinc-700 tabular-nums">
+                              {new Date(msg.createdAt).toLocaleDateString(
+                                "de-DE",
+                                {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                }
+                              )}
+                            </span>
+                            {isPending && (
+                              <span className="text-[10px] bg-amber-500/15 text-amber-400/80 px-1.5 py-0.5 rounded font-medium">
+                                Wartet
+                              </span>
+                            )}
+                            {isHidden && (
+                              <span className="text-[10px] bg-red-500/15 text-red-400/80 px-1.5 py-0.5 rounded font-medium">
+                                Versteckt
+                              </span>
                             )}
                           </div>
-                        </div>
-                      )}
 
-                      {/* Text content */}
-                      {msg.content && (
-                        <p className="text-sm text-zinc-300 leading-relaxed">{msg.content}</p>
-                      )}
+                          {/* Image Post — Gallery Card */}
+                          {msg.imageUrl && (
+                            <div className="ml-[42px] rounded-2xl overflow-hidden border border-white/[0.06] shadow-2xl shadow-black/50 max-w-2xl">
+                              {/* Image Display */}
+                              <div
+                                className="relative flex items-center justify-center p-6 md:p-10 min-h-[200px]"
+                                style={{
+                                  backgroundColor:
+                                    msg.imageBgColor || "#0a0a0a",
+                                }}
+                              >
+                                <img
+                                  src={msg.imageUrl}
+                                  alt={msg.content || "Bild"}
+                                  className="max-w-full max-h-[420px] object-contain rounded-lg drop-shadow-2xl"
+                                  loading="lazy"
+                                />
+                                {/* Subtle vignette overlay */}
+                                <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/[0.04] pointer-events-none" />
+                              </div>
 
-                      {/* Admin moderation buttons */}
-                      {isAdmin && msg.senderType === "customer" && (
-                        <div className="flex items-center gap-2 mt-2">
-                          {msg.messageStatus === "pending" && (
-                            <>
-                              <button
-                                onClick={() => handleModerate(msg.id, msg.chatId, "approved")}
-                                className="text-xs bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-lg hover:bg-emerald-500/20 flex items-center gap-1"
-                              >
-                                <Check className="w-3 h-3" /> Freigeben
-                              </button>
-                              <button
-                                onClick={() => handleModerate(msg.id, msg.chatId, "hidden")}
-                                className="text-xs bg-red-500/10 text-red-400 px-2.5 py-1 rounded-lg hover:bg-red-500/20 flex items-center gap-1"
-                              >
-                                <X className="w-3 h-3" /> Ablehnen
-                              </button>
-                            </>
+                              {/* Glass Action Bar */}
+                              <div className="flex items-center gap-2 p-3 bg-white/[0.02] border-t border-white/[0.06]">
+                                <motion.button
+                                  whileHover={{
+                                    scale: 1.02,
+                                    backgroundColor:
+                                      "rgba(255, 255, 255, 0.07)",
+                                  }}
+                                  whileTap={{ scale: 0.96 }}
+                                  onClick={() => handleDownload(msg.imageUrl)}
+                                  className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-sm transition-colors text-xs font-medium text-zinc-300"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  Herunterladen
+                                </motion.button>
+                                {!isAdmin &&
+                                  session.hasShopifyToken !== false && (
+                                    <motion.button
+                                      whileHover={{ scale: 1.02 }}
+                                      whileTap={{ scale: 0.96 }}
+                                      onClick={() =>
+                                        handlePushToShopify(msg)
+                                      }
+                                      disabled={pushingId === msg.id}
+                                      className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/15 text-[#95BF47] hover:bg-[#95BF47]/15 backdrop-blur-sm transition-colors text-xs font-medium disabled:opacity-50"
+                                    >
+                                      {pushingId === msg.id ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Store className="w-3.5 h-3.5" />
+                                      )}
+                                      Zu Shopify
+                                    </motion.button>
+                                  )}
+                              </div>
+                            </div>
                           )}
-                          {msg.messageStatus === "approved" && (
-                            <button
-                              onClick={() => handleModerate(msg.id, msg.chatId, "hidden")}
-                              className="text-xs text-zinc-500 hover:text-red-400 flex items-center gap-1"
+
+                          {/* Text Content */}
+                          {msg.content && (
+                            <div
+                              className={`ml-[42px] ${msg.imageUrl ? "mt-2.5" : ""}`}
                             >
-                              <EyeOff className="w-3 h-3" /> Verstecken
-                            </button>
+                              <p
+                                className={`text-[14px] leading-relaxed ${
+                                  isAdminMsg
+                                    ? "text-zinc-200"
+                                    : "text-zinc-400"
+                                }`}
+                              >
+                                {msg.content}
+                              </p>
+                            </div>
                           )}
-                          {msg.messageStatus === "hidden" && (
-                            <button
-                              onClick={() => handleModerate(msg.id, msg.chatId, "approved")}
-                              className="text-xs text-zinc-500 hover:text-emerald-400 flex items-center gap-1"
-                            >
-                              <Eye className="w-3 h-3" /> Anzeigen
-                            </button>
+
+                          {/* Moderation Buttons (Admin only, customer messages) */}
+                          {isAdmin && !isAdminMsg && (
+                            <div className="flex items-center gap-2 mt-2 ml-[42px] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              {isPending && (
+                                <>
+                                  <button
+                                    onClick={() =>
+                                      handleModerate(
+                                        msg.id,
+                                        msg.chatId,
+                                        "approved"
+                                      )
+                                    }
+                                    className="text-[11px] bg-emerald-500/10 text-emerald-400 px-2.5 py-1 rounded-md hover:bg-emerald-500/20 flex items-center gap-1 transition"
+                                  >
+                                    <Check className="w-3 h-3" /> Freigeben
+                                  </button>
+                                  <button
+                                    onClick={() =>
+                                      handleModerate(
+                                        msg.id,
+                                        msg.chatId,
+                                        "hidden"
+                                      )
+                                    }
+                                    className="text-[11px] bg-red-500/10 text-red-400 px-2.5 py-1 rounded-md hover:bg-red-500/20 flex items-center gap-1 transition"
+                                  >
+                                    <X className="w-3 h-3" /> Ablehnen
+                                  </button>
+                                </>
+                              )}
+                              {msg.messageStatus === "approved" && (
+                                <button
+                                  onClick={() =>
+                                    handleModerate(
+                                      msg.id,
+                                      msg.chatId,
+                                      "hidden"
+                                    )
+                                  }
+                                  className="text-[11px] text-zinc-600 hover:text-red-400 flex items-center gap-1 transition"
+                                >
+                                  <EyeOff className="w-3 h-3" /> Verstecken
+                                </button>
+                              )}
+                              {isHidden && (
+                                <button
+                                  onClick={() =>
+                                    handleModerate(
+                                      msg.id,
+                                      msg.chatId,
+                                      "approved"
+                                    )
+                                  }
+                                  className="text-[11px] text-zinc-600 hover:text-emerald-400 flex items-center gap-1 transition"
+                                >
+                                  <Eye className="w-3 h-3" /> Anzeigen
+                                </button>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      )}
-                    </motion.div>
-                  ))
+                        </motion.div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
                 )}
               </div>
 
-              {/* Message Input (if allowed) */}
+              {/* Message Input */}
               {(isAdmin || selectedRoom.allowCustomerMessages) && (
-                <div className="p-3 md:p-4 border-t border-white/5">
-                  {!isAdmin && !senderName && (
-                    <div className="mb-2">
+                <div className="px-4 pb-4 pt-2 shrink-0">
+                  <div className="max-w-3xl mx-auto">
+                    {!isAdmin && !senderName && (
+                      <div className="mb-2">
+                        <input
+                          type="text"
+                          value={senderName}
+                          onChange={(e) => setSenderName(e.target.value)}
+                          placeholder="Dein Name..."
+                          className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 text-xs outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-700"
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 bg-white/[0.04] border border-white/[0.08] rounded-xl px-1.5 py-1.5 backdrop-blur-sm focus-within:border-[#95BF47]/20 transition-colors">
                       <input
                         type="text"
-                        value={senderName}
-                        onChange={(e) => setSenderName(e.target.value)}
-                        placeholder="Dein Name..."
-                        className="input-glass w-full text-xs"
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                        placeholder={
+                          isAdmin
+                            ? "Admin-Nachricht schreiben..."
+                            : `Nachricht in #${selectedRoom.name}...`
+                        }
+                        className="flex-1 bg-transparent text-sm px-3 py-2 outline-none placeholder:text-zinc-600"
+                        disabled={sending}
                       />
+                      <motion.button
+                        whileTap={{ scale: 0.88 }}
+                        onClick={handleSendMessage}
+                        disabled={sending || !newMessage.trim()}
+                        className="p-2.5 rounded-lg bg-[#95BF47] text-black disabled:opacity-25 disabled:bg-zinc-700 transition-colors shrink-0"
+                      >
+                        {sending ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                      </motion.button>
                     </div>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
-                      placeholder={isAdmin ? "Admin-Nachricht..." : "Nachricht schreiben..."}
-                      className="input-glass flex-1 text-sm"
-                      disabled={sending}
-                    />
-                    <button
-                      onClick={handleSendMessage}
-                      disabled={sending || !newMessage.trim()}
-                      className="btn-accent p-3 rounded-xl disabled:opacity-50 shrink-0"
-                    >
-                      {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    </button>
+                    {!isAdmin && (
+                      <p className="text-[10px] text-zinc-700 mt-1.5 ml-1">
+                        Wird nach Admin-Freigabe sichtbar.
+                      </p>
+                    )}
                   </div>
-                  {!isAdmin && (
-                    <p className="text-[10px] text-zinc-600 mt-1.5">
-                      Deine Nachricht wird nach Admin-Freigabe sichtbar.
-                    </p>
-                  )}
                 </div>
               )}
             </>
           ) : (
+            /* Empty State (Desktop) */
             <div className="flex-1 flex items-center justify-center p-8">
               <div className="text-center">
-                <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center mx-auto mb-4">
-                  <MessageCircle className="w-8 h-8 text-zinc-600" />
+                <div className="relative mx-auto mb-6">
+                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#95BF47]/10 to-transparent border border-white/[0.05] flex items-center justify-center mx-auto">
+                    <Sparkles className="w-9 h-9 text-[#95BF47]/30" />
+                  </div>
+                  <div className="absolute -inset-6 bg-[#95BF47]/[0.04] rounded-full blur-3xl -z-10" />
                 </div>
-                <h3 className="text-lg font-semibold text-zinc-400 mb-1">Community</h3>
-                <p className="text-sm text-zinc-600">
+                <h3 className="text-lg font-bold text-zinc-300 mb-1.5">
+                  BrospifyHub Community
+                </h3>
+                <p className="text-sm text-zinc-600 max-w-[260px] mx-auto leading-relaxed">
                   {rooms.length > 0
-                    ? "Wähle einen Chat-Raum aus der Liste."
+                    ? "Wähle einen Kanal aus der Sidebar."
                     : isAdmin
-                    ? "Erstelle deinen ersten Chat-Raum."
-                    : "Noch keine Räume vorhanden."}
+                      ? "Erstelle deinen ersten Kanal."
+                      : "Noch keine Kanäle vorhanden."}
                 </p>
               </div>
             </div>
@@ -606,172 +953,248 @@ export default function ChatsPage() {
         </div>
       </div>
 
-      {/* Create Room Modal (Admin) */}
+      {/* ─── Create Room Modal ───────────────────────────────── */}
       <AnimatePresence>
         {showCreateRoom && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
             onClick={() => setShowCreateRoom(false)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md"
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-[#111] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/60"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <Plus className="w-5 h-5 text-[#95BF47]" />
-                Neuer Chat-Raum
+              <h3 className="text-base font-bold mb-5 flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/15 flex items-center justify-center">
+                  <Plus className="w-4 h-4 text-[#95BF47]" />
+                </div>
+                Neuer Kanal
               </h3>
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Name *</label>
+                  <label className="block text-[11px] text-zinc-500 mb-1.5 uppercase tracking-[0.08em] font-medium">
+                    Kanal-Name *
+                  </label>
                   <input
                     type="text"
                     value={newRoomName}
                     onChange={(e) => setNewRoomName(e.target.value)}
-                    placeholder="z.B. Produkt-Updates"
-                    className="input-glass w-full"
+                    placeholder="z.B. produkt-updates"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-700"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Beschreibung</label>
+                  <label className="block text-[11px] text-zinc-500 mb-1.5 uppercase tracking-[0.08em] font-medium">
+                    Kategorie
+                  </label>
+                  <select
+                    value={newRoomCategory}
+                    onChange={(e) => setNewRoomCategory(e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition"
+                  >
+                    {CATEGORIES.map((cat) => (
+                      <option
+                        key={cat.id}
+                        value={cat.id}
+                        className="bg-[#111]"
+                      >
+                        {cat.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-zinc-500 mb-1.5 uppercase tracking-[0.08em] font-medium">
+                    Beschreibung
+                  </label>
                   <input
                     type="text"
                     value={newRoomDesc}
                     onChange={(e) => setNewRoomDesc(e.target.value)}
-                    placeholder="Worum geht es in diesem Raum?"
-                    className="input-glass w-full"
+                    placeholder="Worum geht es?"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-700"
                   />
                 </div>
-                <label className="flex items-center gap-3 cursor-pointer py-2">
+                <label className="flex items-center gap-3 cursor-pointer py-1">
+                  <div
+                    className={`w-5 h-5 rounded-md border transition-all flex items-center justify-center ${
+                      newRoomAllowMsgs
+                        ? "bg-[#95BF47] border-[#95BF47]"
+                        : "border-white/[0.15] bg-white/[0.03]"
+                    }`}
+                  >
+                    {newRoomAllowMsgs && (
+                      <Check className="w-3 h-3 text-black" />
+                    )}
+                  </div>
                   <input
                     type="checkbox"
                     checked={newRoomAllowMsgs}
                     onChange={(e) => setNewRoomAllowMsgs(e.target.checked)}
-                    className="w-4 h-4 accent-[#95BF47] rounded"
+                    className="hidden"
                   />
-                  <span className="text-sm text-zinc-300">Kunden dürfen Nachrichten schreiben</span>
+                  <span className="text-sm text-zinc-300">
+                    Kunden dürfen Nachrichten schreiben
+                  </span>
                 </label>
               </div>
-              <div className="flex gap-3 mt-5">
-                <button onClick={() => setShowCreateRoom(false)} className="flex-1 py-2.5 glass border border-white/10 rounded-xl text-sm font-medium">
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setShowCreateRoom(false)}
+                  className="flex-1 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm font-medium text-zinc-400 hover:bg-white/[0.06] transition"
+                >
                   Abbrechen
                 </button>
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
                   onClick={handleCreateRoom}
                   disabled={creatingRoom || !newRoomName.trim()}
-                  className="flex-1 btn-accent py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3 bg-[#95BF47] text-black rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40 transition"
                 >
-                  {creatingRoom ? <Loader2 className="w-4 h-4 animate-spin" /> : "Erstellen"}
-                </button>
+                  {creatingRoom ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Erstellen"
+                  )}
+                </motion.button>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Image Post Modal (Admin) */}
+      {/* ─── Image Post Modal ────────────────────────────────── */}
       <AnimatePresence>
         {showImagePost && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
             onClick={() => !uploadingImage && setShowImagePost(false)}
           >
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md"
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ type: "spring", damping: 25, stiffness: 300 }}
+              className="bg-[#111] border border-white/[0.08] rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/60"
               onClick={(e) => e.stopPropagation()}
             >
-              <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
-                <ImageIcon className="w-5 h-5 text-[#95BF47]" />
+              <h3 className="text-base font-bold mb-5 flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/15 flex items-center justify-center">
+                  <ImageIcon className="w-4 h-4 text-[#95BF47]" />
+                </div>
                 Bild-Post erstellen
               </h3>
 
               <div className="space-y-4">
-                {/* Image Upload */}
                 {imagePreview ? (
                   <div
-                    className="rounded-xl p-4 flex items-center justify-center relative"
+                    className="rounded-xl overflow-hidden relative border border-white/[0.06]"
                     style={{ backgroundColor: imageBgColor }}
                   >
-                    <img src={imagePreview} alt="" className="max-h-48 object-contain rounded-lg" />
+                    <div className="p-6 flex items-center justify-center">
+                      <img
+                        src={imagePreview}
+                        alt=""
+                        className="max-h-48 object-contain rounded-lg drop-shadow-xl"
+                      />
+                    </div>
                     <button
-                      onClick={() => { setImageFile(null); setImagePreview(""); }}
-                      className="absolute top-2 right-2 p-1 bg-black/50 rounded-full"
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview("");
+                      }}
+                      className="absolute top-2 right-2 p-1.5 bg-black/60 rounded-full hover:bg-black/80 transition"
                     >
-                      <X className="w-4 h-4" />
+                      <X className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-full aspect-video rounded-xl border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center gap-2 text-zinc-500 hover:border-zinc-500 transition"
+                    className="w-full aspect-[16/10] rounded-xl border border-dashed border-white/[0.1] bg-white/[0.02] flex flex-col items-center justify-center gap-3 text-zinc-600 hover:border-[#95BF47]/20 hover:text-zinc-400 transition group"
                   >
-                    <Upload className="w-8 h-8" />
-                    <span className="text-sm">Bild auswählen</span>
+                    <Upload className="w-7 h-7 group-hover:text-[#95BF47]/60 transition" />
+                    <span className="text-xs font-medium">
+                      Bild auswählen
+                    </span>
                   </button>
                 )}
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageSelect} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageSelect}
+                />
 
-                {/* PNG Background Color */}
                 {imageFile?.type === "image/png" && (
                   <div>
-                    <label className="block text-xs text-zinc-400 mb-1.5">Hintergrundfarbe (PNG)</label>
+                    <label className="block text-[11px] text-zinc-500 mb-1.5 uppercase tracking-[0.08em] font-medium">
+                      Hintergrundfarbe
+                    </label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
                         value={imageBgColor}
                         onChange={(e) => setImageBgColor(e.target.value)}
-                        className="w-10 h-10 rounded-lg border border-zinc-700 cursor-pointer bg-transparent"
+                        className="w-10 h-10 rounded-lg border border-white/[0.1] cursor-pointer bg-transparent"
                       />
                       <input
                         type="text"
                         value={imageBgColor}
                         onChange={(e) => setImageBgColor(e.target.value)}
-                        className="input-glass flex-1 text-xs font-mono"
+                        className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-[#95BF47]/30 transition"
                       />
                     </div>
                   </div>
                 )}
 
-                {/* Caption */}
                 <div>
-                  <label className="block text-xs text-zinc-400 mb-1">Bildunterschrift (optional)</label>
+                  <label className="block text-[11px] text-zinc-500 mb-1.5 uppercase tracking-[0.08em] font-medium">
+                    Bildunterschrift
+                  </label>
                   <input
                     type="text"
                     value={imageCaption}
                     onChange={(e) => setImageCaption(e.target.value)}
                     placeholder="Beschreibe das Bild..."
-                    className="input-glass w-full text-sm"
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-700"
                   />
                 </div>
               </div>
 
-              <div className="flex gap-3 mt-5">
+              <div className="flex gap-3 mt-6">
                 <button
                   onClick={() => setShowImagePost(false)}
                   disabled={uploadingImage}
-                  className="flex-1 py-2.5 glass border border-white/10 rounded-xl text-sm font-medium"
+                  className="flex-1 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-sm font-medium text-zinc-400 hover:bg-white/[0.06] transition"
                 >
                   Abbrechen
                 </button>
-                <button
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
                   onClick={handleImagePost}
                   disabled={uploadingImage || !imageFile}
-                  className="flex-1 btn-accent py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="flex-1 py-3 bg-[#95BF47] text-black rounded-xl text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-40 transition"
                 >
-                  {uploadingImage ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Upload className="w-4 h-4" />Posten</>}
-                </button>
+                  {uploadingImage ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" /> Posten
+                    </>
+                  )}
+                </motion.button>
               </div>
             </motion.div>
           </motion.div>

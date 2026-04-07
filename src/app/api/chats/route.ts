@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nur Admin-Zugriff" }, { status: 403 });
     }
 
-    const { name, description, allowCustomerMessages } = await req.json();
+    const { name, description, allowCustomerMessages, category } = await req.json();
     if (!name?.trim()) {
       return NextResponse.json({ error: "Name ist erforderlich" }, { status: 400 });
     }
@@ -38,12 +38,14 @@ export async function POST(req: NextRequest) {
       name: name.trim(),
       description: description?.trim() || "",
       createdAt: new Date().toISOString(),
-      createdBy: "admin",
+      createdBy: session.lizenzschluessel || "admin",
       allowCustomerMessages: !!allowCustomerMessages,
       status: "active",
+      category: category?.trim() || "general",
     };
 
     await addChatRoom(room);
+    console.log("[Chats] Room created:", room.id, room.name, "category:", room.category);
 
     return NextResponse.json({ success: true, room });
   } catch (error) {
@@ -60,7 +62,7 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Nur Admin-Zugriff" }, { status: 403 });
     }
 
-    const { roomId, name, description, allowCustomerMessages, status } = await req.json();
+    const { roomId, name, description, allowCustomerMessages, status, category } = await req.json();
     if (!roomId) {
       return NextResponse.json({ error: "roomId fehlt" }, { status: 400 });
     }
@@ -79,6 +81,7 @@ export async function PUT(req: NextRequest) {
       createdBy: room.createdBy,
       allowCustomerMessages: allowCustomerMessages !== undefined ? !!allowCustomerMessages : room.allowCustomerMessages,
       status: status || room.status,
+      category: category?.trim() || room.category || "general",
     };
 
     await updateChatRoom(room.rowIndex, updated);

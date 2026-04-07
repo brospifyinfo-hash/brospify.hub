@@ -302,7 +302,7 @@ export async function deleteProdukt(rowIndex: number): Promise<void> {
 
 // ─── CHATS (Tab 3) ────────────────────────────────────────────────
 // Columns: A=ID, B=Name, C=Description, D=CreatedAt, E=CreatedBy,
-//          F=AllowCustomerMessages, G=Status
+//          F=AllowCustomerMessages, G=Status, H=Category
 
 export interface ChatRoom {
   rowIndex: number;
@@ -313,6 +313,7 @@ export interface ChatRoom {
   createdBy: string;
   allowCustomerMessages: boolean;
   status: string;
+  category: string;
 }
 
 function rowToChatRoom(row: string[], index: number): ChatRoom {
@@ -325,6 +326,7 @@ function rowToChatRoom(row: string[], index: number): ChatRoom {
     createdBy: row[4] || "",
     allowCustomerMessages: row[5] === "true",
     status: row[6] || "active",
+    category: row[7] || "general",
   };
 }
 
@@ -333,11 +335,12 @@ export async function getAllChatRooms(): Promise<ChatRoom[]> {
   try {
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID(),
-      range: "Chats!A2:G",
+      range: "Chats!A2:H",
     });
     const rows = res.data.values || [];
     return rows.map((row, i) => rowToChatRoom(row, i)).filter((r) => r.id && r.status === "active");
-  } catch {
+  } catch (err) {
+    console.error("[Sheets] getAllChatRooms error:", err);
     return [];
   }
 }
@@ -346,12 +349,13 @@ export async function addChatRoom(room: Omit<ChatRoom, "rowIndex">): Promise<voi
   const sheets = getSheets();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "Chats!A:G",
+    range: "Chats!A:H",
     valueInputOption: "RAW",
     requestBody: {
       values: [[
         room.id, room.name, room.description, room.createdAt,
         room.createdBy, String(room.allowCustomerMessages), room.status,
+        room.category || "general",
       ]],
     },
   });
@@ -361,12 +365,13 @@ export async function updateChatRoom(rowIndex: number, room: Omit<ChatRoom, "row
   const sheets = getSheets();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `Chats!A${rowIndex}:G${rowIndex}`,
+    range: `Chats!A${rowIndex}:H${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [[
         room.id, room.name, room.description, room.createdAt,
         room.createdBy, String(room.allowCustomerMessages), room.status,
+        room.category || "general",
       ]],
     },
   });
