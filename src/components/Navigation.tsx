@@ -15,6 +15,8 @@ import {
   Crown,
   User,
   MessageCircle,
+  Search,
+  PenTool,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -28,6 +30,8 @@ const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home },
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
   { href: "/chats", labelKey: "chats" as const, icon: MessageCircle },
+  { href: "/seo", labelKey: "seo" as const, icon: Search },
+  { href: "/blog", labelKey: "blog" as const, icon: PenTool },
   { href: "/themes", labelKey: "themes" as const, icon: Palette },
   { href: "/profile", labelKey: "profile" as const, icon: User },
 ];

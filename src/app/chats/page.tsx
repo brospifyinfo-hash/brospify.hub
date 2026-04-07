@@ -303,7 +303,7 @@ export default function ChatsPage() {
           chatId: selectedRoom.id,
           content: imageCaption,
           imageUrl: uploadData.url,
-          imageBgColor: imageFile.type === "image/png" ? imageBgColor : "",
+          imageBgColor: imageBgColor,
         }),
       });
       if (res.ok) {
@@ -368,15 +368,23 @@ export default function ChatsPage() {
     }
   }
 
-  function handleDownload(imageUrl: string, filename?: string) {
-    const a = document.createElement("a");
-    a.href = imageUrl;
-    a.download = filename || "brospify-image.png";
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  async function handleDownload(imageUrl: string, filename?: string) {
+    try {
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const ext = blob.type.split("/")[1] || "png";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename || `brospify-image.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fallback: open in new tab
+      window.open(imageUrl, "_blank");
+    }
   }
 
   /* ─── Loading State ────────────────────────────────────────── */
@@ -1137,24 +1145,47 @@ export default function ChatsPage() {
                   onChange={handleImageSelect}
                 />
 
-                {imageFile?.type === "image/png" && (
+                {imageFile && (
                   <div>
                     <label className="block text-[11px] text-zinc-500 mb-1.5 uppercase tracking-[0.08em] font-medium">
-                      Hintergrundfarbe
+                      Hintergrundfarbe (Hex)
                     </label>
                     <div className="flex items-center gap-2">
                       <input
                         type="color"
                         value={imageBgColor}
                         onChange={(e) => setImageBgColor(e.target.value)}
-                        className="w-10 h-10 rounded-lg border border-white/[0.1] cursor-pointer bg-transparent"
+                        className="w-10 h-10 rounded-lg border border-white/[0.1] cursor-pointer bg-transparent shrink-0"
                       />
                       <input
                         type="text"
                         value={imageBgColor}
-                        onChange={(e) => setImageBgColor(e.target.value)}
-                        className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-[#95BF47]/30 transition"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (/^#?[0-9A-Fa-f]{0,6}$/.test(v.replace("#", ""))) {
+                            setImageBgColor(v.startsWith("#") ? v : `#${v}`);
+                          }
+                        }}
+                        maxLength={7}
+                        placeholder="#000000"
+                        className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2.5 text-xs font-mono outline-none focus:border-[#95BF47]/30 transition"
                       />
+                      {/* Quick color presets */}
+                      <div className="flex gap-1 shrink-0">
+                        {["#000000", "#FFFFFF", "#1a1a1a", "#95BF47"].map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setImageBgColor(c)}
+                            className={`w-7 h-7 rounded-md border transition ${
+                              imageBgColor.toUpperCase() === c.toUpperCase()
+                                ? "border-[#95BF47] ring-1 ring-[#95BF47]/50"
+                                : "border-white/[0.1] hover:border-white/[0.2]"
+                            }`}
+                            style={{ backgroundColor: c }}
+                            title={c}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 )}
