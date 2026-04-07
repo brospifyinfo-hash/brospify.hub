@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
+import { getAllProdukte, findKundeByKey, getKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
-
-const MAX_AI_USES_PER_MONTH = 3;
 
 export async function POST(req: NextRequest) {
   try {
@@ -26,20 +24,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Check usage limit (3x per month)
+    // Check credit limit
     const kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde) {
       return NextResponse.json({ error: "Kunde nicht gefunden" }, { status: 404 });
     }
 
     const profile = await getKundeProfile(kunde.rowIndex);
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const aiUsage = profile.ai_usage || { month: "", count: 0 };
-
-    if (aiUsage.month === currentMonth && aiUsage.count >= MAX_AI_USES_PER_MONTH) {
+    const creditState = getCreditsState(profile);
+    if (creditState.remaining < CREDIT_LIMITS.PRODUCT_IMPORT) {
       return NextResponse.json(
-        { error: `Du hast dein Limit von ${MAX_AI_USES_PER_MONTH} KI-Optimierungen pro Monat erreicht. Nächsten Monat stehen dir wieder ${MAX_AI_USES_PER_MONTH} zur Verfügung.` },
+        { error: "Dein monatliches Credit-Limit ist erreicht." },
         { status: 429 }
       );
     }
@@ -129,18 +124,18 @@ Antworte NUR mit einem JSON-Objekt in exakt diesem Format (kein Markdown, kein C
       );
     }
 
-    // Increment usage counter
-    const newCount = aiUsage.month === currentMonth ? aiUsage.count + 1 : 1;
-    await updateKundeProfile(kunde.rowIndex, {
-      ...profile,
-      ai_usage: { month: currentMonth, count: newCount },
-    });
-
-    const remaining = MAX_AI_USES_PER_MONTH - newCount;
+    // Deduct credits
+    const deduction = await deductCredits(kunde.rowIndex, profile, CREDIT_LIMITS.PRODUCT_IMPORT);
+    if (!deduction.success) {
+      return NextResponse.json(
+        { error: "Dein monatliches Credit-Limit ist erreicht." },
+        { status: 429 }
+      );
+    }
 
     return NextResponse.json({
       success: true,
-      remaining,
+      creditsRemaining: deduction.remaining,
       original: {
         title: produkt.titel,
         description: produkt.beschreibung,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
 import { shopifyFetch } from "@/lib/shopify";
 
 export const dynamic = "force-dynamic";
@@ -61,6 +61,17 @@ export async function GET() {
         { status: 400 }
       );
     }
+
+    // Check and deduct credits for SEO audit
+    const profile = await getKundeProfile(kunde.rowIndex);
+    const creditState = getCreditsState(profile);
+    if (creditState.remaining < CREDIT_LIMITS.SEO_AUDIT) {
+      return NextResponse.json(
+        { error: "Dein monatliches Credit-Limit ist erreicht." },
+        { status: 429 }
+      );
+    }
+    await deductCredits(kunde.rowIndex, profile, CREDIT_LIMITS.SEO_AUDIT);
 
     const domain = kunde.shopDomain.replace(/^https?:\/\//, "").replace(/\/$/, "");
     const token = kunde.shopifyToken;

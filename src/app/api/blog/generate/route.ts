@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllKunden, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
+import { getAllKunden, getKundeProfile, updateKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +11,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
     }
 
-    const { topic, language } = await req.json();
+    const { topic, language, products } = await req.json();
 
     if (!topic || typeof topic !== "string") {
       return NextResponse.json({ error: "Kein Thema angegeben." }, { status: 400 });
     }
+
+    // Build product context for AI prompt
+    const selectedProducts: { title: string; description: string; images: { src: string; alt: string }[] }[] = products || [];
 
     // Find customer row
     const kunden = await getAllKunden();
@@ -26,24 +29,31 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
     }
 
-    // Check AI usage limit (3/month)
+    // Check credit limit
     const profile = await getKundeProfile(rowIndex);
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const usage = profile.ai_usage || { month: currentMonth, count: 0 };
-    if (usage.month !== currentMonth) {
-      usage.month = currentMonth;
-      usage.count = 0;
-    }
-    if (usage.count >= 3) {
+    const creditState = getCreditsState(profile);
+    if (creditState.remaining < CREDIT_LIMITS.BLOG_GENERATE) {
       return NextResponse.json(
-        { error: "KI-Limit erreicht (3x pro Monat). Nächsten Monat wieder verfügbar." },
+        { error: "Dein monatliches Credit-Limit ist erreicht." },
         { status: 429 }
       );
     }
 
     const lang = language === "en" ? "English" : "German";
     const toneOfVoice = profile.brand_kit?.toneOfVoice || "";
+
+    // Build product section for prompt
+    let productContext = "";
+    if (selectedProducts.length > 0) {
+      const productLines = selectedProducts.map((p, i) => {
+        const imgTags = p.images.slice(0, 2).map(
+          (img) => `<img src="${img.src}" alt="${img.alt}" style="max-width:100%;border-radius:12px;margin:16px 0" />`
+        ).join("\n");
+        return `Product ${i + 1}: "${p.title}"\nDescription: ${p.description || "N/A"}\nImage HTML to embed:\n${imgTags}`;
+      }).join("\n\n");
+
+      productContext = `\n\nIMPORTANT — The user has selected these products from their shop. You MUST organically mention and feature them in the blog post. Embed the product images using the exact <img> tags provided below. Weave the products naturally into the content as recommendations.\n\n${productLines}`;
+    }
 
     const systemPrompt = `You are an expert e-commerce SEO blog writer. Write in ${lang}.
 ${toneOfVoice ? `Tone of voice: ${toneOfVoice}` : "Use a professional yet engaging tone."}
@@ -53,9 +63,9 @@ The blog post should be:
 - 800-1200 words
 - SEO optimized with proper headings (h2, h3)
 - Include an engaging intro, 3-5 main sections, and a conclusion
-- Include image placeholders as: <div class="blog-image-placeholder" data-alt="[descriptive alt text]">[Bild: descriptive text]</div>
+${selectedProducts.length > 0 ? "- Organically feature the selected products with their REAL images using the exact <img> tags provided" : "- Include image placeholders as: <div class=\"blog-image-placeholder\" data-alt=\"[descriptive alt text]\">[Bild: descriptive text]</div>"}
 - Include internal linking suggestions as comments: <!-- LINK: suggested anchor text -> /collections/... -->
-- End with a call-to-action
+- End with a call-to-action${productContext}
 
 Return JSON: { "title": "...", "body_html": "...", "seo_title": "...", "seo_description": "...", "tags": "tag1,tag2,tag3" }`;
 
@@ -100,9 +110,14 @@ Return JSON: { "title": "...", "body_html": "...", "seo_title": "...", "seo_desc
       return NextResponse.json({ error: "KI-Antwort konnte nicht verarbeitet werden." }, { status: 500 });
     }
 
-    // Increment usage
-    usage.count += 1;
-    await updateKundeProfile(rowIndex, { ...profile, ai_usage: usage });
+    // Deduct credits
+    const deduction = await deductCredits(rowIndex, profile, CREDIT_LIMITS.BLOG_GENERATE);
+    if (!deduction.success) {
+      return NextResponse.json(
+        { error: "Dein monatliches Credit-Limit ist erreicht." },
+        { status: 429 }
+      );
+    }
 
     return NextResponse.json({
       blog: {
@@ -112,7 +127,7 @@ Return JSON: { "title": "...", "body_html": "...", "seo_title": "...", "seo_desc
         seo_description: blogData.seo_description || "",
         tags: blogData.tags || "",
       },
-      aiUsage: usage,
+      creditsRemaining: deduction.remaining,
     });
   } catch (error) {
     console.error("[Blog Generate] Error:", error);

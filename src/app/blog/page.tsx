@@ -29,6 +29,9 @@ import {
   X,
   Tag,
   Search,
+  ShoppingBag,
+  Plus,
+  Minus,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -37,6 +40,15 @@ interface ShopifyImage {
   src: string;
   alt: string;
   productTitle: string;
+}
+
+interface ShopifyProduct {
+  id: number;
+  title: string;
+  description: string;
+  handle: string;
+  image: string | null;
+  images: { src: string; alt: string }[];
 }
 
 export default function BlogPage() {
@@ -61,6 +73,14 @@ export default function BlogPage() {
   const [loadingImages, setLoadingImages] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Product search for AI integration
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [productSearch, setProductSearch] = useState("");
+  const [searchResults, setSearchResults] = useState<ShopifyProduct[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState<ShopifyProduct[]>([]);
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(null);
 
   // Published article
   const [publishedUrl, setPublishedUrl] = useState("");
@@ -100,12 +120,36 @@ export default function BlogPage() {
         const data = await res.json();
         setShopifyImages(data.images || []);
       }
-    } catch {
-      /* ignore */
-    } finally {
-      setLoadingImages(false);
-    }
+    } catch { /* ignore */ }
+    finally { setLoadingImages(false); }
   }, []);
+
+  // Debounced product search
+  function handleProductSearch(q: string) {
+    setProductSearch(q);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q.trim()) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearchLoading(true);
+      try {
+        const res = await fetch(`/api/shopify/products-search?q=${encodeURIComponent(q)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.products || []);
+        }
+      } catch { /* ignore */ }
+      finally { setSearchLoading(false); }
+    }, 400);
+  }
+
+  function toggleProduct(product: ShopifyProduct) {
+    setSelectedProducts((prev) => {
+      const exists = prev.find((p) => p.id === product.id);
+      if (exists) return prev.filter((p) => p.id !== product.id);
+      if (prev.length >= 5) return prev;
+      return [...prev, product];
+    });
+  }
 
   async function handleGenerate() {
     if (!topic.trim()) return;
@@ -115,7 +159,15 @@ export default function BlogPage() {
       const res = await fetch("/api/blog/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic, language }),
+        body: JSON.stringify({
+          topic,
+          language,
+          products: selectedProducts.map((p) => ({
+            title: p.title,
+            description: p.description,
+            images: p.images,
+          })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -143,19 +195,13 @@ export default function BlogPage() {
       const fd = new FormData();
       fd.append("file", file);
       const res = await fetch("/api/upload", { method: "POST", body: fd });
-      if (!res.ok) {
-        setError("Bild-Upload fehlgeschlagen.");
-        return;
-      }
+      if (!res.ok) { setError("Bild-Upload fehlgeschlagen."); return; }
       const data = await res.json();
       editor?.chain().focus().setImage({ src: data.url, alt: file.name }).run();
       setSuccess("Bild eingefügt!");
       setTimeout(() => setSuccess(""), 3000);
-    } catch {
-      setError("Upload fehlgeschlagen.");
-    } finally {
-      setUploadingImage(false);
-    }
+    } catch { setError("Upload fehlgeschlagen."); }
+    finally { setUploadingImage(false); }
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -180,26 +226,14 @@ export default function BlogPage() {
       const res = await fetch("/api/blog/push", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: blogTitle,
-          body_html,
-          tags,
-          seo_title: seoTitle,
-          seo_description: seoDescription,
-        }),
+        body: JSON.stringify({ title: blogTitle, body_html, tags, seo_title: seoTitle, seo_description: seoDescription }),
       });
       const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Veröffentlichung fehlgeschlagen.");
-        return;
-      }
+      if (!res.ok) { setError(data.error || "Veröffentlichung fehlgeschlagen."); return; }
       setPublishedUrl(data.article?.url || "");
       setSuccess("Blog-Artikel erfolgreich veröffentlicht!");
-    } catch {
-      setError("Verbindungsfehler.");
-    } finally {
-      setPublishing(false);
-    }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setPublishing(false); }
   }
 
   if (loading) {
@@ -256,6 +290,112 @@ export default function BlogPage() {
         <div className="grid lg:grid-cols-[1fr,340px] gap-6">
           {/* Main Editor Area */}
           <div className="space-y-5">
+            {/* Product Selection */}
+            <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <ShoppingBag className="w-4 h-4 text-purple-400" />
+                  Produkte einbinden
+                </h3>
+                <button
+                  onClick={() => setShowProductPicker(!showProductPicker)}
+                  className="text-xs text-[#95BF47] hover:text-[#a8d050] transition flex items-center gap-1"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Produkt hinzufügen
+                </button>
+              </div>
+
+              {/* Selected Products */}
+              {selectedProducts.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {selectedProducts.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-center gap-2 pl-1.5 pr-2.5 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20 text-xs"
+                    >
+                      {p.image && (
+                        <img src={p.image} alt="" className="w-6 h-6 rounded object-cover" />
+                      )}
+                      <span className="text-purple-300 font-medium max-w-[120px] truncate">{p.title}</span>
+                      <button onClick={() => toggleProduct(p)} className="text-purple-400 hover:text-red-400 transition">
+                        <Minus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {selectedProducts.length === 0 && !showProductPicker && (
+                <p className="text-[11px] text-zinc-600">
+                  Optional: Wähle Produkte aus deinem Shop, die im Blogbeitrag erwähnt werden sollen.
+                </p>
+              )}
+
+              {/* Product Search */}
+              <AnimatePresence>
+                {showProductPicker && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="relative mt-2">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                      <input
+                        type="text"
+                        value={productSearch}
+                        onChange={(e) => handleProductSearch(e.target.value)}
+                        placeholder="Produkte in deinem Shop suchen..."
+                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-600"
+                        autoFocus
+                      />
+                      {searchLoading && (
+                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-zinc-500" />
+                      )}
+                    </div>
+
+                    {searchResults.length > 0 && (
+                      <div className="mt-2 space-y-1.5 max-h-[240px] overflow-y-auto">
+                        {searchResults.map((product) => {
+                          const isSelected = selectedProducts.some((p) => p.id === product.id);
+                          return (
+                            <button
+                              key={product.id}
+                              onClick={() => toggleProduct(product)}
+                              className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
+                                isSelected
+                                  ? "bg-purple-500/10 border border-purple-500/20"
+                                  : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08]"
+                              }`}
+                            >
+                              {product.image ? (
+                                <img src={product.image} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                              ) : (
+                                <div className="w-10 h-10 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
+                                  <ShoppingBag className="w-4 h-4 text-zinc-600" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-white truncate">{product.title}</div>
+                                <div className="text-[10px] text-zinc-500 truncate mt-0.5">{product.description || "Keine Beschreibung"}</div>
+                              </div>
+                              {isSelected && <Check className="w-4 h-4 text-purple-400 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {productSearch && !searchLoading && searchResults.length === 0 && (
+                      <p className="text-xs text-zinc-600 mt-3 text-center py-4">Keine Produkte gefunden.</p>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             {/* AI Generation */}
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
               <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
@@ -289,6 +429,11 @@ export default function BlogPage() {
                   {generating ? "Generiere..." : "Generieren"}
                 </motion.button>
               </div>
+              {selectedProducts.length > 0 && (
+                <p className="text-[10px] text-purple-400 mt-2">
+                  {selectedProducts.length} Produkt{selectedProducts.length !== 1 ? "e" : ""} werden im Artikel eingebunden
+                </p>
+              )}
             </div>
 
             {/* Blog Title */}
@@ -476,10 +621,7 @@ export default function BlogPage() {
                   <ImageIcon className="w-5 h-5 text-[#95BF47]" />
                   Shopify Produktbilder
                 </h3>
-                <button
-                  onClick={() => setShowImagePicker(false)}
-                  className="p-1.5 hover:bg-white/[0.05] rounded-lg transition"
-                >
+                <button onClick={() => setShowImagePicker(false)} className="p-1.5 hover:bg-white/[0.05] rounded-lg transition">
                   <X className="w-4 h-4 text-zinc-500" />
                 </button>
               </div>
@@ -501,12 +643,7 @@ export default function BlogPage() {
                         className="group rounded-xl border border-white/[0.06] overflow-hidden hover:border-[#95BF47]/30 transition"
                       >
                         <div className="aspect-square bg-white/[0.02] relative">
-                          <img
-                            src={img.src}
-                            alt={img.alt}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
+                          <img src={img.src} alt={img.alt} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" loading="lazy" />
                           <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition flex items-center justify-center opacity-0 group-hover:opacity-100">
                             <ImageIcon className="w-6 h-6 text-white" />
                           </div>

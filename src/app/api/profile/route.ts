@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, getKundeProfile, updateKundeProfile, type KundeProfile } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, CREDIT_LIMITS, type KundeProfile } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +19,18 @@ export async function GET() {
 
     const profile = await getKundeProfile(kunde.rowIndex);
 
+    const creditState = getCreditsState(profile);
+
     return NextResponse.json({
       profile,
       shopDomain: kunde.shopDomain,
       kundenEmail: kunde.kundenEmail,
       hasShopifyToken: !!kunde.shopifyToken,
+      credits: {
+        used: creditState.used,
+        remaining: creditState.remaining,
+        max: CREDIT_LIMITS.MONTHLY_MAX,
+      },
     });
   } catch (error) {
     console.error("[Profile] GET error:", error);

@@ -48,13 +48,13 @@ export default function ProfilePage() {
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [linkGoogleInput, setLinkGoogleInput] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
+  const [credits, setCredits] = useState({ used: 0, remaining: 500, max: 500 });
 
   const [credentials, setCredentials] = useState({ clientId: "", clientSecret: "" });
   const [legalData, setLegalData] = useState({
     firmenname: "", inhaber: "", strasse: "", plz: "", stadt: "",
     land: "Deutschland", email: "", telefon: "", ustId: "", handelsregister: "",
   });
-  const [aiUsage, setAiUsage] = useState({ month: "", count: 0 });
 
   useEffect(() => {
     fetch("/api/auth/session").then((r) => r.json()).then((data) => {
@@ -72,6 +72,7 @@ export default function ProfilePage() {
         setKundenEmail(data.kundenEmail || "");
         setHasShopifyToken(data.hasShopifyToken || false);
         setLinkedGoogleEmail(p.linkedGoogleEmail || "");
+        if (data.credits) setCredits(data.credits);
         setCredentials({
           clientId: p.shopify_credentials?.clientId || "",
           clientSecret: p.shopify_credentials?.clientSecret || "",
@@ -88,7 +89,6 @@ export default function ProfilePage() {
           ustId: p.legal_data?.ustId || "",
           handelsregister: p.legal_data?.handelsregister || "",
         });
-        setAiUsage(p.ai_usage || { month: "", count: 0 });
         setLoading(false);
       })
       .catch(() => router.push("/"));
@@ -132,10 +132,8 @@ export default function ProfilePage() {
     finally { setLinkingGoogle(false); }
   }
 
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const aiUsedThisMonth = aiUsage.month === currentMonth ? aiUsage.count : 0;
-  const aiRemaining = 3 - aiUsedThisMonth;
+  const creditPercent = credits.max > 0 ? ((credits.remaining / credits.max) * 100) : 0;
+  const creditColor = creditPercent > 50 ? "#95BF47" : creditPercent > 20 ? "#F59E0B" : "#EF4444";
 
   if (loading) {
     return (
@@ -209,7 +207,7 @@ export default function ProfilePage() {
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-2.5 md:p-3 text-center">
                 <Zap className="w-4 h-4 text-purple-400 mx-auto mb-1" />
                 <div className="text-[10px] md:text-xs text-zinc-500">{t.profile.aiCredits}</div>
-                <div className="text-xs md:text-sm font-bold text-white mt-0.5">{aiRemaining}/3</div>
+                <div className="text-xs md:text-sm font-bold text-white mt-0.5">{credits.remaining}/{credits.max}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-2.5 md:p-3 text-center">
                 <Store className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
@@ -248,8 +246,63 @@ export default function ProfilePage() {
             </div>
           </motion.div>
 
+          {/* Credit System Card */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
+            className="relative overflow-hidden rounded-2xl border border-white/10 p-5 md:p-6 backdrop-blur-xl"
+            style={{ background: "linear-gradient(135deg, rgba(149,191,71,0.08) 0%, rgba(255,255,255,0.04) 50%, rgba(99,102,241,0.06) 100%)" }}>
+            {/* Decorative glow */}
+            <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-[80px] pointer-events-none" style={{ background: `${creditColor}15` }} />
+
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${creditColor}20`, border: `1px solid ${creditColor}30` }}>
+                  <Zap className="w-5 h-5" style={{ color: creditColor }} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold">Monatliche Credits</h3>
+                  <p className="text-[10px] text-zinc-500">Setzt sich jeden Monat automatisch zur&uuml;ck</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: creditColor }}>
+                  {credits.remaining}
+                </div>
+                <div className="text-[10px] text-zinc-500">von {credits.max}</div>
+              </div>
+            </div>
+
+            {/* Animated Progress Bar */}
+            <div className="relative h-4 bg-white/[0.06] rounded-full overflow-hidden border border-white/[0.06]">
+              <motion.div
+                className="absolute inset-y-0 left-0 rounded-full"
+                style={{
+                  background: `linear-gradient(90deg, ${creditColor}, ${creditColor}CC)`,
+                  boxShadow: `0 0 20px ${creditColor}40`,
+                }}
+                initial={{ width: 0 }}
+                animate={{ width: `${creditPercent}%` }}
+                transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
+              />
+              {/* Shimmer effect */}
+              <motion.div
+                className="absolute inset-y-0 w-20 rounded-full"
+                style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)" }}
+                initial={{ left: "-80px" }}
+                animate={{ left: "calc(100% + 80px)" }}
+                transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
+              />
+            </div>
+
+            <div className="mt-3 flex items-center justify-between text-[10px] text-zinc-500">
+              <span>{credits.remaining} / {credits.max} verf&uuml;gbar</span>
+              {credits.remaining <= 0 && (
+                <span className="text-red-400 font-semibold">Limit erreicht</span>
+              )}
+            </div>
+          </motion.div>
+
           {/* Shopify API */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}
             className="glass-strong rounded-2xl border border-white/10 p-5 md:p-6 space-y-4 backdrop-blur-xl">
             <h2 className="font-bold flex items-center gap-2">
               <Store className="w-5 h-5 text-[#95BF47]" />
@@ -309,7 +362,7 @@ export default function ProfilePage() {
               <label className="block text-xs text-zinc-400 mb-1.5">{t.profile.country}</label>
               <select value={legalData.land} onChange={(e) => setLegalData((p) => ({ ...p, land: e.target.value }))} className="input-glass w-full">
                 <option value="Deutschland">Deutschland</option>
-                <option value="\u00d6sterreich">{"\u00d6sterreich"}</option>
+                <option value={"\u00d6sterreich"}>{"\u00d6sterreich"}</option>
                 <option value="Schweiz">Schweiz</option>
               </select>
             </div>
@@ -332,17 +385,6 @@ export default function ProfilePage() {
                 <label className="block text-xs text-zinc-400 mb-1.5">{t.profile.tradeRegister}</label>
                 <input type="text" value={legalData.handelsregister} onChange={(e) => setLegalData((p) => ({ ...p, handelsregister: e.target.value }))} placeholder="HRB 12345" className="input-glass w-full" />
               </div>
-            </div>
-
-            {/* AI Usage */}
-            <div className="flex items-center gap-2 text-xs text-zinc-500 border-t border-white/5 pt-3">
-              <Zap className="w-3.5 h-3.5 text-purple-400" />
-              {t.profile.aiUsage}: <strong className="text-zinc-300">{aiUsedThisMonth}/3</strong>
-              {aiRemaining > 0 ? (
-                <span className="text-emerald-400">({aiRemaining} {t.profile.aiRemaining})</span>
-              ) : (
-                <span className="text-red-400">({t.profile.aiLimitReached})</span>
-              )}
             </div>
           </motion.div>
 

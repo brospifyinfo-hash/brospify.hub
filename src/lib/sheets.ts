@@ -56,10 +56,46 @@ export interface KundeProfile {
   brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
   legal_data?: { firmenname?: string; inhaber?: string; strasse?: string; plz?: string; stadt?: string; land?: string; email?: string; telefon?: string; ustId?: string; handelsregister?: string };
   ai_usage?: { month: string; count: number };
+  credits?: { month: string; used: number };
   checkout_settings?: CheckoutSettings;
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
   onboarding_checklist?: OnboardingChecklist;
+}
+
+// ─── CREDIT SYSTEM ────────────────────────────────────────────
+export const CREDIT_LIMITS = {
+  MONTHLY_MAX: 500,
+  PRODUCT_IMPORT: 20,
+  BLOG_GENERATE: 50,
+  SEO_AUDIT: 10,
+} as const;
+
+export function getCreditsState(profile: KundeProfile): { used: number; remaining: number; month: string } {
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const credits = profile.credits || { month: currentMonth, used: 0 };
+  if (credits.month !== currentMonth) {
+    return { used: 0, remaining: CREDIT_LIMITS.MONTHLY_MAX, month: currentMonth };
+  }
+  return { used: credits.used, remaining: CREDIT_LIMITS.MONTHLY_MAX - credits.used, month: currentMonth };
+}
+
+export async function deductCredits(
+  rowIndex: number,
+  profile: KundeProfile,
+  amount: number
+): Promise<{ success: boolean; remaining: number }> {
+  const state = getCreditsState(profile);
+  if (state.remaining < amount) {
+    return { success: false, remaining: state.remaining };
+  }
+  const newUsed = state.used + amount;
+  await updateKundeProfile(rowIndex, {
+    ...profile,
+    credits: { month: state.month, used: newUsed },
+  });
+  return { success: true, remaining: CREDIT_LIMITS.MONTHLY_MAX - newUsed };
 }
 
 export interface Kunde {
@@ -465,5 +501,71 @@ export async function updateMessageStatus(rowIndex: number, status: string): Pro
     range: `Nachrichten!I${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [[status]] },
+  });
+}
+
+// ─── NEWS SLIDER (Tab 5) ──────────────────────────────────────────
+// Columns: A=ID, B=Title, C=Subtitle, D=ImageUrl, E=LinkUrl, F=Active, G=CreatedAt
+
+export interface NewsSlide {
+  rowIndex: number;
+  id: string;
+  title: string;
+  subtitle: string;
+  imageUrl: string;
+  linkUrl: string;
+  active: boolean;
+  createdAt: string;
+}
+
+function rowToNewsSlide(row: string[], index: number): NewsSlide {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    title: row[1] || "",
+    subtitle: row[2] || "",
+    imageUrl: row[3] || "",
+    linkUrl: row[4] || "",
+    active: row[5] !== "false",
+    createdAt: row[6] || "",
+  };
+}
+
+export async function getAllNewsSlides(): Promise<NewsSlide[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "NewsSlider!A2:G",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToNewsSlide(row, i)).filter((s) => s.id);
+  } catch {
+    return [];
+  }
+}
+
+export async function addNewsSlide(slide: Omit<NewsSlide, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "NewsSlider!A:G",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        slide.id, slide.title, slide.subtitle, slide.imageUrl,
+        slide.linkUrl, String(slide.active), slide.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function deleteNewsSlide(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `NewsSlider!A${rowIndex}:G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", ""]] },
   });
 }
