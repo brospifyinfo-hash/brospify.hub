@@ -47,6 +47,8 @@ export interface CheckoutSettings {
 export interface OnboardingChecklist {
   setup_complete?: boolean;
   product_imported?: boolean;
+  dropshipping_app?: boolean;
+  aliexpress_link?: boolean;
   legal_texts_generated?: boolean;
   theme_pushed?: boolean;
 }
@@ -568,4 +570,154 @@ export async function deleteNewsSlide(rowIndex: number): Promise<void> {
     valueInputOption: "RAW",
     requestBody: { values: [["", "", "", "", "", "", ""]] },
   });
+}
+
+// ─── TICKETS (Tab 6) ─────────────────────────────────────────────
+// Columns: A=ID, B=CustomerKey, C=CustomerName, D=Subject, E=Status,
+//          F=CreatedAt, G=UpdatedAt, H=Messages_JSON
+
+export interface TicketMessage {
+  sender: "customer" | "admin" | "ai";
+  name: string;
+  content: string;
+  timestamp: string;
+}
+
+export interface Ticket {
+  rowIndex: number;
+  id: string;
+  customerKey: string;
+  customerName: string;
+  subject: string;
+  status: "open" | "resolved" | "closed";
+  createdAt: string;
+  updatedAt: string;
+  messages: TicketMessage[];
+}
+
+function rowToTicket(row: string[], index: number): Ticket {
+  let messages: TicketMessage[] = [];
+  try { messages = JSON.parse(row[7] || "[]"); } catch { messages = []; }
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    customerKey: row[1] || "",
+    customerName: row[2] || "",
+    subject: row[3] || "",
+    status: (row[4] as Ticket["status"]) || "open",
+    createdAt: row[5] || "",
+    updatedAt: row[6] || "",
+    messages,
+  };
+}
+
+export async function getAllTickets(): Promise<Ticket[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Tickets!A2:H",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToTicket(row, i)).filter((t) => t.id);
+  } catch {
+    return [];
+  }
+}
+
+export async function getTicketsByCustomer(customerKey: string): Promise<Ticket[]> {
+  const all = await getAllTickets();
+  return all.filter((t) => t.customerKey === customerKey);
+}
+
+export async function getTicketById(ticketId: string): Promise<Ticket | null> {
+  const all = await getAllTickets();
+  return all.find((t) => t.id === ticketId) || null;
+}
+
+export async function addTicket(ticket: Omit<Ticket, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Tickets!A:H",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        ticket.id, ticket.customerKey, ticket.customerName, ticket.subject,
+        ticket.status, ticket.createdAt, ticket.updatedAt,
+        JSON.stringify(ticket.messages),
+      ]],
+    },
+  });
+}
+
+export async function updateTicket(
+  rowIndex: number,
+  updates: { status?: string; messages?: TicketMessage[]; updatedAt?: string }
+): Promise<void> {
+  const sheets = getSheets();
+  const data: { range: string; values: string[][] }[] = [];
+  if (updates.status) {
+    data.push({ range: `Tickets!E${rowIndex}`, values: [[updates.status]] });
+  }
+  if (updates.updatedAt) {
+    data.push({ range: `Tickets!G${rowIndex}`, values: [[updates.updatedAt]] });
+  }
+  if (updates.messages) {
+    data.push({ range: `Tickets!H${rowIndex}`, values: [[JSON.stringify(updates.messages)]] });
+  }
+  if (data.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID(),
+      requestBody: { valueInputOption: "RAW", data },
+    });
+  }
+}
+
+// ─── ADMIN SETTINGS (Tab 7 - Settings) ──────────────────────────
+// Columns: A=Key, B=Value
+// Used for: ai_knowledge_base, etc.
+
+export async function getAdminSetting(key: string): Promise<string> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Settings!A2:B",
+    });
+    const rows = res.data.values || [];
+    const row = rows.find((r) => r[0] === key);
+    return row?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+export async function setAdminSetting(key: string, value: string): Promise<void> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Settings!A2:B",
+    });
+    const rows = res.data.values || [];
+    const idx = rows.findIndex((r) => r[0] === key);
+    if (idx >= 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID(),
+        range: `Settings!B${idx + 2}`,
+        valueInputOption: "RAW",
+        requestBody: { values: [[value]] },
+      });
+    } else {
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID(),
+        range: "Settings!A:B",
+        valueInputOption: "RAW",
+        requestBody: { values: [[key, value]] },
+      });
+    }
+  } catch (err) {
+    console.error("[Sheets] setAdminSetting error:", err);
+  }
 }

@@ -16,6 +16,7 @@ interface ShopifyProductFull {
   title: string;
   body_html: string | null;
   handle: string;
+  tags: string;
   images: ShopifyImage[];
   metafields_global_title_tag?: string;
   metafields_global_description_tag?: string;
@@ -84,7 +85,7 @@ export async function GET() {
     while (hasMore && allProducts.length < 1000) {
       const params = new URLSearchParams({
         limit: "250",
-        fields: "id,title,body_html,handle,images",
+        fields: "id,title,body_html,handle,images,tags",
       });
       if (pageInfo) params.set("page_info", pageInfo);
 
@@ -104,7 +105,7 @@ export async function GET() {
         pageInfo = "";
         const nextParams = new URLSearchParams({
           limit: "250",
-          fields: "id,title,body_html,handle,images",
+          fields: "id,title,body_html,handle,images,tags",
           since_id: String(lastId),
         });
         const nextData = await shopifyFetch<ProductsResponse>({
@@ -180,6 +181,8 @@ export async function GET() {
     let missingMetaDescriptions = 0;
     let shortDescriptions = 0;
     let missingTitles = 0;
+    let badUrlHandles = 0;
+    let lowKeywordDensity = 0;
 
     for (const product of allProducts) {
       const problems: { type: string; detail: string }[] = [];
@@ -226,6 +229,49 @@ export async function GET() {
         });
       }
 
+      // URL Structure Check (handle analysis)
+      const handle = product.handle || "";
+      const handleIssues: string[] = [];
+      if (handle.length > 60) handleIssues.push("zu lang (max. 60 Zeichen)");
+      if (/[A-Z]/.test(handle)) handleIssues.push("enthält Großbuchstaben");
+      if (/[_]/.test(handle)) handleIssues.push("enthält Unterstriche statt Bindestriche");
+      if (/--/.test(handle)) handleIssues.push("enthält doppelte Bindestriche");
+      if (/\d{5,}/.test(handle)) handleIssues.push("enthält lange Zahlenketten");
+      if (!handle || handle.length < 3) handleIssues.push("Handle fehlt oder zu kurz");
+
+      if (handleIssues.length > 0) {
+        badUrlHandles++;
+        problems.push({
+          type: "bad_url",
+          detail: `URL-Handle "${handle}": ${handleIssues.join(", ")}`,
+        });
+      }
+
+      // Keyword Density Check
+      if (bodyText.length >= 50 && product.title) {
+        const titleWords = product.title.toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+        const bodyLower = bodyText.toLowerCase();
+        const bodyWordCount = bodyLower.split(/\s+/).length;
+
+        if (titleWords.length > 0 && bodyWordCount > 10) {
+          let keywordHits = 0;
+          for (const word of titleWords) {
+            const regex = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+            const matches = bodyLower.match(regex);
+            keywordHits += matches ? matches.length : 0;
+          }
+          const density = (keywordHits / bodyWordCount) * 100;
+
+          if (density < 0.5) {
+            lowKeywordDensity++;
+            problems.push({
+              type: "low_keyword_density",
+              detail: `Keyword-Dichte nur ${density.toFixed(1)}% (empfohlen: 1-3%). Titel-Keywords kaum in Beschreibung.`,
+            });
+          }
+        }
+      }
+
       if (problems.length > 0) {
         issues.push({
           productId: product.id,
@@ -236,7 +282,7 @@ export async function GET() {
       }
     }
 
-    // Calculate score (0-100)
+    // Calculate score (0-100) — now includes URL + keyword checks
     const totalProducts = allProducts.length;
     if (totalProducts === 0) {
       return NextResponse.json({
@@ -248,14 +294,16 @@ export async function GET() {
           missingMetaDescriptions: 0,
           shortDescriptions: 0,
           missingTitles: 0,
+          badUrlHandles: 0,
+          lowKeywordDensity: 0,
         },
         issues: [],
         message: "Keine Produkte im Shop gefunden.",
       });
     }
 
-    const totalChecks = totalImages + totalProducts * 3; // alt texts + meta desc + description length + titles
-    const totalFails = missingAltTexts + missingMetaDescriptions + shortDescriptions + missingTitles;
+    const totalChecks = totalImages + totalProducts * 5; // alt + meta + desc + title + url + keywords
+    const totalFails = missingAltTexts + missingMetaDescriptions + shortDescriptions + missingTitles + badUrlHandles + lowKeywordDensity;
     const score = totalChecks > 0 ? Math.round(((totalChecks - totalFails) / totalChecks) * 100) : 100;
 
     return NextResponse.json({
@@ -267,8 +315,10 @@ export async function GET() {
         missingMetaDescriptions,
         shortDescriptions,
         missingTitles,
+        badUrlHandles,
+        lowKeywordDensity,
       },
-      issues: issues.slice(0, 50), // Limit to first 50 products with issues
+      issues: issues.slice(0, 50),
     });
   } catch (error) {
     console.error("[SEO Audit] Error:", error);

@@ -23,6 +23,8 @@ import {
   Upload,
   Trash2,
   Megaphone,
+  Link2,
+  FileText,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -37,6 +39,8 @@ interface SessionInfo {
 interface Checklist {
   setup_complete?: boolean;
   product_imported?: boolean;
+  dropshipping_app?: boolean;
+  aliexpress_link?: boolean;
   legal_texts_generated?: boolean;
   theme_pushed?: boolean;
 }
@@ -53,8 +57,8 @@ interface NewsSlide {
 const STEPS = [
   {
     key: "setup_complete" as const,
-    title: "Shopify verbinden",
-    description: "Verknüpfe deinen Shopify-Store, um alle Funktionen freizuschalten.",
+    title: "Komplettes Setup",
+    description: "Verknüpfe deinen Shopify-Store mit der API, um alle Funktionen freizuschalten.",
     icon: Store,
     color: "#95BF47",
     href: "/setup",
@@ -70,34 +74,44 @@ const STEPS = [
     ctaText: "Zu den Charts",
   },
   {
+    key: "dropshipping_app" as const,
+    title: "Dropshipping App installieren",
+    description: "Installiere DSers oder eine alternative Dropshipping-App in deinem Shop.",
+    icon: ExternalLink,
+    color: "#F59E0B",
+    href: "https://apps.shopify.com/dsers",
+    ctaText: "App installieren",
+  },
+  {
+    key: "aliexpress_link" as const,
+    title: "AliExpress Link einfügen",
+    description: "Verknüpfe dein importiertes Produkt mit dem AliExpress-Supplier.",
+    icon: Link2,
+    color: "#EF4444",
+    href: "/charts",
+    ctaText: "Link einfügen",
+  },
+  {
     key: "legal_texts_generated" as const,
-    title: "Rechtstexte generieren",
+    title: "Legal Texte generieren",
     description: "Erstelle DACH-konforme Rechtstexte und pushe sie direkt in deinen Shop.",
-    icon: Scale,
+    icon: FileText,
     color: "#3B82F6",
     href: "/legal",
     ctaText: "Rechtstexte erstellen",
   },
   {
     key: "theme_pushed" as const,
-    title: "Theme installieren",
+    title: "Theme hochladen",
     description: "Installiere das Premium-Theme für maximale Conversion in deinem Shop.",
     icon: Palette,
     color: "#EC4899",
     href: "/themes",
-    ctaText: "Theme installieren",
+    ctaText: "Theme hochladen",
   },
 ];
 
 const EXTRA_TASKS = [
-  {
-    title: "Dropshipping-App installieren",
-    description: "Installiere DSers oder eine alternative Dropshipping-App.",
-    icon: ExternalLink,
-    color: "#F59E0B",
-    href: "https://apps.shopify.com/dsers",
-    external: true,
-  },
   {
     title: "Erste SEO-Analyse durchführen",
     description: "Prüfe deinen Shop-SEO-Score und optimiere ihn mit einem Klick.",
@@ -322,7 +336,7 @@ export default function HomePage() {
               <p className="text-zinc-400 text-sm">
                 {allDone
                   ? "Dein Shop ist vollständig eingerichtet."
-                  : "Richte deinen Shop in 4 einfachen Schritten ein."}
+                  : "Richte deinen Shop in 6 einfachen Schritten ein."}
               </p>
             </div>
           </div>
@@ -437,18 +451,21 @@ export default function HomePage() {
 
                     {!done && (
                       <motion.button
-                        onClick={() => router.push(step.href)}
+                        onClick={() => {
+                          if (step.href.startsWith("http")) window.open(step.href, "_blank");
+                          else router.push(step.href);
+                        }}
                         className={`mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs md:text-sm font-semibold transition-all ${
                           isNext
                             ? "text-black hover:brightness-110"
-                            : "bg-white/5 border border-white/10 text-zinc-400 hover:bg-white/10"
+                            : "bg-white/[0.04] border border-white/[0.06] text-zinc-400 hover:bg-white/[0.06]"
                         }`}
-                        style={isNext ? { backgroundColor: step.color } : undefined}
+                        style={isNext ? { backgroundColor: step.color, boxShadow: `0 2px 12px ${step.color}30` } : undefined}
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                       >
                         {step.ctaText}
-                        <ChevronRight className="w-3.5 h-3.5" />
+                        {step.href.startsWith("http") ? <ExternalLink className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </motion.button>
                     )}
                   </div>

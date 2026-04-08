@@ -18,6 +18,10 @@ import {
   Crown,
   CreditCard,
   Link2,
+  Ticket,
+  MessageCircle,
+  Clock,
+  ChevronRight,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -31,6 +35,15 @@ interface Profile {
   };
   ai_usage?: { month: string; count: number };
   linkedGoogleEmail?: string;
+}
+
+interface TicketInfo {
+  id: string;
+  subject: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: { sender: string; name: string; content: string; timestamp: string }[];
 }
 
 export default function ProfilePage() {
@@ -49,6 +62,9 @@ export default function ProfilePage() {
   const [linkGoogleInput, setLinkGoogleInput] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
   const [credits, setCredits] = useState({ used: 0, remaining: 500, max: 500 });
+
+  const [tickets, setTickets] = useState<TicketInfo[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
 
   const [credentials, setCredentials] = useState({ clientId: "", clientSecret: "" });
   const [legalData, setLegalData] = useState({
@@ -92,6 +108,14 @@ export default function ProfilePage() {
         setLoading(false);
       })
       .catch(() => router.push("/"));
+
+    // Load tickets
+    setTicketsLoading(true);
+    fetch("/api/tickets")
+      .then((r) => (r.ok ? r.json() : { tickets: [] }))
+      .then((data) => setTickets(data.tickets || []))
+      .catch(() => {})
+      .finally(() => setTicketsLoading(false));
   }, [router]);
 
   async function handleSave() {
@@ -386,6 +410,64 @@ export default function ProfilePage() {
                 <input type="text" value={legalData.handelsregister} onChange={(e) => setLegalData((p) => ({ ...p, handelsregister: e.target.value }))} placeholder="HRB 12345" className="input-glass w-full" />
               </div>
             </div>
+          </motion.div>
+
+          {/* Ticket History */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
+            className="glass-strong rounded-2xl border border-white/10 p-5 md:p-6 backdrop-blur-xl">
+            <h2 className="font-bold flex items-center gap-2 mb-4">
+              <Ticket className="w-5 h-5 text-amber-400" />
+              Meine Support-Tickets
+            </h2>
+            {ticketsLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
+              </div>
+            ) : tickets.length === 0 ? (
+              <p className="text-sm text-zinc-600 py-4 text-center">Keine Tickets vorhanden.</p>
+            ) : (
+              <div className="space-y-2">
+                {tickets.map((ticket) => (
+                  <button
+                    key={ticket.id}
+                    onClick={() => router.push(`/ai-support?ticket=${ticket.id}`)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08] transition-all text-left group"
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                      ticket.status === "open"
+                        ? "bg-amber-500/12 border border-amber-500/15"
+                        : ticket.status === "resolved"
+                        ? "bg-emerald-500/12 border border-emerald-500/15"
+                        : "bg-zinc-500/12 border border-zinc-500/15"
+                    }`}>
+                      <MessageCircle className={`w-4 h-4 ${
+                        ticket.status === "open" ? "text-amber-400" :
+                        ticket.status === "resolved" ? "text-emerald-400" : "text-zinc-400"
+                      }`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-zinc-200 truncate">{ticket.subject}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className={`text-[10px] font-semibold uppercase tracking-wider ${
+                          ticket.status === "open" ? "text-amber-400" :
+                          ticket.status === "resolved" ? "text-emerald-400" : "text-zinc-500"
+                        }`}>
+                          {ticket.status === "open" ? "Offen" : ticket.status === "resolved" ? "Gelöst" : "Geschlossen"}
+                        </span>
+                        <span className="text-[10px] text-zinc-600 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          {new Date(ticket.updatedAt).toLocaleDateString("de-DE")}
+                        </span>
+                        <span className="text-[10px] text-zinc-600">
+                          {ticket.messages.length} Nachr.
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 transition shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
           </motion.div>
 
           {/* Save */}

@@ -226,11 +226,23 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  const [activeTab, setActiveTab] = useState<"products" | "settings">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "settings" | "knowledge" | "tickets">("products");
   const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [themeUploading, setThemeUploading] = useState(false);
   const themeFileRef = useRef<HTMLInputElement>(null);
+
+  // Knowledge Base
+  const [kbContent, setKbContent] = useState("");
+  const [kbLoading, setKbLoading] = useState(false);
+  const [kbSaving, setKbSaving] = useState(false);
+
+  // Tickets
+  const [adminTickets, setAdminTickets] = useState<{id:string;customerName:string;subject:string;status:string;updatedAt:string;messages:{sender:string;name:string;content:string;timestamp:string}[]}[]>([]);
+  const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
+  const [ticketReply, setTicketReply] = useState("");
+  const [ticketReplying, setTicketReplying] = useState(false);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -243,6 +255,50 @@ export default function AdminPage() {
   }, [router]);
 
   useEffect(() => { loadProducts(); }, [loadProducts]);
+
+  // Load knowledge base
+  useEffect(() => {
+    if (activeTab === "knowledge") {
+      setKbLoading(true);
+      fetch("/api/admin/knowledge-base").then(r => r.json()).then(d => setKbContent(d.content || "")).catch(() => {}).finally(() => setKbLoading(false));
+    }
+  }, [activeTab]);
+
+  // Load tickets
+  useEffect(() => {
+    if (activeTab === "tickets") {
+      setTicketsLoading(true);
+      fetch("/api/tickets").then(r => r.json()).then(d => setAdminTickets(d.tickets || [])).catch(() => {}).finally(() => setTicketsLoading(false));
+    }
+  }, [activeTab]);
+
+  async function saveKnowledgeBase() {
+    setKbSaving(true);
+    try {
+      const res = await fetch("/api/admin/knowledge-base", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ content: kbContent }) });
+      if (res.ok) { setSuccess("KI-Firmenwissen gespeichert."); setTimeout(() => setSuccess(""), 3000); }
+    } catch { setError("Speichern fehlgeschlagen."); }
+    finally { setKbSaving(false); }
+  }
+
+  async function handleTicketReply(ticketId: string) {
+    if (!ticketReply.trim()) return;
+    setTicketReplying(true);
+    try {
+      await fetch("/api/tickets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticketId, message: ticketReply, senderName: "BrospifyHub Support" }) });
+      setTicketReply("");
+      const res = await fetch("/api/tickets"); const d = await res.json(); setAdminTickets(d.tickets || []);
+    } catch { setError("Antwort fehlgeschlagen."); }
+    finally { setTicketReplying(false); }
+  }
+
+  async function handleTicketStatus(ticketId: string, status: string) {
+    try {
+      await fetch("/api/tickets", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticketId, status }) });
+      const res = await fetch("/api/tickets"); const d = await res.json(); setAdminTickets(d.tickets || []);
+      setSuccess(`Ticket ${status === "resolved" ? "gelöst" : "geschlossen"}.`); setTimeout(() => setSuccess(""), 3000);
+    } catch { setError("Status-Update fehlgeschlagen."); }
+  }
 
   useEffect(() => {
     fetch("/api/admin/settings").then(r => r.json()).then(data => {
@@ -381,14 +437,188 @@ export default function AdminPage() {
         {success && <div className="flex items-center gap-2 text-emerald-400 text-sm glass border border-emerald-500/20 px-4 py-3 rounded-xl mb-4"><Check className="w-4 h-4 shrink-0" /><span>{success}</span></div>}
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex flex-wrap gap-2 mb-6">
           <button onClick={() => setActiveTab("products")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "products" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
             <BarChart3 className="w-4 h-4" />Produkte <span className="text-xs opacity-70">({produkte.length})</span>
+          </button>
+          <button onClick={() => setActiveTab("knowledge")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "knowledge" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Zap className="w-4 h-4" />KI-Firmenwissen
+          </button>
+          <button onClick={() => setActiveTab("tickets")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "tickets" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Shield className="w-4 h-4" />Tickets {adminTickets.filter(t => t.status === "open").length > 0 && <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center badge-pulse">{adminTickets.filter(t => t.status === "open").length}</span>}
           </button>
           <button onClick={() => setActiveTab("settings")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "settings" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
             <Settings className="w-4 h-4" />Einstellungen
           </button>
         </div>
+
+        {/* Knowledge Base Tab */}
+        {activeTab === "knowledge" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
+            <div className="glass-strong rounded-2xl border border-purple-500/15 p-6 space-y-4">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-purple-500/15 flex items-center justify-center">
+                  <Zap className="w-5 h-5 text-purple-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">AI Firmenwissen</h3>
+                  <p className="text-xs text-zinc-500">Dieser Text wird als System-Prompt an den DeepSeek KI-Agenten gesendet.</p>
+                </div>
+              </div>
+              {kbLoading ? (
+                <div className="flex items-center justify-center py-10"><Loader2 className="w-6 h-6 animate-spin text-purple-400" /></div>
+              ) : (
+                <>
+                  <textarea
+                    value={kbContent}
+                    onChange={(e) => setKbContent(e.target.value)}
+                    rows={14}
+                    placeholder={"Hier dein Firmenwissen eingeben...\n\nBeispiel:\n- Wir bieten Managed Dropshipping an\n- Unser Service kostet 299\u20AC/Monat\n- Versand dauert 7-14 Werktage\n- Support per Ticket oder Chat\n- Wir nutzen AliExpress als Supplier\n- Kunden bekommen einen eigenen Shopify-Store"}
+                    className="input-glass w-full resize-none text-sm leading-relaxed"
+                  />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-600">{kbContent.length} Zeichen</span>
+                    <button onClick={saveKnowledgeBase} disabled={kbSaving} className="btn-accent px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2">
+                      {kbSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Firmenwissen speichern</>}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Tickets Tab */}
+        {activeTab === "tickets" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl">
+            {ticketsLoading ? (
+              <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
+            ) : adminTickets.length === 0 ? (
+              <div className="text-center py-20">
+                <Shield className="w-12 h-12 text-zinc-800 mx-auto mb-3" />
+                <p className="text-zinc-500">Keine Tickets vorhanden.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                {/* Ticket List */}
+                <div className="lg:col-span-1 space-y-2">
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-2">
+                    {adminTickets.length} Tickets
+                  </div>
+                  {adminTickets.sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map((t) => (
+                    <button
+                      key={t.id}
+                      onClick={() => setSelectedTicket(t.id)}
+                      className={`w-full text-left p-3 rounded-xl border transition-all ${
+                        selectedTicket === t.id
+                          ? "border-amber-500/20 bg-amber-500/8"
+                          : "border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`w-2 h-2 rounded-full ${
+                          t.status === "open" ? "bg-amber-400" : t.status === "resolved" ? "bg-emerald-400" : "bg-zinc-500"
+                        }`} />
+                        <span className="text-sm font-medium text-zinc-200 truncate flex-1">{t.subject}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-zinc-500">
+                        <span>{t.customerName}</span>
+                        <span>&middot;</span>
+                        <span>{new Date(t.updatedAt).toLocaleDateString("de-DE")}</span>
+                        <span>&middot;</span>
+                        <span>{t.messages.length} Nachr.</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Ticket Detail */}
+                <div className="lg:col-span-2">
+                  {selectedTicket ? (() => {
+                    const t = adminTickets.find(x => x.id === selectedTicket);
+                    if (!t) return null;
+                    return (
+                      <div className="glass-strong rounded-2xl border border-white/10 overflow-hidden">
+                        {/* Header */}
+                        <div className="p-4 border-b border-white/[0.06]">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <h4 className="font-bold text-sm">{t.subject}</h4>
+                              <p className="text-[11px] text-zinc-500 mt-0.5">{t.customerName} &middot; {t.id.slice(-8)}</p>
+                            </div>
+                            <div className="flex gap-2">
+                              {t.status === "open" && (
+                                <>
+                                  <button onClick={() => handleTicketStatus(t.id, "resolved")} className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/15 text-emerald-400 text-[11px] font-semibold hover:bg-emerald-500/20 transition">
+                                    Als gelöst markieren
+                                  </button>
+                                  <button onClick={() => handleTicketStatus(t.id, "closed")} className="px-3 py-1.5 rounded-lg bg-zinc-500/10 border border-zinc-500/15 text-zinc-400 text-[11px] font-semibold hover:bg-zinc-500/20 transition">
+                                    Schließen
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Messages */}
+                        <div className="p-4 space-y-3 max-h-[50vh] overflow-y-auto">
+                          {t.messages.map((msg, i) => (
+                            <div key={i} className={`flex gap-2.5 ${msg.sender === "admin" ? "flex-row-reverse" : ""}`}>
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[9px] font-bold shrink-0 ${
+                                msg.sender === "admin" ? "bg-[#95BF47]/15 text-[#95BF47]" :
+                                msg.sender === "ai" ? "bg-purple-500/15 text-purple-400" :
+                                "bg-blue-500/15 text-blue-400"
+                              }`}>
+                                {msg.sender === "admin" ? "A" : msg.sender === "ai" ? "KI" : "K"}
+                              </div>
+                              <div className={`max-w-[75%] rounded-xl px-3 py-2 ${
+                                msg.sender === "admin" ? "bg-[#95BF47]/8 border border-[#95BF47]/10" :
+                                msg.sender === "ai" ? "bg-purple-500/8 border border-purple-500/10" :
+                                "bg-white/[0.03] border border-white/[0.06]"
+                              }`}>
+                                <div className="text-[9px] text-zinc-500 mb-0.5">{msg.name}</div>
+                                <p className="text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                                <div className="text-[8px] text-zinc-600 mt-1">{new Date(msg.timestamp).toLocaleString("de-DE")}</div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Reply */}
+                        {t.status === "open" && (
+                          <div className="p-4 border-t border-white/[0.06]">
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={ticketReply}
+                                onChange={(e) => setTicketReply(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleTicketReply(t.id)}
+                                placeholder="Antwort schreiben..."
+                                className="flex-1 input-glass text-sm"
+                              />
+                              <button
+                                onClick={() => handleTicketReply(t.id)}
+                                disabled={ticketReplying || !ticketReply.trim()}
+                                className="btn-accent px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-1.5 disabled:opacity-40"
+                              >
+                                {ticketReplying ? <Loader2 className="w-4 h-4 animate-spin" /> : "Senden"}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })() : (
+                    <div className="flex items-center justify-center py-20 text-zinc-600 text-sm">
+                      Ticket auswählen, um Details zu sehen
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        )}
 
         {/* Settings Tab */}
         {activeTab === "settings" && (

@@ -13,6 +13,7 @@ const de = {
     themes: "Themes",
     profile: "Profil",
     admin: "Admin",
+    aiSupport: "AI Support",
     logout: "Abmelden",
   },
   login: {

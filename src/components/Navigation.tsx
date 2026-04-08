@@ -18,6 +18,7 @@ import {
   PenTool,
   ChevronDown,
   BarChart,
+  Bot,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -77,16 +78,17 @@ export default function Navigation() {
   if (!session?.isLoggedIn) return null;
 
   const isSeoActive = pathname === "/seo" || pathname === "/blog";
+  const isAiActive = pathname === "/ai-support";
 
   return (
     <>
       {/* Top Bar */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/10">
+      <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/[0.06]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14 md:h-16">
             {/* Logo */}
             <Link href="/home" className="flex items-center gap-2.5 group shrink-0">
-              <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-[#95BF47]/20 border border-[#95BF47]/30 flex items-center justify-center">
+              <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)]">
                 <Crown className="w-4 h-4 md:w-5 md:h-5 text-[#95BF47]" />
               </div>
               <span className="text-base md:text-lg font-bold hidden sm:block">
@@ -95,7 +97,7 @@ export default function Navigation() {
             </Link>
 
             {/* Desktop Links */}
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden md:flex items-center gap-0.5">
               {NAV_ITEMS.map((item) => {
                 const isActive = pathname === item.href;
                 return (
@@ -105,7 +107,7 @@ export default function Navigation() {
                     className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                       isActive
                         ? "text-[#95BF47]"
-                        : "text-zinc-400 hover:text-white hover:bg-white/5"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
                     <item.icon className="w-4 h-4" />
@@ -113,7 +115,7 @@ export default function Navigation() {
                     {isActive && (
                       <motion.div
                         layoutId="nav-indicator"
-                        className="absolute inset-0 bg-[#95BF47]/10 border border-[#95BF47]/20 rounded-xl"
+                        className="absolute inset-0 bg-[#95BF47]/8 border border-[#95BF47]/15 rounded-xl"
                         style={{ zIndex: -1 }}
                         transition={{ type: "spring", stiffness: 350, damping: 30 }}
                       />
@@ -129,7 +131,7 @@ export default function Navigation() {
                   className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                     isSeoActive
                       ? "text-[#95BF47]"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
+                      : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                   }`}
                 >
                   <Search className="w-4 h-4" />
@@ -138,7 +140,7 @@ export default function Navigation() {
                   {isSeoActive && (
                     <motion.div
                       layoutId="nav-indicator"
-                      className="absolute inset-0 bg-[#95BF47]/10 border border-[#95BF47]/20 rounded-xl"
+                      className="absolute inset-0 bg-[#95BF47]/8 border border-[#95BF47]/15 rounded-xl"
                       style={{ zIndex: -1 }}
                       transition={{ type: "spring", stiffness: 350, damping: 30 }}
                     />
@@ -148,23 +150,23 @@ export default function Navigation() {
                 <AnimatePresence>
                   {seoOpen && (
                     <motion.div
-                      initial={{ opacity: 0, y: -8, scale: 0.95 }}
+                      initial={{ opacity: 0, y: -8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -8, scale: 0.95 }}
+                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
                       transition={{ duration: 0.15 }}
-                      className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-[340px] p-3 rounded-2xl border border-white/10 shadow-2xl shadow-black/40"
-                      style={{ background: "rgba(20,20,20,0.95)", backdropFilter: "blur(30px)" }}
+                      className="absolute top-full mt-2 left-1/2 -translate-x-1/2 w-[340px] p-3 rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/50"
+                      style={{ background: "rgba(14,14,14,0.96)", backdropFilter: "blur(40px)" }}
                     >
                       <Link
                         href="/seo"
                         onClick={() => setSeoOpen(false)}
                         className={`group flex items-center gap-4 p-4 rounded-xl border transition-all duration-200 ${
                           pathname === "/seo"
-                            ? "border-[#95BF47]/30 bg-[#95BF47]/10"
-                            : "border-white/[0.06] bg-white/[0.02] hover:border-[#95BF47]/20 hover:bg-[#95BF47]/5"
+                            ? "border-[#95BF47]/25 bg-[#95BF47]/8"
+                            : "border-white/[0.04] bg-white/[0.02] hover:border-[#95BF47]/15 hover:bg-[#95BF47]/[0.04]"
                         }`}
                       >
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 border border-blue-500/20 flex items-center justify-center shrink-0">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/15 to-cyan-500/15 border border-blue-500/15 flex items-center justify-center shrink-0">
                           <BarChart className="w-6 h-6 text-blue-400" />
                         </div>
                         <div>
@@ -178,11 +180,11 @@ export default function Navigation() {
                         onClick={() => setSeoOpen(false)}
                         className={`group flex items-center gap-4 p-4 rounded-xl border transition-all duration-200 mt-2 ${
                           pathname === "/blog"
-                            ? "border-[#95BF47]/30 bg-[#95BF47]/10"
-                            : "border-white/[0.06] bg-white/[0.02] hover:border-[#95BF47]/20 hover:bg-[#95BF47]/5"
+                            ? "border-[#95BF47]/25 bg-[#95BF47]/8"
+                            : "border-white/[0.04] bg-white/[0.02] hover:border-[#95BF47]/15 hover:bg-[#95BF47]/[0.04]"
                         }`}
                       >
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#95BF47]/20 to-emerald-500/20 border border-[#95BF47]/20 flex items-center justify-center shrink-0">
+                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#95BF47]/15 to-emerald-500/15 border border-[#95BF47]/15 flex items-center justify-center shrink-0">
                           <PenTool className="w-6 h-6 text-[#95BF47]" />
                         </div>
                         <div>
@@ -195,13 +197,32 @@ export default function Navigation() {
                 </AnimatePresence>
               </div>
 
+              {/* AI Support — Gradient Text */}
+              <Link
+                href="/ai-support"
+                className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  isAiActive ? "" : "hover:bg-white/[0.04]"
+                }`}
+              >
+                <Bot className="w-4 h-4 text-purple-400" />
+                <span className="hidden lg:inline ai-gradient-text">AI Support</span>
+                {isAiActive && (
+                  <motion.div
+                    layoutId="nav-indicator"
+                    className="absolute inset-0 bg-purple-500/8 border border-purple-500/15 rounded-xl"
+                    style={{ zIndex: -1 }}
+                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
+                  />
+                )}
+              </Link>
+
               {session.isAdmin && (
                 <Link
                   href="/admin"
                   className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                     pathname === "/admin"
-                      ? "text-[#95BF47] bg-[#95BF47]/10"
-                      : "text-zinc-400 hover:text-white hover:bg-white/5"
+                      ? "text-[#95BF47] bg-[#95BF47]/8"
+                      : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                   }`}
                 >
                   <Settings className="w-4 h-4" />
@@ -217,18 +238,18 @@ export default function Navigation() {
                 href="/profile"
                 className={`hidden md:flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 ${
                   pathname === "/profile"
-                    ? "bg-[#95BF47]/10 border border-[#95BF47]/20"
-                    : "hover:bg-white/5 border border-transparent"
+                    ? "bg-[#95BF47]/8 border border-[#95BF47]/15"
+                    : "hover:bg-white/[0.04] border border-transparent"
                 }`}
               >
                 {session.googleImage ? (
                   <img
                     src={session.googleImage}
                     alt=""
-                    className="w-7 h-7 rounded-lg border border-white/10 object-cover"
+                    className="w-7 h-7 rounded-lg border border-white/[0.08] object-cover"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/10 flex items-center justify-center">
+                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
                     <span className="text-[10px] font-bold text-white">
                       {(session.googleName || "U")[0].toUpperCase()}
                     </span>
@@ -248,7 +269,7 @@ export default function Navigation() {
 
               <button
                 onClick={handleLogout}
-                className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-zinc-400 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-zinc-500 hover:text-red-400 hover:bg-red-500/8 transition-all duration-200"
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -256,7 +277,7 @@ export default function Navigation() {
               {/* Mobile Menu Button */}
               <button
                 onClick={() => setMobileOpen(!mobileOpen)}
-                className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-all"
+                className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-all"
               >
                 {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
               </button>
@@ -274,14 +295,14 @@ export default function Navigation() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/50 md:hidden"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
               onClick={() => setMobileOpen(false)}
             />
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="fixed top-14 left-0 right-0 z-40 glass-strong border-b border-white/10 md:hidden max-h-[calc(100vh-3.5rem)] overflow-y-auto"
+              className="fixed top-14 left-0 right-0 z-40 glass-elevated border-b border-white/[0.06] md:hidden max-h-[calc(100vh-3.5rem)] overflow-y-auto"
             >
               <div className="p-3 space-y-1">
                 {/* Profile card at top of mobile menu */}
@@ -289,14 +310,14 @@ export default function Navigation() {
                   href="/profile"
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all mb-2 ${
                     pathname === "/profile"
-                      ? "bg-[#95BF47]/10 border border-[#95BF47]/20"
-                      : "bg-white/[0.03] border border-white/5 hover:bg-white/5"
+                      ? "bg-[#95BF47]/8 border border-[#95BF47]/15"
+                      : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04]"
                   }`}
                 >
                   {session.googleImage ? (
-                    <img src={session.googleImage} alt="" className="w-9 h-9 rounded-lg border border-white/10 object-cover" />
+                    <img src={session.googleImage} alt="" className="w-9 h-9 rounded-lg border border-white/[0.08] object-cover" />
                   ) : (
-                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/10 flex items-center justify-center">
+                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
                       <span className="text-xs font-bold text-white">{(session.googleName || "U")[0].toUpperCase()}</span>
                     </div>
                   )}
@@ -314,8 +335,8 @@ export default function Navigation() {
                       href={item.href}
                       className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
                         isActive
-                          ? "text-[#95BF47] bg-[#95BF47]/10"
-                          : "text-zinc-400 hover:text-white hover:bg-white/5"
+                          ? "text-[#95BF47] bg-[#95BF47]/8"
+                          : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                       }`}
                     >
                       <item.icon className="w-5 h-5" />
@@ -325,12 +346,12 @@ export default function Navigation() {
                 })}
 
                 {/* Mobile SEO section */}
-                <div className="border-t border-white/5 my-2 pt-2">
+                <div className="border-t border-white/[0.04] my-2 pt-2">
                   <div className="text-[10px] text-zinc-600 uppercase tracking-widest px-4 mb-2 font-semibold">SEO & Content</div>
                   <Link
                     href="/seo"
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                      pathname === "/seo" ? "text-[#95BF47] bg-[#95BF47]/10" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                      pathname === "/seo" ? "text-[#95BF47] bg-[#95BF47]/8" : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
                     <BarChart className="w-5 h-5" />
@@ -339,7 +360,7 @@ export default function Navigation() {
                   <Link
                     href="/blog"
                     className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                      pathname === "/blog" ? "text-[#95BF47] bg-[#95BF47]/10" : "text-zinc-400 hover:text-white hover:bg-white/5"
+                      pathname === "/blog" ? "text-[#95BF47] bg-[#95BF47]/8" : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
                     <PenTool className="w-5 h-5" />
@@ -347,21 +368,35 @@ export default function Navigation() {
                   </Link>
                 </div>
 
+                {/* Mobile AI Support */}
+                <div className="border-t border-white/[0.04] my-2 pt-2">
+                  <div className="text-[10px] text-zinc-600 uppercase tracking-widest px-4 mb-2 font-semibold">Support</div>
+                  <Link
+                    href="/ai-support"
+                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
+                      isAiActive ? "bg-purple-500/8 border border-purple-500/15" : "hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    <Bot className="w-5 h-5 text-purple-400" />
+                    <span className="ai-gradient-text">AI Support</span>
+                  </Link>
+                </div>
+
                 {session.isAdmin && (
                   <Link
                     href="/admin"
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/5"
+                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                   >
                     <Settings className="w-5 h-5" />
                     {t.nav.admin}
                   </Link>
                 )}
 
-                <div className="border-t border-white/5 my-2" />
+                <div className="border-t border-white/[0.04] my-2" />
 
                 <button
                   onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 transition-all"
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/8 transition-all"
                 >
                   <LogOut className="w-5 h-5" />
                   {t.nav.logout}
