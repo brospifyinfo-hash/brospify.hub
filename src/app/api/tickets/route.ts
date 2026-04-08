@@ -129,13 +129,22 @@ export async function POST(req: NextRequest) {
       messages,
     };
 
-    await addTicket(ticket);
-    console.log("[Tickets] Created:", ticket.id, "for", ticket.customerKey);
+    try {
+      await addTicket(ticket);
+    } catch (sheetErr) {
+      console.error("[Tickets] Google Sheets write failed:", sheetErr);
+      return NextResponse.json(
+        { error: "Ticket konnte nicht in der Datenbank gespeichert werden. Bitte versuche es erneut." },
+        { status: 500 }
+      );
+    }
+
+    console.log("[Tickets] Created:", ticket.id, "for", ticket.customerKey, "subject:", ticket.subject);
 
     return NextResponse.json({ success: true, ticket });
   } catch (error) {
     console.error("[Tickets] POST error:", error);
-    return NextResponse.json({ error: "Fehler beim Erstellen." }, { status: 500 });
+    return NextResponse.json({ error: "Fehler beim Erstellen des Tickets." }, { status: 500 });
   }
 }
 

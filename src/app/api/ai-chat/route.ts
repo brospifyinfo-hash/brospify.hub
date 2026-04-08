@@ -33,22 +33,40 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Load knowledge base from admin settings
-    const knowledgeBase = await getAdminSetting("ai_knowledge_base");
+    // Load knowledge base from Google Sheet (Settings tab, key: "ai_knowledge_base")
+    let knowledgeBase = "";
+    try {
+      knowledgeBase = await getAdminSetting("ai_knowledge_base");
+      console.log("[AI Chat] Knowledge base loaded, length:", knowledgeBase.length);
+    } catch (kbErr) {
+      console.error("[AI Chat] Failed to load knowledge base:", kbErr);
+      // Continue without KB — the strict prompt will force "no info" answers
+    }
 
-    const systemPrompt = `Du bist der KI-Support-Agent von BrospifyHub, einem Managed Dropshipping Dashboard.
-Deine Aufgabe ist es, Kunden bei Fragen und Problemen zu helfen.
-Antworte immer auf Deutsch, freundlich und professionell.
-Halte deine Antworten kurz und hilfreich (max 3-4 Sätze).
+    // Build the hardened system prompt
+    const systemPrompt = `Du bist der offizielle KI-Support-Agent von BrospifyHub, einem Managed Dropshipping Service.
 
-${knowledgeBase ? `FIRMENWISSEN (nutze dieses Wissen für deine Antworten):\n${knowledgeBase}\n` : ""}
+STRICT INSTRUCTION: Du darfst AUSSCHLIESSLICH Informationen aus diesem System-Prompt verwenden. Wenn eine Frage nicht durch dieses Wissen beantwortet werden kann, ERFINDE NICHTS. Antworte exakt mit: "Dazu habe ich leider keine Informationen. Bitte eröffne ein Live-Ticket, damit ein Admin dir persönlich helfen kann."
 
-Wenn du ein Problem nicht lösen kannst oder dir unsicher bist, sage dem Kunden ehrlich, dass du nicht weiterhelfen kannst.`;
+REGELN:
+- Antworte IMMER auf Deutsch.
+- Antworte kurz und präzise (max 3-4 Sätze).
+- Erfinde NIEMALS Produkte, Apps, Preise, URLs oder Funktionen die nicht im Firmenwissen stehen.
+- Wenn du dir nicht 100% sicher bist, sage dass du keine Information dazu hast.
+- Empfehle KEINE externen Apps oder Tools die nicht explizit im Firmenwissen genannt werden.
+- Verweise bei Unsicherheit IMMER auf das Live-Ticket-System.
+
+WICHTIG ZUM SHOPIFY SETUP:
+Der Kunde muss KEINE eigene App programmieren. Er muss im Shopify Admin-Bereich unter "Einstellungen" → "Apps und Vertriebskanäle" → "Apps entwickeln" → "Benutzerdefinierte App erstellen" (Custom App) eine App anlegen. Dort erhält er die API-Zugangsdaten (Admin API Access Token), die er dann im BrospifyHub unter "Profil" → "Shopify API" einträgt. Das ist ein reiner Klick-Prozess, kein Programmieren.
+
+${knowledgeBase ? `FIRMENWISSEN (NUR diese Informationen als Grundlage verwenden):\n---\n${knowledgeBase}\n---` : "HINWEIS: Es wurde noch kein Firmenwissen vom Admin hinterlegt. Antworte auf alle inhaltlichen Fragen mit dem Hinweis, ein Live-Ticket zu eröffnen."}`;
 
     const deepseekMessages = [
       { role: "system", content: systemPrompt },
       ...messages.map((m) => ({ role: m.role, content: m.content })),
     ];
+
+    console.log("[AI Chat] Sending to DeepSeek, messages:", deepseekMessages.length, "temperature: 0.1");
 
     const res = await fetch("https://api.deepseek.com/chat/completions", {
       method: "POST",
@@ -60,7 +78,7 @@ Wenn du ein Problem nicht lösen kannst oder dir unsicher bist, sage dem Kunden 
         model: "deepseek-chat",
         messages: deepseekMessages,
         max_tokens: 500,
-        temperature: 0.7,
+        temperature: 0.1,
       }),
     });
 
@@ -68,13 +86,13 @@ Wenn du ein Problem nicht lösen kannst oder dir unsicher bist, sage dem Kunden 
       const errText = await res.text();
       console.error("[AI Chat] DeepSeek error:", res.status, errText);
       return NextResponse.json(
-        { error: "KI-Anfrage fehlgeschlagen." },
+        { error: "KI-Anfrage fehlgeschlagen. Bitte versuche es erneut." },
         { status: 502 }
       );
     }
 
     const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content || "Entschuldigung, ich konnte keine Antwort generieren.";
+    const reply = data.choices?.[0]?.message?.content || "Entschuldigung, ich konnte keine Antwort generieren. Bitte eröffne ein Live-Ticket.";
 
     // If this is the 2nd attempt, suggest escalation
     const shouldEscalate = attemptCount >= 2;

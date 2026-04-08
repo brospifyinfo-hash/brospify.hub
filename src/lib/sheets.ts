@@ -24,6 +24,38 @@ const SHEET_ID = () => {
   return id;
 };
 
+// Helper: ensure a sheet/tab exists, create with header row if not
+async function ensureSheet(title: string, headers: string[]): Promise<void> {
+  const sheets = getSheets();
+  try {
+    // Check if sheet exists
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID() });
+    const exists = meta.data.sheets?.some((s) => s.properties?.title === title);
+    if (exists) return;
+
+    // Create the sheet
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SHEET_ID(),
+      requestBody: {
+        requests: [{ addSheet: { properties: { title } } }],
+      },
+    });
+
+    // Add header row
+    if (headers.length > 0) {
+      await sheets.spreadsheets.values.update({
+        spreadsheetId: SHEET_ID(),
+        range: `${title}!A1`,
+        valueInputOption: "RAW",
+        requestBody: { values: [headers] },
+      });
+    }
+    console.log(`[Sheets] Created tab "${title}" with headers.`);
+  } catch (err) {
+    console.error(`[Sheets] ensureSheet("${title}") error:`, err);
+  }
+}
+
 // ─── KUNDEN (Tab 1) ────────────────────────────────────────────
 // Columns: A=Shopify_Token, B=Lizensschlüssel, C=Status, D=Shop Domain,
 //          E=Kunden-Email, F=Bestellnummer, G=charge, H=suplied, I=SKU, J=Profil_JSON
@@ -620,7 +652,14 @@ export async function getAllTickets(): Promise<Ticket[]> {
     });
     const rows = res.data.values || [];
     return rows.map((row, i) => rowToTicket(row, i)).filter((t) => t.id);
-  } catch {
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("Unable to parse range") || errMsg.includes("not found")) {
+      console.log("[Sheets] Tickets tab not found, creating...");
+      await ensureSheet("Tickets", ["Ticket_ID", "Customer_Key", "Customer_Name", "Subject", "Status", "Created_At", "Updated_At", "Messages_JSON"]);
+    } else {
+      console.error("[Sheets] getAllTickets error:", err);
+    }
     return [];
   }
 }
@@ -637,18 +676,35 @@ export async function getTicketById(ticketId: string): Promise<Ticket | null> {
 
 export async function addTicket(ticket: Omit<Ticket, "rowIndex">): Promise<void> {
   const sheets = getSheets();
-  await sheets.spreadsheets.values.append({
-    spreadsheetId: SHEET_ID(),
-    range: "Tickets!A:H",
-    valueInputOption: "RAW",
-    requestBody: {
-      values: [[
-        ticket.id, ticket.customerKey, ticket.customerName, ticket.subject,
-        ticket.status, ticket.createdAt, ticket.updatedAt,
-        JSON.stringify(ticket.messages),
-      ]],
-    },
-  });
+  const row = [
+    ticket.id, ticket.customerKey, ticket.customerName, ticket.subject,
+    ticket.status, ticket.createdAt, ticket.updatedAt,
+    JSON.stringify(ticket.messages),
+  ];
+
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "Tickets!A:H",
+      valueInputOption: "RAW",
+      requestBody: { values: [row] },
+    });
+  } catch (err: unknown) {
+    // If the tab doesn't exist, create it and retry
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("Unable to parse range") || errMsg.includes("not found")) {
+      console.log("[Sheets] Tickets tab not found, creating it...");
+      await ensureSheet("Tickets", ["Ticket_ID", "Customer_Key", "Customer_Name", "Subject", "Status", "Created_At", "Updated_At", "Messages_JSON"]);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID(),
+        range: "Tickets!A:H",
+        valueInputOption: "RAW",
+        requestBody: { values: [row] },
+      });
+    } else {
+      throw err;
+    }
+  }
 }
 
 export async function updateTicket(
@@ -688,7 +744,14 @@ export async function getAdminSetting(key: string): Promise<string> {
     const rows = res.data.values || [];
     const row = rows.find((r) => r[0] === key);
     return row?.[1] || "";
-  } catch {
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("Unable to parse range") || errMsg.includes("not found")) {
+      console.log("[Sheets] Settings tab not found, creating...");
+      await ensureSheet("Settings", ["Key", "Value"]);
+    } else {
+      console.error("[Sheets] getAdminSetting error:", err);
+    }
     return "";
   }
 }
@@ -717,7 +780,20 @@ export async function setAdminSetting(key: string, value: string): Promise<void>
         requestBody: { values: [[key, value]] },
       });
     }
-  } catch (err) {
-    console.error("[Sheets] setAdminSetting error:", err);
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    if (errMsg.includes("Unable to parse range") || errMsg.includes("not found")) {
+      console.log("[Sheets] Settings tab not found, creating...");
+      await ensureSheet("Settings", ["Key", "Value"]);
+      // Retry the append after creating the tab
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID(),
+        range: "Settings!A:B",
+        valueInputOption: "RAW",
+        requestBody: { values: [[key, value]] },
+      });
+    } else {
+      console.error("[Sheets] setAdminSetting error:", err);
+    }
   }
 }
