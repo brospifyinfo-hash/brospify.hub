@@ -36,7 +36,7 @@ const NAV_ITEMS = [
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
   { href: "/chats", labelKey: "chats" as const, icon: MessageCircle },
   { href: "/themes", labelKey: "themes" as const, icon: Palette },
-  { href: "/emails", labelKey: "emails" as const, icon: Mail },
+  { href: "/email-templates", labelKey: "emails" as const, icon: Mail },
 ];
 
 export default function Navigation() {
@@ -108,7 +108,7 @@ export default function Navigation() {
             {/* Desktop Links */}
             <div className="hidden md:flex items-center gap-0.5">
               {NAV_ITEMS.map((item) => {
-                const isActive = pathname === item.href;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 return (
                   <Link
                     key={item.href}
@@ -337,7 +337,7 @@ export default function Navigation() {
                 </Link>
 
                 {NAV_ITEMS.map((item) => {
-                  const isActive = pathname === item.href;
+                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                   return (
                     <Link
                       key={item.href}
