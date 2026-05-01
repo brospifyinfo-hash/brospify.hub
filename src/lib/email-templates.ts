@@ -1,11 +1,5 @@
 // ─── Top 10 Shopify Notification Templates ───────────────────────
 // Maps to Shopify's REST Admin API "notifications" resource.
-// Shopify identifies each transactional email by a stable name.
-// Reference: GET/PUT /admin/api/{version}/notifications/{id}.json
-//
-// We expose a curated list of the 10 most impactful customer-facing
-// emails. The `shopifyName` field is the canonical Shopify identifier
-// used to match entries returned by GET /notifications.json.
 
 import type { LucideIcon } from "lucide-react";
 import {
@@ -22,23 +16,18 @@ import {
 } from "lucide-react";
 
 export interface EmailTemplateDef {
-  /** Stable internal id used in URLs and storage. */
   id: string;
-  /** Display title (German). */
   title: string;
-  /** Short tagline shown on the card. */
   tagline: string;
-  /** Longer description for the editor header. */
   description: string;
-  /** Canonical Shopify notification name (REST API). */
+  /** Full sentence: when / why this email is triggered. Shown in context banner. */
+  triggerContext: string;
+  /** Short badge label shown alongside the category. */
+  contextBadge: string;
   shopifyName: string;
-  /** Liquid variables typically available in this template. */
   liquidVariables: string[];
-  /** Icon component. */
   icon: LucideIcon;
-  /** Accent gradient for hero glow on the card (Tailwind). */
   accent: string;
-  /** Editorial category. */
   category: "transactional" | "lifecycle" | "recovery";
 }
 
@@ -49,6 +38,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Erste Bestätigung nach Kauf",
     description:
       "Wird direkt nach erfolgreichem Checkout an den Kunden gesendet. Höchste Öffnungsrate aller Mails — ideal für Cross-Sell-Hinweise.",
+    triggerContext:
+      "Wird sofort versendet, nachdem der Kunde den Checkout erfolgreich abgeschlossen hat. Mit ~80 % Öffnungsrate die wertvollste Mail im gesamten Funnel — nutze sie für Upsells und Vertrauen.",
+    contextBadge: "Post-Purchase",
     shopifyName: "order_confirmation",
     liquidVariables: [
       "order.name",
@@ -69,6 +61,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Paket ist unterwegs",
     description:
       "Wird ausgelöst, sobald eine Sendung erstellt wird. Enthält Tracking-Nummer und voraussichtliches Lieferdatum.",
+    triggerContext:
+      "Ausgelöst, sobald ein Fulfillment-Eintrag im Shopify-Backend erstellt wird. Perfekter Moment, um Tracking-CTAs prominent zu platzieren und Vorfreude zu erzeugen.",
+    contextBadge: "Fulfillment",
     shopifyName: "shipping_confirmation",
     liquidVariables: [
       "order.name",
@@ -87,6 +82,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Erinnerung an stehengelassene Artikel",
     description:
       "Recovery-Mail an Besucher, die den Checkout begonnen aber nicht abgeschlossen haben. Höchster ROI im gesamten Mail-Funnel.",
+    triggerContext:
+      "Automatisch versendet 6–24 Stunden nach Checkout-Abbruch. Höchster ROI im gesamten Mail-Funnel — ein optimiertes Template hier zahlt sich direkt aus.",
+    contextBadge: "Recovery",
     shopifyName: "abandoned_checkout",
     liquidVariables: [
       "checkout.line_items",
@@ -104,6 +102,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Account erfolgreich erstellt",
     description:
       "Begrüßt neue Kunden nach Account-Erstellung. Erste Berührung — Markenton entscheidet über Wiederkauf.",
+    triggerContext:
+      "Erste E-Mail nach Account-Erstellung. Setzt den Ton für die gesamte Kundenbeziehung — hier entscheidet sich, ob der Kunde wiederkommt.",
+    contextBadge: "Onboarding",
     shopifyName: "customer_account_welcome",
     liquidVariables: ["customer.first_name", "customer.email", "shop.name", "shop.url"],
     icon: Sparkles,
@@ -116,6 +117,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Refund wurde verarbeitet",
     description:
       "Bestätigt eine erfolgreich verarbeitete Rückerstattung. Klare, beruhigende Sprache reduziert Support-Tickets messbar.",
+    triggerContext:
+      "Versendet, sobald eine Rückerstattung im Admin verarbeitet wurde. Klare Kommunikation reduziert Support-Tickets — Ton und Klarheit sind hier entscheidend.",
+    contextBadge: "Post-Service",
     shopifyName: "order_refund",
     liquidVariables: [
       "order.name",
@@ -133,6 +137,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Kauf wurde aufgehoben",
     description:
       "Storno-Bestätigung mit transparenter Erklärung. Empfehlung: Rabatt-Code für späteren Wiederkauf einbauen.",
+    triggerContext:
+      "Versendet nach manuellem oder automatischem Storno. Empfehlung: Rabattcode für Wiederkauf einbauen — reduziert Frustration und sichert Folgebestellung.",
+    contextBadge: "Retention",
     shopifyName: "order_cancelled",
     liquidVariables: ["order.name", "order.cancel_reason", "customer.first_name", "shop.name"],
     icon: XCircle,
@@ -145,6 +152,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Lieferung kommt heute",
     description:
       "Update bei Statuswechsel des Carriers. Erhöht wahrgenommene Servicequalität ohne zusätzlichen Aufwand.",
+    triggerContext:
+      "Ausgelöst bei Statuswechsel des Carriers (z. B. 'Out for Delivery'). Erhöht die wahrgenommene Servicequalität erheblich — ohne manuellen Aufwand.",
+    contextBadge: "Logistics",
     shopifyName: "shipping_update",
     liquidVariables: [
       "fulfillment.tracking_number",
@@ -162,6 +172,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Paket wurde zugestellt",
     description:
       "Auslöser für Review-Anfragen und Cross-Sells. Optimaler Zeitpunkt: 2–4 h nach Zustellung.",
+    triggerContext:
+      "Ausgelöst bei Zustellbestätigung durch den Carrier. Optimaler Zeitpunkt für Review-Anfragen, Cross-Sells und Loyalty-Programme — 2–4 Stunden nach Zustellung.",
+    contextBadge: "Post-Delivery",
     shopifyName: "shipping_confirmation_multipackage",
     liquidVariables: ["order.name", "customer.first_name", "shop.url"],
     icon: PackageCheck,
@@ -174,6 +187,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Beleg & Rechnungsdetails",
     description:
       "Offizieller Zahlungsbeleg. Muss steuerrechtlich konforme Felder enthalten (Bestell-Nr., Betrag, USt.).",
+    triggerContext:
+      "Versendet nach Zahlungseingang. Muss steuerrechtlich konforme Felder enthalten — Bestell-Nr., Betrag, Steuern. Wenig Spielraum für Kreativität, aber wichtig für Compliance.",
+    contextBadge: "Compliance",
     shopifyName: "payment_received",
     liquidVariables: [
       "order.name",
@@ -192,6 +208,9 @@ export const EMAIL_TEMPLATES: EmailTemplateDef[] = [
     tagline: "Konto aktivieren",
     description:
       "Aktivierungslink für eingeladene Kunden. Hohe Conversion bei klarem CTA und Markenton.",
+    triggerContext:
+      "Versendet, wenn ein Admin-Benutzer einen Kunden manuell einlädt. Hohe Conversion bei klarem, einzigem CTA — vermeide ablenkende Elemente.",
+    contextBadge: "Activation",
     shopifyName: "customer_invitation",
     liquidVariables: [
       "customer.first_name",
