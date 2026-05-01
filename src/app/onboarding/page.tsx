@@ -41,8 +41,8 @@ export default function OnboardingPage() {
           className="text-center mb-12"
         >
           <h1 className="text-4xl md:text-5xl font-bold mb-4">
-            Willkommen bei{" "}
-            <span className="text-[#95BF47]">BrospifyHub</span>
+            Willkommen bei deinem{" "}
+            <span className="text-[#95BF47]">Dashboard</span>
           </h1>
           <p className="text-zinc-400 text-lg max-w-xl mx-auto">
             Wie m&ouml;chtest du starten? Du kannst dich jederzeit sp&auml;ter mit Shopify verbinden.

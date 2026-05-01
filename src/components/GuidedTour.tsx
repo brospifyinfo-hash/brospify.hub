@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Crown,
+  Sparkles,
   BarChart3,
   Palette,
   User,
@@ -15,7 +15,7 @@ import { useI18n } from "@/lib/i18n";
 
 interface TourStep {
   target: string;
-  icon: typeof Crown;
+  icon: typeof Sparkles;
   color: string;
   bg: string;
   titleKey: string;
@@ -24,7 +24,7 @@ interface TourStep {
 }
 
 const TOUR_STEPS: TourStep[] = [
-  { target: "", icon: Crown, color: "text-[#95BF47]", bg: "bg-[#95BF47]/10", titleKey: "welcome", descKey: "welcomeDesc", position: "center" },
+  { target: "", icon: Sparkles, color: "text-[#95BF47]", bg: "bg-[#95BF47]/10", titleKey: "welcome", descKey: "welcomeDesc", position: "center" },
   { target: "nav", icon: NavIcon, color: "text-indigo-400", bg: "bg-indigo-500/10", titleKey: "stepNav", descKey: "stepNavDesc", position: "bottom" },
   { target: "[data-tour='charts']", icon: BarChart3, color: "text-emerald-400", bg: "bg-emerald-500/10", titleKey: "stepCharts", descKey: "stepChartsDesc", position: "center" },
   { target: "[data-tour='themes']", icon: Palette, color: "text-amber-400", bg: "bg-amber-500/10", titleKey: "stepThemes", descKey: "stepThemesDesc", position: "center" },

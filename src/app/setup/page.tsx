@@ -94,6 +94,7 @@ function SetupContent() {
   const [showSkipModal, setShowSkipModal] = useState(false);
   const [step1Skipped, setStep1Skipped] = useState(false);
   const [youtubeUrl, setYoutubeUrl] = useState("");
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
   const appUrl = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -170,12 +171,11 @@ function SetupContent() {
     finally { setLoading(false); }
   }
 
-  // Convert YouTube URL to embed URL
-  function getYoutubeEmbedUrl(url: string): string | null {
+  // Extract YouTube video ID
+  function getYoutubeId(url: string): string | null {
     if (!url) return null;
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]+)/);
-    if (match) return `https://www.youtube.com/embed/${match[1]}`;
-    return null;
+    return match ? match[1] : null;
   }
 
   if (!session) {
@@ -186,7 +186,8 @@ function SetupContent() {
     );
   }
 
-  const embedUrl = getYoutubeEmbedUrl(youtubeUrl);
+  const youtubeId = getYoutubeId(youtubeUrl);
+  const embedUrl = youtubeId ? `https://www.youtube.com/embed/${youtubeId}?autoplay=1` : null;
 
   return (
     <div className="min-h-screen bg-mesh">
@@ -206,7 +207,7 @@ function SetupContent() {
         </motion.div>
 
         {/* YouTube Tutorial */}
-        {embedUrl && (
+        {youtubeId && (
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -217,14 +218,32 @@ function SetupContent() {
               <Play className="w-4 h-4 text-red-400" />
               <h3 className="text-sm font-semibold">Video-Anleitung</h3>
             </div>
-            <div className="aspect-video">
-              <iframe
-                src={embedUrl}
-                title="Setup Anleitung"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full"
-              />
+            <div className="aspect-video relative">
+              {videoPlaying && embedUrl ? (
+                <iframe
+                  src={embedUrl}
+                  title="Setup Anleitung"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="w-full h-full"
+                />
+              ) : (
+                <button
+                  onClick={() => setVideoPlaying(true)}
+                  className="w-full h-full relative group cursor-pointer"
+                >
+                  <img
+                    src={`https://img.youtube.com/vi/${youtubeId}/maxresdefault.jpg`}
+                    alt="Video Thumbnail"
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/30 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                    <div className="w-16 h-16 rounded-full bg-red-600 group-hover:bg-red-500 flex items-center justify-center shadow-2xl shadow-red-500/30 transition-all group-hover:scale-110">
+                      <Play className="w-7 h-7 text-white ml-1" fill="white" />
+                    </div>
+                  </div>
+                </button>
+              )}
             </div>
           </motion.div>
         )}
@@ -444,7 +463,13 @@ function SetupContent() {
                 <p className="text-zinc-400 text-sm">
                   Installiere jetzt die kostenlose <strong className="text-white">DSers-App</strong> im Shopify App Store, um später günstigen Versand zu nutzen.
                 </p>
-                <a href="https://apps.shopify.com/dsers" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-[#95BF47] hover:text-[#86ad3f] text-sm transition">
+                <a
+                  href="https://apps.shopify.com/dsers"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => completeStep2()}
+                  className="inline-flex items-center gap-1.5 text-[#95BF47] hover:text-[#86ad3f] text-sm transition"
+                >
                   DSers im App Store öffnen <ExternalLink className="w-3.5 h-3.5" />
                 </a>
                 <button onClick={completeStep2} disabled={loading} className="w-full py-2.5 glass hover:bg-white/10 border border-white/10 rounded-xl font-medium transition text-sm">

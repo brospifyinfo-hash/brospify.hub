@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
 
       const newMsg: TicketMessage = {
         sender: session.isAdmin ? "admin" : "customer",
-        name: session.isAdmin ? "BrospifyHub Support" : (body.senderName || "Kunde"),
+        name: session.isAdmin ? "Support" : (body.senderName || "Kunde"),
         content: body.message,
         timestamp: new Date().toISOString(),
       };

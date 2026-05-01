@@ -14,7 +14,7 @@ import {
   Check,
   X,
   AlertCircle,
-  Crown,
+  ShieldCheck,
   Shield,
   Clock,
   Eye,
@@ -699,7 +699,7 @@ export default function ChatsPage() {
                               }`}
                             >
                               {isAdminMsg ? (
-                                <Crown className="w-3.5 h-3.5 text-[#95BF47]" />
+                                <ShieldCheck className="w-3.5 h-3.5 text-[#95BF47]" />
                               ) : (
                                 <Shield className="w-3 h-3 text-zinc-500" />
                               )}
@@ -709,7 +709,7 @@ export default function ChatsPage() {
                                 isAdminMsg ? "text-[#95BF47]" : "text-zinc-400"
                               }`}
                             >
-                              {isAdminMsg ? "BrospifyHub" : msg.senderName}
+                              {isAdminMsg ? "Admin" : msg.senderName}
                             </span>
                             <span className="text-[10px] text-zinc-700 tabular-nums">
                               {new Date(msg.createdAt).toLocaleDateString(
@@ -946,7 +946,7 @@ export default function ChatsPage() {
                   <div className="absolute -inset-6 bg-[#95BF47]/[0.04] rounded-full blur-3xl -z-10" />
                 </div>
                 <h3 className="text-lg font-bold text-zinc-300 mb-1.5">
-                  BrospifyHub Community
+                  Community
                 </h3>
                 <p className="text-sm text-zinc-600 max-w-[260px] mx-auto leading-relaxed">
                   {rooms.length > 0

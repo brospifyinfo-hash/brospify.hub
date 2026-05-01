@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   X,
-  Crown,
   MessageCircle,
   Search,
   PenTool,
@@ -21,6 +20,7 @@ import {
   Bot,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { BrandLogo, useBranding } from "@/lib/branding";
 
 interface SessionInfo {
   isLoggedIn: boolean;
@@ -45,6 +45,7 @@ export default function Navigation() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [seoOpen, setSeoOpen] = useState(false);
   const seoRef = useRef<HTMLDivElement>(null);
+  const { logoUrl } = useBranding();
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -88,12 +89,18 @@ export default function Navigation() {
           <div className="flex items-center justify-between h-14 md:h-16">
             {/* Logo */}
             <Link href="/home" className="flex items-center gap-2.5 group shrink-0">
-              <div className="w-8 h-8 md:w-9 md:h-9 rounded-xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)]">
-                <Crown className="w-4 h-4 md:w-5 md:h-5 text-[#95BF47]" />
+              <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-xl">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Logo" className="h-8 md:h-9 object-contain rounded-xl" />
+                ) : (
+                  <BrandLogo size="md" />
+                )}
               </div>
-              <span className="text-base md:text-lg font-bold hidden sm:block">
-                Brospify<span className="text-[#95BF47]">Hub</span>
-              </span>
+              {!logoUrl && (
+                <span className="text-base md:text-lg font-bold hidden sm:block">
+                  Managed<span className="text-[#95BF47]">Hub</span>
+                </span>
+              )}
             </Link>
 
             {/* Desktop Links */}

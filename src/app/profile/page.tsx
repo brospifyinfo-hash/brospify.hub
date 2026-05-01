@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -15,16 +15,17 @@ import {
   Key,
   Globe,
   Zap,
-  Crown,
   CreditCard,
   Link2,
   Ticket,
   MessageCircle,
   Clock,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
+import { useBranding } from "@/lib/branding";
 
 interface Profile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
@@ -65,6 +66,8 @@ export default function ProfilePage() {
 
   const [tickets, setTickets] = useState<TicketInfo[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
+  const [ticketsRefreshing, setTicketsRefreshing] = useState(false);
+  const { logoUrl } = useBranding();
 
   const [credentials, setCredentials] = useState({ clientId: "", clientSecret: "" });
   const [legalData, setLegalData] = useState({
@@ -117,6 +120,25 @@ export default function ProfilePage() {
       .catch(() => {})
       .finally(() => setTicketsLoading(false));
   }, [router]);
+
+  // Ticket refresh function
+  const refreshTickets = useCallback(async () => {
+    setTicketsRefreshing(true);
+    try {
+      const res = await fetch("/api/tickets");
+      if (res.ok) {
+        const data = await res.json();
+        setTickets(data.tickets || []);
+      }
+    } catch { /* ignore */ }
+    finally { setTicketsRefreshing(false); }
+  }, []);
+
+  // Auto-poll tickets every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(refreshTickets, 30000);
+    return () => clearInterval(interval);
+  }, [refreshTickets]);
 
   async function handleSave() {
     setSaving(true);
@@ -215,7 +237,11 @@ export default function ProfilePage() {
                 <p className="text-sm text-zinc-400 truncate">{googleProfile?.email || kundenEmail}</p>
                 {shopDomain && <p className="text-xs text-zinc-600 mt-0.5">{shopDomain}</p>}
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/20">
-                  <Crown className="w-4 h-4 text-[#95BF47]" />
+                  {logoUrl ? (
+                    <img src={logoUrl} alt="" className="w-4 h-4 object-contain" />
+                  ) : (
+                    <Zap className="w-4 h-4 text-[#95BF47]" />
+                  )}
                   <span className="text-sm font-semibold text-[#95BF47]">{t.profile.activeSub}</span>
                 </div>
               </div>
@@ -415,10 +441,20 @@ export default function ProfilePage() {
           {/* Ticket History */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}
             className="glass-strong rounded-2xl border border-white/10 p-5 md:p-6 backdrop-blur-xl">
-            <h2 className="font-bold flex items-center gap-2 mb-4">
-              <Ticket className="w-5 h-5 text-amber-400" />
-              Meine Support-Tickets
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-bold flex items-center gap-2">
+                <Ticket className="w-5 h-5 text-amber-400" />
+                Meine Support-Tickets
+              </h2>
+              <button
+                onClick={refreshTickets}
+                disabled={ticketsRefreshing}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${ticketsRefreshing ? "animate-spin" : ""}`} />
+                Aktualisieren
+              </button>
+            </div>
             {ticketsLoading ? (
               <div className="flex items-center justify-center py-6">
                 <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />

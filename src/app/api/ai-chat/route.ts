@@ -40,7 +40,19 @@ export async function POST(req: NextRequest) {
       console.log("[AI Chat] Knowledge base loaded, length:", knowledgeBase.length);
     } catch (kbErr) {
       console.error("[AI Chat] Failed to load knowledge base:", kbErr);
-      // Continue without KB — the strict prompt will force "no info" answers
+    }
+
+    // Fallback knowledge if sheet is empty or failed
+    if (!knowledgeBase || knowledgeBase.trim().length === 0) {
+      console.log("[AI Chat] Knowledge base empty, using fallback");
+      knowledgeBase = `BrospifyHub ist ein Managed Dropshipping Service. Kernfunktionen:
+- PRODUKT-IMPORT: Kunden können Winning Products mit einem Klick in ihren Shopify-Shop importieren.
+- SEO-SUITE: Integrierte SEO-Analyse und KI-gestützter Blogbeitrag-Generator für bessere Sichtbarkeit.
+- THEME-PUSH: Optimiertes Shopify-Theme kann direkt in den Shop installiert werden.
+- COMMUNITY: Discord-ähnliche Chat-Channels für den Austausch zwischen Kunden.
+- AI-SUPPORT: KI-gestützter Kundensupport mit Eskalation zu Live-Tickets.
+- RECHTSTEXTE: Automatische Generierung von Impressum, Datenschutz und AGB.
+Bei technischen Problemen oder spezifischen Fragen zu Preisen/Paketen bitte ein Live-Ticket eröffnen.`;
     }
 
     // Build the hardened system prompt
@@ -60,6 +72,8 @@ WICHTIG ZUM SHOPIFY SETUP:
 Der Kunde muss KEINE eigene App programmieren. Er muss im Shopify Admin-Bereich unter "Einstellungen" → "Apps und Vertriebskanäle" → "Apps entwickeln" → "Benutzerdefinierte App erstellen" (Custom App) eine App anlegen. Dort erhält er die API-Zugangsdaten (Admin API Access Token), die er dann im BrospifyHub unter "Profil" → "Shopify API" einträgt. Das ist ein reiner Klick-Prozess, kein Programmieren.
 
 ${knowledgeBase ? `FIRMENWISSEN (NUR diese Informationen als Grundlage verwenden):\n---\n${knowledgeBase}\n---` : "HINWEIS: Es wurde noch kein Firmenwissen vom Admin hinterlegt. Antworte auf alle inhaltlichen Fragen mit dem Hinweis, ein Live-Ticket zu eröffnen."}`;
+
+    console.log("[AI Chat] System Prompt:", systemPrompt);
 
     const deepseekMessages = [
       { role: "system", content: systemPrompt },

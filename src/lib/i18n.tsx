@@ -27,9 +27,9 @@ const de = {
     googleButton: "Mit Google anmelden",
     divider: "oder",
     licenseLabel: "Lizenzschlüssel",
-    licensePlaceholder: "Dein 32-stelliger Schlüssel",
+    licensePlaceholder: "Lizenzschlüssel eingeben",
     licenseButton: "Einloggen",
-    footer: "\u00A9 2025 BrospifyHub. Alle Rechte vorbehalten.",
+    footer: "\u00A9 2025 Managed Hub. Alle Rechte vorbehalten.",
   },
   profile: {
     title: "Einstellungen",
@@ -67,7 +67,7 @@ const de = {
     aiLimitReached: "Limit erreicht",
   },
   tour: {
-    welcome: "Willkommen bei BrospifyHub!",
+    welcome: "Willkommen!",
     welcomeDesc: "Dein Managed Dropshipping Dashboard. Lass uns einen kurzen Rundgang machen.",
     stepNav: "Navigation",
     stepNavDesc: "Hier findest du alle wichtigen Bereiche deines Dashboards.",

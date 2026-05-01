@@ -4,8 +4,9 @@ import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { KeyRound, Loader2, AlertCircle, Crown } from "lucide-react";
+import { KeyRound, Loader2, AlertCircle } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { BrandLogo, useBranding } from "@/lib/branding";
 
 export default function LoginPage() {
   return (
@@ -23,6 +24,7 @@ export default function LoginPage() {
 
 function LoginContent() {
   const { t } = useI18n();
+  const { logoUrl } = useBranding();
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -79,13 +81,19 @@ function LoginContent() {
             initial={{ scale: 0.8 }}
             animate={{ scale: 1 }}
             transition={{ delay: 0.2, type: "spring" }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl glass mb-4"
+            className="inline-flex items-center justify-center mb-4"
           >
-            <Crown className="w-8 h-8 text-[#95BF47]" />
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="h-16 object-contain rounded-2xl" />
+            ) : (
+              <BrandLogo size="xl" />
+            )}
           </motion.div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            brospify <span className="text-[#95BF47]">hub</span>
-          </h1>
+          {!logoUrl && (
+            <h1 className="text-3xl font-bold tracking-tight">
+              Managed <span className="text-[#95BF47]">Hub</span>
+            </h1>
+          )}
           <p className="text-white/40 mt-2">{t.login.title}</p>
         </div>
 

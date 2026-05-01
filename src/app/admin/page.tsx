@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Pencil, Trash2, Upload, Loader2, X, LogOut, Shield, Save,
   Check, AlertCircle, ImagePlus, BarChart3, DollarSign, Zap, Settings,
-  Video, Palette, Image as ImageIcon, Crown,
+  Video, Palette, Image as ImageIcon, Gem,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -285,7 +285,7 @@ export default function AdminPage() {
     if (!ticketReply.trim()) return;
     setTicketReplying(true);
     try {
-      await fetch("/api/tickets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticketId, message: ticketReply, senderName: "BrospifyHub Support" }) });
+      await fetch("/api/tickets", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ticketId, message: ticketReply, senderName: "Support" }) });
       setTicketReply("");
       const res = await fetch("/api/tickets"); const d = await res.json(); setAdminTickets(d.tickets || []);
     } catch { setError("Antwort fehlgeschlagen."); }
@@ -623,11 +623,57 @@ export default function AdminPage() {
         {/* Settings Tab */}
         {activeTab === "settings" && (
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-2xl">
-            {/* Logo */}
+            {/* Logo Upload */}
             <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
-              <h3 className="font-semibold flex items-center gap-2"><ImageIcon className="w-5 h-5 text-[#95BF47]" />Logo URL</h3>
-              <input type="text" value={settingsData.logoUrl} onChange={e => setSettingsData({ ...settingsData, logoUrl: e.target.value })} placeholder="https://... (Logo-URL)" className="input-glass w-full" />
-              {settingsData.logoUrl && <img src={settingsData.logoUrl} alt="Logo" className="h-12 object-contain rounded" />}
+              <h3 className="font-semibold flex items-center gap-2"><ImageIcon className="w-5 h-5 text-[#95BF47]" />Firmenlogo (White-Label)</h3>
+              <p className="text-zinc-400 text-xs">Lade dein Logo hoch. Es ersetzt das Standard-Logo auf allen Seiten (Login, Navigation, etc.).</p>
+
+              {/* File Upload */}
+              <div className="flex items-center gap-3">
+                <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 text-[#95BF47] text-sm font-medium hover:bg-[#95BF47]/15 transition">
+                  <Upload className="w-4 h-4" />
+                  Logo hochladen
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const fd = new FormData();
+                      fd.append("file", file);
+                      try {
+                        const res = await fetch("/api/upload", { method: "POST", body: fd });
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (data.url) {
+                            setSettingsData({ ...settingsData, logoUrl: data.url });
+                          }
+                        }
+                      } catch { /* ignore */ }
+                    }}
+                  />
+                </label>
+                {settingsData.logoUrl && (
+                  <button
+                    onClick={() => setSettingsData({ ...settingsData, logoUrl: "" })}
+                    className="text-xs text-red-400 hover:text-red-300 transition"
+                  >
+                    Entfernen
+                  </button>
+                )}
+              </div>
+
+              {/* URL fallback */}
+              <input type="text" value={settingsData.logoUrl} onChange={e => setSettingsData({ ...settingsData, logoUrl: e.target.value })} placeholder="Oder Logo-URL direkt eingeben..." className="input-glass w-full text-xs" />
+
+              {/* Preview */}
+              {settingsData.logoUrl && (
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <p className="text-[10px] text-zinc-500 mb-2 uppercase tracking-wider">Vorschau</p>
+                  <img src={settingsData.logoUrl} alt="Logo" className="h-14 object-contain rounded" />
+                </div>
+              )}
             </div>
 
             {/* YouTube */}
@@ -664,7 +710,7 @@ export default function AdminPage() {
 
             {/* Brand Kit */}
             <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
-              <h3 className="font-semibold flex items-center gap-2"><Crown className="w-5 h-5 text-amber-400" />Brand-Kit</h3>
+              <h3 className="font-semibold flex items-center gap-2"><Gem className="w-5 h-5 text-amber-400" />Brand-Kit</h3>
               <p className="text-zinc-400 text-sm">Definiere deine Markenidentität. Diese Werte werden beim Theme-Push automatisch übernommen.</p>
               <div className="grid grid-cols-2 gap-4">
                 <div>

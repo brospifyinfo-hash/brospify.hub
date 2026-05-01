@@ -259,9 +259,13 @@ export default function AISupportPage() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-bold text-emerald-400 flex items-center gap-2">
                     <CheckCircle className="w-3.5 h-3.5" />
-                    Live-Ticket erstellt
+                    Ticket erfolgreich erstellt
                   </div>
-                  <div className="text-[11px] text-zinc-500 truncate mt-0.5">
+                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                    Du findest deine offenen Tickets in deinem{" "}
+                    <button onClick={() => router.push("/profile")} className="underline text-emerald-400 hover:text-emerald-300 transition">Profil</button>.
+                  </div>
+                  <div className="text-[10px] text-zinc-600 truncate mt-0.5">
                     {ticketCreated.subject}
                   </div>
                 </div>
@@ -484,6 +488,9 @@ export default function AISupportPage() {
                   Powered by DeepSeek AI {attemptCount > 0 && `· Versuch ${attemptCount}/2`}
                 </span>
               </div>
+              <p className="text-[10px] text-zinc-600 mt-1.5 px-1">
+                Diese AI kann Fehler machen. Bitte überprüfe wichtige Informationen.
+              </p>
             </div>
           </div>
         )}

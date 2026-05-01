@@ -12,7 +12,7 @@ import {
   ChevronRight,
   ChevronLeft,
   Sparkles,
-  Crown,
+  Layers,
   Rocket,
   Search,
   PenTool,
@@ -326,7 +326,7 @@ export default function HomePage() {
         >
           <div className="flex items-center gap-3 mb-3">
             <div className="w-11 h-11 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
-              <Crown className="w-6 h-6 text-[#95BF47]" />
+              <Layers className="w-6 h-6 text-[#95BF47]" />
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold">
