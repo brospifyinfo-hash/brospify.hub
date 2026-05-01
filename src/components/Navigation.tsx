@@ -18,6 +18,7 @@ import {
   ChevronDown,
   BarChart,
   Bot,
+  Mail,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -35,6 +36,7 @@ const NAV_ITEMS = [
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
   { href: "/chats", labelKey: "chats" as const, icon: MessageCircle },
   { href: "/themes", labelKey: "themes" as const, icon: Palette },
+  { href: "/emails", labelKey: "emails" as const, icon: Mail },
 ];
 
 export default function Navigation() {

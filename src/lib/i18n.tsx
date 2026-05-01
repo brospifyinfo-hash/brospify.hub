@@ -11,6 +11,7 @@ const de = {
     blog: "Blog-Wizard",
     legal: "Rechtstexte",
     themes: "Themes",
+    emails: "Emails",
     profile: "Profil",
     admin: "Admin",
     aiSupport: "AI Support",
