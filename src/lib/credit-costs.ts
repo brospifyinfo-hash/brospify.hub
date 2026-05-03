@@ -14,6 +14,11 @@ export const CREDIT_COSTS = {
   SEO_AUDIT: 0,
 } as const;
 
+// Welcome grant — every customer gets this once, automatically, the
+// first time their profile is loaded after the grant shipped.
+// Idempotent via `credits.starterGranted` on the customer record.
+export const STARTER_CREDITS = 500;
+
 // ─── Shopify Cart Permalinks (purchase packages) ─────────────────
 // `[USER_EMAIL]` is replaced at render time with the logged-in
 // customer's email, so the Shopify checkout pre-fills the field.

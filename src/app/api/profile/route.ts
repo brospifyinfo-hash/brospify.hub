@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, type KundeProfile } from "@/lib/sheets";
+import { ensureStarterGrant, findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, type KundeProfile } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +17,11 @@ export async function GET() {
       return NextResponse.json({ error: "Kunde nicht gefunden" }, { status: 404 });
     }
 
-    const profile = await getKundeProfile(kunde.rowIndex);
+    // Backfill the welcome grant on every profile read for currently
+    // logged-in users who never went through the new login flow.
+    // Idempotent — only writes when the flag isn't set yet.
+    const rawProfile = await getKundeProfile(kunde.rowIndex);
+    const profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
 
     const creditState = getCreditsState(profile);
 

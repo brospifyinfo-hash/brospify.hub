@@ -101,6 +101,10 @@ export interface CreditsRecord {
   // Key = code (uppercased), value = how many times this account
   // has redeemed it. Lets us enforce per-account redemption limits.
   redeemedCodes?: Record<string, number>;
+  // True once the one-time welcome grant has been applied. Stops
+  // the grant helper from re-crediting the user on every profile
+  // load.
+  starterGranted?: boolean;
   lastUpdated?: string;
   // Legacy fields kept so an in-flight migration of an existing
   // profile doesn't lose context. Safe to drop after a few weeks.
@@ -125,6 +129,7 @@ export interface KundeProfile {
 // it under the legacy name `CREDIT_LIMITS` so old call sites keep
 // working without pulling googleapis into client bundles.
 export { CREDIT_COSTS as CREDIT_LIMITS } from "./credit-costs";
+import { STARTER_CREDITS } from "./credit-costs";
 
 function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
   if (!raw) {
@@ -134,6 +139,7 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
       totalUsed: 0,
       fulfilledOrders: [],
       redeemedCodes: {},
+      starterGranted: false,
     };
   }
   // Already the new shape — just guarantee fields exist.
@@ -147,17 +153,20 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
         raw.redeemedCodes && typeof raw.redeemedCodes === "object"
           ? raw.redeemedCodes
           : {},
+      starterGranted: raw.starterGranted === true,
       lastUpdated: raw.lastUpdated,
     };
   }
-  // Legacy { month, used } — start everyone at 0; they'll buy a pack
-  // to get back online. Lifetime usage is preserved for transparency.
+  // Legacy { month, used } — preserve lifetime usage for transparency
+  // but reset balance; the starter grant will fill the new ledger
+  // back up on the next load.
   return {
     balance: 0,
     totalPurchased: 0,
     totalUsed: Math.max(0, Math.round(raw.used ?? 0)),
     fulfilledOrders: [],
     redeemedCodes: {},
+    starterGranted: false,
   };
 }
 
@@ -223,6 +232,35 @@ export async function addCredits(
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
   return { success: true, balance: next.balance, alreadyFulfilled: false };
+}
+
+// One-time welcome grant. Idempotent: if `starterGranted` is already
+// set on the credits record we no-op and return the existing profile.
+// Otherwise we add STARTER_CREDITS to the balance, bump
+// totalPurchased so the analytics line up, and persist the flag.
+//
+// Returns the (possibly updated) profile so callers can use it
+// without re-fetching the row.
+export async function ensureStarterGrant(
+  rowIndex: number,
+  profile: KundeProfile,
+): Promise<KundeProfile> {
+  const credits = normalizeCredits(profile.credits);
+  if (credits.starterGranted) {
+    return { ...profile, credits };
+  }
+  const next: CreditsRecord = {
+    balance: credits.balance + STARTER_CREDITS,
+    totalPurchased: credits.totalPurchased + STARTER_CREDITS,
+    totalUsed: credits.totalUsed,
+    fulfilledOrders: credits.fulfilledOrders || [],
+    redeemedCodes: credits.redeemedCodes || {},
+    starterGranted: true,
+    lastUpdated: new Date().toISOString(),
+  };
+  const updated: KundeProfile = { ...profile, credits: next };
+  await updateKundeProfile(rowIndex, updated);
+  return updated;
 }
 
 // Voucher redemption — bumps balance and records the redemption count

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findKundeByKey, getKundeProfile } from "@/lib/sheets";
+import { ensureStarterGrant, findKundeByKey, getKundeProfile } from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
@@ -49,8 +49,11 @@ export async function POST(req: NextRequest) {
     }
     await session.save();
 
-    // Check onboarding status from Profil_JSON
-    const profile = await getKundeProfile(kunde.rowIndex);
+    // Check onboarding status from Profil_JSON. Apply the one-time
+    // welcome credit grant on the way through — idempotent, so a
+    // returning customer with an already-granted balance is unaffected.
+    const rawProfile = await getKundeProfile(kunde.rowIndex);
+    const profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
 
     // First-time login: send to the onboarding picker (the legacy
     // `/language` page was removed). Returning users go straight home.

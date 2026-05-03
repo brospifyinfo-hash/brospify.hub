@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getAllKunden, getKundeProfile } from "@/lib/sheets";
+import { ensureStarterGrant, getAllKunden, getKundeProfile } from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -60,8 +60,10 @@ export async function GET(req: NextRequest) {
 
     await session.save();
 
-    // Check onboarding status from Profil_JSON
-    const profile = await getKundeProfile(kunde.rowIndex);
+    // Apply the one-time welcome grant (idempotent), then check
+    // onboarding status.
+    const rawProfile = await getKundeProfile(kunde.rowIndex);
+    const profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
 
     if (!profile.hasCompletedOnboarding) {
       return NextResponse.redirect(new URL("/onboarding", req.url));
