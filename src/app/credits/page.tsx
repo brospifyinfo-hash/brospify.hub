@@ -23,8 +23,6 @@ import {
   ArrowLeft,
   Ticket,
   Loader2,
-  Crown,
-  Star,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
@@ -462,8 +460,6 @@ function PackageRow({
 }) {
   const featured = pkg.id === "pro";
   const max = pkg.id === "max";
-  const Icon = max ? Crown : pkg.id === "pro" ? Star : Sparkles;
-  const accent = max ? "#a78bfa" : featured ? "#95BF47" : "#60a5fa";
 
   return (
     <motion.div
@@ -494,32 +490,7 @@ function PackageRow({
             : "inset 0 1px 0 rgba(255,255,255,0.04)",
         }}
       >
-        {pkg.hint && (
-          <div
-            className="absolute top-5 right-5 px-2 py-0.5 rounded-full text-[9.5px] uppercase tracking-[0.16em] font-bold border"
-            style={{
-              background: featured ? "#95BF47" : "rgba(255,255,255,0.08)",
-              color: featured ? "#0a1604" : "rgba(255,255,255,0.85)",
-              borderColor: featured ? "#86ad3f" : "rgba(255,255,255,0.18)",
-            }}
-          >
-            {pkg.hint}
-          </div>
-        )}
-
         <div className="p-5 md:p-6 flex items-center gap-4 md:gap-6">
-          {/* Icon plate */}
-          <div
-            className="shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center"
-            style={{
-              background: `linear-gradient(135deg, ${accent}28 0%, ${accent}10 100%)`,
-              border: `1px solid ${accent}38`,
-              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px -10px ${accent}50`,
-            }}
-          >
-            <Icon className="w-6 h-6 md:w-7 md:h-7" style={{ color: accent }} />
-          </div>
-
           {/* Credits + price */}
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5">
@@ -550,10 +521,7 @@ function PackageRow({
             {redirecting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <>
-                <ShoppingCart className="w-4 h-4" />
-                <span className="hidden sm:inline">Kaufen</span>
-              </>
+              "Kaufen"
             )}
           </button>
         </div>

@@ -49,7 +49,6 @@ export const CREDIT_PACKAGES: readonly CreditPackage[] = [
     priceCents: 2495,
     cartUrl:
       "https://brospify.com/cart/52911654306139:1?checkout[email]=[USER_EMAIL]",
-    hint: "Beliebt",
   },
   {
     id: "max",
@@ -59,7 +58,6 @@ export const CREDIT_PACKAGES: readonly CreditPackage[] = [
     priceCents: 3995,
     cartUrl:
       "https://brospify.com/cart/52911655715163:1?checkout[email]=[USER_EMAIL]",
-    hint: "Bester Preis",
   },
 ] as const;
 
