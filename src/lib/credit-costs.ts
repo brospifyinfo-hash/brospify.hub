@@ -12,6 +12,8 @@ export const CREDIT_COSTS = {
   UPSCALE_IMAGE: 5,
   BLOG_GENERATE: 10,
   SEO_AUDIT: 0,
+  BG_REMOVE: 5,
+  AI_STUDIO: 15,
 } as const;
 
 // Welcome grant — every customer gets this once, automatically, the

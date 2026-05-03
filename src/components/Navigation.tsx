@@ -19,6 +19,8 @@ import {
   Mail,
   Sparkles,
   ImageUp,
+  Scissors,
+  Camera,
   Plus,
   Coins,
 } from "lucide-react";
@@ -76,6 +78,24 @@ const AI_TOOLS = [
     color: "from-[#95BF47]/15 to-emerald-500/15",
     border: "border-[#95BF47]/15",
     iconColor: "text-[#95BF47]",
+  },
+  {
+    href: "/ai-tools/background-remover",
+    title: "Magic Background Remover",
+    desc: "Produkt pixelgenau freistellen · 5 Credits",
+    icon: Scissors,
+    color: "from-amber-500/15 to-orange-500/15",
+    border: "border-amber-500/15",
+    iconColor: "text-amber-400",
+  },
+  {
+    href: "/ai-tools/ai-studio",
+    title: "AI Studio: Produktfotos",
+    desc: "Szenen, Schatten, fertig · 15 Credits",
+    icon: Camera,
+    color: "from-purple-500/15 to-fuchsia-500/15",
+    border: "border-purple-500/15",
+    iconColor: "text-purple-400",
   },
 ] as const;
 

@@ -29,6 +29,8 @@ import {
   Mail,
   Coins,
   AlertTriangle,
+  Scissors,
+  Camera,
 } from "lucide-react";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
@@ -140,6 +142,22 @@ const EXTRA_TASKS = [
     icon: ImageUp,
     color: "#95BF47",
     href: "/ai-tools/hybrid-upscaler",
+    external: false,
+  },
+  {
+    title: "Hintergrund freistellen",
+    description: "Produktfotos pixelgenau freistellen — ohne Detailverlust.",
+    icon: Scissors,
+    color: "#F59E0B",
+    href: "/ai-tools/background-remover",
+    external: false,
+  },
+  {
+    title: "AI Studio: Produktfotos",
+    description: "Setze dein Produkt in eine Studio-Szene mit realistischen Schatten.",
+    icon: Camera,
+    color: "#A855F7",
+    href: "/ai-tools/ai-studio",
     external: false,
   },
   {
@@ -662,7 +680,7 @@ function CreditBalanceBanner({ balance, loading }: { balance: number; loading: b
                 ? "Leer – AI-Tools sind blockiert. Jetzt aufladen."
                 : low
                 ? "Nur noch wenig Guthaben übrig."
-                : "Reicht für E-Mail (20), Blog (10) oder Cloud-Upscale (5)."}
+                : "Reicht für AI-Studio (15), E-Mail (20), Blog (10) oder Bild-Tools (5)."}
             </div>
           </div>
         </div>
