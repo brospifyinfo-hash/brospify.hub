@@ -189,6 +189,14 @@ export async function POST(req: Request) {
 function falErrorResponse(err: unknown, label: string): NextResponse {
   if (err instanceof FalError) {
     console.error(`[${label}] Fal error:`, err.status, err.message);
+    if (err.isOutOfBalance) {
+      return NextResponse.json(
+        {
+          error: `${label}: Fal.ai-Guthaben aufgebraucht. Bitte unter fal.ai/dashboard/billing aufladen.`,
+        },
+        { status: 502 },
+      );
+    }
     if (err.status === 401 || err.status === 403) {
       return NextResponse.json(
         { error: `${label}: Fal-Zugang abgelehnt. Admin kontaktieren.` },

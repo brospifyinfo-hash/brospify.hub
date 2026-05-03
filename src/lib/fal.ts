@@ -21,6 +21,12 @@ export class FalError extends Error {
     super(message);
     this.name = "FalError";
   }
+
+  /** True iff Fal returned a "balance exhausted / account locked" 4xx. */
+  get isOutOfBalance(): boolean {
+    const blob = JSON.stringify(this.details ?? "") + " " + this.message;
+    return /exhausted balance|user is locked|top up/i.test(blob);
+  }
 }
 
 interface FalSubmitResponse {
