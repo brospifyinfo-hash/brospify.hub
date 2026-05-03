@@ -1,13 +1,16 @@
 "use client";
 
 // ─── <MagicBackgroundRemover /> ─────────────────────────────────
-// Drop a product photo → Fal rembg strips the background → user
-// downloads a transparent PNG. The result preview sits on a
+// Drop a product photo → Fal rembg or BiRefNet strips the background
+// → user downloads a transparent PNG. The result preview sits on a
 // checkerboard so the transparency is visually obvious.
 //
-// Reliability: oversized inputs are the #1 cause of failed runs
-// (Vercel rejects > 4.5 MB bodies). We re-encode every input
-// client-side to a JPEG capped at 2400 px on the longest side.
+// Two precision tiers exposed in the UI:
+//   • Schnell  → BRIA RMBG-1.4 (fast, clean)
+//   • Präzise  → BiRefNet v2 Heavy (best edges on hair / fine detail)
+//
+// Layout is mobile-first: drop zone shrinks, buttons stack full-width,
+// padding/typography scale down on small screens.
 
 import {
   useCallback,
@@ -20,6 +23,10 @@ import {
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
+import {
+  BG_PRECISION_OPTIONS,
+  type BgPrecision,
+} from "@/lib/ai-studio-scenes";
 
 const ACCENT = "#95BF47";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -35,6 +42,7 @@ export default function MagicBackgroundRemover() {
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [precision, setPrecision] = useState<BgPrecision>("fast");
 
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
@@ -123,16 +131,17 @@ export default function MagicBackgroundRemover() {
       setStage("processing");
       startTimer();
       credits.optimisticDeduct(CREDIT_COSTS.BG_REMOVE);
-      await runRemoveBg(payload);
+      await runRemoveBg(payload, precision);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [insufficientCredits, credits.balance, originalUrl],
+    [insufficientCredits, credits.balance, originalUrl, precision],
   );
 
-  async function runRemoveBg(file: File) {
+  async function runRemoveBg(file: File, precisionId: BgPrecision) {
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("precision", precisionId);
       const res = await fetch("/api/bg-remove", {
         method: "POST",
         body: fd,
@@ -200,6 +209,15 @@ export default function MagicBackgroundRemover() {
 
   return (
     <div className="font-sf w-full">
+      {/* ── Precision toggle (always visible above the dropzone, also during done) ── */}
+      {(stage === "idle" || stage === "done") && (
+        <PrecisionToggle
+          value={precision}
+          onChange={setPrecision}
+          disabled={isWorking}
+        />
+      )}
+
       {stage === "idle" && (
         <>
           <div
@@ -210,7 +228,7 @@ export default function MagicBackgroundRemover() {
             }}
             onDragLeave={() => setDragActive(false)}
             onClick={() => !insufficientCredits && fileInputRef.current?.click()}
-            className={`relative aspect-[16/10] rounded-[28px] flex flex-col items-center justify-center text-center px-8 py-12 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
+            className={`relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-5 sm:px-8 py-10 sm:py-12 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
             style={{
               background: dragActive
                 ? "rgba(149, 191, 71, 0.06)"
@@ -232,7 +250,7 @@ export default function MagicBackgroundRemover() {
             />
 
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+              className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
               style={{
                 background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}10)`,
                 border: `1px solid ${ACCENT}30`,
@@ -242,15 +260,15 @@ export default function MagicBackgroundRemover() {
             </div>
 
             <h3
-              className="text-[22px] font-semibold tracking-tight text-white"
+              className="text-[19px] sm:text-[22px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Produkt freistellen
             </h3>
-            <p className="text-[14px] text-zinc-400 mt-2 max-w-sm leading-relaxed">
-              Drag &amp; Drop oder klicke, um ein Foto auszuwählen
+            <p className="text-[13px] sm:text-[14px] text-zinc-400 mt-1.5 sm:mt-2 max-w-sm leading-relaxed">
+              Tippen oder Datei reinziehen
             </p>
-            <p className="text-[12px] text-zinc-600 mt-1">
+            <p className="text-[11px] sm:text-[12px] text-zinc-600 mt-1">
               JPG · PNG · WebP · transparenter PNG-Output
             </p>
 
@@ -261,7 +279,7 @@ export default function MagicBackgroundRemover() {
                 e.stopPropagation();
                 if (!insufficientCredits) fileInputRef.current?.click();
               }}
-              className="mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-6 sm:mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -271,14 +289,14 @@ export default function MagicBackgroundRemover() {
               Datei wählen
             </button>
 
-            <p className="absolute bottom-5 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.14em] text-zinc-600">
-              Kostet {CREDIT_COSTS.BG_REMOVE} Credits pro Bild
+            <p className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
+              {CREDIT_COSTS.BG_REMOVE} Credits / Bild
             </p>
 
             {insufficientCredits && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 rounded-[28px] flex flex-col items-center justify-center text-center px-6"
+                className="absolute inset-0 rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6"
                 style={{
                   background: "rgba(7,7,9,0.85)",
                   backdropFilter: "blur(14px)",
@@ -299,7 +317,7 @@ export default function MagicBackgroundRemover() {
                 </h3>
                 <p className="text-[13px] text-zinc-400 mt-1.5 max-w-xs">
                   Pro Bild brauchst du {CREDIT_COSTS.BG_REMOVE} Credits.
-                  Aktuell verfügbar: {credits.balance.toLocaleString("de-DE")}.
+                  Aktuell: {credits.balance.toLocaleString("de-DE")}.
                 </p>
                 <Link
                   href="/credits"
@@ -333,7 +351,7 @@ export default function MagicBackgroundRemover() {
 
       {isWorking && (
         <div
-          className="relative aspect-[16/10] rounded-[28px] flex flex-col items-center justify-center text-center px-8 py-12 overflow-hidden"
+          className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6 sm:px-8 py-10 sm:py-12 overflow-hidden"
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             backdropFilter: "blur(28px) saturate(140%)",
@@ -352,22 +370,23 @@ export default function MagicBackgroundRemover() {
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
             <h3
-              className="mt-6 text-[20px] font-semibold tracking-tight text-white"
+              className="mt-5 sm:mt-6 text-[18px] sm:text-[20px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               {stage === "preparing"
                 ? "Bild wird vorbereitet…"
                 : "Hintergrund wird entfernt"}
             </h3>
-            <p className="mt-2 text-[13px] text-zinc-400">
+            <p className="mt-1.5 sm:mt-2 text-[12.5px] sm:text-[13px] text-zinc-400">
               {stage === "preparing"
                 ? "Optimiere die Quelldatei…"
                 : `Verarbeitung läuft · ${elapsedSec}s`}
             </p>
             {stage === "processing" && (
               <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
-                Dein Produkt bleibt pixelgenau erhalten — nur der
-                Hintergrund wird entfernt.
+                {precision === "precise"
+                  ? "Präzise-Modus: feine Kanten brauchen 5–10 Sekunden."
+                  : "Schnell-Modus: meist unter 3 Sekunden."}
               </p>
             )}
           </div>
@@ -375,9 +394,9 @@ export default function MagicBackgroundRemover() {
       )}
 
       {stage === "done" && resultUrl && (
-        <div className="space-y-5">
+        <div className="space-y-4 sm:space-y-5">
           <div
-            className="relative w-full rounded-[24px] overflow-hidden"
+            className="relative w-full rounded-3xl sm:rounded-[24px] overflow-hidden"
             style={{
               border: "1px solid rgba(255,255,255,0.08)",
               boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
@@ -436,7 +455,7 @@ export default function MagicBackgroundRemover() {
 
       {stage === "error" && errorMsg && (
         <div
-          className="rounded-[24px] p-6 flex items-start gap-4"
+          className="rounded-3xl sm:rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-start gap-3 sm:gap-4"
           style={{
             background: "rgba(239, 68, 68, 0.08)",
             border: "1px solid rgba(239, 68, 68, 0.20)",
@@ -444,16 +463,18 @@ export default function MagicBackgroundRemover() {
             WebkitBackdropFilter: "blur(20px)",
           }}
         >
-          <AlertIcon />
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-semibold text-red-300">Fehler</div>
-            <div className="text-[13px] text-red-200/90 mt-1 break-words">
-              {errorMsg}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <AlertIcon />
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold text-red-300">Fehler</div>
+              <div className="text-[13px] text-red-200/90 mt-1 break-words">
+                {errorMsg}
+              </div>
             </div>
           </div>
           <button
             onClick={reset}
-            className="text-[13px] px-4 h-9 rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
+            className="text-[13px] px-4 h-10 sm:h-9 w-full sm:w-auto rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.10)",
@@ -463,6 +484,85 @@ export default function MagicBackgroundRemover() {
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Precision Toggle ───────────────────────────────────────────
+// iOS-style segmented control. Each segment shows label + sub-hint.
+// Touch targets are at least 44 px tall.
+
+function PrecisionToggle({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: BgPrecision;
+  onChange: (v: BgPrecision) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="mb-5 sm:mb-6">
+      <div className="flex items-center justify-between mb-2 px-1">
+        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">
+          Genauigkeit
+        </span>
+        <span className="text-[10.5px] text-zinc-600">
+          gleicher Credit-Preis
+        </span>
+      </div>
+      <div
+        className="relative grid grid-cols-2 gap-1 p-1 rounded-2xl"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          opacity: disabled ? 0.55 : 1,
+        }}
+      >
+        {BG_PRECISION_OPTIONS.map((opt) => {
+          const active = opt.id === value;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(opt.id)}
+              className="relative rounded-xl py-2.5 px-3 text-left transition-all active:scale-[0.99] disabled:cursor-not-allowed"
+              style={{
+                background: active ? "rgba(149,191,71,0.12)" : "transparent",
+                border: active
+                  ? `1px solid ${ACCENT}55`
+                  : "1px solid transparent",
+                boxShadow: active
+                  ? `0 8px 22px -10px ${ACCENT}50, inset 0 1px 0 rgba(255,255,255,0.04)`
+                  : undefined,
+              }}
+            >
+              <div className="flex items-center gap-2">
+                {active ? (
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: ACCENT, boxShadow: `0 0 8px ${ACCENT}` }}
+                  />
+                ) : (
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
+                )}
+                <span
+                  className="text-[13px] font-semibold tracking-tight"
+                  style={{ color: active ? "#fff" : "#d4d4d8" }}
+                >
+                  {opt.label}
+                </span>
+              </div>
+              <p className="text-[10.5px] text-zinc-500 mt-1 leading-snug">
+                {opt.hint}
+              </p>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

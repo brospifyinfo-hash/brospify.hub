@@ -1,31 +1,19 @@
 // ─── POST /api/ai-studio ────────────────────────────────────────
-// AI Studio. Three-step server pipeline that produces a polished
-// product hero shot WITHOUT letting any model rewrite the product
-// pixels (logos, text, finish stay 1:1 from the source):
-//
-//   1. Background removal — Fal `fal-ai/imageutils/rembg` returns a
-//      transparent-PNG cutout of the product. This is the source of
-//      truth for product pixels.
-//
-//   2. Scene relight — Fal `fal-ai/iclight-v2` takes the cutout +
-//      a scene/lighting prompt and produces an image of the product
-//      placed into that scene with realistic shadows + ambient
-//      bounce light. (IC-Light is a relighting diffusion model;
-//      it CAN drift on subject pixels — that's fine, we discard
-//      its subject in step 3 and keep only background + shadows.)
-//
-//   3. Composite restore — Sharp overlays the original cutout from
-//      step 1 on top of the relit image from step 2 using the
-//      cutout's alpha channel. Result:
-//        • Where alpha = 1 (product body): pixel-perfect original.
-//        • Where alpha < 1 (edges, surroundings): IC-Light's relit
-//          background + AI-generated shadows.
+// AI Studio. Single-call pipeline: the user's product photo goes to
+// Fal `fal-ai/iclight-v2` together with a curated scene prompt
+// (optionally augmented by a free-form user prompt). IC-Light is a
+// relighting diffusion model that reasons jointly about the subject,
+// the new background, and the scene lighting — so it is allowed to:
+//   • adapt the lighting + shading on the product itself
+//   • adjust position and scale for a natural composition
+// while keeping the product visually recognisable. We deliberately
+// do NOT post-composite the original cutout back over the result —
+// strict-pixel preservation would defeat the lighting integration.
 //
 // Wire:
-//   Client → us:        multipart/form-data { file, sceneId }
-//   us → Fal rembg:     { image_url: data:URI }
-//   us → Fal iclight:   { image_url: cutoutUrl, prompt: scene.prompt }
-//   us → Vercel Blob:   public composite (JPEG)
+//   Client → us:        multipart/form-data { file, sceneId, customPrompt? }
+//   us → Fal iclight:   { image_url: data:URI, prompt, negative_prompt, ... }
+//   us → Vercel Blob:   public JPEG
 //   us → Client:        JSON { url, sceneId, sceneLabel, creditsRemaining }
 //
 // Env: FAL_KEY required.
@@ -46,17 +34,21 @@ import {
   buildNegativePrompt,
   findScene,
 } from "@/lib/ai-studio-scenes";
-import { callFal, FalError, type IcLightResponse, type RembgResponse } from "@/lib/fal";
+import { callFal, FalError, type IcLightResponse } from "@/lib/fal";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
 const ALLOWED_MIME = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 const MAX_FILE_SIZE = Math.floor(4.2 * 1024 * 1024);
-// Normalise to a fixed canvas before anything goes to Fal — gives
-// rembg and IC-Light identical input dimensions, so the cutout and
-// the relit image align pixel-for-pixel for the composite step.
+// IC-Light v2 takes a fixed `image_size` enum. We pre-pad the input
+// to a square so the model has clean breathing room around the
+// product — this also lets it scale/move the subject within the
+// canvas without cropping.
 const STUDIO_DIM = 1024;
+// Free-form prompt cap — keeps payloads reasonable and stops users
+// from injecting massive blobs.
+const CUSTOM_PROMPT_MAX = 500;
 
 export async function POST(req: Request) {
   // 0) Auth + credit gate
@@ -106,6 +98,7 @@ export async function POST(req: Request) {
   }
   const fileEntry = formData.get("file");
   const sceneIdRaw = formData.get("sceneId");
+  const customPromptRaw = formData.get("customPrompt");
   if (!(fileEntry instanceof File)) {
     return NextResponse.json(
       { error: "Feld 'file' fehlt oder ist keine Datei." },
@@ -129,10 +122,17 @@ export async function POST(req: Request) {
 
   const sceneId = typeof sceneIdRaw === "string" ? sceneIdRaw : "";
   const scene = findScene(sceneId) || AI_STUDIO_SCENES[0];
+  const customPrompt =
+    typeof customPromptRaw === "string"
+      ? customPromptRaw.trim().slice(0, CUSTOM_PROMPT_MAX)
+      : "";
+  const finalPrompt = customPrompt
+    ? `${scene.prompt}, ${customPrompt}`
+    : scene.prompt;
 
-  // 3) Normalise to a centred white-padded square at STUDIO_DIM. Both
-  //    rembg and IC-Light return outputs at the input dimensions, so
-  //    same-square input → same-square outputs → trivial alpha composite.
+  // 3) Pre-process: pad to a centred white square so IC-Light has
+  //    headroom to compose the subject in the new scene. Same dim
+  //    matches the IC-Light `image_size: square_hd` (1024x1024).
   let normalisedDataUri: string;
   try {
     const buf = Buffer.from(await fileEntry.arrayBuffer());
@@ -155,40 +155,13 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4) Step 1 — bg removal. Fal returns a hosted URL that IC-Light
-  //    can fetch directly, so we don't have to round-trip the bytes.
-  let cutoutUrl: string;
-  let cutoutBuffer: Buffer;
-  try {
-    const rembg = await callFal<RembgResponse>("fal-ai/imageutils/rembg", {
-      image_url: normalisedDataUri,
-    });
-    if (!rembg.image?.url) {
-      throw new FalError("rembg lieferte keine Bild-URL.", 502, rembg);
-    }
-    cutoutUrl = rembg.image.url;
-
-    const dl = await fetch(cutoutUrl);
-    if (!dl.ok) {
-      throw new FalError(
-        `Cutout-Download fehlgeschlagen (${dl.status}).`,
-        502,
-      );
-    }
-    cutoutBuffer = Buffer.from(await dl.arrayBuffer());
-  } catch (err) {
-    return falErrorResponse(err, "Hintergrund-Entfernung");
-  }
-
-  // 5) Step 2 — IC-Light relight in the chosen scene. We feed the
-  //    NORMALISED ORIGINAL (not the cutout) so the model has lighting
-  //    context for the subject geometry, then we discard its subject
-  //    pixels in step 6 anyway.
+  // 4) Single-call relight — IC-Light handles bg, shadows, and the
+  //    integration of the subject into the new lighting environment.
   let relitBuffer: Buffer;
   try {
     const iclight = await callFal<IcLightResponse>("fal-ai/iclight-v2", {
       image_url: normalisedDataUri,
-      prompt: scene.prompt,
+      prompt: finalPrompt,
       negative_prompt: buildNegativePrompt(scene),
       image_size: "square_hd",
       num_inference_steps: 28,
@@ -210,35 +183,19 @@ export async function POST(req: Request) {
     return falErrorResponse(err, "Szenen-Generierung");
   }
 
-  // 6) Step 3 — composite. Force both layers to STUDIO_DIM × STUDIO_DIM
-  //    so alignment is guaranteed, then overlay the cutout (with its
-  //    alpha intact) onto the relit base. Sharp's `composite` honours
-  //    the alpha channel of the input — every fully-opaque pixel of
-  //    the cutout overwrites the relit pixel beneath it; partially-
-  //    transparent pixels at the edge blend smoothly with the AI
-  //    shadow underneath, giving a clean, integrated result.
+  // 5) Re-encode as a clean JPEG (Fal often returns PNG which is
+  //    larger; we standardise on JPEG for the download endpoint).
   let finalJpeg: Buffer;
   try {
-    const baseSquared = await sharp(relitBuffer)
-      .resize(STUDIO_DIM, STUDIO_DIM, { fit: "fill" })
-      .toBuffer();
-    const cutoutSquared = await sharp(cutoutBuffer)
-      .resize(STUDIO_DIM, STUDIO_DIM, { fit: "fill" })
-      .png()
-      .toBuffer();
-    finalJpeg = await sharp(baseSquared)
-      .composite([{ input: cutoutSquared, blend: "over" }])
+    finalJpeg = await sharp(relitBuffer)
       .jpeg({ quality: 92, mozjpeg: true })
       .toBuffer();
   } catch (err) {
-    console.error("[ai-studio] sharp composite failed:", err);
-    return NextResponse.json(
-      { error: "Composite-Schritt fehlgeschlagen." },
-      { status: 500 },
-    );
+    console.error("[ai-studio] sharp re-encode failed:", err);
+    finalJpeg = relitBuffer; // fall back to whatever Fal sent
   }
 
-  // 7) Persist final to Blob.
+  // 6) Persist final to Blob.
   let outputUrl: string;
   try {
     const baseName = fileEntry.name.replace(/\.[^.]+$/, "");
@@ -256,7 +213,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 8) Charge credits — admins skip the meter.
+  // 7) Charge credits — admins skip the meter.
   let creditsRemaining: number | undefined;
   if (kundeRowIndex !== null && kundeProfile !== null) {
     try {

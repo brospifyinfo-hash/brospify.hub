@@ -1,15 +1,19 @@
 "use client";
 
 // ─── <AiStudio /> ────────────────────────────────────────────────
-// Three-step studio: 1) drop a product 2) pick a scene from the
-// horizontal carousel 3) generate. Result lands in a before/after
-// reveal slider so the user sees exactly what changed.
+// Three-step studio: 1) drop a product 2) pick a scene + tweak prompt
+// 3) generate. Result lands in a before/after reveal slider.
 //
-// Strict compositing happens server-side: /api/ai-studio chains
-// Fal rembg → IC-Light relight → sharp composite. The original
-// product cutout is layered back on top of the relit base, so the
-// product pixels (logos, text, finish) survive 1:1 — only the new
-// background and AI-generated shadows come from the model.
+// Server-side: /api/ai-studio runs a single Fal IC-Light v2 call.
+// IC-Light is allowed to relight the product, adapt its position
+// and scale to the scene, and generate the new background +
+// realistic shadows. The carousel scenes are rendered with
+// layered CSS gradients (no image hosting needed) using the
+// `visual` props from the scene catalog.
+//
+// Layout is mobile-first: the carousel snaps cleanly on touch,
+// the prompt area is collapsible, and the generate CTA is
+// full-width on small screens.
 
 import {
   useCallback,
@@ -23,12 +27,16 @@ import {
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
-import { AI_STUDIO_SCENES, type AiStudioScene } from "@/lib/ai-studio-scenes";
+import {
+  AI_STUDIO_SCENES,
+  type AiStudioScene,
+} from "@/lib/ai-studio-scenes";
 
 const ACCENT = "#95BF47";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const PROCESS_MAX_DIM = 2400;
 const PROCESS_QUALITY = 0.92;
+const CUSTOM_PROMPT_MAX = 500;
 
 type Stage = "upload" | "configure" | "processing" | "done" | "error";
 
@@ -42,6 +50,8 @@ export default function AiStudio() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultScene, setResultScene] = useState<AiStudioScene | null>(null);
   const [sceneId, setSceneId] = useState<string>(AI_STUDIO_SCENES[0].id);
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
@@ -86,6 +96,8 @@ export default function AiStudio() {
     setResultUrl(null);
     setResultScene(null);
     setSceneId(AI_STUDIO_SCENES[0].id);
+    setCustomPrompt("");
+    setShowCustomPrompt(false);
     setElapsed(0);
   }
 
@@ -164,6 +176,9 @@ export default function AiStudio() {
       const fd = new FormData();
       fd.append("file", preparedFile);
       fd.append("sceneId", scene.id);
+      const trimmedPrompt = customPrompt.trim().slice(0, CUSTOM_PROMPT_MAX);
+      if (trimmedPrompt) fd.append("customPrompt", trimmedPrompt);
+
       const res = await fetch("/api/ai-studio", {
         method: "POST",
         body: fd,
@@ -230,7 +245,7 @@ export default function AiStudio() {
             }}
             onDragLeave={() => setDragActive(false)}
             onClick={() => fileInputRef.current?.click()}
-            className="relative aspect-[16/10] rounded-[28px] flex flex-col items-center justify-center text-center px-8 py-12 transition-all duration-300 cursor-pointer"
+            className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-5 sm:px-8 py-10 sm:py-12 transition-all duration-300 cursor-pointer"
             style={{
               background: dragActive
                 ? "rgba(149, 191, 71, 0.06)"
@@ -252,7 +267,7 @@ export default function AiStudio() {
             />
 
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+              className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
               style={{
                 background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}10)`,
                 border: `1px solid ${ACCENT}30`,
@@ -262,16 +277,16 @@ export default function AiStudio() {
             </div>
 
             <h3
-              className="text-[22px] font-semibold tracking-tight text-white"
+              className="text-[19px] sm:text-[22px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Produkt hochladen
             </h3>
-            <p className="text-[14px] text-zinc-400 mt-2 max-w-sm leading-relaxed">
-              Drag &amp; Drop oder klicke, um dein Produktfoto auszuwählen
+            <p className="text-[13px] sm:text-[14px] text-zinc-400 mt-1.5 sm:mt-2 max-w-sm leading-relaxed">
+              Tippen oder Datei reinziehen
             </p>
-            <p className="text-[12px] text-zinc-600 mt-1">
-              JPG · PNG · WebP · Produkt bleibt 1:1 erhalten
+            <p className="text-[11px] sm:text-[12px] text-zinc-600 mt-1">
+              JPG · PNG · WebP
             </p>
 
             <button
@@ -280,7 +295,7 @@ export default function AiStudio() {
                 e.stopPropagation();
                 fileInputRef.current?.click();
               }}
-              className="mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98]"
+              className="mt-6 sm:mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -290,8 +305,8 @@ export default function AiStudio() {
               Datei wählen
             </button>
 
-            <p className="absolute bottom-5 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.14em] text-zinc-600">
-              Generierung kostet {CREDIT_COSTS.AI_STUDIO} Credits
+            <p className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
+              {CREDIT_COSTS.AI_STUDIO} Credits / Generierung
             </p>
           </div>
 
@@ -302,17 +317,18 @@ export default function AiStudio() {
       {/* ── STAGE: configure (Step 2 + Step 3) ───────────────── */}
       {stage === "configure" && originalUrl && (
         <>
-          <StepHeader step={2} total={3} title="Hintergrund auswählen" />
+          <StepHeader step={2} total={3} title="Szene & Stil wählen" />
 
           {/* Compact preview row */}
-          <div className="flex items-center gap-4 mb-6 rounded-2xl p-3"
+          <div
+            className="flex items-center gap-3 sm:gap-4 mb-5 sm:mb-6 rounded-2xl p-2.5 sm:p-3"
             style={{
               background: "rgba(255,255,255,0.03)",
               border: "1px solid rgba(255,255,255,0.08)",
             }}
           >
             <div
-              className="w-16 h-16 rounded-xl overflow-hidden shrink-0"
+              className="w-14 sm:w-16 h-14 sm:h-16 rounded-xl overflow-hidden shrink-0"
               style={{ background: "#0a0a0c" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -323,10 +339,10 @@ export default function AiStudio() {
               />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-semibold text-white">
+              <div className="text-[12.5px] sm:text-[13px] font-semibold text-white">
                 Bereit zur Verarbeitung
               </div>
-              <div className="text-[11.5px] text-zinc-500 mt-0.5">
+              <div className="text-[11px] sm:text-[11.5px] text-zinc-500 mt-0.5">
                 Wähle eine Szene unten
               </div>
             </div>
@@ -337,58 +353,66 @@ export default function AiStudio() {
                 setPreparedFile(null);
                 setStage("upload");
               }}
-              className="text-[12px] px-3 h-8 rounded-full font-medium text-zinc-300 transition active:scale-[0.97]"
+              className="text-[11.5px] sm:text-[12px] px-3 h-8 rounded-full font-medium text-zinc-300 transition active:scale-[0.97] shrink-0"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
               }}
             >
-              Anderes Bild
+              Anderes
             </button>
           </div>
 
           {/* Carousel of scene templates */}
           <SceneCarousel selected={sceneId} onSelect={setSceneId} />
 
-          <StepHeader step={3} total={3} title="Generieren" className="mt-8" />
+          {/* Custom prompt — collapsible */}
+          <CustomPromptBlock
+            value={customPrompt}
+            onChange={setCustomPrompt}
+            open={showCustomPrompt}
+            setOpen={setShowCustomPrompt}
+          />
 
-          <div className="flex flex-col sm:flex-row gap-3">
-            <button
-              onClick={handleGenerate}
-              disabled={insufficientCredits}
-              className="flex-1 h-13 py-4 rounded-2xl text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{
-                background: ACCENT,
-                color: "#0a1604",
-                boxShadow: `0 12px 28px -10px ${ACCENT}80, inset 0 1px 0 rgba(255,255,255,0.25)`,
-              }}
-            >
-              <SparklesIcon />
-              Generieren ({CREDIT_COSTS.AI_STUDIO} Credits)
-            </button>
-          </div>
+          <StepHeader step={3} total={3} title="Generieren" className="mt-6 sm:mt-8" />
+
+          <button
+            onClick={handleGenerate}
+            disabled={insufficientCredits}
+            className="w-full h-13 py-4 rounded-2xl text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              background: ACCENT,
+              color: "#0a1604",
+              boxShadow: `0 12px 28px -10px ${ACCENT}80, inset 0 1px 0 rgba(255,255,255,0.25)`,
+            }}
+          >
+            <SparklesIcon />
+            Generieren · {CREDIT_COSTS.AI_STUDIO} Credits
+          </button>
 
           {insufficientCredits && (
             <div
-              className="mt-4 rounded-2xl p-4 flex items-center gap-3"
+              className="mt-4 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center gap-3"
               style={{
                 background: "rgba(245, 158, 11, 0.08)",
                 border: "1px solid rgba(245, 158, 11, 0.20)",
               }}
             >
-              <span className="text-[20px]">🪙</span>
-              <div className="flex-1 min-w-0">
-                <div className="text-[13px] font-semibold text-amber-200">
-                  Nicht genug Credits
-                </div>
-                <div className="text-[12px] text-amber-100/70 mt-0.5">
-                  Pro Generierung brauchst du {CREDIT_COSTS.AI_STUDIO} Credits.
-                  Aktuell: {credits.balance.toLocaleString("de-DE")}.
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <span className="text-[20px]">🪙</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[13px] font-semibold text-amber-200">
+                    Nicht genug Credits
+                  </div>
+                  <div className="text-[11.5px] text-amber-100/70 mt-0.5">
+                    Pro Generierung brauchst du {CREDIT_COSTS.AI_STUDIO} Credits.
+                    Aktuell: {credits.balance.toLocaleString("de-DE")}.
+                  </div>
                 </div>
               </div>
               <Link
                 href="/credits"
-                className="shrink-0 px-4 h-9 rounded-full inline-flex items-center text-[12px] font-semibold transition active:scale-[0.97]"
+                className="shrink-0 w-full sm:w-auto px-4 h-10 rounded-full inline-flex items-center justify-center text-[12.5px] font-semibold transition active:scale-[0.97]"
                 style={{
                   background: ACCENT,
                   color: "#0a1604",
@@ -406,7 +430,7 @@ export default function AiStudio() {
       {/* ── STAGE: processing ────────────────────────────────── */}
       {stage === "processing" && (
         <div
-          className="relative aspect-[16/10] rounded-[28px] flex flex-col items-center justify-center text-center px-8 py-12 overflow-hidden"
+          className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6 sm:px-8 py-10 sm:py-12 overflow-hidden"
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             backdropFilter: "blur(28px) saturate(140%)",
@@ -425,17 +449,17 @@ export default function AiStudio() {
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
             <h3
-              className="mt-6 text-[20px] font-semibold tracking-tight text-white"
+              className="mt-5 sm:mt-6 text-[18px] sm:text-[20px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Szene wird erstellt
             </h3>
-            <p className="mt-2 text-[13px] text-zinc-400">
+            <p className="mt-1.5 sm:mt-2 text-[12.5px] sm:text-[13px] text-zinc-400">
               Verarbeitung läuft · {elapsedSec}s
             </p>
             <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
-              Dein Produkt bleibt pixelgenau — die KI generiert nur den
-              neuen Hintergrund und realistische Schatten.
+              Die KI integriert dein Produkt in die neue Szene mit
+              passender Belichtung und realistischen Schatten.
             </p>
           </div>
         </div>
@@ -443,7 +467,7 @@ export default function AiStudio() {
 
       {/* ── STAGE: done — before/after slider ────────────────── */}
       {stage === "done" && resultUrl && originalUrl && (
-        <div className="space-y-5">
+        <div className="space-y-4 sm:space-y-5">
           <BeforeAfter beforeUrl={originalUrl} afterUrl={resultUrl} />
 
           {resultScene && (
@@ -481,7 +505,7 @@ export default function AiStudio() {
                 setResultScene(null);
                 setStage("configure");
               }}
-              className="px-6 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-5 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -491,7 +515,7 @@ export default function AiStudio() {
             </button>
             <button
               onClick={reset}
-              className="px-6 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-5 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -506,7 +530,7 @@ export default function AiStudio() {
       {/* ── STAGE: error ─────────────────────────────────────── */}
       {stage === "error" && errorMsg && (
         <div
-          className="rounded-[24px] p-6 flex items-start gap-4"
+          className="rounded-3xl sm:rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-start gap-3 sm:gap-4"
           style={{
             background: "rgba(239, 68, 68, 0.08)",
             border: "1px solid rgba(239, 68, 68, 0.20)",
@@ -514,16 +538,18 @@ export default function AiStudio() {
             WebkitBackdropFilter: "blur(20px)",
           }}
         >
-          <AlertIcon />
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-semibold text-red-300">Fehler</div>
-            <div className="text-[13px] text-red-200/90 mt-1 break-words">
-              {errorMsg}
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <AlertIcon />
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold text-red-300">Fehler</div>
+              <div className="text-[13px] text-red-200/90 mt-1 break-words">
+                {errorMsg}
+              </div>
             </div>
           </div>
           <button
             onClick={reset}
-            className="text-[13px] px-4 h-9 rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
+            className="text-[13px] px-4 h-10 sm:h-9 w-full sm:w-auto rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.10)",
@@ -551,9 +577,9 @@ function StepHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex items-center gap-3 mb-4 ${className}`}>
+    <div className={`flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-4 ${className}`}>
       <span
-        className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold tabular-nums"
+        className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold tabular-nums shrink-0"
         style={{
           background: `${ACCENT}18`,
           border: `1px solid ${ACCENT}40`,
@@ -562,10 +588,10 @@ function StepHeader({
       >
         {step}
       </span>
-      <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-zinc-500">
+      <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-zinc-500 hidden sm:inline">
         Schritt {step} / {total}
       </span>
-      <h2 className="text-[15px] font-semibold tracking-tight text-white ml-1">
+      <h2 className="text-[14.5px] sm:text-[15px] font-semibold tracking-tight text-white sm:ml-1 truncate">
         {title}
       </h2>
     </div>
@@ -577,19 +603,112 @@ function StepHeader({
 function InlineError({ msg }: { msg: string }) {
   return (
     <div
-      className="mt-4 rounded-2xl p-4 flex items-center gap-3"
+      className="mt-4 rounded-2xl p-4 flex items-start gap-3"
       style={{
         background: "rgba(239, 68, 68, 0.08)",
         border: "1px solid rgba(239, 68, 68, 0.20)",
       }}
     >
       <AlertIcon />
-      <div className="text-[13px] text-red-200">{msg}</div>
+      <div className="text-[13px] text-red-200 break-words flex-1 min-w-0">{msg}</div>
+    </div>
+  );
+}
+
+// ─── Custom Prompt block ────────────────────────────────────────
+// Collapsible textarea so the configure view stays clean by default.
+// Power users can pop it open and add framing or mood notes that get
+// appended to the scene's curated prompt server-side.
+
+function CustomPromptBlock({
+  value,
+  onChange,
+  open,
+  setOpen,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  open: boolean;
+  setOpen: (o: boolean) => void;
+}) {
+  const remaining = CUSTOM_PROMPT_MAX - value.length;
+  return (
+    <div className="mt-4">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between rounded-2xl px-4 py-3 transition active:scale-[0.99]"
+        style={{
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid rgba(255,255,255,0.08)",
+        }}
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+            style={{
+              background: open ? `${ACCENT}18` : "rgba(255,255,255,0.04)",
+              border: `1px solid ${open ? `${ACCENT}40` : "rgba(255,255,255,0.08)"}`,
+            }}
+          >
+            <PencilIcon color={open ? ACCENT : "#a1a1aa"} />
+          </div>
+          <div className="text-left min-w-0">
+            <div className="text-[13px] font-semibold text-white truncate">
+              Eigener Prompt
+              <span className="text-zinc-500 font-normal ml-1.5">
+                (optional)
+              </span>
+            </div>
+            <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
+              {value
+                ? `${value.slice(0, 60)}${value.length > 60 ? "…" : ""}`
+                : "z. B. „mit Schatten von einer Pflanze rechts"}
+            </div>
+          </div>
+        </div>
+        <ChevronIcon dir={open ? "up" : "down"} />
+      </button>
+
+      {open && (
+        <div
+          className="mt-2 rounded-2xl p-3 sm:p-4"
+          style={{
+            background: "rgba(255,255,255,0.025)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        >
+          <textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value.slice(0, CUSTOM_PROMPT_MAX))}
+            placeholder="Beschreibe Details die zur Szene hinzukommen sollen — auf Deutsch oder Englisch."
+            rows={3}
+            className="w-full rounded-xl px-3 py-2.5 text-[13.5px] outline-none resize-none transition placeholder:text-white/25 leading-relaxed text-white"
+            style={{
+              background: "rgba(0,0,0,0.25)",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}
+          />
+          <div className="flex items-center justify-between mt-2 px-1">
+            <span className="text-[10.5px] text-zinc-500">
+              wird an die Szene angehängt
+            </span>
+            <span
+              className="text-[10.5px] tabular-nums"
+              style={{ color: remaining < 50 ? "#fbbf24" : "#71717a" }}
+            >
+              {remaining}/{CUSTOM_PROMPT_MAX}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Scene Carousel ──────────────────────────────────────────────
+// Horizontal snap carousel. On mobile we hide the desktop arrow
+// buttons (touch swipe is the natural interaction) and use a
+// taller card so the scene visual is more legible.
 
 function SceneCarousel({
   selected,
@@ -603,93 +722,36 @@ function SceneCarousel({
   function nudge(dir: 1 | -1) {
     const el = scrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: dir * 280, behavior: "smooth" });
+    el.scrollBy({ left: dir * 320, behavior: "smooth" });
   }
 
   return (
-    <div className="relative mb-6">
+    <div className="relative -mx-1">
       <div
         ref={scrollRef}
-        className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1 snap-x snap-mandatory"
+        className="flex gap-3 overflow-x-auto pb-3 px-1 snap-x snap-mandatory scrollbar-thin"
         style={{
           scrollbarWidth: "thin",
           scrollbarColor: "rgba(255,255,255,0.10) transparent",
+          WebkitOverflowScrolling: "touch",
         }}
       >
-        {AI_STUDIO_SCENES.map((scene) => {
-          const active = scene.id === selected;
-          return (
-            <button
-              key={scene.id}
-              onClick={() => onSelect(scene.id)}
-              className={`group relative shrink-0 snap-start w-[170px] rounded-2xl overflow-hidden text-left transition-all active:scale-[0.98]`}
-              style={{
-                border: active
-                  ? `1.5px solid ${ACCENT}`
-                  : "1px solid rgba(255,255,255,0.10)",
-                boxShadow: active
-                  ? `0 12px 28px -10px ${ACCENT}50, 0 0 0 4px ${ACCENT}18`
-                  : "0 12px 24px -16px rgba(0,0,0,0.6)",
-              }}
-            >
-              <div
-                className="aspect-[4/5] relative"
-                style={{ background: scene.swatch }}
-              >
-                {/* Subtle inner shadow vignette */}
-                <div
-                  className="absolute inset-0 pointer-events-none"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(0,0,0,0) 50%, rgba(0,0,0,0.45) 100%)",
-                  }}
-                />
-                {/* Tiny floating product placeholder so the user sees it
-                    as a "scene" — purely decorative. */}
-                <div
-                  className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-[55%] w-12 h-16 rounded-lg"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0.55) 100%)",
-                    boxShadow:
-                      "0 12px 18px -6px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.6)",
-                  }}
-                />
-                {active && (
-                  <div
-                    className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center"
-                    style={{
-                      background: ACCENT,
-                      boxShadow: "0 4px 10px -2px rgba(0,0,0,0.4)",
-                    }}
-                  >
-                    <CheckIcon />
-                  </div>
-                )}
-              </div>
-              <div
-                className="px-3 py-2.5"
-                style={{
-                  background: "rgba(15, 15, 18, 0.85)",
-                  backdropFilter: "blur(8px)",
-                }}
-              >
-                <div className="text-[12.5px] font-semibold text-white truncate">
-                  {scene.label}
-                </div>
-                <div className="text-[10.5px] text-zinc-500 truncate mt-0.5">
-                  {scene.hint}
-                </div>
-              </div>
-            </button>
-          );
-        })}
+        {AI_STUDIO_SCENES.map((scene) => (
+          <SceneCard
+            key={scene.id}
+            scene={scene}
+            active={scene.id === selected}
+            onClick={() => onSelect(scene.id)}
+          />
+        ))}
+        {/* Trailing spacer so the last card snaps with breathing room */}
+        <div className="shrink-0 w-1" aria-hidden />
       </div>
 
-      {/* Edge nudge buttons (desktop) */}
+      {/* Desktop edge nudges */}
       <button
         onClick={() => nudge(-1)}
-        className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 w-9 h-9 rounded-full items-center justify-center transition active:scale-[0.95]"
+        className="hidden md:flex absolute left-0 top-[42%] -translate-y-1/2 -translate-x-2 w-9 h-9 rounded-full items-center justify-center transition active:scale-[0.95]"
         style={{
           background: "rgba(15,15,18,0.92)",
           border: "1px solid rgba(255,255,255,0.10)",
@@ -702,7 +764,7 @@ function SceneCarousel({
       </button>
       <button
         onClick={() => nudge(1)}
-        className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 w-9 h-9 rounded-full items-center justify-center transition active:scale-[0.95]"
+        className="hidden md:flex absolute right-0 top-[42%] -translate-y-1/2 translate-x-2 w-9 h-9 rounded-full items-center justify-center transition active:scale-[0.95]"
         style={{
           background: "rgba(15,15,18,0.92)",
           border: "1px solid rgba(255,255,255,0.10)",
@@ -713,6 +775,157 @@ function SceneCarousel({
       >
         <ChevronIcon dir="right" />
       </button>
+    </div>
+  );
+}
+
+// ─── Single Scene Card ──────────────────────────────────────────
+// Layered CSS art: background gradient → optional radial light spot →
+// optional surface band → product silhouette → glass label. Selected
+// state adds a green ring and a checkmark; hover gently lifts.
+
+function SceneCard({
+  scene,
+  active,
+  onClick,
+}: {
+  scene: AiStudioScene;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const v = scene.visual;
+  const tint = v.product === "light" ? "light" : "dark";
+
+  return (
+    <button
+      onClick={onClick}
+      className="group relative shrink-0 snap-start w-[180px] sm:w-[200px] rounded-2xl overflow-hidden text-left transition-all active:scale-[0.98] hover:-translate-y-0.5"
+      style={{
+        border: active ? `1.5px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.10)",
+        boxShadow: active
+          ? `0 16px 32px -12px ${ACCENT}55, 0 0 0 4px ${ACCENT}20`
+          : "0 14px 28px -18px rgba(0,0,0,0.7)",
+      }}
+    >
+      {/* Visual stage: aspect 4:5 portrait */}
+      <div className="relative aspect-[4/5]" style={{ background: v.background }}>
+        {v.light && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: v.light, mixBlendMode: "screen" }}
+          />
+        )}
+        {v.accent && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: v.accent }}
+          />
+        )}
+        {v.surface && (
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{ background: v.surface }}
+          />
+        )}
+
+        {/* Product silhouette — universal-ish bottle/box shape with
+            a soft contact shadow so each card reads as a real scene. */}
+        <ProductSilhouette tint={tint} />
+
+        {/* Selected check badge */}
+        {active && (
+          <div
+            className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full flex items-center justify-center"
+            style={{
+              background: ACCENT,
+              boxShadow: "0 6px 14px -2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.4)",
+            }}
+          >
+            <CheckIcon />
+          </div>
+        )}
+
+        {/* Vignette to make labels pop */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%)",
+          }}
+        />
+      </div>
+
+      {/* Glass label */}
+      <div
+        className="px-3 py-2.5"
+        style={{
+          background: "rgba(12, 12, 14, 0.92)",
+          backdropFilter: "blur(10px)",
+        }}
+      >
+        <div className="text-[12.5px] font-semibold text-white truncate">
+          {scene.label}
+        </div>
+        <div className="text-[10.5px] text-zinc-500 truncate mt-0.5">
+          {scene.hint}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// Universal product silhouette: rounded "bottle" body with a soft
+// contact shadow. Tint flips between light/dark depending on the
+// scene background so it stays visible on every theme.
+function ProductSilhouette({ tint }: { tint: "light" | "dark" }) {
+  const fill =
+    tint === "light"
+      ? "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.62) 60%, rgba(255,255,255,0.45) 100%)"
+      : "linear-gradient(180deg, rgba(40,40,46,0.92) 0%, rgba(20,20,24,0.7) 60%, rgba(12,12,16,0.55) 100%)";
+  const innerShine =
+    tint === "light"
+      ? "linear-gradient(85deg, transparent 65%, rgba(255,255,255,0.35) 78%, transparent 92%)"
+      : "linear-gradient(85deg, transparent 65%, rgba(255,255,255,0.10) 78%, transparent 92%)";
+  return (
+    <div className="absolute inset-0 flex items-end justify-center pointer-events-none pb-[26%]">
+      <div className="relative w-[42%]">
+        {/* Contact shadow ellipse */}
+        <div
+          className="absolute -bottom-[14%] left-1/2 -translate-x-1/2 w-[120%] h-[14%] rounded-[50%]"
+          style={{
+            background:
+              "radial-gradient(closest-side, rgba(0,0,0,0.55), transparent 75%)",
+            filter: "blur(2px)",
+          }}
+        />
+        {/* Body */}
+        <div
+          className="relative aspect-[2/3] rounded-[22%_22%_18%_18%/14%_14%_10%_10%]"
+          style={{
+            background: fill,
+            boxShadow:
+              tint === "light"
+                ? "0 14px 18px -8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.55)"
+                : "0 14px 18px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18)",
+          }}
+        >
+          {/* Subtle "neck" highlight */}
+          <div
+            className="absolute top-0 left-1/2 -translate-x-1/2 w-[35%] h-[18%] rounded-b-xl"
+            style={{
+              background:
+                tint === "light"
+                  ? "linear-gradient(180deg, rgba(255,255,255,0.7) 0%, transparent 100%)"
+                  : "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 100%)",
+            }}
+          />
+          {/* Side shine */}
+          <div
+            className="absolute inset-0 rounded-[22%_22%_18%_18%/14%_14%_10%_10%]"
+            style={{ background: innerShine }}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -731,9 +944,6 @@ function BeforeAfter({
   const containerRef = useRef<HTMLDivElement>(null);
   const draggingRef = useRef(false);
 
-  // Track the container width so the BEFORE image can be sized to match
-  // the AFTER image's display box. We can't read containerRef during
-  // render — store it in state via a ResizeObserver instead.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -769,7 +979,7 @@ function BeforeAfter({
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-square rounded-[24px] overflow-hidden select-none touch-none"
+      className="relative w-full aspect-square rounded-3xl sm:rounded-[24px] overflow-hidden select-none touch-none"
       style={{
         border: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
@@ -780,9 +990,7 @@ function BeforeAfter({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* AFTER (full layer, on the bottom) — the AI Studio output is
-          a square composite, so we anchor the canvas to aspect-square
-          and let the after fill it edge-to-edge. */}
+      {/* AFTER — square output fills the canvas */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={afterUrl}
@@ -792,9 +1000,7 @@ function BeforeAfter({
         draggable={false}
       />
 
-      {/* BEFORE (clipped from the left). object-contain so the original
-          aspect is preserved inside the same square frame — letterbox
-          is honest, stretching would lie. */}
+      {/* BEFORE — clipped from the left, contain to keep aspect honest */}
       <div
         className="absolute inset-0 overflow-hidden pointer-events-none"
         style={{ width: `${pct}%` }}
@@ -824,7 +1030,7 @@ function BeforeAfter({
         }}
       >
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center"
+          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center"
           style={{
             background: "#fff",
             boxShadow:
@@ -932,14 +1138,15 @@ function CheckIcon() {
   );
 }
 
-function ChevronIcon({ dir }: { dir: "left" | "right" }) {
+function ChevronIcon({ dir }: { dir: "left" | "right" | "up" | "down" }) {
+  let points = "";
+  if (dir === "left") points = "15 18 9 12 15 6";
+  else if (dir === "right") points = "9 18 15 12 9 6";
+  else if (dir === "up") points = "18 15 12 9 6 15";
+  else points = "6 9 12 15 18 9";
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      {dir === "left" ? (
-        <polyline points="15 18 9 12 15 6" />
-      ) : (
-        <polyline points="9 18 15 12 9 6" />
-      )}
+      <polyline points={points} />
     </svg>
   );
 }
@@ -949,6 +1156,15 @@ function ArrowsIcon() {
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0a0c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="15 18 9 12 15 6" transform="translate(-3 0)" />
       <polyline points="9 18 15 12 9 6" transform="translate(3 0)" />
+    </svg>
+  );
+}
+
+function PencilIcon({ color = "#fff" }: { color?: string }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z" />
     </svg>
   );
 }

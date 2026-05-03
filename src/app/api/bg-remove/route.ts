@@ -1,15 +1,17 @@
 // ─── POST /api/bg-remove ────────────────────────────────────────
-// Magic Background Remover. Routes through Fal.ai's
-// `fal-ai/imageutils/rembg` (BRIA RMBG-1.4) which returns a clean
-// alpha-cutout PNG. The cutout is the original product pixels punched
-// against transparency — the model never re-paints subject pixels.
+// Magic Background Remover. Two precision tiers — both return clean
+// alpha-cutout PNGs. The cutout is the original product pixels
+// punched against transparency, the model never re-paints subject
+// pixels.
+//   • "fast"    → fal-ai/imageutils/rembg (BRIA RMBG-1.4) · ~2 s
+//   • "precise" → fal-ai/birefnet/v2 (General Use Heavy)  · ~6 s
 //
 // Wire:
-//   Client → us:        multipart/form-data { file }
-//   us → Fal:           JSON { image_url: data:URI }
+//   Client → us:        multipart/form-data { file, precision? }
+//   us → Fal:           JSON { image_url: data:URI, ...modelInputs }
 //   Fal → us:           { image: { url } }
 //   us → Vercel Blob:   public PNG
-//   us → Client:        JSON  { url, creditsRemaining }
+//   us → Client:        JSON { url, precision, creditsRemaining }
 //
 // Env: FAL_KEY required (header `Authorization: Key <key>`).
 
@@ -25,6 +27,7 @@ import {
   getKundeProfile,
 } from "@/lib/sheets";
 import { callFal, FalError, type RembgResponse } from "@/lib/fal";
+import { findBgPrecision } from "@/lib/ai-studio-scenes";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -82,6 +85,10 @@ export async function POST(req: Request) {
     );
   }
   const fileEntry = formData.get("file");
+  const precisionRaw = formData.get("precision");
+  const precision = findBgPrecision(
+    typeof precisionRaw === "string" ? precisionRaw : null,
+  );
   if (!(fileEntry instanceof File)) {
     return NextResponse.json(
       { error: "Feld 'file' fehlt oder ist keine Datei." },
@@ -126,11 +133,12 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4) Call Fal rembg (BRIA RMBG-1.4)
+  // 4) Call the chosen Fal model (rembg or birefnet/v2).
   let cutoutBuffer: Buffer;
   try {
-    const result = await callFal<RembgResponse>("fal-ai/imageutils/rembg", {
+    const result = await callFal<RembgResponse>(precision.model, {
       image_url: dataUri,
+      ...(precision.modelInputs ?? {}),
     });
     if (!result.image?.url) {
       throw new FalError("Fal-Response enthielt keine Bild-URL.", 502, result);
@@ -181,7 +189,7 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(
-    { url: outputUrl, creditsRemaining },
+    { url: outputUrl, precision: precision.id, creditsRemaining },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }
