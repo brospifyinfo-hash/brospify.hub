@@ -3,7 +3,7 @@
 // ─── <HybridUpscaler /> ───────────────────────────────────────────
 // Smart 2-way image upscaler:
 //   1. "Standard"  → in-browser, free, GPU/WebGL via UpscalerJS+TF.js
-//   2. "High Quality" → server-side, Cloudinary AI upscale
+//   2. "High Quality" → server-side, Replicate Real-ESRGAN (~1¢/call)
 //
 // Cost optimisation: the heavy TF.js + UpscalerJS bundle is loaded
 // ONLY when the user actually starts a Standard-mode run (next/dynamic
@@ -169,7 +169,7 @@ export default function HybridUpscaler() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/upscale/cloudinary", {
+      const res = await fetch("/api/upscale/cloud", {
         method: "POST",
         body: fd,
       });
@@ -181,7 +181,8 @@ export default function HybridUpscaler() {
       }
       stopTimer();
       setUpscaledUrl(data.url as string);
-      setOutputDims({ width: data.width, height: data.height });
+      // Real-ESRGAN doesn't return dims — read them from the image itself.
+      void measureRemoteImage(data.url as string).then(setOutputDims);
       setProgress(1);
       setStage("done");
     } catch (err) {
@@ -349,7 +350,7 @@ export default function HybridUpscaler() {
           >
             {mode === "local"
               ? "Standard · GPU lokal · 0 Credits"
-              : "High Quality · Cloudinary AI · 1 Aufruf"}
+              : "High Quality · Real-ESRGAN · ~1 Cent"}
           </p>
         </div>
       )}
@@ -381,7 +382,7 @@ export default function HybridUpscaler() {
             >
               {mode === "local"
                 ? "GPU rechnet · in deinem Browser"
-                : "Cloudinary AI verfeinert"}
+                : "Real-ESRGAN verfeinert · Cloud-GPU"}
             </h3>
             <p className="mt-2 text-[13px] text-zinc-400">
               {mode === "local"
@@ -435,7 +436,7 @@ export default function HybridUpscaler() {
 
             <Pill text="Vorher" position="left" />
             <Pill
-              text={mode === "local" ? "Lokal · 4×" : "Cloud · HQ"}
+              text={mode === "local" ? "Lokal · 4×" : "Real-ESRGAN · 4×"}
               position="right"
               accent
             />
@@ -489,7 +490,7 @@ export default function HybridUpscaler() {
           </div>
 
           <p className="text-[12px] text-zinc-500 text-center">
-            Fertig in {elapsedSec}s · {mode === "local" ? "UpscalerJS lokal" : "Cloudinary AI"}
+            Fertig in {elapsedSec}s · {mode === "local" ? "UpscalerJS lokal" : "Real-ESRGAN Cloud"}
             {outputDims && ` · ${outputDims.width}×${outputDims.height}`}
           </p>
         </div>
@@ -552,8 +553,8 @@ function ModeToggle({
   disabled?: boolean;
 }) {
   const options: { value: Mode; label: string; sub: string }[] = [
-    { value: "local", label: "Standard", sub: "Lokal · 0 Credits" },
-    { value: "cloud", label: "High Quality", sub: "Cloud · 1 Call" },
+    { value: "local", label: "Standard", sub: "Lokal · 0 €" },
+    { value: "cloud", label: "High Quality", sub: "Real-ESRGAN" },
   ];
 
   return (
@@ -611,6 +612,19 @@ function ModeToggle({
       })}
     </div>
   );
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────
+
+function measureRemoteImage(url: string): Promise<{ width: number; height: number } | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () =>
+      resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 // ─── Tiny inline icons ───────────────────────────────────────────

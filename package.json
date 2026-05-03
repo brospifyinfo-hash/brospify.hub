@@ -17,7 +17,6 @@
     "@tiptap/starter-kit": "^3.22.2",
     "@upscalerjs/default-model": "^1.0.0",
     "@vercel/blob": "^2.3.3",
-    "cloudinary": "^2.10.0",
     "framer-motion": "^12.38.0",
     "googleapis": "^171.4.0",
     "iron-session": "^8.0.4",
