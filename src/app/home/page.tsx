@@ -25,6 +25,8 @@ import {
   Megaphone,
   Link2,
   FileText,
+  ImageUp,
+  Mail,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -126,6 +128,22 @@ const EXTRA_TASKS = [
     icon: PenTool,
     color: "#A855F7",
     href: "/blog",
+    external: false,
+  },
+  {
+    title: "Bilder per AI hochskalieren",
+    description: "Lokal auf deiner GPU (kostenlos) oder Cloudinary HQ — Toggle frei wählbar.",
+    icon: ImageUp,
+    color: "#95BF47",
+    href: "/ai-tools/hybrid-upscaler",
+    external: false,
+  },
+  {
+    title: "Shopify-Mails generieren",
+    description: "10 transaktionale Templates per KI mit deinem Branding und 1-Klick-Deploy.",
+    icon: Mail,
+    color: "#F43F5E",
+    href: "/email-templates",
     external: false,
   },
 ];
