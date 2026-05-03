@@ -52,9 +52,10 @@ export async function POST(req: NextRequest) {
     // Check onboarding status from Profil_JSON
     const profile = await getKundeProfile(kunde.rowIndex);
 
-    // First login flow: language → guided tour → home
+    // First-time login: send to the onboarding picker (the legacy
+    // `/language` page was removed). Returning users go straight home.
     if (!profile.hasCompletedOnboarding) {
-      return NextResponse.json({ redirect: "/language" });
+      return NextResponse.json({ redirect: "/onboarding" });
     }
 
     return NextResponse.json({ redirect: "/home" });

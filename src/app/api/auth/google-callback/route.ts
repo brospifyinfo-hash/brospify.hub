@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     const profile = await getKundeProfile(kunde.rowIndex);
 
     if (!profile.hasCompletedOnboarding) {
-      return NextResponse.redirect(new URL("/language", req.url));
+      return NextResponse.redirect(new URL("/onboarding", req.url));
     }
 
     return NextResponse.redirect(new URL("/home", req.url));
