@@ -71,12 +71,11 @@ const AI_TOOLS = [
   {
     href: "/ai-tools/hybrid-upscaler",
     title: "Image Upscaler",
-    desc: "Lokal frei · Cloud HQ · 5 Credits",
+    desc: "Bilder 4× hochskalieren · 5 Credits",
     icon: ImageUp,
     color: "from-[#95BF47]/15 to-emerald-500/15",
     border: "border-[#95BF47]/15",
     iconColor: "text-[#95BF47]",
-    isNew: true,
   },
 ] as const;
 
@@ -251,15 +250,8 @@ export default function Navigation() {
                                 <Icon className={`w-5 h-5 ${tool.iconColor}`} />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <div className="font-semibold text-[13.5px] text-white truncate">
-                                    {tool.title}
-                                  </div>
-                                  {"isNew" in tool && tool.isNew && (
-                                    <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                                      Neu
-                                    </span>
-                                  )}
+                                <div className="font-semibold text-[13.5px] text-white truncate">
+                                  {tool.title}
                                 </div>
                                 <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
                                   {tool.desc}
@@ -465,11 +457,6 @@ export default function Navigation() {
                       >
                         <Icon className={`w-5 h-5 ${tool.iconColor}`} />
                         <span className="flex-1">{tool.title}</span>
-                        {"isNew" in tool && tool.isNew && (
-                          <span className="text-[9px] uppercase tracking-wider font-bold px-1.5 py-0.5 rounded-md bg-purple-500/20 text-purple-300 border border-purple-500/30">
-                            Neu
-                          </span>
-                        )}
                       </Link>
                     );
                   })}

@@ -86,10 +86,7 @@ export async function POST(req: Request) {
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
     return NextResponse.json(
-      {
-        error:
-          "Replicate ist nicht konfiguriert. Bitte REPLICATE_API_TOKEN in der .env-Datei setzen.",
-      },
+      { error: "Upscaler ist nicht konfiguriert. Admin kontaktieren." },
       { status: 500 },
     );
   }
@@ -176,45 +173,45 @@ export async function POST(req: Request) {
 
     if (!res.ok || !json) {
       const msg = json?.detail || json?.error || `HTTP ${res.status}`;
-      console.error("[Replicate upscale] start error:", res.status, msg);
+      console.error("[Upscale] start error:", res.status, msg);
       if (res.status === 401 || res.status === 403) {
         return NextResponse.json(
-          { error: "Replicate-Token ungültig oder ohne Berechtigung. Admin kontaktieren." },
+          { error: "Upscaler-Zugang abgelehnt. Admin kontaktieren." },
           { status: 502 },
         );
       }
       if (res.status === 402) {
         return NextResponse.json(
-          { error: "Replicate-Konto hat keine Guthaben mehr. Admin kontaktieren." },
+          { error: "Upscaler-Quota erschöpft. Admin kontaktieren." },
           { status: 502 },
         );
       }
       if (res.status === 422) {
         return NextResponse.json(
-          { error: `Bild abgelehnt: ${msg}` },
+          { error: `Bild wurde abgelehnt: ${msg}` },
           { status: 400 },
         );
       }
       if (res.status === 429) {
         return NextResponse.json(
-          { error: "Replicate Rate-Limit erreicht. Bitte 30 Sekunden warten." },
+          { error: "Zu viele Anfragen. Bitte 30 Sekunden warten und erneut versuchen." },
           { status: 429 },
         );
       }
       return NextResponse.json(
-        { error: `Replicate-Fehler: ${msg}` },
+        { error: `Verarbeitung fehlgeschlagen: ${msg}` },
         { status: 502 },
       );
     }
     prediction = json;
   } catch (err) {
-    console.error("[Replicate upscale] start failed:", err);
+    console.error("[Upscale] start failed:", err);
     return NextResponse.json(
       {
         error:
           err instanceof Error
-            ? `Verbindung zu Replicate fehlgeschlagen: ${err.message}`
-            : "Verbindung zu Replicate fehlgeschlagen.",
+            ? `Verbindung fehlgeschlagen: ${err.message}`
+            : "Verbindung fehlgeschlagen.",
       },
       { status: 502 },
     );
@@ -231,14 +228,14 @@ export async function POST(req: Request) {
 
   // 6) Branch on final status.
   if (prediction.status === "failed" || prediction.status === "canceled") {
-    const reason = prediction.error || "Modell ist fehlgeschlagen.";
-    return NextResponse.json({ error: `Replicate: ${reason}` }, { status: 502 });
+    const reason = prediction.error || "Verarbeitung ist fehlgeschlagen.";
+    return NextResponse.json({ error: reason }, { status: 502 });
   }
   if (prediction.status !== "succeeded") {
     return NextResponse.json(
       {
         error:
-          "Upscale dauert ungewöhnlich lange (Timeout). Bitte erneut versuchen.",
+          "Verarbeitung dauert ungewöhnlich lange (Timeout). Bitte erneut versuchen.",
       },
       { status: 504 },
     );
@@ -249,7 +246,7 @@ export async function POST(req: Request) {
     : prediction.output;
   if (!outputUrl) {
     return NextResponse.json(
-      { error: "Replicate lieferte keine Output-URL." },
+      { error: "Es kam kein Bild zurück. Bitte erneut versuchen." },
       { status: 502 },
     );
   }
@@ -272,7 +269,7 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(
-    { url: outputUrl, model: MODEL, scale, creditsRemaining },
+    { url: outputUrl, scale, creditsRemaining },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }
