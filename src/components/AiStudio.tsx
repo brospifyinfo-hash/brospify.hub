@@ -5,10 +5,11 @@
 // horizontal carousel 3) generate. Result lands in a before/after
 // reveal slider so the user sees exactly what changed.
 //
-// Strict compositing happens server-side: /api/photoroom/ai-studio
-// uses Photoroom /v2/edit with `removeBackground=true` (mask cutout,
-// not redraw) plus an AI shadow. The product mask itself is never
-// re-painted.
+// Strict compositing happens server-side: /api/ai-studio chains
+// Fal rembg → IC-Light relight → sharp composite. The original
+// product cutout is layered back on top of the relit base, so the
+// product pixels (logos, text, finish) survive 1:1 — only the new
+// background and AI-generated shadows come from the model.
 
 import {
   useCallback,
@@ -22,7 +23,7 @@ import {
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
-import { AI_STUDIO_SCENES, type AiStudioScene } from "@/lib/photoroom-scenes";
+import { AI_STUDIO_SCENES, type AiStudioScene } from "@/lib/ai-studio-scenes";
 
 const ACCENT = "#95BF47";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -163,7 +164,7 @@ export default function AiStudio() {
       const fd = new FormData();
       fd.append("file", preparedFile);
       fd.append("sceneId", scene.id);
-      const res = await fetch("/api/photoroom/ai-studio", {
+      const res = await fetch("/api/ai-studio", {
         method: "POST",
         body: fd,
       });
@@ -779,9 +780,9 @@ function BeforeAfter({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
     >
-      {/* AFTER (full layer, on the bottom) — Photoroom returns a
-          square crop, so we anchor the canvas to aspect-square and
-          let the after fill it edge-to-edge. */}
+      {/* AFTER (full layer, on the bottom) — the AI Studio output is
+          a square composite, so we anchor the canvas to aspect-square
+          and let the after fill it edge-to-edge. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={afterUrl}

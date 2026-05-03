@@ -1,7 +1,7 @@
 "use client";
 
 // ─── <MagicBackgroundRemover /> ─────────────────────────────────
-// Drop a product photo → Photoroom strips the background → user
+// Drop a product photo → Fal rembg strips the background → user
 // downloads a transparent PNG. The result preview sits on a
 // checkerboard so the transparency is visually obvious.
 //
@@ -133,7 +133,7 @@ export default function MagicBackgroundRemover() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/photoroom/remove-bg", {
+      const res = await fetch("/api/bg-remove", {
         method: "POST",
         body: fd,
       });
