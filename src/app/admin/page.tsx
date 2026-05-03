@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Pencil, Trash2, Upload, Loader2, X, LogOut, Shield, Save,
   Check, AlertCircle, ImagePlus, BarChart3, DollarSign, Zap, Settings,
-  Video, Palette, Image as ImageIcon, Gem,
+  Video, Palette, Image as ImageIcon, Gem, Ticket, Coins, Power,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -226,7 +226,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  const [activeTab, setActiveTab] = useState<"products" | "settings" | "knowledge" | "tickets">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "settings" | "knowledge" | "tickets" | "codes">("products");
   const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [themeUploading, setThemeUploading] = useState(false);
@@ -243,6 +243,28 @@ export default function AdminPage() {
   const [selectedTicket, setSelectedTicket] = useState<string | null>(null);
   const [ticketReply, setTicketReply] = useState("");
   const [ticketReplying, setTicketReplying] = useState(false);
+
+  // Credit codes
+  interface CreditCodeRow {
+    rowIndex: number;
+    code: string;
+    credits: number;
+    maxPerAccount: number;
+    active: boolean;
+    createdAt: string;
+    note: string;
+    totalRedemptions: number;
+  }
+  const [codes, setCodes] = useState<CreditCodeRow[]>([]);
+  const [codesLoading, setCodesLoading] = useState(false);
+  const [codeForm, setCodeForm] = useState({
+    code: "",
+    credits: 100,
+    maxPerAccount: 1,
+    note: "",
+  });
+  const [codeSaving, setCodeSaving] = useState(false);
+  const [codeBusyRow, setCodeBusyRow] = useState<number | null>(null);
 
   const loadProducts = useCallback(async () => {
     try {
@@ -271,6 +293,78 @@ export default function AdminPage() {
       fetch("/api/tickets").then(r => r.json()).then(d => setAdminTickets(d.tickets || [])).catch(() => {}).finally(() => setTicketsLoading(false));
     }
   }, [activeTab]);
+
+  // Load codes
+  const loadCodes = useCallback(async () => {
+    setCodesLoading(true);
+    try {
+      const res = await fetch("/api/admin/credit-codes");
+      if (res.ok) {
+        const data = await res.json();
+        setCodes(data.codes || []);
+      }
+    } catch { /* ignore */ }
+    finally { setCodesLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "codes") loadCodes();
+  }, [activeTab, loadCodes]);
+
+  async function handleCreateCode() {
+    if (!codeForm.code.trim() || codeForm.credits <= 0) return;
+    setCodeSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/credit-codes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code: codeForm.code.trim().toUpperCase(),
+          credits: codeForm.credits,
+          maxPerAccount: codeForm.maxPerAccount,
+          note: codeForm.note.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Anlegen fehlgeschlagen.");
+      } else {
+        setSuccess(`Code "${codeForm.code.trim().toUpperCase()}" angelegt.`);
+        setTimeout(() => setSuccess(""), 3000);
+        setCodeForm({ code: "", credits: 100, maxPerAccount: 1, note: "" });
+        await loadCodes();
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setCodeSaving(false); }
+  }
+
+  async function handleToggleCode(c: CreditCodeRow) {
+    setCodeBusyRow(c.rowIndex);
+    try {
+      await fetch("/api/admin/credit-codes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: c.rowIndex, active: !c.active }),
+      });
+      await loadCodes();
+    } catch { setError("Update fehlgeschlagen."); }
+    finally { setCodeBusyRow(null); }
+  }
+
+  async function handleDeleteCode(c: CreditCodeRow) {
+    if (!confirm(`Code "${c.code}" wirklich löschen?`)) return;
+    setCodeBusyRow(c.rowIndex);
+    try {
+      await fetch("/api/admin/credit-codes", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: c.rowIndex }),
+      });
+      await loadCodes();
+    } catch { setError("Löschen fehlgeschlagen."); }
+    finally { setCodeBusyRow(null); }
+  }
 
   async function saveKnowledgeBase() {
     setKbSaving(true);
@@ -446,6 +540,9 @@ export default function AdminPage() {
           </button>
           <button onClick={() => setActiveTab("tickets")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "tickets" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
             <Shield className="w-4 h-4" />Tickets {adminTickets.filter(t => t.status === "open").length > 0 && <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center badge-pulse">{adminTickets.filter(t => t.status === "open").length}</span>}
+          </button>
+          <button onClick={() => setActiveTab("codes")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "codes" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Ticket className="w-4 h-4" />Gutschein-Codes
           </button>
           <button onClick={() => setActiveTab("settings")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "settings" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
             <Settings className="w-4 h-4" />Einstellungen
@@ -759,6 +856,147 @@ export default function AdminPage() {
             <button onClick={saveSettings} disabled={settingsLoading} className="btn-accent px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
               {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Einstellungen speichern</>}
             </button>
+          </motion.div>
+        )}
+
+        {/* Credit Codes Tab */}
+        {activeTab === "codes" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl space-y-5">
+            {/* Create new code */}
+            <div className="glass-strong rounded-2xl border border-[#95BF47]/15 p-5 md:p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
+                  <Ticket className="w-5 h-5 text-[#95BF47]" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-base">Neuen Code anlegen</h3>
+                  <p className="text-xs text-zinc-500">Wird sofort einlösbar – aktivierungspflichtig kann später per Toggle geändert werden.</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-[1.4fr_1fr_1fr_2fr_auto] gap-3 items-end">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-1.5">Code</label>
+                  <input
+                    type="text"
+                    value={codeForm.code}
+                    onChange={(e) => setCodeForm({ ...codeForm, code: e.target.value.toUpperCase() })}
+                    placeholder="WELCOME50"
+                    maxLength={64}
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm font-mono uppercase tracking-wider outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-700"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-1.5 flex items-center gap-1"><Coins className="w-3 h-3" />Credits</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1_000_000}
+                    value={codeForm.credits}
+                    onChange={(e) => setCodeForm({ ...codeForm, credits: Math.max(0, Number(e.target.value) || 0) })}
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums outline-none focus:border-[#95BF47]/40 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-1.5">Max/Account</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={999}
+                    value={codeForm.maxPerAccount}
+                    onChange={(e) => setCodeForm({ ...codeForm, maxPerAccount: Math.max(1, Number(e.target.value) || 1) })}
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm font-mono tabular-nums outline-none focus:border-[#95BF47]/40 transition"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-widest font-semibold mb-1.5">Notiz (optional)</label>
+                  <input
+                    type="text"
+                    value={codeForm.note}
+                    onChange={(e) => setCodeForm({ ...codeForm, note: e.target.value })}
+                    placeholder="z. B. Black Friday Aktion"
+                    maxLength={200}
+                    className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-700"
+                  />
+                </div>
+                <button
+                  onClick={handleCreateCode}
+                  disabled={codeSaving || !codeForm.code.trim() || codeForm.credits <= 0}
+                  className="btn-accent flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 transition"
+                >
+                  {codeSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Anlegen
+                </button>
+              </div>
+              <p className="mt-3 text-[11px] text-zinc-600">
+                Erlaubt: A-Z, 0-9, Bindestrich, Unterstrich (3–64 Zeichen). Codes sind nicht case-sensitiv.
+              </p>
+            </div>
+
+            {/* Codes list */}
+            <div className="glass border border-white/[0.06] rounded-2xl overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">Aktive Codes</span>
+                  <span className="text-[10px] font-mono text-zinc-600 tabular-nums">{codes.length}</span>
+                </div>
+                <button onClick={loadCodes} disabled={codesLoading} className="text-zinc-500 hover:text-white transition disabled:opacity-50">
+                  {codesLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Settings className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+              {codesLoading ? (
+                <div className="flex items-center justify-center py-14"><Loader2 className="w-5 h-5 animate-spin text-zinc-600" /></div>
+              ) : codes.length === 0 ? (
+                <div className="text-center py-14 px-6 text-sm text-zinc-500">
+                  <Ticket className="w-10 h-10 mx-auto mb-3 text-zinc-800" />
+                  Noch keine Codes angelegt.
+                </div>
+              ) : (
+                <div className="divide-y divide-white/[0.04]">
+                  {codes.map((c) => (
+                    <div key={c.rowIndex} className="grid grid-cols-1 md:grid-cols-[1.6fr_1fr_1fr_1fr_2fr_auto] gap-3 items-center px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`w-1.5 h-6 rounded-full ${c.active ? "bg-[#95BF47]" : "bg-zinc-700"}`}
+                        />
+                        <code className="font-mono text-sm font-bold tracking-wider uppercase">{c.code}</code>
+                      </div>
+                      <div className="text-xs flex items-center gap-1.5">
+                        <Coins className="w-3 h-3 text-[#95BF47]" />
+                        <span className="font-mono tabular-nums text-white">{c.credits.toLocaleString("de-DE")}</span>
+                        <span className="text-zinc-500">Credits</span>
+                      </div>
+                      <div className="text-xs">
+                        <span className="font-mono tabular-nums text-white">{c.maxPerAccount}×</span>
+                        <span className="text-zinc-500"> / Account</span>
+                      </div>
+                      <div className="text-xs">
+                        <span className="text-zinc-500">Eingelöst </span>
+                        <span className="font-mono tabular-nums text-white">{c.totalRedemptions.toLocaleString("de-DE")}</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-500 truncate">{c.note || "—"}</div>
+                      <div className="flex items-center gap-1.5 justify-end">
+                        <button
+                          onClick={() => handleToggleCode(c)}
+                          disabled={codeBusyRow === c.rowIndex}
+                          title={c.active ? "Deaktivieren" : "Aktivieren"}
+                          className={`p-2 rounded-lg transition disabled:opacity-50 ${c.active ? "text-[#95BF47] hover:bg-[#95BF47]/10" : "text-zinc-600 hover:bg-white/5 hover:text-white"}`}
+                        >
+                          {codeBusyRow === c.rowIndex ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteCode(c)}
+                          disabled={codeBusyRow === c.rowIndex}
+                          title="Löschen"
+                          className="p-2 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition disabled:opacity-50"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
 

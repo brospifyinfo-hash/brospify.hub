@@ -97,6 +97,10 @@ export interface CreditsRecord {
   totalPurchased: number;
   totalUsed: number;
   fulfilledOrders?: string[];
+  // Per-account redemption ledger for admin-issued voucher codes.
+  // Key = code (uppercased), value = how many times this account
+  // has redeemed it. Lets us enforce per-account redemption limits.
+  redeemedCodes?: Record<string, number>;
   lastUpdated?: string;
   // Legacy fields kept so an in-flight migration of an existing
   // profile doesn't lose context. Safe to drop after a few weeks.
@@ -124,7 +128,13 @@ export { CREDIT_COSTS as CREDIT_LIMITS } from "./credit-costs";
 
 function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
   if (!raw) {
-    return { balance: 0, totalPurchased: 0, totalUsed: 0, fulfilledOrders: [] };
+    return {
+      balance: 0,
+      totalPurchased: 0,
+      totalUsed: 0,
+      fulfilledOrders: [],
+      redeemedCodes: {},
+    };
   }
   // Already the new shape — just guarantee fields exist.
   if (typeof raw.balance === "number") {
@@ -133,6 +143,10 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
       totalPurchased: Math.max(0, Math.round(raw.totalPurchased ?? 0)),
       totalUsed: Math.max(0, Math.round(raw.totalUsed ?? 0)),
       fulfilledOrders: Array.isArray(raw.fulfilledOrders) ? raw.fulfilledOrders : [],
+      redeemedCodes:
+        raw.redeemedCodes && typeof raw.redeemedCodes === "object"
+          ? raw.redeemedCodes
+          : {},
       lastUpdated: raw.lastUpdated,
     };
   }
@@ -143,6 +157,7 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
     totalPurchased: 0,
     totalUsed: Math.max(0, Math.round(raw.used ?? 0)),
     fulfilledOrders: [],
+    redeemedCodes: {},
   };
 }
 
@@ -203,10 +218,36 @@ export async function addCredits(
     totalPurchased: credits.totalPurchased + safeAmount,
     totalUsed: credits.totalUsed,
     fulfilledOrders: orderId ? [...fulfilled, orderId] : fulfilled,
+    redeemedCodes: credits.redeemedCodes || {},
     lastUpdated: new Date().toISOString(),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
   return { success: true, balance: next.balance, alreadyFulfilled: false };
+}
+
+// Voucher redemption — bumps balance and records the redemption count
+// for this account so we can enforce per-account caps on the next try.
+export async function redeemCode(
+  rowIndex: number,
+  profile: KundeProfile,
+  code: string,
+  amount: number
+): Promise<{ success: boolean; balance: number }> {
+  const upper = code.trim().toUpperCase();
+  const safeAmount = Math.max(0, Math.round(amount));
+  const credits = normalizeCredits(profile.credits);
+  const ledger = { ...(credits.redeemedCodes || {}) };
+  ledger[upper] = (ledger[upper] || 0) + 1;
+  const next: CreditsRecord = {
+    balance: credits.balance + safeAmount,
+    totalPurchased: credits.totalPurchased + safeAmount,
+    totalUsed: credits.totalUsed,
+    fulfilledOrders: credits.fulfilledOrders || [],
+    redeemedCodes: ledger,
+    lastUpdated: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, { ...profile, credits: next });
+  return { success: true, balance: next.balance };
 }
 
 export interface Kunde {
@@ -887,4 +928,166 @@ export async function setAdminSetting(key: string, value: string): Promise<void>
       console.error("[Sheets] setAdminSetting error:", err);
     }
   }
+}
+
+// ─── CREDIT CODES (Tab "CreditCodes") ─────────────────────────────
+// Admin-issued voucher codes. Each row defines one code, the credit
+// payout per redemption, the per-account redemption limit, and a
+// freeform note for internal record-keeping.
+//
+// Columns: A=Code, B=Credits, C=MaxPerAccount, D=Active,
+//          E=CreatedAt, F=Note, G=TotalRedemptions
+
+export interface CreditCode {
+  rowIndex: number;
+  code: string;
+  credits: number;
+  maxPerAccount: number;
+  active: boolean;
+  createdAt: string;
+  note: string;
+  totalRedemptions: number;
+}
+
+const CREDIT_CODES_HEADERS = [
+  "Code",
+  "Credits",
+  "Max_Per_Account",
+  "Active",
+  "Created_At",
+  "Note",
+  "Total_Redemptions",
+];
+
+function rowToCreditCode(row: string[], index: number): CreditCode {
+  return {
+    rowIndex: index + 2,
+    code: (row[0] || "").trim().toUpperCase(),
+    credits: Number.parseInt(row[1] || "0", 10) || 0,
+    maxPerAccount: Math.max(1, Number.parseInt(row[2] || "1", 10) || 1),
+    active: (row[3] || "").toLowerCase() !== "false",
+    createdAt: row[4] || "",
+    note: row[5] || "",
+    totalRedemptions: Number.parseInt(row[6] || "0", 10) || 0,
+  };
+}
+
+export async function getAllCreditCodes(): Promise<CreditCode[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "CreditCodes!A2:G",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToCreditCode(row, i)).filter((c) => c.code);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Unable to parse range") || msg.includes("not found")) {
+      console.log("[Sheets] CreditCodes tab not found, creating...");
+      await ensureSheet("CreditCodes", CREDIT_CODES_HEADERS);
+    } else {
+      console.error("[Sheets] getAllCreditCodes error:", err);
+    }
+    return [];
+  }
+}
+
+export async function findCreditCode(code: string): Promise<CreditCode | null> {
+  const target = code.trim().toUpperCase();
+  if (!target) return null;
+  const all = await getAllCreditCodes();
+  return all.find((c) => c.code === target) || null;
+}
+
+export async function addCreditCode(
+  input: Omit<CreditCode, "rowIndex" | "totalRedemptions">,
+): Promise<void> {
+  const sheets = getSheets();
+  const row = [
+    input.code.trim().toUpperCase(),
+    String(Math.max(0, Math.round(input.credits))),
+    String(Math.max(1, Math.round(input.maxPerAccount))),
+    String(input.active !== false),
+    input.createdAt || new Date().toISOString(),
+    input.note || "",
+    "0",
+  ];
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "CreditCodes!A:G",
+      valueInputOption: "RAW",
+      requestBody: { values: [row] },
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Unable to parse range") || msg.includes("not found")) {
+      await ensureSheet("CreditCodes", CREDIT_CODES_HEADERS);
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID(),
+        range: "CreditCodes!A:G",
+        valueInputOption: "RAW",
+        requestBody: { values: [row] },
+      });
+    } else {
+      throw err;
+    }
+  }
+}
+
+export async function updateCreditCode(
+  rowIndex: number,
+  updates: Partial<Pick<CreditCode, "credits" | "maxPerAccount" | "active" | "note" | "totalRedemptions">>,
+): Promise<void> {
+  const sheets = getSheets();
+  const data: { range: string; values: string[][] }[] = [];
+  if (typeof updates.credits === "number") {
+    data.push({ range: `CreditCodes!B${rowIndex}`, values: [[String(Math.max(0, Math.round(updates.credits)))]] });
+  }
+  if (typeof updates.maxPerAccount === "number") {
+    data.push({ range: `CreditCodes!C${rowIndex}`, values: [[String(Math.max(1, Math.round(updates.maxPerAccount)))]] });
+  }
+  if (typeof updates.active === "boolean") {
+    data.push({ range: `CreditCodes!D${rowIndex}`, values: [[String(updates.active)]] });
+  }
+  if (typeof updates.note === "string") {
+    data.push({ range: `CreditCodes!F${rowIndex}`, values: [[updates.note]] });
+  }
+  if (typeof updates.totalRedemptions === "number") {
+    data.push({ range: `CreditCodes!G${rowIndex}`, values: [[String(Math.max(0, Math.round(updates.totalRedemptions)))]] });
+  }
+  if (data.length === 0) return;
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID(),
+    requestBody: { valueInputOption: "RAW", data },
+  });
+}
+
+export async function deleteCreditCode(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `CreditCodes!A${rowIndex}:G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", ""]] },
+  });
+}
+
+// Atomic-ish increment of the lifetime redemption counter on a code.
+// Read-then-write — admin-only writes elsewhere mean races are
+// effectively impossible for the volumes this thing handles.
+export async function bumpCodeRedemptions(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `CreditCodes!G${rowIndex}`,
+  });
+  const current = Number.parseInt(res.data.values?.[0]?.[0] || "0", 10) || 0;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `CreditCodes!G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[String(current + 1)]] },
+  });
 }

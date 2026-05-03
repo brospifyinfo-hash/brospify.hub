@@ -2,14 +2,16 @@
 
 // ─── /credits — Credit Shop ──────────────────────────────────────
 // Strictly hub-internal: any non-logged-in visitor is bounced to "/".
-// Three Shopify cart permalinks; we patch the customer's email into
-// the URL so the Shopify checkout pre-fills the contact field, which
-// the orders/paid webhook later uses to credit the right account.
+// Premium two-column layout: balance + voucher redemption on the
+// left, a vertical stack of three packages on the right. Cart links
+// patch the customer's email into the URL so the Shopify checkout
+// pre-fills, which the orders/paid webhook later uses to credit the
+// right account.
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Coins,
   ShoppingCart,
@@ -19,15 +21,14 @@ import {
   CheckCircle2,
   AlertTriangle,
   ArrowLeft,
-  Mail,
-  ImageUp,
-  PenTool,
-  BarChart,
+  Ticket,
+  Loader2,
+  Crown,
+  Star,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
 import {
-  CREDIT_COSTS,
   CREDIT_PACKAGES,
   buildCartUrl,
   type CreditPackage,
@@ -43,8 +44,6 @@ interface ProfileInfo {
   kundenEmail?: string;
 }
 
-const PER_CREDIT_PRICE = (pkg: CreditPackage) => pkg.priceCents / pkg.credits;
-
 export default function CreditsPage() {
   const router = useRouter();
   const credits = useCredits();
@@ -52,6 +51,15 @@ export default function CreditsPage() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState<string | null>(null);
+
+  // Voucher
+  const [voucher, setVoucher] = useState("");
+  const [voucherStatus, setVoucherStatus] = useState<
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "success"; credits: number }
+    | { kind: "error"; message: string }
+  >({ kind: "idle" });
 
   useEffect(() => {
     Promise.all([
@@ -83,17 +91,8 @@ export default function CreditsPage() {
     );
   }, [profile, session]);
 
-  const cheapest = useMemo(() => {
-    return CREDIT_PACKAGES.reduce((best, p) =>
-      PER_CREDIT_PRICE(p) < PER_CREDIT_PRICE(best) ? p : best,
-    );
-  }, []);
-
   function handleBuy(pkg: CreditPackage) {
     if (!checkoutEmail) {
-      // Without an email we'd send the user to a permalink with the
-      // literal `[USER_EMAIL]` placeholder — Shopify would reject it.
-      // Fall back to the unbranded cart URL.
       window.location.href = pkg.cartUrl.replace("?checkout[email]=[USER_EMAIL]", "");
       return;
     }
@@ -101,302 +100,465 @@ export default function CreditsPage() {
     window.location.href = buildCartUrl(pkg, checkoutEmail);
   }
 
+  async function handleRedeem(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = voucher.trim();
+    if (!trimmed) return;
+    setVoucherStatus({ kind: "loading" });
+    try {
+      const res = await fetch("/api/credits/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: trimmed }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setVoucherStatus({
+          kind: "error",
+          message: data.error || "Code konnte nicht eingelöst werden.",
+        });
+        return;
+      }
+      setVoucherStatus({ kind: "success", credits: data.creditsAdded });
+      setVoucher("");
+      if (typeof data.balance === "number") {
+        credits.setBalance(data.balance);
+      } else {
+        credits.refresh();
+      }
+    } catch {
+      setVoucherStatus({ kind: "error", message: "Verbindungsfehler – bitte erneut versuchen." });
+    }
+  }
+
   if (loading || !session) {
     return (
-      <div className="min-h-screen bg-mesh flex items-center justify-center">
+      <div className="min-h-screen bg-credits-mesh flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-email-mesh font-sf text-white">
+    <div className="min-h-screen bg-credits-mesh font-sf text-white relative overflow-hidden">
       <Navigation />
 
-      <div className="fixed top-32 right-10 w-72 h-72 bg-[#95BF47]/8 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-20 left-10 w-72 h-72 bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
+      {/* Ambient orbs — ultra subtle, premium feel */}
+      <div className="pointer-events-none fixed top-32 right-[-200px] w-[600px] h-[600px] rounded-full opacity-50"
+        style={{ background: "radial-gradient(closest-side, rgba(149,191,71,0.18), transparent 70%)" }}
+      />
+      <div className="pointer-events-none fixed bottom-[-150px] left-[-150px] w-[500px] h-[500px] rounded-full opacity-40"
+        style={{ background: "radial-gradient(closest-side, rgba(99,102,241,0.16), transparent 70%)" }}
+      />
+      <div className="pointer-events-none fixed top-1/2 left-1/3 w-[700px] h-[700px] rounded-full opacity-30 -translate-y-1/2"
+        style={{ background: "radial-gradient(closest-side, rgba(168,85,247,0.10), transparent 70%)" }}
+      />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-10">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-12">
         {/* Back link */}
         <Link
           href="/home"
-          className="inline-flex items-center gap-1.5 text-xs text-white/45 hover:text-white transition mb-6"
+          className="inline-flex items-center gap-1.5 text-[12px] text-white/45 hover:text-white transition mb-8"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
           Zurück zum Dashboard
         </Link>
 
-        {/* Header */}
+        {/* Hero */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
+          className="mb-10 md:mb-12"
         >
-          <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:gap-6 sm:justify-between">
-            <div>
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-11 h-11 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/30 flex items-center justify-center">
-                  <Coins className="w-6 h-6 text-[#95BF47]" />
-                </div>
-                <div>
-                  <h1 className="font-sf-display text-2xl md:text-3xl font-bold tracking-tight">
-                    Credit-Shop
-                  </h1>
-                  <p className="text-zinc-400 text-sm mt-0.5">
-                    Lade dein Guthaben auf – sofort verfügbar nach dem Kauf.
-                  </p>
-                </div>
-              </div>
-            </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-[10.5px] uppercase tracking-[0.18em] text-white/55 mb-5">
+            <Sparkles className="w-3 h-3 text-[#95BF47]" />
+            Credit-Aufladung
+          </div>
+          <h1 className="font-sf-display text-4xl md:text-6xl font-bold tracking-[-0.025em] leading-[1.05] max-w-3xl">
+            Lade dein <span className="bg-gradient-to-r from-[#95BF47] to-[#c8e87a] bg-clip-text text-transparent">Brospify-Konto</span> auf.
+          </h1>
+          <p className="text-white/55 text-[15px] mt-4 max-w-xl leading-relaxed">
+            Wähle ein Paket oder löse einen Gutschein-Code ein. Dein Guthaben wird
+            unmittelbar nach dem Bezahlvorgang gutgeschrieben.
+          </p>
+        </motion.div>
 
-            {/* Live balance card */}
-            <div className="glass-email px-5 py-3.5 flex items-center gap-3 self-start sm:self-end">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-white/45 leading-none">
-                Aktuelles Guthaben
-              </div>
-              <div className="font-mono font-bold text-2xl tabular-nums text-[#95BF47] leading-none">
-                {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
-              </div>
+        {/* Two-column workspace */}
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-5 md:gap-7">
+          {/* LEFT: Balance + voucher */}
+          <div className="space-y-5">
+            <BalanceCard
+              balance={credits.balance}
+              loading={credits.loading}
+              email={checkoutEmail}
+            />
+
+            <VoucherCard
+              voucher={voucher}
+              setVoucher={setVoucher}
+              status={voucherStatus}
+              onSubmit={handleRedeem}
+              onDismissStatus={() => setVoucherStatus({ kind: "idle" })}
+            />
+
+            {/* Trust strip */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <TrustItem icon={Zap} title="Sofort verfügbar">
+                Echtzeit-Gutschrift nach erfolgreichem Bezahlvorgang.
+              </TrustItem>
+              <TrustItem icon={ShieldCheck} title="Sichere Bezahlung">
+                Abwicklung über den offiziellen Brospify-Shopify-Checkout.
+              </TrustItem>
             </div>
           </div>
 
-          {credits.balance <= 0 && !credits.loading && (
-            <div className="mt-5 flex items-start gap-2 text-[13px] text-amber-200/90 bg-amber-500/10 border border-amber-500/25 px-4 py-3 rounded-xl">
-              <AlertTriangle className="w-4 h-4 mt-px shrink-0" />
-              <span>
-                Dein Guthaben ist leer. AI-Tools bleiben blockiert, bis du Credits aufgeladen hast.
-              </span>
+          {/* RIGHT: Packages stacked vertically */}
+          <div className="space-y-3.5">
+            <div className="flex items-baseline justify-between mb-1">
+              <h2 className="text-[13px] uppercase tracking-[0.18em] font-semibold text-white/55">
+                Pakete
+              </h2>
+              <span className="text-[11px] text-white/30">Einmalzahlung · inkl. MwSt.</span>
             </div>
-          )}
-        </motion.div>
-
-        {/* Cost reference strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-8">
-          <CostBox icon={Mail} label="E-Mail" value={CREDIT_COSTS.EMAIL_GENERATE} accent="#fb7185" />
-          <CostBox icon={PenTool} label="Blog" value={CREDIT_COSTS.BLOG_GENERATE} accent="#95BF47" />
-          <CostBox icon={ImageUp} label="Upscale" value={CREDIT_COSTS.UPSCALE_IMAGE} accent="#a78bfa" />
-          <CostBox icon={BarChart} label="SEO" value={CREDIT_COSTS.SEO_AUDIT} accent="#60a5fa" free />
-        </div>
-
-        {/* Packages */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5">
-          {CREDIT_PACKAGES.map((pkg, idx) => (
-            <PackageCard
-              key={pkg.id}
-              pkg={pkg}
-              index={idx}
-              isCheapest={pkg.id === cheapest.id}
-              email={checkoutEmail}
-              redirecting={redirecting === pkg.id}
-              disabled={Boolean(redirecting && redirecting !== pkg.id)}
-              onBuy={() => handleBuy(pkg)}
-            />
-          ))}
+            {CREDIT_PACKAGES.map((pkg, idx) => (
+              <PackageRow
+                key={pkg.id}
+                pkg={pkg}
+                index={idx}
+                redirecting={redirecting === pkg.id}
+                disabled={Boolean(redirecting && redirecting !== pkg.id)}
+                hasEmail={Boolean(checkoutEmail)}
+                onBuy={() => handleBuy(pkg)}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Mandatory hint */}
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25 }}
-          className="mt-8 glass-email px-5 py-4 flex items-start gap-3"
+          transition={{ delay: 0.3 }}
+          className="mt-10 rounded-2xl border border-white/[0.06] bg-white/[0.025] backdrop-blur-2xl px-5 py-4 flex items-start gap-3"
         >
           <ShieldCheck className="w-5 h-5 text-[#95BF47] mt-0.5 shrink-0" />
-          <div className="text-[13px] leading-relaxed text-white/75">
+          <div className="text-[13.5px] leading-relaxed text-white/75">
             <span className="font-semibold text-white">Hinweis: </span>
             Diese Credits sind nur in Verbindung mit einem Brospify Abo nutzbar.
           </div>
         </motion.div>
 
-        {/* Trust strip */}
-        <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12px] text-white/55">
-          <TrustItem icon={Zap} title="Sofort verfügbar">
-            Credits werden in Echtzeit nach erfolgreichem Kauf gutgeschrieben.
-          </TrustItem>
-          <TrustItem icon={ShieldCheck} title="Sichere Bezahlung">
-            Abwicklung über den offiziellen Brospify Shopify-Checkout.
-          </TrustItem>
-          <TrustItem icon={Sparkles} title="Kein Verfall">
-            Dein Guthaben bleibt bestehen, solange dein Abo aktiv ist.
-          </TrustItem>
-        </div>
-
-        {/* Email used for checkout (transparency) */}
         {checkoutEmail && (
-          <p className="mt-6 text-[11px] text-white/35 text-center">
-            Checkout-Email wird vorausgefüllt mit{" "}
-            <span className="font-mono text-white/60">{checkoutEmail}</span>
-            {" "}— deine Credits landen automatisch auf diesem Konto.
+          <p className="mt-6 text-[11px] text-white/30 text-center">
+            Checkout vorausgefüllt mit{" "}
+            <span className="font-mono text-white/55">{checkoutEmail}</span>
           </p>
         )}
       </div>
+
+      {/* Page-local mesh background — only on this route. Doesn't
+          touch the global tokens, so the rest of the hub is unaffected. */}
+      <style jsx global>{`
+        .bg-credits-mesh {
+          background:
+            radial-gradient(ellipse 1100px 800px at 8% -10%, rgba(149, 191, 71, 0.12) 0%, transparent 55%),
+            radial-gradient(ellipse 900px 700px at 92% 110%, rgba(99, 102, 241, 0.08) 0%, transparent 55%),
+            radial-gradient(ellipse 700px 500px at 50% 50%, rgba(255, 255, 255, 0.012) 0%, transparent 70%),
+            #050507;
+        }
+      `}</style>
     </div>
   );
 }
 
-// ─── Cost Box ────────────────────────────────────────────────────
+// ─── Balance Card ───────────────────────────────────────────────
 
-function CostBox({
-  icon: Icon,
-  label,
-  value,
-  accent,
-  free,
+function BalanceCard({
+  balance,
+  loading,
+  email,
 }: {
-  icon: typeof Coins;
-  label: string;
-  value: number;
-  accent: string;
-  free?: boolean;
+  balance: number;
+  loading: boolean;
+  email: string;
 }) {
+  const empty = balance <= 0 && !loading;
   return (
-    <div
-      className="rounded-xl border px-3 py-2.5 flex items-center gap-2.5"
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="relative rounded-3xl border border-white/[0.10] backdrop-blur-2xl px-6 py-7 overflow-hidden"
       style={{
-        background: "rgba(255,255,255,0.025)",
-        borderColor: "rgba(255,255,255,0.06)",
+        background:
+          "linear-gradient(135deg, rgba(149,191,71,0.08) 0%, rgba(255,255,255,0.04) 50%, rgba(168,85,247,0.06) 100%)",
+        boxShadow:
+          "0 30px 80px -40px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.05)",
       }}
     >
       <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-        style={{ background: `${accent}1f`, border: `1px solid ${accent}3a` }}
-      >
-        <Icon className="w-4 h-4" style={{ color: accent }} />
-      </div>
-      <div className="min-w-0">
-        <div className="text-[10px] uppercase tracking-[0.12em] text-white/40 leading-none">
-          {label}
-        </div>
-        <div className="text-[14px] font-bold text-white mt-1 leading-none tabular-nums">
-          {free ? "Gratis" : `${value} CR`}
-        </div>
-      </div>
-    </div>
-  );
-}
+        className="absolute -top-24 -right-24 w-56 h-56 rounded-full pointer-events-none"
+        style={{ background: "radial-gradient(closest-side, rgba(149,191,71,0.25), transparent 70%)" }}
+      />
 
-// ─── Package Card ────────────────────────────────────────────────
-
-function PackageCard({
-  pkg,
-  index,
-  isCheapest,
-  email,
-  redirecting,
-  disabled,
-  onBuy,
-}: {
-  pkg: CreditPackage;
-  index: number;
-  isCheapest: boolean;
-  email: string;
-  redirecting: boolean;
-  disabled: boolean;
-  onBuy: () => void;
-}) {
-  const ratePerCent = pkg.credits / pkg.priceCents;
-  const ratePerEuro = ratePerCent * 100;
-  const featured = pkg.id === "pro";
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 18 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.05 + index * 0.05, type: "spring", stiffness: 220, damping: 22 }}
-      className={`relative rounded-3xl border backdrop-blur-2xl overflow-hidden transition-all duration-300 ${
-        featured
-          ? "border-[#95BF47]/35 bg-[#95BF47]/[0.06] shadow-[0_30px_80px_-30px_rgba(149,191,71,0.45)]"
-          : "border-white/[0.08] bg-white/[0.025] hover:border-white/[0.18]"
-      }`}
-    >
-      {pkg.hint && (
-        <div
-          className={`absolute top-0 right-5 -translate-y-1/2 px-2.5 py-1 rounded-full text-[10px] uppercase tracking-[0.12em] font-bold border ${
-            featured
-              ? "bg-[#95BF47] text-[#0a1604] border-[#86ad3f]"
-              : "bg-white/10 text-white/85 border-white/20 backdrop-blur"
-          }`}
-        >
-          {pkg.hint}
-        </div>
-      )}
-
-      <div className="p-6 md:p-7">
-        <div className="flex items-baseline justify-between mb-1">
-          <span className="text-[11px] uppercase tracking-[0.16em] font-semibold text-white/55">
-            {pkg.id === "starter" ? "Starter" : pkg.id === "pro" ? "Pro" : "Max"}
-          </span>
-          {isCheapest && (
-            <span className="text-[10px] font-mono text-[#95BF47]">
-              {ratePerEuro.toFixed(0)} Cr / €
-            </span>
-          )}
+      <div className="relative">
+        <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.18em] text-white/45 mb-3">
+          <Coins className="w-3.5 h-3.5 text-[#95BF47]" />
+          Aktuelles Guthaben
         </div>
 
-        <div className="flex items-baseline gap-2 mb-3">
-          <span className="font-sf-display font-black text-4xl md:text-5xl tabular-nums tracking-tight">
-            {pkg.credits.toLocaleString("de-DE")}
-          </span>
-          <span className="text-sm text-white/55 font-medium">Credits</span>
+        <div className="flex items-baseline gap-2.5">
+          <motion.span
+            key={balance}
+            initial={{ y: -4, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+            className="font-sf-display font-black text-5xl md:text-6xl tabular-nums tracking-[-0.03em] leading-none text-white"
+          >
+            {loading ? "···" : balance.toLocaleString("de-DE")}
+          </motion.span>
+          <span className="text-[14px] font-medium text-white/45">Credits</span>
         </div>
 
-        <div className="mb-5 pb-5 border-b border-white/[0.06]">
-          <div className="flex items-baseline gap-2">
-            <span className="font-sf-display text-2xl font-bold">{pkg.priceLabel}</span>
-            <span className="text-[11px] text-white/40">einmalig · inkl. MwSt.</span>
-          </div>
-        </div>
-
-        <ul className="space-y-2 mb-6 text-[13px] text-white/70">
-          <Bullet>
-            ≈ {Math.floor(pkg.credits / CREDIT_COSTS.EMAIL_GENERATE).toLocaleString("de-DE")} E-Mail-Generierungen
-          </Bullet>
-          <Bullet>
-            ≈ {Math.floor(pkg.credits / CREDIT_COSTS.BLOG_GENERATE).toLocaleString("de-DE")} Blog-Beiträge
-          </Bullet>
-          <Bullet>
-            ≈ {Math.floor(pkg.credits / CREDIT_COSTS.UPSCALE_IMAGE).toLocaleString("de-DE")} Cloud-Upscales
-          </Bullet>
-          <Bullet>SEO-Analyse immer kostenfrei</Bullet>
-        </ul>
-
-        <button
-          onClick={onBuy}
-          disabled={disabled || redirecting || !email}
-          className={`w-full inline-flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
-            featured ? "btn-deploy" : "btn-accent"
-          }`}
-          style={featured ? undefined : { paddingTop: 12, paddingBottom: 12 }}
-        >
-          {redirecting ? (
-            <>
-              <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              Weiterleitung …
-            </>
-          ) : (
-            <>
-              <ShoppingCart className="w-4 h-4" />
-              Jetzt kaufen
-            </>
-          )}
-        </button>
-
-        {!email && (
-          <p className="mt-3 text-[11px] text-amber-300/85 text-center">
-            Hinterlege eine E-Mail in deinem Profil, um den Checkout vorzubefüllen.
+        {empty ? (
+          <p className="mt-4 text-[13px] text-amber-200/85 leading-relaxed">
+            <AlertTriangle className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+            Dein Guthaben ist leer – AI-Tools sind blockiert. Lade auf, um wieder loszulegen.
           </p>
+        ) : (
+          <p className="mt-4 text-[13px] text-white/50 leading-relaxed">
+            Dein Guthaben verfällt nicht – verbrauchte Credits werden in Echtzeit aktualisiert.
+          </p>
+        )}
+
+        {email && (
+          <div className="mt-5 pt-4 border-t border-white/[0.06] flex items-center gap-2">
+            <Sparkles className="w-3 h-3 text-white/40" />
+            <span className="text-[11px] text-white/40 font-mono truncate">{email}</span>
+          </div>
         )}
       </div>
     </motion.div>
   );
 }
 
-function Bullet({ children }: { children: React.ReactNode }) {
+// ─── Voucher Card ───────────────────────────────────────────────
+
+function VoucherCard({
+  voucher,
+  setVoucher,
+  status,
+  onSubmit,
+  onDismissStatus,
+}: {
+  voucher: string;
+  setVoucher: (v: string) => void;
+  status:
+    | { kind: "idle" }
+    | { kind: "loading" }
+    | { kind: "success"; credits: number }
+    | { kind: "error"; message: string };
+  onSubmit: (e: React.FormEvent) => void;
+  onDismissStatus: () => void;
+}) {
   return (
-    <li className="flex items-start gap-2">
-      <CheckCircle2 className="w-4 h-4 text-[#95BF47] mt-0.5 shrink-0" />
-      <span>{children}</span>
-    </li>
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.1 }}
+      className="rounded-3xl border border-white/[0.08] backdrop-blur-2xl px-6 py-6"
+      style={{
+        background: "rgba(255,255,255,0.025)",
+        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.04)",
+      }}
+    >
+      <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.18em] text-white/45 mb-1.5">
+        <Ticket className="w-3.5 h-3.5 text-[#95BF47]" />
+        Gutschein einlösen
+      </div>
+      <h3 className="font-sf-display text-xl font-semibold tracking-tight mb-4">
+        Hast du einen Code?
+      </h3>
+
+      <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2.5">
+        <input
+          value={voucher}
+          onChange={(e) => {
+            setVoucher(e.target.value.toUpperCase());
+            if (status.kind !== "idle" && status.kind !== "loading") {
+              onDismissStatus();
+            }
+          }}
+          placeholder="z. B. WELCOME50"
+          maxLength={64}
+          className="flex-1 rounded-xl px-4 py-3 text-[14px] font-mono tracking-wider uppercase outline-none transition placeholder:text-white/20 placeholder:font-sans placeholder:tracking-normal placeholder:normal-case"
+          style={{
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.08)",
+          }}
+        />
+        <button
+          type="submit"
+          disabled={status.kind === "loading" || voucher.trim().length < 3}
+          className="btn-accent inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-[13.5px] font-semibold disabled:opacity-50 disabled:cursor-not-allowed transition"
+        >
+          {status.kind === "loading" ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Ticket className="w-4 h-4" />
+          )}
+          Einlösen
+        </button>
+      </form>
+
+      <AnimatePresence mode="wait">
+        {status.kind === "success" && (
+          <motion.div
+            key="success"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="mt-3 flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-[#95BF47]/12 border border-[#95BF47]/30 text-[13px] text-[#bce078]"
+          >
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            <span>
+              <span className="font-semibold">+{status.credits.toLocaleString("de-DE")} Credits</span> wurden gutgeschrieben.
+            </span>
+          </motion.div>
+        )}
+        {status.kind === "error" && (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="mt-3 flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-red-500/10 border border-red-500/25 text-[13px] text-red-200"
+          >
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>{status.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── Package Row ────────────────────────────────────────────────
+
+function PackageRow({
+  pkg,
+  index,
+  redirecting,
+  disabled,
+  hasEmail,
+  onBuy,
+}: {
+  pkg: CreditPackage;
+  index: number;
+  redirecting: boolean;
+  disabled: boolean;
+  hasEmail: boolean;
+  onBuy: () => void;
+}) {
+  const featured = pkg.id === "pro";
+  const max = pkg.id === "max";
+  const Icon = max ? Crown : pkg.id === "pro" ? Star : Sparkles;
+  const accent = max ? "#a78bfa" : featured ? "#95BF47" : "#60a5fa";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        delay: 0.08 + index * 0.06,
+        type: "spring",
+        stiffness: 220,
+        damping: 22,
+      }}
+      className="relative group"
+    >
+      <div
+        className={`relative rounded-3xl border backdrop-blur-2xl overflow-hidden transition-all duration-300 ${
+          featured
+            ? "border-[#95BF47]/35 group-hover:border-[#95BF47]/55"
+            : "border-white/[0.08] group-hover:border-white/[0.18]"
+        }`}
+        style={{
+          background: featured
+            ? "linear-gradient(135deg, rgba(149,191,71,0.10) 0%, rgba(149,191,71,0.04) 60%, rgba(255,255,255,0.025) 100%)"
+            : max
+            ? "linear-gradient(135deg, rgba(168,85,247,0.07) 0%, rgba(255,255,255,0.025) 100%)"
+            : "rgba(255,255,255,0.025)",
+          boxShadow: featured
+            ? "0 30px 80px -40px rgba(149,191,71,0.5), inset 0 1px 0 rgba(255,255,255,0.06)"
+            : "inset 0 1px 0 rgba(255,255,255,0.04)",
+        }}
+      >
+        {pkg.hint && (
+          <div
+            className="absolute top-5 right-5 px-2 py-0.5 rounded-full text-[9.5px] uppercase tracking-[0.16em] font-bold border"
+            style={{
+              background: featured ? "#95BF47" : "rgba(255,255,255,0.08)",
+              color: featured ? "#0a1604" : "rgba(255,255,255,0.85)",
+              borderColor: featured ? "#86ad3f" : "rgba(255,255,255,0.18)",
+            }}
+          >
+            {pkg.hint}
+          </div>
+        )}
+
+        <div className="p-5 md:p-6 flex items-center gap-4 md:gap-6">
+          {/* Icon plate */}
+          <div
+            className="shrink-0 w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center"
+            style={{
+              background: `linear-gradient(135deg, ${accent}28 0%, ${accent}10 100%)`,
+              border: `1px solid ${accent}38`,
+              boxShadow: `inset 0 1px 0 rgba(255,255,255,0.08), 0 8px 24px -10px ${accent}50`,
+            }}
+          >
+            <Icon className="w-6 h-6 md:w-7 md:h-7" style={{ color: accent }} />
+          </div>
+
+          {/* Credits + price */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-sf-display font-black text-3xl md:text-4xl tabular-nums tracking-[-0.025em] leading-none">
+                {pkg.credits.toLocaleString("de-DE")}
+              </span>
+              <span className="text-[12.5px] text-white/45 font-medium">Credits</span>
+            </div>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="font-sf-display text-lg font-bold tabular-nums">
+                {pkg.priceLabel}
+              </span>
+              <span className="text-[10.5px] text-white/35 uppercase tracking-[0.12em]">
+                einmalig
+              </span>
+            </div>
+          </div>
+
+          {/* CTA */}
+          <button
+            onClick={onBuy}
+            disabled={disabled || redirecting || !hasEmail}
+            className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-4 md:px-5 h-11 md:h-12 rounded-xl font-semibold text-[13.5px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
+              featured ? "btn-deploy" : "btn-accent"
+            }`}
+            title={hasEmail ? "Zur Kasse" : "Kein E-Mail-Profil hinterlegt"}
+          >
+            {redirecting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <>
+                <ShoppingCart className="w-4 h-4" />
+                <span className="hidden sm:inline">Kaufen</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -412,11 +574,11 @@ function TrustItem({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-3 flex gap-3">
+    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] backdrop-blur-md px-4 py-3 flex gap-3">
       <Icon className="w-4 h-4 text-[#95BF47] mt-0.5 shrink-0" />
       <div>
         <div className="font-semibold text-white/85 text-[12.5px]">{title}</div>
-        <div className="text-white/50 leading-relaxed">{children}</div>
+        <div className="text-white/45 text-[11.5px] leading-relaxed">{children}</div>
       </div>
     </div>
   );
