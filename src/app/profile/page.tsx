@@ -22,7 +22,10 @@ import {
   Clock,
   ChevronRight,
   RefreshCw,
+  Coins,
+  Plus,
 } from "lucide-react";
+import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
 import { useBranding } from "@/lib/branding";
@@ -62,7 +65,7 @@ export default function ProfilePage() {
   const [linkingGoogle, setLinkingGoogle] = useState(false);
   const [linkGoogleInput, setLinkGoogleInput] = useState("");
   const [showLinkInput, setShowLinkInput] = useState(false);
-  const [credits, setCredits] = useState({ used: 0, remaining: 500, max: 500 });
+  const [credits, setCredits] = useState({ balance: 0, totalPurchased: 0, totalUsed: 0 });
 
   const [tickets, setTickets] = useState<TicketInfo[]>([]);
   const [ticketsLoading, setTicketsLoading] = useState(false);
@@ -178,8 +181,9 @@ export default function ProfilePage() {
     finally { setLinkingGoogle(false); }
   }
 
-  const creditPercent = credits.max > 0 ? ((credits.remaining / credits.max) * 100) : 0;
-  const creditColor = creditPercent > 50 ? "#95BF47" : creditPercent > 20 ? "#F59E0B" : "#EF4444";
+  const lowBalance = credits.balance < 20;
+  const emptyBalance = credits.balance <= 0;
+  const creditColor = emptyBalance ? "#EF4444" : lowBalance ? "#F59E0B" : "#95BF47";
 
   if (loading) {
     return (
@@ -255,9 +259,9 @@ export default function ProfilePage() {
                 <div className="text-xs md:text-sm font-bold text-white mt-0.5">Managed</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-2.5 md:p-3 text-center">
-                <Zap className="w-4 h-4 text-purple-400 mx-auto mb-1" />
+                <Coins className="w-4 h-4 text-[#95BF47] mx-auto mb-1" />
                 <div className="text-[10px] md:text-xs text-zinc-500">{t.profile.aiCredits}</div>
-                <div className="text-xs md:text-sm font-bold text-white mt-0.5">{credits.remaining}/{credits.max}</div>
+                <div className="text-xs md:text-sm font-bold text-white mt-0.5 tabular-nums">{credits.balance.toLocaleString("de-DE")}</div>
               </div>
               <div className="bg-white/[0.03] border border-white/5 rounded-xl p-2.5 md:p-3 text-center">
                 <Store className="w-4 h-4 text-emerald-400 mx-auto mb-1" />
@@ -296,59 +300,62 @@ export default function ProfilePage() {
             </div>
           </motion.div>
 
-          {/* Credit System Card */}
+          {/* Credit Balance Card */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 }}
             className="relative overflow-hidden rounded-2xl border border-white/10 p-5 md:p-6 backdrop-blur-xl"
             style={{ background: "linear-gradient(135deg, rgba(149,191,71,0.08) 0%, rgba(255,255,255,0.04) 50%, rgba(99,102,241,0.06) 100%)" }}>
-            {/* Decorative glow */}
             <div className="absolute -top-20 -right-20 w-40 h-40 rounded-full blur-[80px] pointer-events-none" style={{ background: `${creditColor}15` }} />
 
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: `${creditColor}20`, border: `1px solid ${creditColor}30` }}>
-                  <Zap className="w-5 h-5" style={{ color: creditColor }} />
+            <div className="flex items-center justify-between mb-4 gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${creditColor}20`, border: `1px solid ${creditColor}30` }}>
+                  <Coins className="w-5 h-5" style={{ color: creditColor }} />
                 </div>
-                <div>
-                  <h3 className="text-sm font-bold">Monatliche Credits</h3>
-                  <p className="text-[10px] text-zinc-500">Setzt sich jeden Monat automatisch zur&uuml;ck</p>
+                <div className="min-w-0">
+                  <h3 className="text-sm font-bold">Credit-Guthaben</h3>
+                  <p className="text-[10px] text-zinc-500">Wird verbraucht beim Generieren – jederzeit aufladbar.</p>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xl md:text-2xl font-black tabular-nums" style={{ color: creditColor }}>
-                  {credits.remaining}
+              <div className="text-right shrink-0">
+                <div className="text-2xl md:text-3xl font-black tabular-nums leading-none" style={{ color: creditColor }}>
+                  {credits.balance.toLocaleString("de-DE")}
                 </div>
-                <div className="text-[10px] text-zinc-500">von {credits.max}</div>
+                <div className="text-[10px] text-zinc-500 mt-1">Credits</div>
               </div>
             </div>
 
-            {/* Animated Progress Bar */}
-            <div className="relative h-4 bg-white/[0.06] rounded-full overflow-hidden border border-white/[0.06]">
-              <motion.div
-                className="absolute inset-y-0 left-0 rounded-full"
-                style={{
-                  background: `linear-gradient(90deg, ${creditColor}, ${creditColor}CC)`,
-                  boxShadow: `0 0 20px ${creditColor}40`,
-                }}
-                initial={{ width: 0 }}
-                animate={{ width: `${creditPercent}%` }}
-                transition={{ duration: 1.2, ease: "easeOut", delay: 0.3 }}
-              />
-              {/* Shimmer effect */}
-              <motion.div
-                className="absolute inset-y-0 w-20 rounded-full"
-                style={{ background: "linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)" }}
-                initial={{ left: "-80px" }}
-                animate={{ left: "calc(100% + 80px)" }}
-                transition={{ duration: 2.5, repeat: Infinity, repeatDelay: 3, ease: "easeInOut" }}
-              />
+            <div className="grid grid-cols-3 gap-2 mb-4">
+              <div className="rounded-lg bg-white/[0.04] border border-white/[0.06] px-2.5 py-2 text-center">
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500">E-Mail</div>
+                <div className="text-xs font-bold text-white mt-0.5">20</div>
+              </div>
+              <div className="rounded-lg bg-white/[0.04] border border-white/[0.06] px-2.5 py-2 text-center">
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500">Blog</div>
+                <div className="text-xs font-bold text-white mt-0.5">10</div>
+              </div>
+              <div className="rounded-lg bg-white/[0.04] border border-white/[0.06] px-2.5 py-2 text-center">
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500">Upscale</div>
+                <div className="text-xs font-bold text-white mt-0.5">5</div>
+              </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-between text-[10px] text-zinc-500">
-              <span>{credits.remaining} / {credits.max} verf&uuml;gbar</span>
-              {credits.remaining <= 0 && (
-                <span className="text-red-400 font-semibold">Limit erreicht</span>
-              )}
-            </div>
+            <Link
+              href="/credits"
+              className="btn-accent w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              {emptyBalance ? "Credits aufladen" : "Mehr Credits kaufen"}
+              <ChevronRight className="w-4 h-4 -mr-1" />
+            </Link>
+
+            {(emptyBalance || lowBalance) && (
+              <div className="mt-3 text-[11px] text-amber-300/90 flex items-start gap-1.5">
+                <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
+                <span>{emptyBalance
+                  ? "Dein Guthaben ist leer – AI-Tools sind blockiert, bis du Credits nachlädst."
+                  : "Wenig Guthaben – lade rechtzeitig auf, damit deine Tools nicht blockieren."}</span>
+              </div>
+            )}
           </motion.div>
 
           {/* Shopify API */}

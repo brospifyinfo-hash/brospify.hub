@@ -7,6 +7,13 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { generateEmailTemplate, type GenerateInput } from "@/lib/ai-email-generator";
 import { getTemplateById, type EmailTemplateDef } from "@/lib/email-templates";
+import {
+  CREDIT_LIMITS,
+  deductCredits,
+  findKundeByKey,
+  getCreditsState,
+  getKundeProfile,
+} from "@/lib/sheets";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -21,12 +28,39 @@ interface RequestBody extends Partial<GenerateInput> {
   socialTwitter?: string;
   tonalität?: string;
   typographyStyle?: "serif" | "sans-serif";
+  fontFamily?: string;
   addSocialLinks?: boolean;
   addDiscountCode?: boolean;
   discountCode?: string;
   addTrustBadges?: boolean;
   specialNotes?: string;
 }
+
+// Whitelist of selectable Google fonts (mirrors ConfigPanel.FONT_FAMILIES).
+const ALLOWED_FONTS: Record<string, string> = {
+  Inter: '"Inter", system-ui, sans-serif',
+  Roboto: '"Roboto", Helvetica, Arial, sans-serif',
+  "Open Sans": '"Open Sans", Helvetica, Arial, sans-serif',
+  Montserrat: '"Montserrat", system-ui, sans-serif',
+  Poppins: '"Poppins", system-ui, sans-serif',
+  Lato: '"Lato", system-ui, sans-serif',
+  Nunito: '"Nunito", system-ui, sans-serif',
+  Raleway: '"Raleway", system-ui, sans-serif',
+  "Work Sans": '"Work Sans", system-ui, sans-serif',
+  "DM Sans": '"DM Sans", system-ui, sans-serif',
+  "Playfair Display": '"Playfair Display", Georgia, serif',
+  Merriweather: '"Merriweather", Georgia, serif',
+  Lora: '"Lora", Georgia, serif',
+  "EB Garamond": '"EB Garamond", Garamond, serif',
+  "Cormorant Garamond": '"Cormorant Garamond", Garamond, serif',
+  "Bodoni Moda": '"Bodoni Moda", Didot, serif',
+  "DM Serif Display": '"DM Serif Display", Georgia, serif',
+  "Space Grotesk": '"Space Grotesk", system-ui, sans-serif',
+  "Bricolage Grotesque": '"Bricolage Grotesque", system-ui, sans-serif',
+  Manrope: '"Manrope", system-ui, sans-serif',
+  Geist: '"Geist", system-ui, sans-serif',
+  "JetBrains Mono": '"JetBrains Mono", monospace',
+};
 
 // ─── Layout Directives (tone → explicit HTML/CSS instructions) ───
 
@@ -121,10 +155,19 @@ function buildPrompt(tpl: EmailTemplateDef, body: RequestBody): string {
   const backgroundColor = body.backgroundColor || "#ffffff";
   const tonalität = body.tonalität || body.brandTone || "seriös";
   const typographyStyle = body.typographyStyle || "sans-serif";
-  const fontFamily =
-    typographyStyle === "serif"
+  const fontKey =
+    typeof body.fontFamily === "string" && ALLOWED_FONTS[body.fontFamily]
+      ? body.fontFamily
+      : null;
+  const fontFamily = fontKey
+    ? ALLOWED_FONTS[fontKey]
+    : typographyStyle === "serif"
       ? '"Georgia", "Times New Roman", Times, serif'
       : '"Helvetica Neue", "Arial", Helvetica, sans-serif';
+  // Used to instruct the AI to embed the right Google Fonts <link>.
+  const googleFontHref = fontKey
+    ? `https://fonts.googleapis.com/css2?family=${encodeURIComponent(fontKey).replace(/%20/g, "+")}:wght@400;500;600;700&display=swap`
+    : null;
 
   const styleDirective = buildStyleDirective(
     tonalität,
@@ -183,7 +226,7 @@ MARKEN-KONFIGURATION:
 - Primärfarbe: ${primaryColor}
 - Sekundärfarbe: ${secondaryColor}
 - Hintergrundfarbe: ${backgroundColor}
-- Typografie: ${fontFamily}
+- Typografie: ${fontFamily}${googleFontHref ? `\n- Google-Font einbinden: füge im <head> ein <link href="${googleFontHref}" rel="stylesheet"> ein und nutze die Schrift in einem inline <style>html,body{font-family:${fontFamily};}</style> Block.` : ""}
 
 ${styleDirective}
 
@@ -248,6 +291,28 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Unbekannte templateId." }, { status: 404 });
   }
 
+  // ── Credit pre-check (admin bypasses the meter) ────────────────
+  let kundeRowIndex: number | null = null;
+  let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;
+  if (!session.isAdmin && session.lizenzschluessel) {
+    const kunde = await findKundeByKey(session.lizenzschluessel);
+    if (!kunde) {
+      return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
+    }
+    kundeRowIndex = kunde.rowIndex;
+    kundeProfile = await getKundeProfile(kunde.rowIndex);
+    const credits = getCreditsState(kundeProfile);
+    if (credits.balance < CREDIT_LIMITS.EMAIL_GENERATE) {
+      return NextResponse.json(
+        {
+          error: `Nicht genug Credits — du brauchst ${CREDIT_LIMITS.EMAIL_GENERATE}, hast aber nur ${credits.balance}. Lade dein Konto unter /credits auf.`,
+          creditsRemaining: credits.balance,
+        },
+        { status: 402 },
+      );
+    }
+  }
+
   const apiKey = process.env.DEEPSEEK_API_KEY;
 
   // ── Try DeepSeek if key is configured ──────────────────────────
@@ -289,12 +354,17 @@ export async function POST(req: Request) {
 
         if (raw.includes("<") && raw.includes(">")) {
           const { subject, body: liquid } = extractSubject(raw, tpl.title);
+          const creditsRemaining = await chargeCredits(
+            kundeRowIndex,
+            kundeProfile,
+          );
           return NextResponse.json({
             liquid,
             subject,
             templateId: tpl.id,
             generatedAt: new Date().toISOString(),
             source: "deepseek",
+            creditsRemaining,
           });
         }
       } else {
@@ -323,9 +393,11 @@ export async function POST(req: Request) {
           : "#95BF47",
     });
 
+    const creditsRemaining = await chargeCredits(kundeRowIndex, kundeProfile);
     return NextResponse.json({
       ...result,
       source: "deterministic",
+      creditsRemaining,
       _warning: apiKey ? undefined : "DEEPSEEK_API_KEY nicht konfiguriert — deterministischer Fallback verwendet.",
     });
   } catch (err) {
@@ -334,4 +406,19 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
+}
+
+// ─── Credit deduction helper ────────────────────────────────────
+
+async function chargeCredits(
+  rowIndex: number | null,
+  profile: Awaited<ReturnType<typeof getKundeProfile>> | null,
+): Promise<number | undefined> {
+  if (rowIndex === null || profile === null) return undefined;
+  const result = await deductCredits(
+    rowIndex,
+    profile,
+    CREDIT_LIMITS.EMAIL_GENERATE,
+  );
+  return result.success ? result.remaining : undefined;
 }

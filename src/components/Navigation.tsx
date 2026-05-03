@@ -19,6 +19,8 @@ import {
   Mail,
   Sparkles,
   ImageUp,
+  Plus,
+  Coins,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -42,7 +44,7 @@ const AI_TOOLS = [
   {
     href: "/email-templates",
     title: "AI Email Generator",
-    desc: "10 Shopify-Mails per KI generieren · 30 Credits",
+    desc: "10 Shopify-Mails per KI · 20 Credits",
     icon: Mail,
     color: "from-rose-500/15 to-pink-500/15",
     border: "border-rose-500/15",
@@ -51,7 +53,7 @@ const AI_TOOLS = [
   {
     href: "/seo",
     title: "SEO Analyse",
-    desc: "On-Page Audit & Optimierung · 10 Credits",
+    desc: "On-Page Audit & Optimierung · 0 Credits",
     icon: BarChart,
     color: "from-blue-500/15 to-cyan-500/15",
     border: "border-blue-500/15",
@@ -60,7 +62,7 @@ const AI_TOOLS = [
   {
     href: "/blog",
     title: "Blog-Beiträge",
-    desc: "KI-Writer für Shopify-Blogs · 50 Credits",
+    desc: "KI-Writer für Shopify-Blogs · 10 Credits",
     icon: PenTool,
     color: "from-[#95BF47]/15 to-emerald-500/15",
     border: "border-[#95BF47]/15",
@@ -69,7 +71,7 @@ const AI_TOOLS = [
   {
     href: "/ai-tools/hybrid-upscaler",
     title: "Image Upscaler",
-    desc: "Lokal (GPU) oder Cloud (HQ) · Toggle",
+    desc: "Lokal frei · Cloud HQ · 5 Credits",
     icon: ImageUp,
     color: "from-[#95BF47]/15 to-emerald-500/15",
     border: "border-[#95BF47]/15",
@@ -217,9 +219,14 @@ export default function Navigation() {
                         <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-zinc-500">
                           AI Suite · {AI_TOOLS.length} Tools
                         </span>
-                        <span className="text-[10px] font-mono text-[#95BF47]">
-                          🪙 {credits.loading ? "···" : credits.remaining}
-                        </span>
+                        <Link
+                          href="/credits"
+                          onClick={() => setAiOpen(false)}
+                          className="text-[10px] font-mono text-[#95BF47] hover:text-white transition flex items-center gap-1"
+                        >
+                          🪙 {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
+                          <Plus className="w-2.5 h-2.5" />
+                        </Link>
                       </div>
                       <div className="space-y-1.5">
                         {AI_TOOLS.map((tool) => {
@@ -305,8 +312,7 @@ export default function Navigation() {
             <div className="flex items-center gap-2">
               {/* Global Credits Pill — always visible */}
               <CreditsPill
-                remaining={credits.remaining}
-                max={credits.max}
+                balance={credits.balance}
                 loading={credits.loading}
               />
 
@@ -382,14 +388,19 @@ export default function Navigation() {
             >
               <div className="p-3 space-y-1">
                 {/* Mobile credits row */}
-                <div className="flex items-center justify-between px-4 py-3 mb-2 rounded-xl bg-[#95BF47]/8 border border-[#95BF47]/15">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
-                    Verfügbare Credits
+                <Link
+                  href="/credits"
+                  className="flex items-center justify-between px-4 py-3 mb-2 rounded-xl bg-[#95BF47]/8 border border-[#95BF47]/15 hover:bg-[#95BF47]/12 transition"
+                >
+                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-300">
+                    <Coins className="w-3.5 h-3.5 text-[#95BF47]" />
+                    Credit-Guthaben
+                  </div>
+                  <span className="text-sm font-mono font-semibold text-[#95BF47] tabular-nums flex items-center gap-1.5">
+                    {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
+                    <Plus className="w-3.5 h-3.5" />
                   </span>
-                  <span className="text-sm font-mono font-semibold text-[#95BF47] tabular-nums">
-                    🪙 {credits.loading ? "···" : credits.remaining} / {credits.max}
-                  </span>
-                </div>
+                </Link>
 
                 {/* Profile card */}
                 <Link
@@ -509,86 +520,81 @@ export default function Navigation() {
 }
 
 // ─── Global Credits Pill ────────────────────────────────────────
-// Always-visible balance display in the top-right of the nav.
-// Animates the value when it changes after a tool consumes credits.
+// Always-visible balance display in the top-right of the nav. Tap
+// to jump straight to the credit shop. Pulses when the value
+// changes after a tool consumes credits.
 
 function CreditsPill({
-  remaining,
-  max,
+  balance,
   loading,
 }: {
-  remaining: number;
-  max: number;
+  balance: number;
   loading: boolean;
 }) {
   const [pulse, setPulse] = useState(false);
-  const prev = useRef(remaining);
+  const prev = useRef(balance);
 
   useEffect(() => {
-    if (prev.current !== remaining && !loading) {
+    if (prev.current !== balance && !loading) {
       setPulse(true);
       const t = setTimeout(() => setPulse(false), 600);
       return () => clearTimeout(t);
     }
-    prev.current = remaining;
-  }, [remaining, loading]);
+    prev.current = balance;
+  }, [balance, loading]);
 
-  const low = remaining <= 30 && !loading;
-  const ratio = max > 0 ? Math.min(100, (remaining / max) * 100) : 0;
+  const empty = balance <= 0 && !loading;
+  const low = !empty && balance < 20 && !loading;
+  const accent = empty ? "#ef4444" : low ? "#fbbf24" : "#95BF47";
+  const tint = empty
+    ? "rgba(239, 68, 68, 0.10)"
+    : low
+    ? "rgba(245, 158, 11, 0.10)"
+    : "rgba(149, 191, 71, 0.10)";
+  const ring = empty
+    ? "rgba(239, 68, 68, 0.25)"
+    : low
+    ? "rgba(245, 158, 11, 0.25)"
+    : "rgba(149, 191, 71, 0.25)";
 
   return (
     <Link
-      href="/profile"
-      title={`${remaining} von ${max} Credits verfügbar`}
+      href="/credits"
+      title={`${balance} Credits verfügbar – tippen zum Aufladen`}
       className="hidden sm:flex items-center gap-2 pl-2.5 pr-3 h-9 rounded-xl border transition-all duration-300"
       style={{
-        background: low
-          ? "rgba(245, 158, 11, 0.10)"
-          : "rgba(149, 191, 71, 0.10)",
-        borderColor: low
-          ? "rgba(245, 158, 11, 0.25)"
-          : "rgba(149, 191, 71, 0.25)",
-        boxShadow: pulse
-          ? `0 0 0 4px ${low ? "rgba(245, 158, 11, 0.18)" : "rgba(149, 191, 71, 0.18)"}`
-          : undefined,
+        background: tint,
+        borderColor: ring,
+        boxShadow: pulse ? `0 0 0 4px ${tint}` : undefined,
       }}
     >
       <div className="relative flex items-center justify-center w-5 h-5">
         <span
           className="text-[14px]"
-          style={{ filter: low ? "saturate(0.85)" : "none" }}
+          style={{ filter: empty ? "saturate(0.6)" : "none" }}
         >
           🪙
         </span>
       </div>
       <div className="flex flex-col leading-none">
         <motion.span
-          key={remaining}
+          key={balance}
           initial={{ y: -6, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
           className="font-mono font-semibold text-[12.5px] tabular-nums"
-          style={{ color: low ? "#fbbf24" : "#95BF47" }}
+          style={{ color: accent }}
         >
-          {loading ? "···" : remaining}
+          {loading ? "···" : balance.toLocaleString("de-DE")}
         </motion.span>
-        <span
-          className="text-[8.5px] uppercase tracking-[0.12em] font-medium text-white/40 mt-0.5"
-        >
-          Credits
+        <span className="text-[8.5px] uppercase tracking-[0.12em] font-medium text-white/40 mt-0.5">
+          {empty ? "Aufladen" : "Credits"}
         </span>
       </div>
-      <div className="hidden lg:block w-12 h-1 rounded-full overflow-hidden bg-white/[0.06] ml-1">
-        <div
-          className="h-full transition-all duration-700 rounded-full"
-          style={{
-            width: `${ratio}%`,
-            background: low
-              ? "linear-gradient(90deg, #fbbf24, #f59e0b)"
-              : "linear-gradient(90deg, #95BF47, #86ad3f)",
-          }}
-        />
-      </div>
+      <Plus
+        className="w-3 h-3 ml-0.5 opacity-70"
+        style={{ color: accent }}
+      />
     </Link>
   );
 }

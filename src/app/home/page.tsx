@@ -27,8 +27,12 @@ import {
   FileText,
   ImageUp,
   Mail,
+  Coins,
+  AlertTriangle,
 } from "lucide-react";
+import Link from "next/link";
 import Navigation from "@/components/Navigation";
+import { useCredits } from "@/lib/credits";
 
 interface SessionInfo {
   isLoggedIn: boolean;
@@ -150,6 +154,7 @@ const EXTRA_TASKS = [
 
 export default function HomePage() {
   const router = useRouter();
+  const credits = useCredits();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
   const [loading, setLoading] = useState(true);
@@ -359,6 +364,9 @@ export default function HomePage() {
             </div>
           </div>
         </motion.div>
+
+        {/* Credit Balance Banner */}
+        <CreditBalanceBanner balance={credits.balance} loading={credits.loading} />
 
         {/* Progress Bar */}
         <motion.div
@@ -579,6 +587,101 @@ export default function HomePage() {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+// ─── Dashboard Credit Balance Banner ────────────────────────────
+// Always visible at the top of the hub home page so the current
+// balance is "jederzeit klar ersichtlich". Tapping it jumps to the
+// shop. Switches to a warning treatment at zero or near-zero.
+
+function CreditBalanceBanner({ balance, loading }: { balance: number; loading: boolean }) {
+  const empty = balance <= 0 && !loading;
+  const low = !empty && balance < 20 && !loading;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="mb-4"
+    >
+      <Link
+        href="/credits"
+        className="group relative flex items-center justify-between gap-3 rounded-2xl border px-4 py-3.5 md:px-5 md:py-4 backdrop-blur-md transition-all duration-300 overflow-hidden"
+        style={{
+          background: empty
+            ? "linear-gradient(135deg, rgba(239,68,68,0.10), rgba(255,255,255,0.03))"
+            : low
+            ? "linear-gradient(135deg, rgba(245,158,11,0.10), rgba(255,255,255,0.03))"
+            : "linear-gradient(135deg, rgba(149,191,71,0.10), rgba(255,255,255,0.03))",
+          borderColor: empty
+            ? "rgba(239,68,68,0.30)"
+            : low
+            ? "rgba(245,158,11,0.30)"
+            : "rgba(149,191,71,0.25)",
+        }}
+      >
+        <div className="flex items-center gap-3 min-w-0">
+          <div
+            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+            style={{
+              background: empty
+                ? "rgba(239,68,68,0.18)"
+                : low
+                ? "rgba(245,158,11,0.18)"
+                : "rgba(149,191,71,0.18)",
+              border: empty
+                ? "1px solid rgba(239,68,68,0.35)"
+                : low
+                ? "1px solid rgba(245,158,11,0.35)"
+                : "1px solid rgba(149,191,71,0.30)",
+            }}
+          >
+            {empty ? (
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+            ) : (
+              <Coins className="w-5 h-5" style={{ color: low ? "#fbbf24" : "#95BF47" }} />
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.14em] font-semibold text-white/45">
+              Credit-Guthaben
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span
+                className="font-sf-display font-black text-2xl md:text-3xl tabular-nums leading-none"
+                style={{ color: empty ? "#ef4444" : low ? "#fbbf24" : "#95BF47" }}
+              >
+                {loading ? "···" : balance.toLocaleString("de-DE")}
+              </span>
+              <span className="text-[11px] text-white/45 leading-none">Credits</span>
+            </div>
+            <div className="text-[11px] text-white/55 mt-1.5 truncate">
+              {empty
+                ? "Leer – AI-Tools sind blockiert. Jetzt aufladen."
+                : low
+                ? "Nur noch wenig Guthaben übrig."
+                : "Reicht für E-Mail (20), Blog (10) oder Cloud-Upscale (5)."}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[12px] font-semibold border transition-colors"
+            style={{
+              background: "rgba(149,191,71,0.10)",
+              borderColor: "rgba(149,191,71,0.30)",
+              color: "#95BF47",
+            }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Aufladen
+          </span>
+          <ChevronRight className="w-4 h-4 text-white/45 group-hover:text-white transition" />
+        </div>
+      </Link>
+    </motion.div>
   );
 }
 

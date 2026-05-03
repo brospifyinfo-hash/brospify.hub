@@ -14,6 +14,14 @@
 // Env: REPLICATE_API_TOKEN (already set on Vercel as of 2026-05-03).
 
 import { NextResponse } from "next/server";
+import { getSession } from "@/lib/session";
+import {
+  CREDIT_LIMITS,
+  deductCredits,
+  findKundeByKey,
+  getCreditsState,
+  getKundeProfile,
+} from "@/lib/sheets";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -38,6 +46,34 @@ interface ReplicatePrediction {
 }
 
 export async function POST(req: Request) {
+  // 0) Auth + credit gate. Admins bypass the meter; anyone else must
+  //    have at least UPSCALE_IMAGE credits before we even hit Replicate.
+  const session = await getSession();
+  if (!session.isLoggedIn) {
+    return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
+  }
+
+  let kundeRowIndex: number | null = null;
+  let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;
+  if (!session.isAdmin && session.lizenzschluessel) {
+    const kunde = await findKundeByKey(session.lizenzschluessel);
+    if (!kunde) {
+      return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
+    }
+    kundeRowIndex = kunde.rowIndex;
+    kundeProfile = await getKundeProfile(kunde.rowIndex);
+    const credits = getCreditsState(kundeProfile);
+    if (credits.balance < CREDIT_LIMITS.UPSCALE_IMAGE) {
+      return NextResponse.json(
+        {
+          error: `Nicht genug Credits — Cloud-Upscale kostet ${CREDIT_LIMITS.UPSCALE_IMAGE}. Du hast ${credits.balance}.`,
+          creditsRemaining: credits.balance,
+        },
+        { status: 402 },
+      );
+    }
+  }
+
   // 1) Token check
   const token = process.env.REPLICATE_API_TOKEN;
   if (!token) {
@@ -196,8 +232,25 @@ export async function POST(req: Request) {
     );
   }
 
+  // Charge the credit. Admins skip the meter entirely; if the deduction
+  // somehow fails (race, sheet timeout) we still return the upscale —
+  // we'd rather under-bill than block a paying customer.
+  let creditsRemaining: number | undefined;
+  if (kundeRowIndex !== null && kundeProfile !== null) {
+    try {
+      const result = await deductCredits(
+        kundeRowIndex,
+        kundeProfile,
+        CREDIT_LIMITS.UPSCALE_IMAGE,
+      );
+      if (result.success) creditsRemaining = result.remaining;
+    } catch (err) {
+      console.error("[Upscale cloud] credit deduction failed:", err);
+    }
+  }
+
   return NextResponse.json(
-    { url: outputUrl, model: MODEL, scale },
+    { url: outputUrl, model: MODEL, scale, creditsRemaining },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }

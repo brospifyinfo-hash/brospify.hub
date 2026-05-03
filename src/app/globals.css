@@ -1,5 +1,39 @@
 @import "tailwindcss";
 
+/* ─── Mobile baseline: stop iOS auto-zoom on focus ─────────────── */
+/* Safari zooms in whenever a tappable form field has font-size <16px.
+   We force 16px on every editable surface and rely on Tailwind's
+   text-* utilities only for non-interactive text. Visual size of small
+   inputs is restored via `transform: scale(...)` if ever needed.    */
+input,
+textarea,
+select,
+button,
+[contenteditable="true"] {
+  font-size: 16px;
+}
+
+@media (min-width: 768px) {
+  /* Restore tighter typography on tablet/desktop where zoom isn't an issue. */
+  input,
+  textarea,
+  select {
+    font-size: inherit;
+  }
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Honour the iOS notch */
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Disable the grey tap-flash on iOS — we render our own active states. */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
 :root {
   --accent: #95BF47;
   --accent-hover: #86ad3f;
@@ -39,6 +73,22 @@ body {
   box-shadow:
     0 0 0 0.5px rgba(255, 255, 255, 0.03) inset,
     0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Header Glass — Solid Frosted Surface ────────────────────── */
+/* Used by the top navigation. Much more opaque than the regular
+   glass so it visibly separates from the content behind it.       */
+.glass-header {
+  background: rgba(10, 10, 12, 0.78);
+  backdrop-filter: blur(40px) saturate(180%);
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 8px 32px -12px rgba(0, 0, 0, 0.6);
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-header { background: rgba(10, 10, 12, 0.95); }
 }
 
 .glass-strong {
@@ -340,6 +390,55 @@ textarea.input-glass {
   width: 11px;
   height: 11px;
   border-radius: 50%;
+}
+
+/* ─── Bottom-sheet modal on mobile, centered on desktop ───────── */
+.bottom-sheet-shell {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+@media (min-width: 640px) {
+  .bottom-sheet-shell {
+    align-items: center;
+    padding: 1.5rem;
+  }
+}
+.bottom-sheet-card {
+  width: 100%;
+  max-width: 100%;
+  border-top-left-radius: 1.5rem;
+  border-top-right-radius: 1.5rem;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  padding-bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 640px) {
+  .bottom-sheet-card {
+    max-width: 28rem;
+    border-radius: 1.5rem;
+  }
+}
+.bottom-sheet-grabber {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.16);
+  margin: 0 auto 14px;
+}
+@media (min-width: 640px) {
+  .bottom-sheet-grabber {
+    display: none;
+  }
+}
+
+/* ─── Editor toolbar shown above a tapped block (inside iframe) ── */
+/* Defined globally so the iframe stylesheet can mirror these tokens. */
+.bsf-toolbar-vars {
+  --bsf-toolbar-bg: linear-gradient(180deg, #1a1a1a 0%, #0d0d0d 100%);
+  --bsf-toolbar-fg: #f5f5f5;
+  --bsf-toolbar-border: rgba(255, 255, 255, 0.12);
 }
 
 /* ─── Subtle gradient outline used on accent cards ─── */

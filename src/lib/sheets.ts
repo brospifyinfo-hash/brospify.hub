@@ -85,12 +85,31 @@ export interface OnboardingChecklist {
   theme_pushed?: boolean;
 }
 
+// ─── Credits — purchasable balance ────────────────────────────
+// Old shape: { month: "2026-05", used: 30 }   (monthly meter — deprecated)
+// New shape: { balance, totalPurchased, totalUsed, fulfilledOrders[] }
+//   - balance         current spendable credits (the source of truth)
+//   - totalPurchased  lifetime credits the user ever bought
+//   - totalUsed       lifetime credits ever consumed
+//   - fulfilledOrders Shopify order IDs already credited → idempotency
+export interface CreditsRecord {
+  balance: number;
+  totalPurchased: number;
+  totalUsed: number;
+  fulfilledOrders?: string[];
+  lastUpdated?: string;
+  // Legacy fields kept so an in-flight migration of an existing
+  // profile doesn't lose context. Safe to drop after a few weeks.
+  month?: string;
+  used?: number;
+}
+
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
   brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
   legal_data?: { firmenname?: string; inhaber?: string; strasse?: string; plz?: string; stadt?: string; land?: string; email?: string; telefon?: string; ustId?: string; handelsregister?: string };
   ai_usage?: { month: string; count: number };
-  credits?: { month: string; used: number };
+  credits?: CreditsRecord;
   checkout_settings?: CheckoutSettings;
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
@@ -98,21 +117,46 @@ export interface KundeProfile {
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
-export const CREDIT_LIMITS = {
-  MONTHLY_MAX: 500,
-  PRODUCT_IMPORT: 20,
-  BLOG_GENERATE: 50,
-  SEO_AUDIT: 10,
-} as const;
+// CREDIT_COSTS lives in `./credit-costs` (client-safe). We re-export
+// it under the legacy name `CREDIT_LIMITS` so old call sites keep
+// working without pulling googleapis into client bundles.
+export { CREDIT_COSTS as CREDIT_LIMITS } from "./credit-costs";
 
-export function getCreditsState(profile: KundeProfile): { used: number; remaining: number; month: string } {
-  const now = new Date();
-  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const credits = profile.credits || { month: currentMonth, used: 0 };
-  if (credits.month !== currentMonth) {
-    return { used: 0, remaining: CREDIT_LIMITS.MONTHLY_MAX, month: currentMonth };
+function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
+  if (!raw) {
+    return { balance: 0, totalPurchased: 0, totalUsed: 0, fulfilledOrders: [] };
   }
-  return { used: credits.used, remaining: CREDIT_LIMITS.MONTHLY_MAX - credits.used, month: currentMonth };
+  // Already the new shape — just guarantee fields exist.
+  if (typeof raw.balance === "number") {
+    return {
+      balance: Math.max(0, Math.round(raw.balance)),
+      totalPurchased: Math.max(0, Math.round(raw.totalPurchased ?? 0)),
+      totalUsed: Math.max(0, Math.round(raw.totalUsed ?? 0)),
+      fulfilledOrders: Array.isArray(raw.fulfilledOrders) ? raw.fulfilledOrders : [],
+      lastUpdated: raw.lastUpdated,
+    };
+  }
+  // Legacy { month, used } — start everyone at 0; they'll buy a pack
+  // to get back online. Lifetime usage is preserved for transparency.
+  return {
+    balance: 0,
+    totalPurchased: 0,
+    totalUsed: Math.max(0, Math.round(raw.used ?? 0)),
+    fulfilledOrders: [],
+  };
+}
+
+export function getCreditsState(profile: KundeProfile): {
+  balance: number;
+  totalPurchased: number;
+  totalUsed: number;
+} {
+  const c = normalizeCredits(profile.credits);
+  return {
+    balance: c.balance,
+    totalPurchased: c.totalPurchased,
+    totalUsed: c.totalUsed,
+  };
 }
 
 export async function deductCredits(
@@ -120,16 +164,49 @@ export async function deductCredits(
   profile: KundeProfile,
   amount: number
 ): Promise<{ success: boolean; remaining: number }> {
-  const state = getCreditsState(profile);
-  if (state.remaining < amount) {
-    return { success: false, remaining: state.remaining };
+  const safeAmount = Math.max(0, Math.round(amount));
+  const credits = normalizeCredits(profile.credits);
+  // Free actions (cost 0) always succeed without touching the sheet.
+  if (safeAmount === 0) {
+    return { success: true, remaining: credits.balance };
   }
-  const newUsed = state.used + amount;
-  await updateKundeProfile(rowIndex, {
-    ...profile,
-    credits: { month: state.month, used: newUsed },
-  });
-  return { success: true, remaining: CREDIT_LIMITS.MONTHLY_MAX - newUsed };
+  if (credits.balance < safeAmount) {
+    return { success: false, remaining: credits.balance };
+  }
+  const next: CreditsRecord = {
+    balance: credits.balance - safeAmount,
+    totalPurchased: credits.totalPurchased,
+    totalUsed: credits.totalUsed + safeAmount,
+    fulfilledOrders: credits.fulfilledOrders || [],
+    lastUpdated: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, { ...profile, credits: next });
+  return { success: true, remaining: next.balance };
+}
+
+// Webhook-driven top-up. Idempotent: if `orderId` was already
+// credited we silently skip the increment.
+export async function addCredits(
+  rowIndex: number,
+  profile: KundeProfile,
+  amount: number,
+  orderId?: string
+): Promise<{ success: boolean; balance: number; alreadyFulfilled: boolean }> {
+  const safeAmount = Math.max(0, Math.round(amount));
+  const credits = normalizeCredits(profile.credits);
+  const fulfilled = credits.fulfilledOrders || [];
+  if (orderId && fulfilled.includes(orderId)) {
+    return { success: true, balance: credits.balance, alreadyFulfilled: true };
+  }
+  const next: CreditsRecord = {
+    balance: credits.balance + safeAmount,
+    totalPurchased: credits.totalPurchased + safeAmount,
+    totalUsed: credits.totalUsed,
+    fulfilledOrders: orderId ? [...fulfilled, orderId] : fulfilled,
+    lastUpdated: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, { ...profile, credits: next });
+  return { success: true, balance: next.balance, alreadyFulfilled: false };
 }
 
 export interface Kunde {
@@ -200,6 +277,20 @@ export async function updateKundeProfile(rowIndex: number, profile: KundeProfile
 export async function findKundeByKey(key: string): Promise<Kunde | null> {
   const kunden = await getAllKunden();
   return kunden.find((k) => k.lizenzschluessel === key) || null;
+}
+
+// Match a customer by email — webhook flow uses this to figure out
+// which row to top up after a Shopify checkout completes. Lower-cased
+// to absorb capitalisation differences between Shopify's record and
+// the value we stored in the sheet.
+export async function findKundeByEmail(email: string): Promise<Kunde | null> {
+  if (!email) return null;
+  const target = email.trim().toLowerCase();
+  const kunden = await getAllKunden();
+  return (
+    kunden.find((k) => (k.kundenEmail || "").trim().toLowerCase() === target) ||
+    null
+  );
 }
 
 export async function updateKundeField(

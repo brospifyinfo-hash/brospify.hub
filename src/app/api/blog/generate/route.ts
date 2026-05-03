@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllKunden, getKundeProfile, updateKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -21,21 +21,22 @@ export async function POST(req: NextRequest) {
     const selectedProducts: { title: string; description: string; images: { src: string; alt: string }[] }[] = products || [];
 
     // Find customer row
-    const kunden = await getAllKunden();
-    const rowIndex = kunden.findIndex(
-      (k) => k.lizenzschluessel === session.lizenzschluessel
-    );
-    if (rowIndex === -1) {
+    const kunde = await findKundeByKey(session.lizenzschluessel);
+    if (!kunde) {
       return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
     }
+    const rowIndex = kunde.rowIndex;
 
-    // Check credit limit
+    // Pre-flight credit check (admins still pay 0).
     const profile = await getKundeProfile(rowIndex);
     const creditState = getCreditsState(profile);
-    if (creditState.remaining < CREDIT_LIMITS.BLOG_GENERATE) {
+    if (!session.isAdmin && creditState.balance < CREDIT_LIMITS.BLOG_GENERATE) {
       return NextResponse.json(
-        { error: "Dein monatliches Credit-Limit ist erreicht." },
-        { status: 429 }
+        {
+          error: `Nicht genug Credits — du brauchst ${CREDIT_LIMITS.BLOG_GENERATE}, hast aber nur ${creditState.balance}. Lade dein Konto unter /credits auf.`,
+          creditsRemaining: creditState.balance,
+        },
+        { status: 402 }
       );
     }
 
@@ -110,12 +111,17 @@ Return JSON: { "title": "...", "body_html": "...", "seo_title": "...", "seo_desc
       return NextResponse.json({ error: "KI-Antwort konnte nicht verarbeitet werden." }, { status: 500 });
     }
 
-    // Deduct credits
-    const deduction = await deductCredits(rowIndex, profile, CREDIT_LIMITS.BLOG_GENERATE);
+    // Deduct credits — admins bypass the meter.
+    const deduction = session.isAdmin
+      ? { success: true, remaining: creditState.balance }
+      : await deductCredits(rowIndex, profile, CREDIT_LIMITS.BLOG_GENERATE);
     if (!deduction.success) {
       return NextResponse.json(
-        { error: "Dein monatliches Credit-Limit ist erreicht." },
-        { status: 429 }
+        {
+          error: `Nicht genug Credits — du brauchst ${CREDIT_LIMITS.BLOG_GENERATE}.`,
+          creditsRemaining: deduction.remaining,
+        },
+        { status: 402 }
       );
     }
 

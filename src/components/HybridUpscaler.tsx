@@ -20,6 +20,9 @@ import {
   type DragEvent,
 } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
+import { useCredits } from "@/lib/credits";
+import { CREDIT_COSTS } from "@/lib/credit-costs";
 
 // Dynamic import — UpscalerJS imports `window`/`document` at the top of
 // its module, so a static import would crash `next build` on Vercel.
@@ -36,9 +39,12 @@ type Mode = "local" | "cloud";
 type Stage = "idle" | "processing" | "done" | "error";
 
 export default function HybridUpscaler() {
+  const credits = useCredits();
   const [mode, setMode] = useState<Mode>("local");
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const insufficientCloudCredits =
+    !credits.loading && credits.balance < CREDIT_COSTS.UPSCALE_IMAGE;
 
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
@@ -137,6 +143,14 @@ export default function HybridUpscaler() {
         );
         return;
       }
+      // Cloud branch is metered — block before we even copy the file
+      // into memory if the balance is too low.
+      if (mode === "cloud" && insufficientCloudCredits) {
+        setErrorMsg(
+          `Cloud-Upscale kostet ${CREDIT_COSTS.UPSCALE_IMAGE} Credits – du hast ${credits.balance}. Lade dein Konto unter /credits auf.`,
+        );
+        return;
+      }
 
       // Reset any previous run.
       if (originalUrl) URL.revokeObjectURL(originalUrl);
@@ -155,13 +169,14 @@ export default function HybridUpscaler() {
       startTimer();
 
       if (mode === "cloud") {
+        credits.optimisticDeduct(CREDIT_COSTS.UPSCALE_IMAGE);
         await runCloud(file);
       } else {
         // Bumping runId forces the dynamic engine to remount and start.
         setRunId((id) => id + 1);
       }
     },
-    [mode, originalUrl, upscaledUrl],
+    [mode, originalUrl, upscaledUrl, credits, insufficientCloudCredits],
   );
 
   // ── Cloud branch (server-side) ──────────────────────────────────
@@ -175,9 +190,20 @@ export default function HybridUpscaler() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.url) {
+        // Reconcile optimistic deduction with whatever the server says.
+        if (typeof data?.creditsRemaining === "number") {
+          credits.setBalance(data.creditsRemaining);
+        } else {
+          credits.refresh();
+        }
         throw new Error(
           (data && data.error) || `Server-Fehler (Status ${res.status}).`,
         );
+      }
+      if (typeof data.creditsRemaining === "number") {
+        credits.setBalance(data.creditsRemaining);
+      } else {
+        credits.refresh();
       }
       stopTimer();
       setUpscaledUrl(data.url as string);
@@ -350,8 +376,58 @@ export default function HybridUpscaler() {
           >
             {mode === "local"
               ? "Standard · GPU lokal · 0 Credits"
-              : "High Quality · Real-ESRGAN · ~1 Cent"}
+              : `High Quality · Real-ESRGAN · ${CREDIT_COSTS.UPSCALE_IMAGE} Credits`}
           </p>
+
+          {/* Insufficient-credit gate for cloud mode. We render INSIDE
+              the upload zone so the user never gets the chance to drop
+              a file when they cannot pay for the run. */}
+          {mode === "cloud" && insufficientCloudCredits && (
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="absolute inset-0 rounded-[28px] flex flex-col items-center justify-center text-center px-6"
+              style={{
+                background: "rgba(7,7,9,0.85)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+              }}
+            >
+              <div
+                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
+                style={{
+                  background: "rgba(245,158,11,0.15)",
+                  border: "1px solid rgba(245,158,11,0.35)",
+                }}
+              >
+                <span className="text-[24px]">🪙</span>
+              </div>
+              <h3 className="text-[18px] font-semibold tracking-tight">
+                Nicht genug Credits
+              </h3>
+              <p className="text-[13px] text-zinc-400 mt-1.5 max-w-xs">
+                Cloud-Upscale kostet {CREDIT_COSTS.UPSCALE_IMAGE} Credits.
+                Aktuell verfügbar: {credits.balance.toLocaleString("de-DE")}.
+              </p>
+              <Link
+                href="/credits"
+                className="mt-5 px-5 h-10 rounded-full inline-flex items-center gap-2 text-[13px] font-semibold transition active:scale-[0.98]"
+                style={{
+                  background: ACCENT,
+                  color: "#0a1604",
+                  boxShadow: `0 8px 24px -8px ${ACCENT}80`,
+                }}
+              >
+                Credits aufladen
+              </Link>
+              <button
+                type="button"
+                onClick={() => setMode("local")}
+                className="mt-3 text-[12px] text-white/55 hover:text-white transition"
+              >
+                Stattdessen kostenlosen Standard-Modus nutzen
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -553,8 +629,8 @@ function ModeToggle({
   disabled?: boolean;
 }) {
   const options: { value: Mode; label: string; sub: string }[] = [
-    { value: "local", label: "Standard", sub: "Lokal · 0 €" },
-    { value: "cloud", label: "High Quality", sub: "Real-ESRGAN" },
+    { value: "local", label: "Standard", sub: "Lokal · 0 Credits" },
+    { value: "cloud", label: "High Quality", sub: `Cloud · ${CREDIT_COSTS.UPSCALE_IMAGE} Credits` },
   ];
 
   return (

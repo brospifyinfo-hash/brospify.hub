@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, CREDIT_LIMITS, type KundeProfile } from "@/lib/sheets";
+import { findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, type KundeProfile } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -27,9 +27,9 @@ export async function GET() {
       kundenEmail: kunde.kundenEmail,
       hasShopifyToken: !!kunde.shopifyToken,
       credits: {
-        used: creditState.used,
-        remaining: creditState.remaining,
-        max: CREDIT_LIMITS.MONTHLY_MAX,
+        balance: creditState.balance,
+        totalPurchased: creditState.totalPurchased,
+        totalUsed: creditState.totalUsed,
       },
     });
   } catch (error) {

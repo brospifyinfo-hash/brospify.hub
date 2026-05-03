@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, findKundeByKey, getKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
+import { getAllProdukte, findKundeByKey, getKundeProfile, deductCredits, getCreditsState } from "@/lib/sheets";
+
+// Product AI optimisation isn't part of the public credit table — we
+// still bill it modestly to discourage abuse against DeepSeek quota.
+const PRODUCT_OPTIMIZE_COST = 5;
 
 export const dynamic = "force-dynamic";
 
@@ -32,10 +36,13 @@ export async function POST(req: NextRequest) {
 
     const profile = await getKundeProfile(kunde.rowIndex);
     const creditState = getCreditsState(profile);
-    if (creditState.remaining < CREDIT_LIMITS.PRODUCT_IMPORT) {
+    if (creditState.balance < PRODUCT_OPTIMIZE_COST) {
       return NextResponse.json(
-        { error: "Dein monatliches Credit-Limit ist erreicht." },
-        { status: 429 }
+        {
+          error: `Nicht genug Credits — du brauchst ${PRODUCT_OPTIMIZE_COST}.`,
+          creditsRemaining: creditState.balance,
+        },
+        { status: 402 }
       );
     }
 
@@ -125,11 +132,14 @@ Antworte NUR mit einem JSON-Objekt in exakt diesem Format (kein Markdown, kein C
     }
 
     // Deduct credits
-    const deduction = await deductCredits(kunde.rowIndex, profile, CREDIT_LIMITS.PRODUCT_IMPORT);
+    const deduction = await deductCredits(kunde.rowIndex, profile, PRODUCT_OPTIMIZE_COST);
     if (!deduction.success) {
       return NextResponse.json(
-        { error: "Dein monatliches Credit-Limit ist erreicht." },
-        { status: 429 }
+        {
+          error: `Nicht genug Credits — du brauchst ${PRODUCT_OPTIMIZE_COST}.`,
+          creditsRemaining: deduction.remaining,
+        },
+        { status: 402 }
       );
     }
 

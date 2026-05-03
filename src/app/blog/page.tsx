@@ -32,8 +32,12 @@ import {
   ShoppingBag,
   Plus,
   Minus,
+  Coins,
 } from "lucide-react";
+import NextLink from "next/link";
 import Navigation from "@/components/Navigation";
+import { useCredits } from "@/lib/credits";
+import { CREDIT_COSTS } from "@/lib/credit-costs";
 
 interface ShopifyImage {
   id: number;
@@ -53,11 +57,14 @@ interface ShopifyProduct {
 
 export default function BlogPage() {
   const router = useRouter();
+  const credits = useCredits();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const insufficientCredits =
+    !credits.loading && credits.balance < CREDIT_COSTS.BLOG_GENERATE;
 
   // Blog generation
   const [topic, setTopic] = useState("");
@@ -153,8 +160,15 @@ export default function BlogPage() {
 
   async function handleGenerate() {
     if (!topic.trim()) return;
+    if (insufficientCredits) {
+      setError(
+        `Nicht genug Credits — du brauchst ${CREDIT_COSTS.BLOG_GENERATE}, hast aber nur ${credits.balance}.`,
+      );
+      return;
+    }
     setGenerating(true);
     setError("");
+    credits.optimisticDeduct(CREDIT_COSTS.BLOG_GENERATE);
     try {
       const res = await fetch("/api/blog/generate", {
         method: "POST",
@@ -171,6 +185,11 @@ export default function BlogPage() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (typeof data.creditsRemaining === "number") {
+          credits.setBalance(data.creditsRemaining);
+        } else {
+          credits.refresh();
+        }
         setError(data.error || "Generierung fehlgeschlagen.");
         return;
       }
@@ -180,9 +199,15 @@ export default function BlogPage() {
       setSeoDescription(blog.seo_description || "");
       setTags(blog.tags || "");
       editor?.commands.setContent(blog.body_html);
+      if (typeof data.creditsRemaining === "number") {
+        credits.setBalance(data.creditsRemaining);
+      } else {
+        credits.refresh();
+      }
       setSuccess("Blog-Artikel generiert! Bearbeite ihn im Editor.");
       setTimeout(() => setSuccess(""), 4000);
     } catch {
+      credits.refresh();
       setError("Verbindungsfehler.");
     } finally {
       setGenerating(false);
@@ -398,10 +423,35 @@ export default function BlogPage() {
 
             {/* AI Generation */}
             <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-              <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#95BF47]" />
-                KI-Generierung
-              </h3>
+              <div className="flex items-center justify-between mb-3 gap-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#95BF47]" />
+                  KI-Generierung
+                </h3>
+                <div className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+                  <Coins className="w-3 h-3 text-[#95BF47]" />
+                  <span className="font-mono tabular-nums">
+                    {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
+                  </span>
+                  <span className="text-zinc-600">Credits</span>
+                </div>
+              </div>
+
+              {insufficientCredits && (
+                <div className="mb-3 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-200/90 text-[12px]">
+                  <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span className="flex-1">
+                    Du brauchst {CREDIT_COSTS.BLOG_GENERATE} Credits pro Beitrag – du hast nur {credits.balance}.
+                  </span>
+                  <NextLink
+                    href="/credits"
+                    className="font-semibold text-[#95BF47] hover:text-white transition"
+                  >
+                    Aufladen →
+                  </NextLink>
+                </div>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3">
                 <input
                   type="text"
@@ -409,7 +459,7 @@ export default function BlogPage() {
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="Blog-Thema eingeben, z.B. '5 Tipps für bessere Produktfotos'"
                   className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-600"
-                  onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+                  onKeyDown={(e) => e.key === "Enter" && !insufficientCredits && handleGenerate()}
                 />
                 <select
                   value={language}
@@ -422,11 +472,16 @@ export default function BlogPage() {
                 <motion.button
                   whileTap={{ scale: 0.97 }}
                   onClick={handleGenerate}
-                  disabled={generating || !topic.trim()}
+                  disabled={generating || !topic.trim() || insufficientCredits}
                   className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-[#95BF47] text-black font-bold text-sm disabled:opacity-40 transition shrink-0"
+                  title={
+                    insufficientCredits
+                      ? `Nicht genug Credits (${CREDIT_COSTS.BLOG_GENERATE} benötigt)`
+                      : `Generierung kostet ${CREDIT_COSTS.BLOG_GENERATE} Credits`
+                  }
                 >
                   {generating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  {generating ? "Generiere..." : "Generieren"}
+                  {generating ? "Generiere..." : `Generieren · ${CREDIT_COSTS.BLOG_GENERATE} CR`}
                 </motion.button>
               </div>
               {selectedProducts.length > 0 && (
