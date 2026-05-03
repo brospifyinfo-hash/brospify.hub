@@ -63,6 +63,7 @@ export default function BlogPage() {
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [shopConnected, setShopConnected] = useState<boolean | null>(null);
   const insufficientCredits =
     !credits.loading && credits.balance < CREDIT_COSTS.BLOG_GENERATE;
 
@@ -114,39 +115,64 @@ export default function BlogPage() {
           router.push("/");
           return;
         }
+        setShopConnected(Boolean(data.hasShopifyToken));
         setLoading(false);
       })
       .catch(() => router.push("/"));
   }, [router]);
 
+  // ── Auto-load most recent products as soon as the picker opens.
+  // Empty query → API returns the 50 newest products without
+  // requiring the user to type something first.
+  const fetchProducts = useCallback(async (q: string) => {
+    setSearchLoading(true);
+    try {
+      const res = await fetch(`/api/shopify/products-search?q=${encodeURIComponent(q)}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (data?.notConnected) {
+          setShopConnected(false);
+          setSearchResults([]);
+        } else {
+          setError(data?.error || "Produkte konnten nicht geladen werden.");
+        }
+        return;
+      }
+      setSearchResults(data.products || []);
+    } catch {
+      setError("Verbindungsfehler beim Laden der Produkte.");
+    } finally {
+      setSearchLoading(false);
+    }
+  }, []);
+
   const loadShopifyImages = useCallback(async () => {
     setLoadingImages(true);
     try {
       const res = await fetch("/api/blog/shopify-images");
-      if (res.ok) {
-        const data = await res.json();
-        setShopifyImages(data.images || []);
+      const data = await res.json().catch(() => null);
+      if (!res.ok) {
+        if (data?.notConnected) {
+          setShopConnected(false);
+        } else {
+          setError(data?.error || "Bilder konnten nicht geladen werden.");
+        }
+        setShopifyImages([]);
+        return;
       }
-    } catch { /* ignore */ }
+      setShopifyImages(data.images || []);
+    } catch {
+      setError("Verbindungsfehler beim Laden der Bilder.");
+    }
     finally { setLoadingImages(false); }
   }, []);
 
-  // Debounced product search
+  // Debounced product search. Empty query loads the most recent
+  // products so the picker isn't a blank slate when first opened.
   function handleProductSearch(q: string) {
     setProductSearch(q);
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (!q.trim()) { setSearchResults([]); return; }
-    searchTimer.current = setTimeout(async () => {
-      setSearchLoading(true);
-      try {
-        const res = await fetch(`/api/shopify/products-search?q=${encodeURIComponent(q)}`);
-        if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data.products || []);
-        }
-      } catch { /* ignore */ }
-      finally { setSearchLoading(false); }
-    }, 400);
+    searchTimer.current = setTimeout(() => fetchProducts(q.trim()), 350);
   }
 
   function toggleProduct(product: ShopifyProduct) {
@@ -323,7 +349,16 @@ export default function BlogPage() {
                   Produkte einbinden
                 </h3>
                 <button
-                  onClick={() => setShowProductPicker(!showProductPicker)}
+                  onClick={() => {
+                    const opening = !showProductPicker;
+                    setShowProductPicker(opening);
+                    // Pre-load the most recent products as soon as the
+                    // picker opens — empty query → server returns the
+                    // newest 50 so the user can pick without searching.
+                    if (opening && shopConnected !== false && searchResults.length === 0) {
+                      fetchProducts("");
+                    }
+                  }}
                   className="text-xs text-[#95BF47] hover:text-[#a8d050] transition flex items-center gap-1"
                 >
                   <Plus className="w-3.5 h-3.5" />
@@ -366,55 +401,81 @@ export default function BlogPage() {
                     exit={{ opacity: 0, height: 0 }}
                     className="overflow-hidden"
                   >
-                    <div className="relative mt-2">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                      <input
-                        type="text"
-                        value={productSearch}
-                        onChange={(e) => handleProductSearch(e.target.value)}
-                        placeholder="Produkte in deinem Shop suchen..."
-                        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-600"
-                        autoFocus
-                      />
-                      {searchLoading && (
-                        <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-zinc-500" />
-                      )}
-                    </div>
-
-                    {searchResults.length > 0 && (
-                      <div className="mt-2 space-y-1.5 max-h-[240px] overflow-y-auto">
-                        {searchResults.map((product) => {
-                          const isSelected = selectedProducts.some((p) => p.id === product.id);
-                          return (
-                            <button
-                              key={product.id}
-                              onClick={() => toggleProduct(product)}
-                              className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
-                                isSelected
-                                  ? "bg-purple-500/10 border border-purple-500/20"
-                                  : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08]"
-                              }`}
-                            >
-                              {product.image ? (
-                                <img src={product.image} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
-                              ) : (
-                                <div className="w-10 h-10 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
-                                  <ShoppingBag className="w-4 h-4 text-zinc-600" />
-                                </div>
-                              )}
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs font-semibold text-white truncate">{product.title}</div>
-                                <div className="text-[10px] text-zinc-500 truncate mt-0.5">{product.description || "Keine Beschreibung"}</div>
-                              </div>
-                              {isSelected && <Check className="w-4 h-4 text-purple-400 shrink-0" />}
-                            </button>
-                          );
-                        })}
+                    {shopConnected === false ? (
+                      <div className="mt-3 rounded-xl bg-amber-500/8 border border-amber-500/20 px-4 py-3.5 flex items-start gap-2.5">
+                        <AlertCircle className="w-4 h-4 text-amber-400 mt-0.5 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[12.5px] font-semibold text-amber-200/95">
+                            Shopify-Store nicht verbunden
+                          </div>
+                          <div className="text-[11.5px] text-amber-200/70 mt-1">
+                            Verbinde deinen Store, um Produkte direkt aus dem Shop einzubinden.
+                          </div>
+                          <NextLink
+                            href="/setup"
+                            className="inline-flex items-center gap-1 mt-2 text-[11.5px] font-semibold text-amber-200 hover:text-white transition"
+                          >
+                            Jetzt verbinden →
+                          </NextLink>
+                        </div>
                       </div>
-                    )}
+                    ) : (
+                      <>
+                        <div className="relative mt-2">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                          <input
+                            type="text"
+                            value={productSearch}
+                            onChange={(e) => handleProductSearch(e.target.value)}
+                            placeholder="Produkte in deinem Shop suchen oder leer lassen für die neuesten 50…"
+                            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl pl-10 pr-4 py-3 text-sm outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-600"
+                            autoFocus
+                          />
+                          {searchLoading && (
+                            <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-zinc-500" />
+                          )}
+                        </div>
 
-                    {productSearch && !searchLoading && searchResults.length === 0 && (
-                      <p className="text-xs text-zinc-600 mt-3 text-center py-4">Keine Produkte gefunden.</p>
+                        {searchResults.length > 0 && (
+                          <div className="mt-2 space-y-1.5 max-h-[280px] overflow-y-auto pr-1">
+                            {searchResults.map((product) => {
+                              const isSelected = selectedProducts.some((p) => p.id === product.id);
+                              return (
+                                <button
+                                  key={product.id}
+                                  onClick={() => toggleProduct(product)}
+                                  className={`w-full flex items-center gap-3 p-2.5 rounded-xl text-left transition-all ${
+                                    isSelected
+                                      ? "bg-purple-500/10 border border-purple-500/20"
+                                      : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] hover:border-white/[0.08]"
+                                  }`}
+                                >
+                                  {product.image ? (
+                                    <img src={product.image} alt="" className="w-10 h-10 rounded-lg object-cover shrink-0" />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
+                                      <ShoppingBag className="w-4 h-4 text-zinc-600" />
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-xs font-semibold text-white truncate">{product.title}</div>
+                                    <div className="text-[10px] text-zinc-500 truncate mt-0.5">{product.description || "Keine Beschreibung"}</div>
+                                  </div>
+                                  {isSelected && <Check className="w-4 h-4 text-purple-400 shrink-0" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {!searchLoading && searchResults.length === 0 && (
+                          <p className="text-xs text-zinc-600 mt-3 text-center py-4">
+                            {productSearch
+                              ? `Keine Treffer für „${productSearch}".`
+                              : "Keine Produkte gefunden — hat dein Shop schon welche?"}
+                          </p>
+                        )}
+                      </>
                     )}
                   </motion.div>
                 )}
@@ -685,9 +746,27 @@ export default function BlogPage() {
                   <div className="flex justify-center py-12">
                     <Loader2 className="w-6 h-6 animate-spin text-zinc-600" />
                   </div>
+                ) : shopConnected === false ? (
+                  <div className="rounded-xl bg-amber-500/8 border border-amber-500/20 px-5 py-6 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-amber-200/95">
+                        Shopify-Store nicht verbunden
+                      </div>
+                      <div className="text-[12px] text-amber-200/70 mt-1.5 leading-relaxed">
+                        Verbinde deinen Shop unter <span className="font-mono">/setup</span>, um deine Produktbilder direkt in den Editor zu ziehen. Alternativ kannst du Bilder per <span className="font-semibold">Hochladen</span>-Button von deinem Rechner einfügen.
+                      </div>
+                      <NextLink
+                        href="/setup"
+                        className="inline-flex items-center gap-1 mt-3 text-[12px] font-semibold text-amber-200 hover:text-white transition"
+                      >
+                        Jetzt verbinden →
+                      </NextLink>
+                    </div>
+                  </div>
                 ) : shopifyImages.length === 0 ? (
                   <p className="text-center text-sm text-zinc-600 py-12">
-                    Keine Produktbilder gefunden. Ist dein Shop verbunden?
+                    Keine Produktbilder gefunden. Hat dein Shop schon Produkte?
                   </p>
                 ) : (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">

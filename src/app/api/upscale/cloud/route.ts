@@ -9,9 +9,17 @@
 //   Client → us:        multipart/form-data { file, scale?, face_enhance? }
 //   us → Replicate:     JSON  { input: { image: dataUri, scale, face_enhance } }
 //   Replicate → us:     prediction object (with output URL when ready)
-//   us → Client:        JSON  { url, width?, height?, model }
+//   us → Client:        JSON  { url, width?, height?, model, creditsRemaining }
 //
-// Env: REPLICATE_API_TOKEN (already set on Vercel as of 2026-05-03).
+// Env:
+//   REPLICATE_API_TOKEN  required
+//
+// Hard timing notes: Vercel functions on Pro plans accept up to
+// `maxDuration = 300` (5 min). Real-ESRGAN at 4× on a high-res
+// photo can run 30–80 s GPU time; with cold-start overhead a tight
+// 60 s budget made the function reliably time out before Replicate
+// finished. We now ask Replicate to stream the prediction with
+// `Prefer: wait=60` and fall back to polling for up to 200 s.
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
@@ -24,18 +32,18 @@ import {
 } from "@/lib/sheets";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const ALLOWED_MIME = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-const MAX_FILE_SIZE = 4 * 1024 * 1024; // Vercel body cap is 4.5 MB
+// Vercel's hard body cap is 4.5 MB; we cushion to 4.2 to leave room
+// for multipart boundary + headers without Vercel chopping the body.
+const MAX_FILE_SIZE = Math.floor(4.2 * 1024 * 1024);
 const MODEL = "nightmareai/real-esrgan";
 const PREDICTION_URL = `https://api.replicate.com/v1/models/${MODEL}/predictions`;
-// Maximum Replicate `Prefer: wait=N` budget. Leave a 5 s slack for the
-// rest of the function (response parsing, polling fallback).
-const WAIT_BUDGET_S = 55;
-// If the prediction is still running after the initial wait, poll up
-// to this long before giving up.
-const POLL_DEADLINE_MS = 50_000;
+// Replicate caps `Prefer: wait` at 60 — anything higher is silently
+// clamped. After the wait, we keep polling until the function deadline.
+const WAIT_BUDGET_S = 60;
+const POLL_DEADLINE_MS = 200_000;
 
 interface ReplicatePrediction {
   id: string;
@@ -155,27 +163,41 @@ export async function POST(req: Request) {
     });
 
     const text = await res.text();
-    let json: ReplicatePrediction & { detail?: string };
+    let json: (ReplicatePrediction & { detail?: string }) | null = null;
     try {
       json = JSON.parse(text);
     } catch {
-      throw new Error(
-        `Antwort von Replicate war kein JSON (Status ${res.status}).`,
+      console.error("[Replicate upscale] non-JSON body:", res.status, text.slice(0, 400));
+      return NextResponse.json(
+        { error: `Replicate antwortete unerwartet (Status ${res.status}).` },
+        { status: 502 },
       );
     }
 
-    if (!res.ok) {
-      // Replicate returns { detail: "..." } on auth/quota errors.
-      const msg = json.detail || json.error || `HTTP ${res.status}`;
+    if (!res.ok || !json) {
+      const msg = json?.detail || json?.error || `HTTP ${res.status}`;
+      console.error("[Replicate upscale] start error:", res.status, msg);
       if (res.status === 401 || res.status === 403) {
         return NextResponse.json(
-          { error: "Replicate-Token ungültig oder ohne Berechtigung." },
+          { error: "Replicate-Token ungültig oder ohne Berechtigung. Admin kontaktieren." },
           { status: 502 },
+        );
+      }
+      if (res.status === 402) {
+        return NextResponse.json(
+          { error: "Replicate-Konto hat keine Guthaben mehr. Admin kontaktieren." },
+          { status: 502 },
+        );
+      }
+      if (res.status === 422) {
+        return NextResponse.json(
+          { error: `Bild abgelehnt: ${msg}` },
+          { status: 400 },
         );
       }
       if (res.status === 429) {
         return NextResponse.json(
-          { error: "Replicate Rate-Limit erreicht. Kurz warten." },
+          { error: "Replicate Rate-Limit erreicht. Bitte 30 Sekunden warten." },
           { status: 429 },
         );
       }
@@ -272,16 +294,22 @@ async function pollUntilDone(
   deadlineMs: number,
 ): Promise<ReplicatePrediction> {
   const start = Date.now();
-  let delay = 1000; // start at 1 s, exponential up to 4 s
+  // Open with quick checks, then back off — typical 4×-runs converge
+  // within 10–30 s of the wait window, so 1 s / 1.5 s / 2 s / 3 s
+  // buys most cases without hammering Replicate.
+  let delay = 1000;
+  let lastSnapshot: ReplicatePrediction | null = null;
   while (Date.now() - start < deadlineMs) {
     await sleep(delay);
-    delay = Math.min(delay * 1.5, 4000);
+    delay = Math.min(Math.round(delay * 1.4), 4000);
     try {
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
       });
       if (!res.ok) continue;
       const json = (await res.json()) as ReplicatePrediction;
+      lastSnapshot = json;
       if (
         json.status === "succeeded" ||
         json.status === "failed" ||
@@ -293,13 +321,14 @@ async function pollUntilDone(
       // transient — try again
     }
   }
-  // Final timeout state — surface as still-processing.
-  return {
-    id: "",
-    status: "processing",
-    output: null,
-    error: "Polling-Timeout.",
-  };
+  return (
+    lastSnapshot ?? {
+      id: "",
+      status: "processing",
+      output: null,
+      error: "Polling-Timeout.",
+    }
+  );
 }
 
 function sleep(ms: number): Promise<void> {
