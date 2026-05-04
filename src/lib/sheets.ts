@@ -774,6 +774,124 @@ export async function deleteNewsSlide(rowIndex: number): Promise<void> {
   });
 }
 
+// ─── NEWS POSTS (Tab "NewsPosts") ─────────────────────────────────
+// Admin-curated news cards rendered on the home page.
+//   A=ID, B=Type ("text" or "video"), C=Title, D=Body (markdown/plain),
+//   E=ImageUrl, F=YoutubeUrl, G=PreviewImageUrl, H=Active, I=CreatedAt
+// Text cards: image is the cover, body opens in a detail modal.
+// Video cards: previewImage is the cover, click opens youtube embed.
+
+export interface NewsPost {
+  rowIndex: number;
+  id: string;
+  type: "text" | "video";
+  title: string;
+  body: string;
+  imageUrl: string;
+  youtubeUrl: string;
+  previewImageUrl: string;
+  active: boolean;
+  createdAt: string;
+}
+
+function rowToNewsPost(row: string[], index: number): NewsPost {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    type: (row[1] as NewsPost["type"]) || "text",
+    title: row[2] || "",
+    body: row[3] || "",
+    imageUrl: row[4] || "",
+    youtubeUrl: row[5] || "",
+    previewImageUrl: row[6] || "",
+    active: row[7] !== "false",
+    createdAt: row[8] || "",
+  };
+}
+
+export async function getAllNewsPosts(): Promise<NewsPost[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("NewsPosts", [
+      "ID", "Type", "Title", "Body", "ImageUrl", "YoutubeUrl",
+      "PreviewImageUrl", "Active", "CreatedAt",
+    ]);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "NewsPosts!A2:I",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToNewsPost(row, i)).filter((p) => p.id);
+  } catch {
+    return [];
+  }
+}
+
+export async function addNewsPost(post: Omit<NewsPost, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await ensureSheet("NewsPosts", [
+    "ID", "Type", "Title", "Body", "ImageUrl", "YoutubeUrl",
+    "PreviewImageUrl", "Active", "CreatedAt",
+  ]);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "NewsPosts!A:I",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        post.id, post.type, post.title, post.body, post.imageUrl,
+        post.youtubeUrl, post.previewImageUrl, String(post.active), post.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function updateNewsPost(
+  rowIndex: number,
+  patch: Partial<Omit<NewsPost, "rowIndex" | "id" | "createdAt">>,
+): Promise<void> {
+  const sheets = getSheets();
+  // Read the existing row to merge non-provided fields.
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
+  });
+  const row = res.data.values?.[0] || [];
+  const merged: NewsPost = {
+    rowIndex,
+    id: row[0] || "",
+    type: (patch.type ?? (row[1] as NewsPost["type"])) || "text",
+    title: patch.title ?? row[2] ?? "",
+    body: patch.body ?? row[3] ?? "",
+    imageUrl: patch.imageUrl ?? row[4] ?? "",
+    youtubeUrl: patch.youtubeUrl ?? row[5] ?? "",
+    previewImageUrl: patch.previewImageUrl ?? row[6] ?? "",
+    active: patch.active ?? row[7] !== "false",
+    createdAt: row[8] || "",
+  };
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        merged.id, merged.type, merged.title, merged.body, merged.imageUrl,
+        merged.youtubeUrl, merged.previewImageUrl, String(merged.active), merged.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function deleteNewsPost(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
+  });
+}
+
 // ─── TICKETS (Tab 6) ─────────────────────────────────────────────
 // Columns: A=ID, B=CustomerKey, C=CustomerName, D=Subject, E=Status,
 //          F=CreatedAt, G=UpdatedAt, H=Messages_JSON
