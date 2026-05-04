@@ -1,14 +1,16 @@
 "use client";
 
 // ─── <HybridUpscaler /> ───────────────────────────────────────────
-// One-shot 4× image upscaler. Drop a photo → wait → download.
+// Three upscale modes (Photo / Faces / Graphics) × scale (2× or 4×).
+// Result is shown in a draggable before/after compare slider, with
+// optional one-click save to the user's Mediathek.
 //
-// Reliability: oversized inputs are the #1 cause of failed runs
-// (Vercel rejects > 4.5 MB bodies, the GPU model times out on
-// huge images). We therefore re-encode every input client-side
-// to a JPEG capped at 2400 px on the longest side and ~92% quality
-// — typically lands well under 1 MB regardless of source format
-// or megapixel count.
+// Reliability rails (kept from the previous version):
+//   • Client re-encodes every input to a JPEG ≤ 2400 px and ~92%
+//     quality so the multipart payload is well under Vercel's 4.5 MB
+//     body cap regardless of source format or megapixel count.
+//   • The server uses Replicate's `Prefer: wait=60` then long-polls
+//     up to ~3.5 minutes — generous enough for full 4× passes.
 
 import {
   useCallback,
@@ -17,20 +19,48 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
+  type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
 
 const ACCENT = "#95BF47";
-// Hard ceiling on what the user is allowed to pick up. We re-encode
-// almost everything below this, so this is just defensive.
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
-// Max dimension for the re-encoded payload sent to the server.
 const PROCESS_MAX_DIM = 2400;
 const PROCESS_QUALITY = 0.92;
 
 type Stage = "idle" | "preparing" | "processing" | "done" | "error";
+type UpscaleMode = "photo" | "faces" | "graphics";
+type Scale = 2 | 4;
+
+interface ModeOption {
+  id: UpscaleMode;
+  label: string;
+  hint: string;
+  icon: (props: { color?: string }) => React.JSX.Element;
+}
+
+const MODES: readonly ModeOption[] = [
+  {
+    id: "photo",
+    label: "Foto",
+    hint: "Beste Wahl für Produktbilder & Fotos.",
+    icon: ImageIcon,
+  },
+  {
+    id: "faces",
+    label: "Gesichter",
+    hint: "Schärft & glättet Gesichter — perfekt für Lifestyle-Shots.",
+    icon: FaceIcon,
+  },
+  {
+    id: "graphics",
+    label: "Grafik / Logo",
+    hint: "Knackige Kanten für Logos, Icons, Screenshots.",
+    icon: GraphicIcon,
+  },
+];
 
 export default function HybridUpscaler() {
   const credits = useCredits();
@@ -38,11 +68,18 @@ export default function HybridUpscaler() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
+  const [originalDims, setOriginalDims] = useState<{ width: number; height: number } | null>(null);
   const [upscaledUrl, setUpscaledUrl] = useState<string | null>(null);
   const [outputDims, setOutputDims] = useState<{ width: number; height: number } | null>(null);
 
-  const [elapsed, setElapsed] = useState(0); // ms
+  const [mode, setMode] = useState<UpscaleMode>("photo");
+  const [scale, setScale] = useState<Scale>(4);
+
+  const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
+
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -51,7 +88,6 @@ export default function HybridUpscaler() {
   const insufficientCredits =
     !credits.loading && credits.balance < CREDIT_COSTS.UPSCALE_IMAGE;
 
-  // ── Cleanup blob URLs on unmount ────────────────────────────────
   useEffect(() => {
     return () => {
       if (originalUrl) URL.revokeObjectURL(originalUrl);
@@ -81,12 +117,14 @@ export default function HybridUpscaler() {
     setStage("idle");
     setErrorMsg(null);
     setOriginalUrl(null);
+    setOriginalDims(null);
     setUpscaledUrl(null);
     setOutputDims(null);
     setElapsed(0);
+    setSavedToLibrary(false);
+    setSaving(false);
   }
 
-  // ── File intake ─────────────────────────────────────────────────
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) {
@@ -106,20 +144,22 @@ export default function HybridUpscaler() {
         return;
       }
 
-      // Clear previous run.
       if (originalUrl) URL.revokeObjectURL(originalUrl);
       setErrorMsg(null);
       setUpscaledUrl(null);
       setOutputDims(null);
+      setSavedToLibrary(false);
 
       const previewUrl = URL.createObjectURL(file);
       setOriginalUrl(previewUrl);
       setStage("preparing");
 
-      // 1) Re-encode client-side to keep payload predictable.
       let payload: File;
+      let dims: { width: number; height: number };
       try {
-        payload = await preprocessImage(file);
+        const result = await preprocessImage(file);
+        payload = result.file;
+        dims = result.dims;
       } catch (err) {
         console.error("[Upscaler] preprocess failed:", err);
         setErrorMsg(
@@ -130,22 +170,23 @@ export default function HybridUpscaler() {
         setStage("error");
         return;
       }
+      setOriginalDims(dims);
 
-      // 2) Send to the server. Optimistic credit deduction —
-      //    server response reconciles the true balance.
       setStage("processing");
       startTimer();
       credits.optimisticDeduct(CREDIT_COSTS.UPSCALE_IMAGE);
-      await runUpscale(payload);
+      await runUpscale(payload, mode, scale);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [insufficientCredits, credits.balance, originalUrl],
+    [insufficientCredits, credits.balance, originalUrl, mode, scale],
   );
 
-  async function runUpscale(file: File) {
+  async function runUpscale(file: File, modeId: UpscaleMode, scaleN: Scale) {
     try {
       const fd = new FormData();
       fd.append("file", file);
+      fd.append("mode", modeId);
+      fd.append("scale", String(scaleN));
       const res = await fetch("/api/upscale/cloud", {
         method: "POST",
         body: fd,
@@ -199,7 +240,7 @@ export default function HybridUpscaler() {
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;
-      a.download = `upscaled-${Date.now()}.png`;
+      a.download = `upscaled-${scale}x-${Date.now()}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -209,12 +250,47 @@ export default function HybridUpscaler() {
     }
   }
 
+  async function handleSaveToLibrary() {
+    if (!upscaledUrl || saving || savedToLibrary) return;
+    setSaving(true);
+    try {
+      const r = await fetch("/api/library/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "image-url",
+          source: "upscaler",
+          remoteUrl: upscaledUrl,
+          title: `Upscale ${scale}× · ${MODES.find((m) => m.id === mode)?.label}`,
+          basename: "upscaled",
+          meta: {
+            scale,
+            mode,
+            ...(outputDims || {}),
+          },
+        }),
+      });
+      if (r.ok) setSavedToLibrary(true);
+    } catch {
+      // ignore — user can retry
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const elapsedSec = (elapsed / 1000).toFixed(1);
   const isWorking = stage === "preparing" || stage === "processing";
 
-  // ───────────────────────────────────────────────────────────────
   return (
     <div className="font-sf w-full">
+      {/* ── Mode + scale picker (above dropzone, also during done) ── */}
+      {(stage === "idle" || stage === "done") && (
+        <div className="mb-4 sm:mb-6 space-y-3">
+          <ModePicker value={mode} onChange={setMode} disabled={isWorking} />
+          <ScalePicker value={scale} onChange={setScale} disabled={isWorking} />
+        </div>
+      )}
+
       {/* ── Stage: IDLE — drop zone ───────────────────────────── */}
       {stage === "idle" && (
         <>
@@ -226,7 +302,7 @@ export default function HybridUpscaler() {
             }}
             onDragLeave={() => setDragActive(false)}
             onClick={() => !insufficientCredits && fileInputRef.current?.click()}
-            className={`relative aspect-[16/10] rounded-[28px] flex flex-col items-center justify-center text-center px-8 py-12 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
+            className={`relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-5 sm:px-8 py-10 sm:py-12 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
             style={{
               background: dragActive
                 ? "rgba(149, 191, 71, 0.06)"
@@ -248,7 +324,7 @@ export default function HybridUpscaler() {
             />
 
             <div
-              className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6"
+              className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
               style={{
                 background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}10)`,
                 border: `1px solid ${ACCENT}30`,
@@ -258,16 +334,16 @@ export default function HybridUpscaler() {
             </div>
 
             <h3
-              className="text-[22px] font-semibold tracking-tight text-white"
+              className="text-[19px] sm:text-[22px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Bild hochladen
             </h3>
-            <p className="text-[14px] text-zinc-400 mt-2 max-w-sm leading-relaxed">
+            <p className="text-[13px] sm:text-[14px] text-zinc-400 mt-1.5 sm:mt-2 max-w-sm leading-relaxed">
               Drag &amp; Drop oder klicke, um ein Foto auszuwählen
             </p>
-            <p className="text-[12px] text-zinc-600 mt-1">
-              JPG · PNG · WebP · 4× Auflösung
+            <p className="text-[11px] sm:text-[12px] text-zinc-600 mt-1">
+              JPG · PNG · WebP · {scale}× Auflösung
             </p>
 
             <button
@@ -277,7 +353,7 @@ export default function HybridUpscaler() {
                 e.stopPropagation();
                 if (!insufficientCredits) fileInputRef.current?.click();
               }}
-              className="mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-6 sm:mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -287,16 +363,14 @@ export default function HybridUpscaler() {
               Datei wählen
             </button>
 
-            <p
-              className="absolute bottom-5 left-1/2 -translate-x-1/2 text-[11px] uppercase tracking-[0.14em] text-zinc-600"
-            >
-              Kostet {CREDIT_COSTS.UPSCALE_IMAGE} Credits pro Bild
+            <p className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
+              {CREDIT_COSTS.UPSCALE_IMAGE} Credits / Bild
             </p>
 
             {insufficientCredits && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 rounded-[28px] flex flex-col items-center justify-center text-center px-6"
+                className="absolute inset-0 rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6"
                 style={{
                   background: "rgba(7,7,9,0.85)",
                   backdropFilter: "blur(14px)",
@@ -334,7 +408,6 @@ export default function HybridUpscaler() {
             )}
           </div>
 
-          {/* Inline error during idle (validation) */}
           {errorMsg && (
             <div
               className="mt-4 rounded-2xl p-4 flex items-center gap-3"
@@ -353,7 +426,7 @@ export default function HybridUpscaler() {
       {/* ── Stage: WORKING ───────────────────────────────────── */}
       {isWorking && (
         <div
-          className="relative aspect-[16/10] rounded-[28px] flex flex-col items-center justify-center text-center px-8 py-12 overflow-hidden"
+          className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6 sm:px-8 py-10 sm:py-12 overflow-hidden"
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             backdropFilter: "blur(28px) saturate(140%)",
@@ -363,6 +436,7 @@ export default function HybridUpscaler() {
           }}
         >
           {originalUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={originalUrl}
               alt=""
@@ -372,15 +446,15 @@ export default function HybridUpscaler() {
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
             <h3
-              className="mt-6 text-[20px] font-semibold tracking-tight text-white"
+              className="mt-5 sm:mt-6 text-[18px] sm:text-[20px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
-              {stage === "preparing" ? "Bild wird vorbereitet…" : "Bild wird hochskaliert"}
+              {stage === "preparing" ? "Bild wird vorbereitet…" : `Auf ${scale}× hochskaliert`}
             </h3>
-            <p className="mt-2 text-[13px] text-zinc-400">
+            <p className="mt-1.5 sm:mt-2 text-[12.5px] sm:text-[13px] text-zinc-400">
               {stage === "preparing"
                 ? "Optimiere die Quelldatei…"
-                : `Verarbeitung läuft · ${elapsedSec}s`}
+                : `${MODES.find((m) => m.id === mode)?.label}-Modus · ${elapsedSec}s`}
             </p>
             {stage === "processing" && (
               <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
@@ -391,29 +465,15 @@ export default function HybridUpscaler() {
         </div>
       )}
 
-      {/* ── Stage: DONE — only the upscaled image ─────────────── */}
-      {stage === "done" && upscaledUrl && (
-        <div className="space-y-5">
-          <div
-            className="relative w-full rounded-[24px] overflow-hidden bg-zinc-900"
-            style={{
-              border: "1px solid rgba(255,255,255,0.08)",
-              boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
-            }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={upscaledUrl}
-              alt="Hochskaliertes Bild"
-              crossOrigin="anonymous"
-              className="block w-full h-auto"
-            />
-          </div>
+      {/* ── Stage: DONE — before/after slider ─────────────── */}
+      {stage === "done" && upscaledUrl && originalUrl && (
+        <div className="space-y-4 sm:space-y-5">
+          <BeforeAfter beforeUrl={originalUrl} afterUrl={upscaledUrl} />
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <button
               onClick={handleDownload}
-              className="flex-1 h-12 rounded-2xl text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              className="flex-1 h-12 rounded-2xl text-[14px] sm:text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -421,25 +481,36 @@ export default function HybridUpscaler() {
               }}
             >
               <DownloadIcon />
-              Bild herunterladen
+              Herunterladen
+            </button>
+            <button
+              onClick={handleSaveToLibrary}
+              disabled={saving || savedToLibrary}
+              className="h-12 px-5 rounded-2xl text-[14px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
+              style={{
+                background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)"}`,
+                color: savedToLibrary ? "#10b981" : "#e4e4e7",
+              }}
+            >
+              {saving ? <Spinner color="currentColor" small /> : savedToLibrary ? <CheckIcon /> : <FolderIcon />}
+              {savedToLibrary ? "Gespeichert" : saving ? "Speichere…" : "In Mediathek"}
             </button>
             <button
               onClick={reset}
-              className="px-6 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-5 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
-                backdropFilter: "blur(20px)",
-                WebkitBackdropFilter: "blur(20px)",
               }}
             >
               Neues Bild
             </button>
           </div>
 
-          <p className="text-[12px] text-zinc-500 text-center">
+          <p className="text-[11px] sm:text-[12px] text-zinc-500 text-center">
             Fertig in {elapsedSec}s
-            {outputDims && ` · ${outputDims.width}×${outputDims.height}`}
+            {originalDims && outputDims && ` · ${originalDims.width}×${originalDims.height} → ${outputDims.width}×${outputDims.height}`}
           </p>
         </div>
       )}
@@ -447,7 +518,7 @@ export default function HybridUpscaler() {
       {/* ── Stage: ERROR ──────────────────────────────────────── */}
       {stage === "error" && errorMsg && (
         <div
-          className="rounded-[24px] p-6 flex items-start gap-4"
+          className="rounded-3xl sm:rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-start gap-3 sm:gap-4"
           style={{
             background: "rgba(239, 68, 68, 0.08)",
             border: "1px solid rgba(239, 68, 68, 0.20)",
@@ -455,14 +526,16 @@ export default function HybridUpscaler() {
             WebkitBackdropFilter: "blur(20px)",
           }}
         >
-          <AlertIcon />
-          <div className="flex-1 min-w-0">
-            <div className="text-[15px] font-semibold text-red-300">Fehler</div>
-            <div className="text-[13px] text-red-200/90 mt-1 break-words">{errorMsg}</div>
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <AlertIcon />
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold text-red-300">Fehler</div>
+              <div className="text-[13px] text-red-200/90 mt-1 break-words">{errorMsg}</div>
+            </div>
           </div>
           <button
             onClick={reset}
-            className="text-[13px] px-4 h-9 rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
+            className="text-[13px] px-4 h-9 rounded-full font-medium text-red-200 transition-all active:scale-[0.97] shrink-0"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.10)",
@@ -476,11 +549,186 @@ export default function HybridUpscaler() {
   );
 }
 
+// ─── Mode picker ───────────────────────────────────────────────
+
+function ModePicker({ value, onChange, disabled }: {
+  value: UpscaleMode;
+  onChange: (m: UpscaleMode) => void;
+  disabled: boolean;
+}) {
+  const active = MODES.find((m) => m.id === value) ?? MODES[0];
+  return (
+    <div
+      className="rounded-2xl p-1 grid grid-cols-3 gap-1"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      {MODES.map((m) => {
+        const isSelected = m.id === value;
+        return (
+          <button
+            key={m.id}
+            disabled={disabled}
+            onClick={() => onChange(m.id)}
+            className="relative px-2 py-2 rounded-xl text-[11px] sm:text-[12px] font-semibold flex flex-col items-center justify-center gap-1 transition disabled:opacity-50"
+            style={{
+              background: isSelected ? `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}08)` : "transparent",
+              border: isSelected ? `1px solid ${ACCENT}40` : "1px solid transparent",
+              color: isSelected ? ACCENT : "rgba(255,255,255,0.65)",
+            }}
+            title={m.hint}
+          >
+            <m.icon color={isSelected ? ACCENT : "currentColor"} />
+            {m.label}
+          </button>
+        );
+      })}
+
+      {/* Hint row spans full grid */}
+      <p className="col-span-3 px-3 pt-1.5 pb-1 text-[10px] sm:text-[11px] text-zinc-500 leading-snug text-center">
+        {active.hint}
+      </p>
+    </div>
+  );
+}
+
+// ─── Scale picker ──────────────────────────────────────────────
+
+function ScalePicker({ value, onChange, disabled }: {
+  value: Scale;
+  onChange: (s: Scale) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      className="rounded-2xl p-1 grid grid-cols-2 gap-1"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      {([2, 4] as Scale[]).map((s) => {
+        const isSelected = s === value;
+        return (
+          <button
+            key={s}
+            disabled={disabled}
+            onClick={() => onChange(s)}
+            className="relative px-3 py-2 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-1 transition disabled:opacity-50"
+            style={{
+              background: isSelected ? `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}08)` : "transparent",
+              border: isSelected ? `1px solid ${ACCENT}40` : "1px solid transparent",
+              color: isSelected ? ACCENT : "rgba(255,255,255,0.7)",
+            }}
+          >
+            {s}× Auflösung
+            <span className="text-[9px] font-normal opacity-60 ml-1">
+              {s === 2 ? "schneller" : "max"}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── Before/after compare slider ───────────────────────────────
+
+function BeforeAfter({ beforeUrl, afterUrl }: { beforeUrl: string; afterUrl: string }) {
+  const [pos, setPos] = useState(50);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const draggingRef = useRef(false);
+
+  function handleMove(clientX: number) {
+    const el = containerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const next = ((clientX - rect.left) / rect.width) * 100;
+    setPos(Math.max(0, Math.min(100, next)));
+  }
+
+  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
+    draggingRef.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    handleMove(e.clientX);
+  }
+  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
+    if (!draggingRef.current) return;
+    handleMove(e.clientX);
+  }
+  function onPointerUp(e: ReactPointerEvent<HTMLDivElement>) {
+    draggingRef.current = false;
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="relative w-full rounded-3xl sm:rounded-[24px] overflow-hidden bg-zinc-900 select-none touch-none"
+      style={{
+        border: "1px solid rgba(255,255,255,0.08)",
+        boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+    >
+      {/* AFTER (full-size, behind) */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={afterUrl}
+        alt="Hochskaliert"
+        crossOrigin="anonymous"
+        className="block w-full h-auto pointer-events-none"
+      />
+
+      {/* BEFORE (clipped to slider position) */}
+      <div
+        className="absolute inset-0 overflow-hidden"
+        style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={beforeUrl}
+          alt="Original"
+          className="block w-full h-full object-cover pointer-events-none"
+        />
+      </div>
+
+      {/* Slider handle */}
+      <div
+        className="absolute top-0 bottom-0 w-[2px] bg-white/90 pointer-events-none"
+        style={{ left: `${pos}%`, boxShadow: "0 0 12px rgba(0,0,0,0.5)" }}
+      />
+      <div
+        className="absolute -translate-x-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 flex items-center justify-center cursor-ew-resize pointer-events-none"
+        style={{ left: `${pos}%`, top: "50%", boxShadow: "0 4px 16px rgba(0,0,0,0.4)" }}
+      >
+        <SliderHandleIcon />
+      </div>
+
+      {/* Labels */}
+      <div className="absolute top-3 left-3 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest bg-black/60 text-white/90 backdrop-blur-md pointer-events-none">
+        Vorher
+      </div>
+      <div className="absolute top-3 right-3 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-widest bg-[#95BF47] text-black backdrop-blur-md pointer-events-none">
+        Nachher
+      </div>
+    </div>
+  );
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────
 
-// Re-encode the source image to a JPEG bounded by PROCESS_MAX_DIM
-// on the longest side. Always re-encodes — it's the reliable path.
-async function preprocessImage(file: File): Promise<File> {
+interface PreprocessResult {
+  file: File;
+  dims: { width: number; height: number };
+}
+
+async function preprocessImage(file: File): Promise<PreprocessResult> {
   const url = URL.createObjectURL(file);
   try {
     const img = await loadImage(url);
@@ -506,7 +754,10 @@ async function preprocessImage(file: File): Promise<File> {
       );
     });
     const baseName = file.name.replace(/\.[^.]+$/, "");
-    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+    return {
+      file: new File([blob], `${baseName}.jpg`, { type: "image/jpeg" }),
+      dims: { width: img.naturalWidth, height: img.naturalHeight },
+    };
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -555,6 +806,22 @@ function DownloadIcon() {
   );
 }
 
+function FolderIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6l2 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2z" />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 function AlertIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#f87171" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 mt-0.5">
@@ -565,21 +832,60 @@ function AlertIcon() {
   );
 }
 
-function Spinner({ color }: { color: string }) {
+function SliderHandleIcon() {
   return (
-    <div className="relative w-12 h-12">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0a0a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 3 12 9 6" />
+      <polyline points="15 18 21 12 15 6" />
+    </svg>
+  );
+}
+
+function Spinner({ color, small = false }: { color: string; small?: boolean }) {
+  const size = small ? 18 : 48;
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
       <div
         className="absolute inset-0 rounded-full"
-        style={{ border: `2px solid ${color}25` }}
+        style={{ border: `${small ? 2 : 2}px solid ${color}25` }}
       />
       <div
         className="absolute inset-0 rounded-full animate-spin"
         style={{
-          border: "2px solid transparent",
+          border: `${small ? 2 : 2}px solid transparent`,
           borderTopColor: color,
           animationDuration: "0.8s",
         }}
       />
     </div>
+  );
+}
+
+// Mode icons
+function ImageIcon({ color = "currentColor" }: { color?: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
+  );
+}
+function FaceIcon({ color = "currentColor" }: { color?: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
+  );
+}
+function GraphicIcon({ color = "currentColor" }: { color?: string }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2" />
+      <line x1="12" y1="22" x2="12" y2="11" />
+    </svg>
   );
 }

@@ -7,6 +7,7 @@ const de = {
     home: "Home",
     charts: "Winning Charts",
     chats: "Community",
+    library: "Mediathek",
     seo: "SEO Audit",
     blog: "Blog-Wizard",
     legal: "Rechtstexte",

@@ -1247,3 +1247,135 @@ export async function bumpCodeRedemptions(rowIndex: number): Promise<void> {
     requestBody: { values: [[String(current + 1)]] },
   });
 }
+
+// ─── LIBRARY (Tab "Library") ──────────────────────────────────────
+// User-owned media vault. Items are written by every AI tool that
+// generates an image or template the user might want to revisit.
+//
+// Storage strategy (cost-minimised):
+//   • Asset blob: WebP @78%   ~  85% smaller than PNG
+//   • Thumbnail blob: WebP 320px @70%, ~5–15 KB per item
+//   • Template body inline in the sheet (templates are small)
+//   • Per-user cap (LIBRARY_MAX_ITEMS) — oldest pruned automatically
+//
+// Columns: A=ID, B=UserKey, C=Type ("image"|"email"), D=Source,
+//          E=Title, F=AssetUrl, G=ThumbnailUrl, H=Body,
+//          I=MetaJSON, J=CreatedAt, K=Active
+//
+// `MetaJSON` carries tool-specific extras (width, height, scale,
+// scene name, template id, etc.). Kept as JSON for forward-compat.
+
+export const LIBRARY_MAX_ITEMS = 60;
+
+export type LibraryItemType = "image" | "email";
+export type LibrarySource =
+  | "upscaler"
+  | "bg-remover"
+  | "ai-studio"
+  | "email-templates"
+  | "other";
+
+export interface LibraryItem {
+  rowIndex: number;
+  id: string;
+  userKey: string;
+  type: LibraryItemType;
+  source: LibrarySource;
+  title: string;
+  assetUrl: string;
+  thumbnailUrl: string;
+  body: string;
+  meta: Record<string, unknown>;
+  createdAt: string;
+  active: boolean;
+}
+
+const LIBRARY_HEADERS = [
+  "ID", "UserKey", "Type", "Source", "Title",
+  "AssetUrl", "ThumbnailUrl", "Body", "MetaJSON",
+  "CreatedAt", "Active",
+];
+
+function rowToLibraryItem(row: string[], index: number): LibraryItem {
+  let meta: Record<string, unknown> = {};
+  try { meta = JSON.parse(row[8] || "{}"); } catch { meta = {}; }
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    userKey: row[1] || "",
+    type: (row[2] as LibraryItemType) || "image",
+    source: (row[3] as LibrarySource) || "other",
+    title: row[4] || "",
+    assetUrl: row[5] || "",
+    thumbnailUrl: row[6] || "",
+    body: row[7] || "",
+    meta,
+    createdAt: row[9] || "",
+    active: row[10] !== "false",
+  };
+}
+
+async function ensureLibrarySheet(): Promise<void> {
+  await ensureSheet("Library", LIBRARY_HEADERS);
+}
+
+export async function getLibraryItems(userKey: string): Promise<LibraryItem[]> {
+  if (!userKey) return [];
+  const sheets = getSheets();
+  try {
+    await ensureLibrarySheet();
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Library!A2:K",
+    });
+    const rows = res.data.values || [];
+    return rows
+      .map((row, i) => rowToLibraryItem(row, i))
+      .filter((it) => it.id && it.userKey === userKey && it.active);
+  } catch {
+    return [];
+  }
+}
+
+export async function addLibraryItem(
+  item: Omit<LibraryItem, "rowIndex">,
+): Promise<void> {
+  const sheets = getSheets();
+  await ensureLibrarySheet();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Library!A:K",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        item.id, item.userKey, item.type, item.source, item.title,
+        item.assetUrl, item.thumbnailUrl, item.body,
+        JSON.stringify(item.meta || {}),
+        item.createdAt, String(item.active),
+      ]],
+    },
+  });
+}
+
+export async function deleteLibraryItem(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Library!A${rowIndex}:K${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", "", "", "", "", ""]] },
+  });
+}
+
+// Returns items that should be evicted to keep the user under the cap.
+// Returned in chronological order so callers can delete blobs first.
+export function pickLibraryItemsToEvict(
+  items: LibraryItem[],
+  cap = LIBRARY_MAX_ITEMS,
+): LibraryItem[] {
+  if (items.length <= cap) return [];
+  const sorted = [...items].sort(
+    (a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""),
+  );
+  return sorted.slice(0, items.length - cap);
+}

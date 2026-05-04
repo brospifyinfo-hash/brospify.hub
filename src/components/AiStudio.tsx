@@ -53,6 +53,9 @@ export default function AiStudio() {
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
 
@@ -98,7 +101,38 @@ export default function AiStudio() {
     setSceneId(AI_STUDIO_SCENES[0].id);
     setCustomPrompt("");
     setShowCustomPrompt(false);
+    setSavedToLibrary(false);
+    setSavingToLibrary(false);
     setElapsed(0);
+  }
+
+  async function handleSaveToLibrary() {
+    if (!resultUrl || savingToLibrary || savedToLibrary) return;
+    setSavingToLibrary(true);
+    try {
+      const r = await fetch("/api/library/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "image-url",
+          source: "ai-studio",
+          remoteUrl: resultUrl,
+          title: resultScene
+            ? `AI Studio · ${resultScene.label}`
+            : "AI Studio Szene",
+          basename: "ai-studio",
+          meta: {
+            sceneId: resultScene?.id,
+            sceneLabel: resultScene?.label,
+          },
+        }),
+      });
+      if (r.ok) setSavedToLibrary(true);
+    } catch {
+      // ignore
+    } finally {
+      setSavingToLibrary(false);
+    }
   }
 
   // ── Step 1: upload ────────────────────────────────────────────
@@ -202,6 +236,7 @@ export default function AiStudio() {
       stopTimer();
       setResultUrl(data.url as string);
       setResultScene(scene);
+      setSavedToLibrary(false);
       setStage("done");
     } catch (err) {
       stopTimer();
@@ -486,10 +521,10 @@ export default function AiStudio() {
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-2.5">
             <button
               onClick={handleDownload}
-              className="flex-1 h-12 rounded-2xl text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              className="flex-1 h-12 rounded-2xl text-[14px] sm:text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -497,15 +532,35 @@ export default function AiStudio() {
               }}
             >
               <DownloadIcon />
-              Bild herunterladen
+              Herunterladen
+            </button>
+            <button
+              onClick={handleSaveToLibrary}
+              disabled={savingToLibrary || savedToLibrary}
+              className="h-12 px-5 rounded-2xl text-[13px] sm:text-[14px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
+              style={{
+                background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
+                border: `1px solid ${savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)"}`,
+                color: savedToLibrary ? "#10b981" : "#e4e4e7",
+              }}
+            >
+              {savingToLibrary ? (
+                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : savedToLibrary ? (
+                <CheckSmallIcon />
+              ) : (
+                <FolderSmallIcon />
+              )}
+              {savedToLibrary ? "Gespeichert" : savingToLibrary ? "Speichere…" : "In Mediathek"}
             </button>
             <button
               onClick={() => {
                 setResultUrl(null);
                 setResultScene(null);
+                setSavedToLibrary(false);
                 setStage("configure");
               }}
-              className="px-5 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-4 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -515,7 +570,7 @@ export default function AiStudio() {
             </button>
             <button
               onClick={reset}
-              className="px-5 h-12 rounded-2xl text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-4 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -1175,6 +1230,22 @@ function DownloadIcon() {
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+  );
+}
+
+function FolderSmallIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6l2 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2z" />
+    </svg>
+  );
+}
+
+function CheckSmallIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
     </svg>
   );
 }

@@ -35,6 +35,7 @@ import {
   X,
   AlertTriangle,
   SlidersHorizontal,
+  FolderHeart,
 } from "lucide-react";
 import {
   EMAIL_TEMPLATES,
@@ -206,6 +207,43 @@ function EmailStudio() {
     navigator.clipboard.writeText(generated.liquid);
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
+  }
+
+  // ── Save the generated template into the user's Mediathek ──
+  const [savedToLibrary, setSavedToLibrary] = useState(false);
+  const [savingToLibrary, setSavingToLibrary] = useState(false);
+
+  // Reset library state whenever a fresh generation lands
+  useEffect(() => {
+    setSavedToLibrary(false);
+  }, [generated]);
+
+  async function saveToLibrary() {
+    if (!generated || savingToLibrary || savedToLibrary) return;
+    setSavingToLibrary(true);
+    try {
+      const r = await fetch("/api/library/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "email",
+          source: "email-templates",
+          title: generated.subject || tpl.title,
+          subject: generated.subject,
+          liquid: generated.liquid,
+          meta: {
+            templateId: tpl.id,
+            shopifyName: tpl.shopifyName,
+            source: generated.source,
+          },
+        }),
+      });
+      if (r.ok) setSavedToLibrary(true);
+    } catch {
+      // ignore
+    } finally {
+      setSavingToLibrary(false);
+    }
   }
 
   const insufficient =
@@ -419,6 +457,27 @@ function EmailStudio() {
                     subject={generated.subject}
                     ready={shopReady}
                   />
+
+                  {/* Save to Mediathek — full-width secondary CTA */}
+                  <button
+                    onClick={saveToLibrary}
+                    disabled={savingToLibrary || savedToLibrary}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-[13px] font-semibold border transition disabled:opacity-60"
+                    style={{
+                      background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
+                      borderColor: savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)",
+                      color: savedToLibrary ? "#10b981" : "#e4e4e7",
+                    }}
+                  >
+                    {savingToLibrary ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : savedToLibrary ? (
+                      <Check className="w-3.5 h-3.5" />
+                    ) : (
+                      <FolderHeart className="w-3.5 h-3.5" />
+                    )}
+                    {savedToLibrary ? "In Mediathek gespeichert" : savingToLibrary ? "Speichere…" : "In Mediathek speichern"}
+                  </button>
                 </div>
               </>
             ) : (

@@ -31,9 +31,9 @@ export default function BackgroundRemoverPage() {
               Magic Background Remover
             </h1>
             <p className="mt-2.5 sm:mt-3 text-[13.5px] sm:text-[15px] text-zinc-400 max-w-xl leading-relaxed">
-              Lade ein Produktfoto hoch — der Hintergrund wird pixelgenau
-              entfernt. Wähle zwischen schnellem Standard und Präzise-Modus
-              für feinste Kanten.
+              Drei Genauigkeits-Modi inkl. Haar/Fell — danach kannst du das
+              Produkt direkt auf eine Farbe, einen Gradient oder ein eigenes
+              Hintergrundbild legen. Komposition läuft lokal &amp; kostet 0 Credits.
             </p>
           </header>
 

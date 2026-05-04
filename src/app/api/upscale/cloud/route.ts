@@ -132,7 +132,13 @@ export async function POST(req: Request) {
   }
 
   const scale = clamp(toNumber(scaleRaw, 4), 2, 4);
-  const faceEnhance = String(faceEnhanceRaw ?? "false") === "true";
+  const modeRaw = formData.get("mode");
+  // Mode is the primary control. Legacy `face_enhance` form field is still
+  // accepted for back-compat and overrides whatever the mode would imply.
+  const mode = normaliseMode(typeof modeRaw === "string" ? modeRaw : null);
+  const faceEnhance = faceEnhanceRaw !== null
+    ? String(faceEnhanceRaw) === "true"
+    : mode === "faces";
 
   // 3) File → base64 data URI (Replicate accepts data URIs directly).
   const arrayBuffer = await fileEntry.arrayBuffer();
@@ -269,9 +275,15 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json(
-    { url: outputUrl, scale, creditsRemaining },
+    { url: outputUrl, scale, mode, creditsRemaining },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
+}
+
+function normaliseMode(raw: string | null): "photo" | "faces" | "graphics" {
+  if (raw === "faces") return "faces";
+  if (raw === "graphics") return "graphics";
+  return "photo";
 }
 
 // ─── helpers ─────────────────────────────────────────────────────

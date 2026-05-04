@@ -217,7 +217,7 @@ export function findScene(id: string | null | undefined): AiStudioScene | null {
 // distinct Fal models — fast BRIA cutout vs slower BiRefNet for
 // clean edges on hair, fur, and fine product details.
 
-export type BgPrecision = "fast" | "precise";
+export type BgPrecision = "fast" | "precise" | "hair";
 
 export interface BgPrecisionOption {
   id: BgPrecision;
@@ -233,15 +233,22 @@ export const BG_PRECISION_OPTIONS: readonly BgPrecisionOption[] = [
   {
     id: "fast",
     label: "Schnell",
-    hint: "BRIA RMBG-1.4 · 1–3 Sekunden, sauber für klare Kanten",
+    hint: "BRIA RMBG-1.4 · 1–3 s, klare Produktkanten",
     model: "fal-ai/imageutils/rembg",
   },
   {
     id: "precise",
     label: "Präzise",
-    hint: "BiRefNet v2 (Heavy) · 5–10 Sekunden, beste Kanten",
+    hint: "BiRefNet v2 General Heavy · 5–10 s, knackige feine Details",
     model: "fal-ai/birefnet/v2",
     modelInputs: { model: "General Use (Heavy)" },
+  },
+  {
+    id: "hair",
+    label: "Haar / Fell",
+    hint: "BiRefNet v2 Portrait · 6–10 s, perfekte Härchen-Kanten",
+    model: "fal-ai/birefnet/v2",
+    modelInputs: { model: "Portrait" },
   },
 ] as const;
 

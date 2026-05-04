@@ -31,8 +31,9 @@ export default function HybridUpscalerPage() {
               Image Upscaler
             </h1>
             <p className="mt-3 text-[15px] text-zinc-400 max-w-xl mx-auto sm:mx-0 leading-relaxed">
-              Lade ein Bild hoch und erhalte eine 4× hochskalierte Version —
-              schärfer, detailreicher, mit einem Klick.
+              Drei Modi für Foto, Gesichter oder Grafik — wähle 2× oder 4×
+              und vergleich Vorher/Nachher direkt im Slider. Speicher das
+              Ergebnis in einem Klick in deine Mediathek.
             </p>
           </header>
 

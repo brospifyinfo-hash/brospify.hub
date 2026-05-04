@@ -23,6 +23,7 @@ import {
   Camera,
   Plus,
   Coins,
+  FolderHeart,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -39,6 +40,7 @@ interface SessionInfo {
 const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home },
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
+  { href: "/library", labelKey: "library" as const, icon: FolderHeart },
   { href: "/themes", labelKey: "themes" as const, icon: Palette },
 ];
 
