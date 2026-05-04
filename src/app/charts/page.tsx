@@ -229,18 +229,8 @@ export default function ChartsPage() {
     finally { setImportingId(null); }
   }
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-mesh flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const p = infoModal.produkt;
-  const allImages = p ? [...new Set([p.bildUrl, ...(p.extra?.images || [])].filter(Boolean))] : [];
-
-  // Apply search + filter to charts
+  // Apply search + filter to charts — must run BEFORE any early return
+  // (Rules of Hooks: useMemo can't be called conditionally)
   const filteredCharts = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
     return charts
@@ -258,6 +248,17 @@ export default function ChartsPage() {
     () => charts.reduce((s, c) => s + c.produkte.length, 0),
     [charts],
   );
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-mesh flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const p = infoModal.produkt;
+  const allImages = p ? [...new Set([p.bildUrl, ...(p.extra?.images || [])].filter(Boolean))] : [];
 
   return (
     <div className="min-h-screen bg-mesh">
