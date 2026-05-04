@@ -23,9 +23,14 @@ import {
   Scissors,
   Camera,
   Plus,
-  Coins,
   FolderHeart,
   User as UserIcon,
+  FileText,
+  Shield,
+  Scale,
+  Receipt,
+  Undo2,
+  ExternalLink,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -508,56 +513,44 @@ export default function Navigation() {
         )}
       </AnimatePresence>
 
-      {/* ── More sheet (Profile / Themes / Support / Admin / Logout) ── */}
+      {/* ── More sheet (sorted, expandable Profile group) ─────── */}
       <AnimatePresence>
         {moreSheetOpen && (
           <BottomSheet onClose={() => setMoreSheetOpen(false)} title="Mehr">
-            <div className="space-y-1.5">
-              {/* Profile */}
-              <Link
-                href="/profile"
-                onClick={() => setMoreSheetOpen(false)}
-                className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition ${
-                  pathname === "/profile"
-                    ? "border-[#95BF47]/25 bg-[#95BF47]/8"
-                    : "border-white/[0.05] bg-white/[0.02]"
-                }`}
-              >
-                {session.googleImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={session.googleImage} alt="" className="w-9 h-9 rounded-lg border border-white/[0.08] object-cover" />
-                ) : (
-                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
-                    <UserIcon className="w-4 h-4 text-white" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold truncate">{session.googleName || "Profil"}</div>
-                  {session.googleEmail && (
-                    <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
-                  )}
-                </div>
-                <ChevronRight className="w-4 h-4 text-zinc-500" />
-              </Link>
+            <div className="space-y-2">
+              {/* ─── Profile & Account expandable ─── */}
+              <ProfileAccountGroup
+                session={session}
+                pathname={pathname}
+                onNavigate={() => setMoreSheetOpen(false)}
+              />
 
+              {/* ─── Tools ─── */}
+              <SectionLabel>Tools</SectionLabel>
               <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} />
-              <SheetItem href="/credits" icon={Coins} label="Credits aufladen" active={pathname === "/credits"} onClick={() => setMoreSheetOpen(false)} accent />
-              <SheetItem href="/ai-support" icon={Bot} label="Support" active={isAiSupportActive} onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive} onClick={() => setMoreSheetOpen(false)} />
+
+              {/* ─── Admin (if applicable) ─── */}
               {session.isAdmin && (
-                <SheetItem href="/admin" icon={Settings} label="Admin" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} />
+                <>
+                  <SectionLabel>Verwaltung</SectionLabel>
+                  <SheetItem href="/admin" icon={Settings} label="Admin-Panel" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} />
+                </>
               )}
 
-              <div className="border-t border-white/[0.06] my-1" />
-              <button
-                onClick={() => {
-                  setMoreSheetOpen(false);
-                  handleLogout();
-                }}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.06] text-red-300 transition active:bg-red-500/15"
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="text-sm font-semibold flex-1 text-left">Abmelden</span>
-              </button>
+              {/* ─── Logout ─── */}
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setMoreSheetOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.06] text-red-300 transition active:bg-red-500/15"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="text-sm font-semibold flex-1 text-left">Abmelden</span>
+                </button>
+              </div>
             </div>
           </BottomSheet>
         )}
@@ -620,29 +613,178 @@ function BottomSheet({ children, title, onClose }: {
   );
 }
 
-function SheetItem({ href, icon: Icon, label, active, onClick, accent }: {
+function SheetItem({ href, icon: Icon, label, active, onClick, accent, external, sub }: {
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   active?: boolean;
   onClick?: () => void;
   accent?: boolean;
+  external?: boolean;
+  sub?: string;
 }) {
+  const inner = (
+    <>
+      <Icon className="w-4 h-4 shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] sm:text-sm font-semibold truncate">{label}</div>
+        {sub && <div className="text-[10px] text-zinc-500 truncate">{sub}</div>}
+      </div>
+      {external ? <ExternalLink className="w-3.5 h-3.5 text-zinc-500 shrink-0" /> : <ChevronRight className="w-4 h-4 text-zinc-500 shrink-0" />}
+    </>
+  );
+  const className = `flex items-center gap-2.5 px-3 py-2.5 rounded-xl border transition ${
+    active
+      ? "border-[#95BF47]/25 bg-[#95BF47]/8 text-[#95BF47]"
+      : accent
+        ? "border-[#95BF47]/15 bg-[#95BF47]/5 text-[#95BF47]"
+        : "border-white/[0.05] bg-white/[0.02] text-zinc-200"
+  }`;
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={className}>
+        {inner}
+      </a>
+    );
+  }
   return (
-    <Link
-      href={href}
-      onClick={onClick}
-      className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition ${
-        active
-          ? "border-[#95BF47]/25 bg-[#95BF47]/8 text-[#95BF47]"
-          : accent
-            ? "border-[#95BF47]/15 bg-[#95BF47]/5 text-[#95BF47]"
-            : "border-white/[0.05] bg-white/[0.02] text-zinc-200"
-      }`}
-    >
-      <Icon className="w-4 h-4" />
-      <span className="text-sm font-semibold flex-1">{label}</span>
-      <ChevronRight className="w-4 h-4 text-zinc-500" />
+    <Link href={href} onClick={onClick} className={className}>
+      {inner}
+    </Link>
+  );
+}
+
+// ─── Section label inside the Mehr sheet ────────────────────────
+
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="pt-3 pb-1 px-2">
+      <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+        {children}
+      </span>
+    </div>
+  );
+}
+
+// ─── Profil & Account expandable group ──────────────────────────
+// Top of the Mehr sheet. Header card always visible (avatar + name).
+// Tapping the header expands a sub-list with Profil, Einstellungen,
+// Rechtstexte (für Shop), Impressum / Datenschutz / AGB / Widerruf
+// (links to brospify.com/policies for the platform-level pages).
+
+function ProfileAccountGroup({ session, pathname, onNavigate }: {
+  session: { googleName?: string; googleEmail?: string; googleImage?: string };
+  pathname: string;
+  onNavigate: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-3 py-3"
+      >
+        {session.googleImage ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={session.googleImage} alt="" className="w-10 h-10 rounded-lg border border-white/[0.08] object-cover shrink-0" />
+        ) : (
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center shrink-0">
+            <UserIcon className="w-4 h-4 text-white" />
+          </div>
+        )}
+        <div className="min-w-0 flex-1 text-left">
+          <div className="text-[13px] sm:text-sm font-semibold truncate">{session.googleName || "Profil"}</div>
+          {session.googleEmail && (
+            <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
+          )}
+        </div>
+        <motion.div
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+          className="shrink-0"
+        >
+          <ChevronDown className="w-4 h-4 text-zinc-500" />
+        </motion.div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-2 pb-2 pt-1 space-y-1 border-t border-white/[0.04]">
+              {/* Account */}
+              <div className="px-1 pt-1 pb-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
+                  Account
+                </span>
+              </div>
+              <SubItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={onNavigate} />
+              <SubItem href="/profile" icon={Settings} label="Einstellungen" active={pathname === "/profile"} onClick={onNavigate} />
+
+              {/* Shop */}
+              <div className="px-1 pt-2 pb-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
+                  Shop
+                </span>
+              </div>
+              <SubItem href="/legal" icon={Scale} label="Rechtstexte für deinen Shop" active={pathname === "/legal"} onClick={onNavigate} />
+
+              {/* Brospify Hub legal */}
+              <div className="px-1 pt-2 pb-0.5">
+                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
+                  Rechtliches
+                </span>
+              </div>
+              <SubItem href="https://brospify.com/policies/legal-notice" icon={FileText} label="Impressum" external onClick={onNavigate} />
+              <SubItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label="Datenschutzerklärung" external onClick={onNavigate} />
+              <SubItem href="https://brospify.com/policies/terms-of-service" icon={Receipt} label="AGB" external onClick={onNavigate} />
+              <SubItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label="Widerrufsbelehrung" external onClick={onNavigate} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function SubItem({ href, icon: Icon, label, active, external, onClick }: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active?: boolean;
+  external?: boolean;
+  onClick?: () => void;
+}) {
+  const inner = (
+    <>
+      <Icon className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
+      <span className="text-[12.5px] font-medium flex-1 truncate">{label}</span>
+      {external
+        ? <ExternalLink className="w-3 h-3 text-zinc-600 shrink-0" />
+        : <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />}
+    </>
+  );
+  const className = `flex items-center gap-2 px-2.5 py-2 rounded-lg transition ${
+    active
+      ? "bg-[#95BF47]/10 text-[#95BF47]"
+      : "text-zinc-200 hover:bg-white/[0.04] active:bg-white/[0.06]"
+  }`;
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={className}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} onClick={onClick} className={className}>
+      {inner}
     </Link>
   );
 }

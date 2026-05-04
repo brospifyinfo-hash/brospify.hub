@@ -228,6 +228,52 @@ export async function GET() {
       .sort((a, b) => b.estimatedProfit - a.estimatedProfit)
       .slice(0, 5);
 
+    // ─── 4b. Cross-Sell Pairs ────────────────────────────────────
+    // Products that are frequently bought TOGETHER in the same order.
+    // Standard Shopify Analytics doesn't surface this — it's the basis
+    // for bundle creation and "frequently bought together" widgets.
+    //
+    // Algorithm: for every order with ≥2 distinct products, count
+    // every (a,b) pair (a < b by id to dedupe). Top pairs are the
+    // strongest co-occurrences in the customer's actual basket history.
+    type PairKey = string;
+    const pairCounts = new Map<PairKey, { a: number; b: number; titleA: string; titleB: string; count: number }>();
+
+    for (const o of orders) {
+      // Distinct product IDs in this order (line items can repeat the same product variant)
+      const seen = new Map<number, string>();
+      for (const li of o.line_items) {
+        if (li.product_id && !seen.has(li.product_id)) {
+          seen.set(li.product_id, li.title);
+        }
+      }
+      const ids = Array.from(seen.keys()).sort((x, y) => x - y);
+      if (ids.length < 2) continue;
+      for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = ids[i], b = ids[j];
+          const key = `${a}|${b}`;
+          const titleA = seen.get(a) || "";
+          const titleB = seen.get(b) || "";
+          const existing = pairCounts.get(key);
+          if (existing) {
+            existing.count++;
+          } else {
+            pairCounts.set(key, { a, b, titleA, titleB, count: 1 });
+          }
+        }
+      }
+    }
+    const crossSellPairs = Array.from(pairCounts.values())
+      .filter((p) => p.count >= 2) // at least 2 co-occurrences worth surfacing
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5)
+      .map((p) => ({
+        a: p.titleA,
+        b: p.titleB,
+        count: p.count,
+      }));
+
     // ─── 5. Verpasster Umsatz (abandoned checkouts, 30d) ─────────
     const abandoned30dCutoff = new Date(now);
     abandoned30dCutoff.setUTCDate(abandoned30dCutoff.getUTCDate() - 30);
@@ -311,6 +357,7 @@ export async function GET() {
       aovWeeks,
       hotspots,
       productRanking,
+      crossSellPairs,
       missedRevenue: {
         amount: +missedRevenueCurrent.toFixed(2),
         count: missedCountCurrent,

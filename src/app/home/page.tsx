@@ -38,6 +38,7 @@ import {
   Zap,
   FolderHeart,
   ArrowRight,
+  Link2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -82,6 +83,7 @@ interface Insights {
   aovWeeks?: { label: string; aov: number }[];
   hotspots?: { hour: number; count: number }[];
   productRanking?: { id: number; title: string; units: number; revenue: number; estimatedProfit: number }[];
+  crossSellPairs?: { a: string; b: string; count: number }[];
   missedRevenue?: { amount: number; count: number; trendPct: number };
   returning?: { ratePct: number; customers: number; trend: { label: string; rate: number }[] };
   bestHour?: { hour: number; label: string; sharePct: number; recommendation: string };
@@ -554,6 +556,7 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
       <AovBarsCard data={insights.aovWeeks || []} />
       <HotspotsCard data={insights.hotspots || []} />
       <ProductRankingCard data={insights.productRanking || []} />
+      <CrossSellCard data={insights.crossSellPairs || []} />
       <MissedRevenueCard data={insights.missedRevenue} />
       <ReturningCard data={insights.returning} />
       <BestHourCard data={insights.bestHour} />
@@ -716,6 +719,38 @@ function ProductRankingCard({ data }: { data: { id: number; title: string; estim
         </div>
       )}
       <div className="text-[8px] sm:text-[10px] text-zinc-500 mt-auto">≈ Gewinn · 60 Tage</div>
+    </InsightCard>
+  );
+}
+
+function CrossSellCard({ data }: { data: { a: string; b: string; count: number }[] }) {
+  return (
+    <InsightCard icon={Link2} title="Häufig zusammen" accent="#0EA5E9">
+      {data.length === 0 ? (
+        <div className="text-[10px] sm:text-xs text-zinc-500 mt-1 leading-snug">
+          Noch keine Mehrfach-Bestellungen. Sobald Kunden 2+ Produkte zusammen kaufen, zeigen wir Bundle-Empfehlungen.
+        </div>
+      ) : (
+        <div className="space-y-1 sm:space-y-1.5 flex-1">
+          {data.slice(0, 3).map((p, i) => (
+            <div key={i} className="flex items-start gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] leading-tight">
+              <span className="inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-cyan-500/15 text-cyan-300 text-[9px] sm:text-[10px] font-bold shrink-0 tabular-nums">
+                {p.count}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-zinc-200">{p.a}</div>
+                <div className="text-zinc-500 text-[9px] sm:text-[10px] my-0.5 flex items-center gap-1">
+                  <span>+</span>
+                </div>
+                <div className="truncate text-zinc-200">{p.b}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="text-[8px] sm:text-[10px] text-zinc-500 mt-auto">
+        {data.length > 0 ? "Bundle-Idee: 2-für-1 Rabatt" : "Bundle-Empfehlung"}
+      </div>
     </InsightCard>
   );
 }
