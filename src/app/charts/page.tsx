@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -184,6 +184,8 @@ export default function ChartsPage() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [highMarginOnly, setHighMarginOnly] = useState(false);
 
   // AI Import Modal
   const [aiModal, setAiModal] = useState<{ open: boolean; produkt: Produkt | null }>({ open: false, produkt: null });
@@ -238,134 +240,188 @@ export default function ChartsPage() {
   const p = infoModal.produkt;
   const allImages = p ? [...new Set([p.bildUrl, ...(p.extra?.images || [])].filter(Boolean))] : [];
 
+  // Apply search + filter to charts
+  const filteredCharts = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    return charts
+      .map((chart) => ({
+        ...chart,
+        produkte: chart.produkte.filter((pr) => {
+          if (q && !pr.titel.toLowerCase().includes(q)) return false;
+          if (highMarginOnly && (pr.extra?.finances?.profitMargin ?? 0) < 15) return false;
+          return true;
+        }),
+      }))
+      .filter((c) => c.produkte.length > 0);
+  }, [charts, searchTerm, highMarginOnly]);
+  const totalProducts = useMemo(
+    () => charts.reduce((s, c) => s + c.produkte.length, 0),
+    [charts],
+  );
+
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-8 space-y-3 sm:space-y-5">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-              <BarChart3 className="w-8 h-8 text-[#95BF47]" />
-              Winning Product Charts
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-3xl font-bold flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-[#95BF47] shrink-0" />
+              <span className="truncate">Winning Charts</span>
             </h1>
-            <p className="text-zinc-400">
-              Die besten Dropshipping-Produkte mit Rankings, Analysen &amp; 1-Klick Import.
+            <p className="text-[11px] sm:text-sm text-zinc-500 mt-0.5 sm:mt-1">
+              Top-Dropshipping-Produkte · Rankings · 1-Klick-Import
             </p>
           </div>
+          {totalProducts > 0 && (
+            <div className="text-right shrink-0">
+              <div className="text-[8px] sm:text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Produkte</div>
+              <div className="text-sm sm:text-lg font-bold text-[#95BF47] tabular-nums">{totalProducts}</div>
+            </div>
+          )}
         </div>
 
-        {/* No Token Banner */}
-        {!hasShopifyToken && (
-          <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/20 text-amber-300 px-5 py-4 rounded-xl mb-8">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <div className="flex-1">
-              <p className="text-sm font-medium">Shopify nicht verbunden</p>
-              <p className="text-xs text-amber-400/70 mt-0.5">1-Klick-Import deaktiviert. Verbinde deinen Shop in den Einstellungen.</p>
+        {/* Search + filter */}
+        {charts.length > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1 min-w-0">
+              <BarChart3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Produkt suchen…"
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-3 py-1.5 sm:py-2 text-[12px] sm:text-sm outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+              />
             </div>
-            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-4 py-2 rounded-lg text-sm font-medium">Verbinden</button>
+            <button
+              onClick={() => setHighMarginOnly((v) => !v)}
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold border transition shrink-0 ${
+                highMarginOnly
+                  ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-300"
+                  : "bg-white/[0.03] border-white/10 text-zinc-400"
+              }`}
+            >
+              <DollarSign className="w-3 h-3" />
+              Top-Marge
+            </button>
           </div>
         )}
 
-        {/* Strategy Banner */}
-        <div className="flex items-start gap-3 bg-indigo-500/8 border border-indigo-500/15 text-indigo-300 px-5 py-4 rounded-xl mb-6">
-          <Sparkles className="w-5 h-5 shrink-0 mt-0.5 text-indigo-400" />
-          <div>
-            <p className="text-sm font-medium">Pro-Tipp</p>
-            <p className="text-xs text-indigo-300/70 mt-0.5">
-              Denke daran &ndash; die beliebtesten Produkte haben oft die h&ouml;chste Konkurrenz. Suche nach Nischen!
+        {/* Token banner — slim on mobile */}
+        {!hasShopifyToken && (
+          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 px-3 py-2.5 rounded-xl">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+            <p className="flex-1 text-[11px] sm:text-xs leading-snug">
+              <span className="font-semibold">Shop nicht verbunden.</span>{" "}
+              <span className="hidden sm:inline">1-Klick-Import deaktiviert.</span>
             </p>
+            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium">
+              Verbinden
+            </button>
           </div>
-        </div>
+        )}
 
         {error && (
-          <div className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-500/20 px-4 py-3 rounded-xl mb-6">
-            <AlertCircle className="w-4 h-4" />
-            <span>{error}</span>
-            <button onClick={() => setError("")} className="ml-auto"><X className="w-4 h-4" /></button>
+          <div className="flex items-center gap-2 text-red-400 text-xs bg-red-400/10 border border-red-500/20 px-3 py-2 rounded-xl">
+            <AlertCircle className="w-3.5 h-3.5" />
+            <span className="flex-1">{error}</span>
+            <button onClick={() => setError("")}><X className="w-3 h-3" /></button>
           </div>
         )}
 
-        {charts.length === 0 ? (
-          <div className="text-center py-20">
-            <TrendingUp className="w-12 h-12 text-zinc-700 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-zinc-400">Noch keine Produkte</h2>
-            <p className="text-zinc-500 mt-2">Deine Winning Product Charts erscheinen hier.</p>
+        {filteredCharts.length === 0 ? (
+          <div className="text-center py-12 sm:py-20">
+            <TrendingUp className="w-10 h-10 sm:w-12 sm:h-12 text-zinc-700 mx-auto mb-3" />
+            <h2 className="text-base sm:text-xl font-semibold text-zinc-400">
+              {charts.length === 0 ? "Noch keine Produkte" : "Nichts gefunden"}
+            </h2>
+            <p className="text-xs sm:text-sm text-zinc-500 mt-1">
+              {charts.length === 0
+                ? "Deine Winning Product Charts erscheinen hier."
+                : "Probier einen anderen Suchbegriff oder deaktiviere den Filter."}
+            </p>
           </div>
         ) : (
-          <div className="space-y-12">
-            {charts.map((chart) => (
+          <div className="space-y-5 sm:space-y-10">
+            {filteredCharts.map((chart) => (
               <section key={chart.monat}>
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-3">
-                  <div className="p-2 bg-[#95BF47]/10 rounded-lg border border-[#95BF47]/20"><TrendingUp className="w-5 h-5 text-[#95BF47]" /></div>
-                  {formatMonth(chart.monat)}
-                  <span className="text-sm font-normal text-zinc-500 ml-auto">{chart.produkte.length} Produkte</span>
+                <h2 className="text-sm sm:text-xl font-bold mb-2.5 sm:mb-5 flex items-center gap-2">
+                  <div className="p-1 sm:p-2 bg-[#95BF47]/10 rounded-md sm:rounded-lg border border-[#95BF47]/20">
+                    <TrendingUp className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-[#95BF47]" />
+                  </div>
+                  <span className="truncate">{formatMonth(chart.monat)}</span>
+                  <span className="text-[10px] sm:text-sm font-normal text-zinc-500 ml-auto shrink-0">{chart.produkte.length}</span>
                 </h2>
 
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   {chart.produkte.map((produkt, idx) => {
                     const rank = idx + 1;
-
                     return (
                       <div
                         key={produkt.id}
-                        className="flex items-center gap-4 border border-white/10 bg-white/[0.03] rounded-xl px-4 py-3 backdrop-blur-md hover:bg-white/[0.06] transition"
+                        className="flex items-center gap-2 sm:gap-3 border border-white/10 bg-white/[0.03] rounded-lg sm:rounded-xl px-2 py-2 sm:px-4 sm:py-3 backdrop-blur-md hover:bg-white/[0.06] transition"
                       >
                         {/* Rank */}
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-white/5">
-                          <span className="text-sm font-bold text-zinc-400">{rank}</span>
+                        <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-md sm:rounded-xl flex items-center justify-center shrink-0 bg-white/5">
+                          <span className="text-[11px] sm:text-sm font-bold text-zinc-400 tabular-nums">{rank}</span>
                         </div>
 
                         {/* Thumbnail */}
-                        <div className="w-12 h-12 rounded-lg bg-white/5 overflow-hidden shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-md sm:rounded-lg bg-white/5 overflow-hidden shrink-0">
                           {produkt.bildUrl ? (
-                            <img src={produkt.bildUrl} alt="" className="w-full h-full object-cover" />
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={produkt.bildUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center text-zinc-600"><ShoppingBag className="w-5 h-5" /></div>
+                            <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                              <ShoppingBag className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                            </div>
                           )}
                         </div>
 
                         {/* Title & Stats */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-sm truncate text-zinc-200">{produkt.titel}</h3>
-                          <div className="flex items-center gap-3 mt-0.5">
-                            <span className="text-lg font-bold text-[#95BF47]">{produkt.extra?.finances?.recommendedSellPrice || produkt.preis}&euro;</span>
+                          <h3 className="font-semibold text-[11px] sm:text-sm truncate text-zinc-200 leading-tight">{produkt.titel}</h3>
+                          <div className="flex items-center gap-1.5 sm:gap-3 mt-0.5">
+                            <span className="text-sm sm:text-lg font-bold text-[#95BF47] tabular-nums">
+                              {produkt.extra?.finances?.recommendedSellPrice || produkt.preis}€
+                            </span>
                             {produkt.extra?.stats?.trendScore && (
-                              <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-400/10 px-2 py-0.5 rounded-full">
-                                <Zap className="w-3 h-3" />
-                                Trend {produkt.extra.stats.trendScore}%
+                              <span className="flex items-center gap-0.5 text-[9px] sm:text-xs text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
+                                <Zap className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                                {produkt.extra.stats.trendScore}%
                               </span>
                             )}
                             {produkt.extra?.finances?.profitMargin && (
-                              <span className="flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full hidden sm:flex">
+                              <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
                                 <DollarSign className="w-3 h-3" />
-                                +{produkt.extra.finances.profitMargin.toFixed(2)}&euro;
+                                +{produkt.extra.finances.profitMargin.toFixed(2)}€
                               </span>
                             )}
                           </div>
                         </div>
 
                         {/* Buttons */}
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                           <button
                             onClick={() => setInfoModal({ open: true, produkt })}
-                            className="px-3 py-2 text-sm text-zinc-400 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1.5"
+                            className="p-1.5 sm:px-3 sm:py-2 text-zinc-400 bg-white/5 border border-white/10 rounded-md sm:rounded-lg"
                           >
-                            <Info className="w-4 h-4" />
-                            <span className="hidden sm:inline">Info</span>
+                            <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </button>
                           {hasShopifyToken ? (
                             <button
                               onClick={() => { setAiModal({ open: true, produkt }); setAiResult(null); setAiError(""); }}
-                              className="btn-accent px-4 py-2 text-sm font-medium rounded-lg flex items-center gap-1.5"
+                              className="btn-accent p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium rounded-md sm:rounded-lg flex items-center gap-1"
                             >
-                              <Rocket className="w-4 h-4" /><span className="hidden sm:inline">Import</span>
+                              <Rocket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <span className="hidden sm:inline">Import</span>
                             </button>
                           ) : (
-                            <div className="px-4 py-2 text-sm text-zinc-500 bg-white/5 border border-white/10 rounded-lg flex items-center gap-1.5">
-                              <AlertCircle className="w-4 h-4" />
-                              <span className="hidden sm:inline">Nicht verbunden</span>
+                            <div className="p-1.5 sm:px-3 sm:py-2 text-zinc-500 bg-white/5 border border-white/10 rounded-md sm:rounded-lg">
+                              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                             </div>
                           )}
                         </div>

@@ -31,6 +31,7 @@ import {
   Receipt,
   Undo2,
   ExternalLink,
+  Inbox,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -528,7 +529,11 @@ export default function Navigation() {
               {/* ─── Tools ─── */}
               <SectionLabel>Tools</SectionLabel>
               <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} />
-              <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive} onClick={() => setMoreSheetOpen(false)} />
+
+              {/* ─── Support — with Tickets sub-item ─── */}
+              <SectionLabel>Support</SectionLabel>
+              <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
 
               {/* ─── Admin (if applicable) ─── */}
               {session.isAdmin && (
@@ -725,7 +730,7 @@ function ProfileAccountGroup({ session, pathname, onNavigate }: {
                 </span>
               </div>
               <SubItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={onNavigate} />
-              <SubItem href="/profile" icon={Settings} label="Einstellungen" active={pathname === "/profile"} onClick={onNavigate} />
+              <SubItem href="/settings" icon={Settings} label="Einstellungen" active={pathname === "/settings"} onClick={onNavigate} />
 
               {/* Shop */}
               <div className="px-1 pt-2 pb-0.5">
