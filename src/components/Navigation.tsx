@@ -14,6 +14,7 @@ import {
   X,
   PenTool,
   ChevronDown,
+  ChevronRight,
   BarChart,
   Bot,
   Mail,
@@ -24,6 +25,7 @@ import {
   Plus,
   Coins,
   FolderHeart,
+  User as UserIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -84,7 +86,7 @@ const AI_TOOLS = [
   {
     href: "/ai-tools/background-remover",
     title: "Magic Background Remover",
-    desc: "Produkt pixelgenau freistellen · 5 Credits",
+    desc: "Produkt freistellen + Hintergrund · 5 Credits",
     icon: Scissors,
     color: "from-amber-500/15 to-orange-500/15",
     border: "border-amber-500/15",
@@ -101,13 +103,34 @@ const AI_TOOLS = [
   },
 ] as const;
 
+// ─── Mobile bottom-tab destinations ────────────────────────────────
+// Five thumb-reachable shortcuts. "AI" opens a bottom sheet listing
+// every AI tool — no second tap to navigate anywhere on the app.
+
+interface BottomTab {
+  key: string;
+  label: string;
+  href?: string;          // direct link
+  action?: "ai" | "more"; // sheet trigger
+  icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
+}
+
+const BOTTOM_TABS: readonly BottomTab[] = [
+  { key: "home", label: "Home", href: "/home", icon: Home },
+  { key: "charts", label: "Charts", href: "/charts", icon: BarChart3 },
+  { key: "ai", label: "AI", action: "ai", icon: Sparkles },
+  { key: "library", label: "Mediathek", href: "/library", icon: FolderHeart },
+  { key: "more", label: "Mehr", action: "more", icon: Menu },
+];
+
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
-  const [mobileOpen, setMobileOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [aiSheetOpen, setAiSheetOpen] = useState(false);
+  const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
   const { logoUrl } = useBranding();
   const credits = useCredits();
@@ -120,8 +143,9 @@ export default function Navigation() {
   }, []);
 
   useEffect(() => {
-    setMobileOpen(false);
     setAiOpen(false);
+    setAiSheetOpen(false);
+    setMoreSheetOpen(false);
   }, [pathname]);
 
   useEffect(() => {
@@ -148,21 +172,22 @@ export default function Navigation() {
 
   return (
     <>
-      {/* Top Bar */}
+      {/* ── Top bar (slim on mobile, full on desktop) ─────────── */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass-header">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14 md:h-16">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-12 md:h-16 gap-2">
             {/* Logo */}
-            <Link href="/home" className="flex items-center gap-2.5 group shrink-0">
+            <Link href="/home" className="flex items-center gap-2 group shrink-0">
               <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-xl">
                 {logoUrl ? (
-                  <img src={logoUrl} alt="Logo" className="h-8 md:h-9 object-contain rounded-xl" />
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={logoUrl} alt="Logo" className="h-7 md:h-9 object-contain rounded-lg" />
                 ) : (
                   <BrandLogo size="md" />
                 )}
               </div>
               {!logoUrl && (
-                <span className="text-base md:text-lg font-bold hidden sm:block">
+                <span className="text-sm md:text-lg font-bold hidden sm:block">
                   Brospify<span className="text-[#95BF47]">Hub</span>
                 </span>
               )}
@@ -196,14 +221,11 @@ export default function Navigation() {
                 );
               })}
 
-              {/* AI Tools Mega Dropdown */}
               <div ref={aiRef} className="relative">
                 <button
                   onClick={() => setAiOpen(!aiOpen)}
                   className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                    isAiActive
-                      ? ""
-                      : "hover:bg-white/[0.04]"
+                    isAiActive ? "" : "hover:bg-white/[0.04]"
                   }`}
                 >
                   <Sparkles className="w-4 h-4 text-purple-400" />
@@ -288,7 +310,6 @@ export default function Navigation() {
                 </AnimatePresence>
               </div>
 
-              {/* AI Support — kept separate (live chat helper) */}
               <Link
                 href="/ai-support"
                 className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
@@ -322,15 +343,11 @@ export default function Navigation() {
               )}
             </div>
 
-            {/* Right Side: Credits + Profile Avatar + Logout */}
-            <div className="flex items-center gap-2">
-              {/* Global Credits Pill — always visible */}
-              <CreditsPill
-                balance={credits.balance}
-                loading={credits.loading}
-              />
+            {/* Right Side */}
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <CreditsPill balance={credits.balance} loading={credits.loading} />
 
-              {/* Profile Avatar Button */}
+              {/* Profile/Logout shown on desktop only — mobile uses bottom tabs */}
               <Link
                 href="/profile"
                 className={`hidden md:flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 ${
@@ -340,6 +357,7 @@ export default function Navigation() {
                 }`}
               >
                 {session.googleImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={session.googleImage}
                     alt=""
@@ -370,176 +388,270 @@ export default function Navigation() {
               >
                 <LogOut className="w-4 h-4" />
               </button>
-
-              {/* Mobile Menu Button */}
-              <button
-                onClick={() => setMobileOpen(!mobileOpen)}
-                className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/[0.04] transition-all"
-              >
-                {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-              </button>
             </div>
           </div>
         </div>
       </nav>
 
-      {/* Mobile Menu */}
-      <AnimatePresence>
-        {mobileOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm md:hidden"
-              onClick={() => setMobileOpen(false)}
-            />
-            <motion.div
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              className="fixed top-14 left-0 right-0 z-40 glass-elevated border-b border-white/[0.06] md:hidden max-h-[calc(100vh-3.5rem)] overflow-y-auto"
-            >
-              <div className="p-3 space-y-1">
-                {/* Mobile credits row */}
-                <Link
-                  href="/credits"
-                  className="flex items-center justify-between px-4 py-3 mb-2 rounded-xl bg-[#95BF47]/8 border border-[#95BF47]/15 hover:bg-[#95BF47]/12 transition"
-                >
-                  <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-zinc-300">
-                    <Coins className="w-3.5 h-3.5 text-[#95BF47]" />
-                    Credit-Guthaben
-                  </div>
-                  <span className="text-sm font-mono font-semibold text-[#95BF47] tabular-nums flex items-center gap-1.5">
-                    {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
-                    <Plus className="w-3.5 h-3.5" />
-                  </span>
-                </Link>
+      {/* ── Mobile bottom tab bar ─────────────────────────────── */}
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-40 md:hidden glass-header border-t border-white/[0.08]"
+        style={{ paddingBottom: "var(--safe-bottom, 0px)" }}
+      >
+        <div className="flex items-center justify-around h-14">
+          {BOTTOM_TABS.map((tab) => {
+            const Icon = tab.icon;
+            const isActiveLink = tab.href && (pathname === tab.href || pathname.startsWith(tab.href + "/"));
+            const isActiveAction =
+              (tab.action === "ai" && (isAiActive || aiSheetOpen)) ||
+              (tab.action === "more" && moreSheetOpen);
+            const isActive = !!isActiveLink || !!isActiveAction;
+            const isAi = tab.action === "ai";
 
-                {/* Profile card */}
-                <Link
-                  href="/profile"
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all mb-2 ${
-                    pathname === "/profile"
-                      ? "bg-[#95BF47]/8 border border-[#95BF47]/15"
-                      : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04]"
+            const inner = (
+              <div className="relative flex flex-col items-center justify-center gap-0.5">
+                {isActive && !isAi && (
+                  <motion.div
+                    layoutId="bottom-nav-indicator"
+                    className="absolute -top-3 w-8 h-0.5 rounded-full bg-[#95BF47]"
+                    transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                  />
+                )}
+                <Icon
+                  className={`w-5 h-5 ${
+                    isAi
+                      ? "text-purple-400"
+                      : isActive
+                        ? "text-[#95BF47]"
+                        : "text-zinc-400"
+                  }`}
+                  strokeWidth={isActive ? 2.4 : 2}
+                />
+                <span
+                  className={`text-[10px] leading-none tracking-tight ${
+                    isAi
+                      ? "ai-gradient-text font-semibold"
+                      : isActive
+                        ? "text-[#95BF47] font-semibold"
+                        : "text-zinc-500 font-medium"
                   }`}
                 >
-                  {session.googleImage ? (
-                    <img src={session.googleImage} alt="" className="w-9 h-9 rounded-lg border border-white/[0.08] object-cover" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
-                      <span className="text-xs font-bold text-white">{(session.googleName || "U")[0].toUpperCase()}</span>
-                    </div>
-                  )}
-                  <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white truncate">{session.googleName || "Profil"}</div>
-                    {session.googleEmail && <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>}
-                  </div>
+                  {tab.label}
+                </span>
+              </div>
+            );
+
+            if (tab.href) {
+              return (
+                <Link
+                  key={tab.key}
+                  href={tab.href}
+                  className="flex-1 h-full flex items-center justify-center"
+                >
+                  {inner}
                 </Link>
+              );
+            }
+            return (
+              <button
+                key={tab.key}
+                onClick={() => {
+                  if (tab.action === "ai") setAiSheetOpen(true);
+                  if (tab.action === "more") setMoreSheetOpen(true);
+                }}
+                className="flex-1 h-full flex items-center justify-center"
+              >
+                {inner}
+              </button>
+            );
+          })}
+        </div>
+      </nav>
 
-                {NAV_ITEMS.map((item) => {
-                  const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                        isActive
-                          ? "text-[#95BF47] bg-[#95BF47]/8"
-                          : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                      }`}
-                    >
-                      <item.icon className="w-5 h-5" />
-                      {t.nav[item.labelKey]}
-                    </Link>
-                  );
-                })}
-
-                {/* Mobile AI Tools section */}
-                <div className="border-t border-white/[0.04] my-2 pt-2">
-                  <div className="text-[10px] text-zinc-600 uppercase tracking-widest px-4 mb-2 font-semibold flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-purple-400" />
-                    <span className="ai-gradient-text">AI Tools</span>
-                  </div>
-                  {AI_TOOLS.map((tool) => {
-                    const isActive =
-                      pathname === tool.href ||
-                      pathname.startsWith(tool.href + "/");
-                    const Icon = tool.icon;
-                    return (
-                      <Link
-                        key={tool.href}
-                        href={tool.href}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                          isActive
-                            ? "text-[#95BF47] bg-[#95BF47]/8"
-                            : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        <Icon className={`w-5 h-5 ${tool.iconColor}`} />
-                        <span className="flex-1">{tool.title}</span>
-                      </Link>
-                    );
-                  })}
-                </div>
-
-                {/* Mobile Support */}
-                <div className="border-t border-white/[0.04] my-2 pt-2">
+      {/* ── AI tools bottom sheet (mobile) ────────────────────── */}
+      <AnimatePresence>
+        {aiSheetOpen && (
+          <BottomSheet onClose={() => setAiSheetOpen(false)} title="AI Tools">
+            <div className="grid grid-cols-2 gap-2">
+              {AI_TOOLS.map((tool) => {
+                const isActive = pathname === tool.href || pathname.startsWith(tool.href + "/");
+                const Icon = tool.icon;
+                return (
                   <Link
-                    href="/ai-support"
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all ${
-                      isAiSupportActive ? "bg-white/[0.06] border border-white/[0.10]" : "hover:bg-white/[0.04]"
+                    key={tool.href}
+                    href={tool.href}
+                    onClick={() => setAiSheetOpen(false)}
+                    className={`group flex flex-col gap-2 p-3 rounded-xl border transition ${
+                      isActive
+                        ? "border-[#95BF47]/30 bg-[#95BF47]/8"
+                        : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]"
                     }`}
                   >
-                    <Bot className="w-5 h-5 text-zinc-400" />
-                    Support
+                    <div
+                      className={`w-9 h-9 rounded-lg bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center`}
+                    >
+                      <Icon className={`w-4 h-4 ${tool.iconColor}`} />
+                    </div>
+                    <div>
+                      <div className="text-[12.5px] font-semibold text-white leading-tight">
+                        {tool.title}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5 leading-tight">
+                        {tool.desc.split("·")[1]?.trim() || tool.desc}
+                      </div>
+                    </div>
                   </Link>
-                </div>
-
-                {session.isAdmin && (
-                  <Link
-                    href="/admin"
-                    className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                  >
-                    <Settings className="w-5 h-5" />
-                    {t.nav.admin}
-                  </Link>
-                )}
-
-                <div className="border-t border-white/[0.04] my-2" />
-
-                <button
-                  onClick={handleLogout}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/8 transition-all"
-                >
-                  <LogOut className="w-5 h-5" />
-                  {t.nav.logout}
-                </button>
-              </div>
-            </motion.div>
-          </>
+                );
+              })}
+            </div>
+          </BottomSheet>
         )}
       </AnimatePresence>
 
-      {/* Spacer for fixed nav */}
-      <div className="h-14 md:h-16" />
+      {/* ── More sheet (Profile / Themes / Support / Admin / Logout) ── */}
+      <AnimatePresence>
+        {moreSheetOpen && (
+          <BottomSheet onClose={() => setMoreSheetOpen(false)} title="Mehr">
+            <div className="space-y-1.5">
+              {/* Profile */}
+              <Link
+                href="/profile"
+                onClick={() => setMoreSheetOpen(false)}
+                className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition ${
+                  pathname === "/profile"
+                    ? "border-[#95BF47]/25 bg-[#95BF47]/8"
+                    : "border-white/[0.05] bg-white/[0.02]"
+                }`}
+              >
+                {session.googleImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={session.googleImage} alt="" className="w-9 h-9 rounded-lg border border-white/[0.08] object-cover" />
+                ) : (
+                  <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
+                    <UserIcon className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-semibold truncate">{session.googleName || "Profil"}</div>
+                  {session.googleEmail && (
+                    <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
+                  )}
+                </div>
+                <ChevronRight className="w-4 h-4 text-zinc-500" />
+              </Link>
+
+              <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="/credits" icon={Coins} label="Credits aufladen" active={pathname === "/credits"} onClick={() => setMoreSheetOpen(false)} accent />
+              <SheetItem href="/ai-support" icon={Bot} label="Support" active={isAiSupportActive} onClick={() => setMoreSheetOpen(false)} />
+              {session.isAdmin && (
+                <SheetItem href="/admin" icon={Settings} label="Admin" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} />
+              )}
+
+              <div className="border-t border-white/[0.06] my-1" />
+              <button
+                onClick={() => {
+                  setMoreSheetOpen(false);
+                  handleLogout();
+                }}
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.06] text-red-300 transition active:bg-red-500/15"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="text-sm font-semibold flex-1 text-left">Abmelden</span>
+              </button>
+            </div>
+          </BottomSheet>
+        )}
+      </AnimatePresence>
+
+      {/* Spacer for fixed nav (top) */}
+      <div className="h-12 md:h-16" />
     </>
   );
 }
 
-// ─── Global Credits Pill ────────────────────────────────────────
-// Always-visible balance display in the top-right of the nav. Tap
-// to jump straight to the credit shop. Pulses when the value
-// changes after a tool consumes credits.
+// ─── Bottom sheet wrapper ───────────────────────────────────────
 
-function CreditsPill({
-  balance,
-  loading,
-}: {
-  balance: number;
-  loading: boolean;
+function BottomSheet({ children, title, onClose }: {
+  children: React.ReactNode;
+  title: string;
+  onClose: () => void;
 }) {
+  return (
+    <>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm md:hidden"
+      />
+      <motion.div
+        initial={{ y: "100%" }}
+        animate={{ y: 0 }}
+        exit={{ y: "100%" }}
+        transition={{ type: "spring", stiffness: 360, damping: 36 }}
+        drag="y"
+        dragConstraints={{ top: 0 }}
+        dragElastic={0.1}
+        onDragEnd={(_, info) => { if (info.offset.y > 100) onClose(); }}
+        className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-3xl border-t border-white/[0.08] overflow-hidden"
+        style={{
+          background: "rgba(10,10,12,0.96)",
+          backdropFilter: "blur(40px) saturate(180%)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+          paddingBottom: "calc(var(--safe-bottom, 0px) + 0.75rem)",
+          maxHeight: "85vh",
+        }}
+      >
+        <div className="flex justify-center pt-2.5 pb-1">
+          <div className="w-10 h-1 rounded-full bg-white/15" />
+        </div>
+        <div className="flex items-center justify-between px-4 py-2">
+          <div className="text-xs font-bold uppercase tracking-widest text-zinc-300">{title}</div>
+          <button onClick={onClose} className="p-1.5 -m-1.5 hover:bg-white/[0.06] rounded-lg transition">
+            <X className="w-4 h-4 text-zinc-500" />
+          </button>
+        </div>
+        <div className="px-3 pb-3 overflow-y-auto" style={{ maxHeight: "70vh" }}>
+          {children}
+        </div>
+      </motion.div>
+    </>
+  );
+}
+
+function SheetItem({ href, icon: Icon, label, active, onClick, accent }: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active?: boolean;
+  onClick?: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`flex items-center gap-3 px-3 py-3 rounded-xl border transition ${
+        active
+          ? "border-[#95BF47]/25 bg-[#95BF47]/8 text-[#95BF47]"
+          : accent
+            ? "border-[#95BF47]/15 bg-[#95BF47]/5 text-[#95BF47]"
+            : "border-white/[0.05] bg-white/[0.02] text-zinc-200"
+      }`}
+    >
+      <Icon className="w-4 h-4" />
+      <span className="text-sm font-semibold flex-1">{label}</span>
+      <ChevronRight className="w-4 h-4 text-zinc-500" />
+    </Link>
+  );
+}
+
+// ─── Global Credits Pill ────────────────────────────────────────
+// Always-visible balance display. Compact on mobile (icon + number),
+// full pill on tablet+. Pulses when value changes after a tool runs.
+
+function CreditsPill({ balance, loading }: { balance: number; loading: boolean }) {
   const [pulse, setPulse] = useState(false);
   const prev = useRef(balance);
 
@@ -569,41 +681,28 @@ function CreditsPill({
   return (
     <Link
       href="/credits"
-      title={`${balance} Credits verfügbar – tippen zum Aufladen`}
-      className="hidden sm:flex items-center gap-2 pl-2.5 pr-3 h-9 rounded-xl border transition-all duration-300"
+      title={`${balance} Credits verfügbar`}
+      className="flex items-center gap-1.5 sm:gap-2 pl-2 pr-2.5 sm:pl-2.5 sm:pr-3 h-8 sm:h-9 rounded-lg sm:rounded-xl border transition-all duration-300"
       style={{
         background: tint,
         borderColor: ring,
         boxShadow: pulse ? `0 0 0 4px ${tint}` : undefined,
       }}
     >
-      <div className="relative flex items-center justify-center w-5 h-5">
-        <span
-          className="text-[14px]"
-          style={{ filter: empty ? "saturate(0.6)" : "none" }}
-        >
-          🪙
-        </span>
-      </div>
-      <div className="flex flex-col leading-none">
-        <motion.span
-          key={balance}
-          initial={{ y: -6, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="font-mono font-semibold text-[12.5px] tabular-nums"
-          style={{ color: accent }}
-        >
-          {loading ? "···" : balance.toLocaleString("de-DE")}
-        </motion.span>
-        <span className="text-[8.5px] uppercase tracking-[0.12em] font-medium text-white/40 mt-0.5">
-          {empty ? "Aufladen" : "Credits"}
-        </span>
-      </div>
-      <Plus
-        className="w-3 h-3 ml-0.5 opacity-70"
+      <span className="text-[12px] sm:text-[14px]" style={{ filter: empty ? "saturate(0.6)" : "none" }}>
+        🪙
+      </span>
+      <motion.span
+        key={balance}
+        initial={{ y: -4, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.25 }}
+        className="font-mono font-semibold text-[11px] sm:text-[12.5px] tabular-nums"
         style={{ color: accent }}
-      />
+      >
+        {loading ? "···" : balance.toLocaleString("de-DE")}
+      </motion.span>
+      <Plus className="w-2.5 sm:w-3 h-2.5 sm:h-3 opacity-70" style={{ color: accent }} />
     </Link>
   );
 }

@@ -18,8 +18,6 @@ import {
   Newspaper,
   FileText,
   ImageUp,
-  Coins,
-  AlertTriangle,
   Scissors,
   Camera,
   BarChart3,
@@ -36,9 +34,12 @@ import {
   Eye,
   EyeOff,
   Megaphone,
+  AlertTriangle,
+  Zap,
+  FolderHeart,
+  ArrowRight,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
-import { useCredits } from "@/lib/credits";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -48,6 +49,7 @@ interface SessionInfo {
   hasShopifyConnection: boolean;
   hasShopifyToken: boolean;
   shopDomain?: string;
+  googleName?: string;
 }
 
 interface Checklist {
@@ -75,6 +77,7 @@ interface NewsPost {
 interface Insights {
   connected: boolean;
   window?: { since: string; until: string; totalOrders: number };
+  today?: { orders: number; revenue: number; revenueDeltaPct: number; ordersDelta: number };
   conversionTrend?: { date: string; value: number }[];
   aovWeeks?: { label: string; aov: number }[];
   hotspots?: { hour: number; count: number }[];
@@ -84,31 +87,41 @@ interface Insights {
   bestHour?: { hour: number; label: string; sharePct: number; recommendation: string };
 }
 
+interface LibraryItem {
+  rowIndex: number;
+  id: string;
+  type: "image" | "email";
+  source: "upscaler" | "bg-remover" | "ai-studio" | "email-templates" | "other";
+  title: string;
+  thumbnailUrl: string;
+  assetUrl: string;
+  createdAt: string;
+}
+
 const SETUP_STEPS: { key: keyof Checklist; label: string }[] = [
-  { key: "setup_complete", label: "Shop verbinden" },
-  { key: "product_imported", label: "Produkt importieren" },
+  { key: "setup_complete", label: "Shop verbunden" },
+  { key: "product_imported", label: "Produkt importiert" },
   { key: "dropshipping_app", label: "Dropshipping-App" },
   { key: "aliexpress_link", label: "AliExpress-Link" },
   { key: "legal_texts_generated", label: "Rechtstexte" },
-  { key: "theme_pushed", label: "Theme installieren" },
+  { key: "theme_pushed", label: "Theme aktiv" },
 ];
 
 const QUICK_TILES = [
-  { title: "Shop bearbeiten", desc: "Theme & Layout", href: "/themes", icon: Palette, color: "#EC4899" },
-  { title: "Produkte importieren", desc: "Winning Charts", href: "/charts", icon: Package, color: "#8B5CF6" },
-  { title: "Blog schreiben", desc: "KI-Artikel", href: "/blog", icon: PenTool, color: "#A855F7" },
-  { title: "Analytics & SEO", desc: "Audit & Score", href: "/seo", icon: BarChart3, color: "#06B6D4" },
-  { title: "AI Studio", desc: "Produktfotos", href: "/ai-tools/ai-studio", icon: Camera, color: "#F59E0B" },
-  { title: "Hintergrund weg", desc: "Pixelgenau", href: "/ai-tools/background-remover", icon: Scissors, color: "#F43F5E" },
-  { title: "Bilder skalieren", desc: "4× Upscale", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#95BF47" },
-  { title: "Shopify-Mails", desc: "10 Templates", href: "/email-templates", icon: Mail, color: "#10B981" },
+  { title: "Shop", desc: "Theme", href: "/themes", icon: Palette, color: "#EC4899" },
+  { title: "Produkte", desc: "Charts", href: "/charts", icon: Package, color: "#8B5CF6" },
+  { title: "Blog", desc: "KI-Writer", href: "/blog", icon: PenTool, color: "#A855F7" },
+  { title: "SEO", desc: "Audit", href: "/seo", icon: BarChart3, color: "#06B6D4" },
+  { title: "Studio", desc: "Fotos", href: "/ai-tools/ai-studio", icon: Camera, color: "#F59E0B" },
+  { title: "Freistellen", desc: "BG weg", href: "/ai-tools/background-remover", icon: Scissors, color: "#F43F5E" },
+  { title: "Upscale", desc: "4× HD", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#95BF47" },
+  { title: "Mails", desc: "Templates", href: "/email-templates", icon: Mail, color: "#10B981" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const router = useRouter();
-  const credits = useCredits();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
   const [loading, setLoading] = useState(true);
@@ -119,6 +132,8 @@ export default function HomePage() {
   const [posts, setPosts] = useState<NewsPost[]>([]);
   const [newsAdminOpen, setNewsAdminOpen] = useState(false);
   const [activePost, setActivePost] = useState<NewsPost | null>(null);
+
+  const [libraryRecent, setLibraryRecent] = useState<LibraryItem[]>([]);
 
   const loadPosts = useCallback(async () => {
     try {
@@ -147,6 +162,16 @@ export default function HomePage() {
     }
   }, []);
 
+  const loadLibrary = useCallback(async () => {
+    try {
+      const res = await fetch("/api/library/items");
+      if (res.ok) {
+        const data = await res.json();
+        setLibraryRecent((data.items || []).slice(0, 6));
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/auth/session").then((r) => r.json()),
@@ -171,7 +196,8 @@ export default function HomePage() {
 
     loadPosts();
     loadInsights();
-  }, [router, loadPosts, loadInsights]);
+    loadLibrary();
+  }, [router, loadPosts, loadInsights, loadLibrary]);
 
   if (loading || !session) {
     return (
@@ -185,37 +211,44 @@ export default function HomePage() {
   const progress = (completed / SETUP_STEPS.length) * 100;
   const allDone = completed === SETUP_STEPS.length;
   const shopConnected = !!(session.hasShopifyToken || session.hasShopifyConnection);
+  const firstName = (session.googleName || "").split(" ")[0] || "";
 
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
-      <div className="fixed top-20 right-10 w-72 h-72 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-20 left-10 w-60 h-60 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed top-20 right-6 w-56 h-56 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-20 left-6 w-48 h-48 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 md:py-10 space-y-6">
+      {/* Mobile: super-tight padding (px-3 py-3). Desktop expands. */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-3 sm:py-8 space-y-3 sm:space-y-6">
 
-        {/* ─── Header ─────────────────────────────────── */}
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold leading-tight">
-                {allDone ? "Willkommen zurück" : "Willkommen"}
-                {" "}
-                <span className="text-[#95BF47]">{allDone ? "\u{1F44B}" : "\u{1F44B}"}</span>
-              </h1>
-              {session.shopDomain && (
-                <p className="text-xs text-zinc-500 mt-1 flex items-center gap-1.5">
-                  <Store className="w-3 h-3" />
-                  {session.shopDomain}
-                </p>
-              )}
-            </div>
-            <CreditsChip balance={credits.balance} loading={credits.loading} />
+        {/* ─── Greeting (compact) ─────────────────────── */}
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between gap-2"
+        >
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-2xl md:text-3xl font-bold leading-tight truncate">
+              {firstName ? `Hi ${firstName} ` : "Willkommen "}
+              <span className="text-[#95BF47]">{allDone ? "\u{1F389}" : "\u{1F44B}"}</span>
+            </h1>
+            {session.shopDomain && (
+              <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5 flex items-center gap-1 truncate">
+                <Store className="w-2.5 sm:w-3 h-2.5 sm:h-3 shrink-0" />
+                <span className="truncate">{session.shopDomain}</span>
+              </p>
+            )}
           </div>
         </motion.div>
 
-        {/* ─── Compact Setup Progress ───────────────────── */}
+        {/* ─── Today KPI strip (only when shop connected) ───── */}
+        {shopConnected && insights?.today && (
+          <TodayStrip today={insights.today} />
+        )}
+
+        {/* ─── Compact setup progress (1 line on mobile) ─── */}
         <CompactProgress
           completed={completed}
           total={SETUP_STEPS.length}
@@ -225,34 +258,33 @@ export default function HomePage() {
           onClick={() => router.push("/setup")}
         />
 
-        {/* ─── Quick Access Tiles ─────────────────────── */}
+        {/* ─── Quick Tiles (4 cols mobile, very compact) ─── */}
         <section>
-          <SectionHeader icon={Sparkles} title="Schnellzugriff" />
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <SectionHeader icon={Zap} title="Schnellzugriff" />
+          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-1.5 sm:gap-3">
             {QUICK_TILES.map((tile, i) => (
               <motion.button
                 key={tile.title}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.05 + i * 0.03 }}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.97 }}
+                transition={{ delay: 0.02 * i }}
+                whileTap={{ scale: 0.93 }}
                 onClick={() => router.push(tile.href)}
-                className="group relative flex flex-col gap-3 p-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition-all text-left overflow-hidden"
+                className="group relative flex flex-col items-center gap-1.5 sm:gap-2 px-1 py-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/15 transition-all overflow-hidden"
               >
                 <div
-                  className="absolute -top-8 -right-8 w-20 h-20 rounded-full opacity-25 blur-2xl group-hover:opacity-40 transition"
+                  className="absolute -top-6 -right-6 w-12 h-12 rounded-full opacity-20 blur-xl group-hover:opacity-35 transition"
                   style={{ background: tile.color }}
                 />
                 <div
-                  className="relative w-9 h-9 rounded-xl flex items-center justify-center border"
+                  className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: `${tile.color}15`, borderColor: `${tile.color}30` }}
                 >
-                  <tile.icon className="w-4.5 h-4.5" style={{ color: tile.color, width: 18, height: 18 }} />
+                  <tile.icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" style={{ color: tile.color, width: 16, height: 16 }} />
                 </div>
-                <div className="relative">
-                  <div className="text-sm font-semibold text-white">{tile.title}</div>
-                  <div className="text-[11px] text-zinc-500 mt-0.5">{tile.desc}</div>
+                <div className="relative text-center">
+                  <div className="text-[10px] sm:text-[12px] font-semibold text-white leading-tight">{tile.title}</div>
+                  <div className="hidden sm:block text-[10px] text-zinc-500 mt-0.5">{tile.desc}</div>
                 </div>
               </motion.button>
             ))}
@@ -264,7 +296,7 @@ export default function HomePage() {
           <SectionHeader
             icon={TrendingUp}
             title="Shop-Insights"
-            sub={shopConnected ? "Eigene Berechnungen aus deinen Shopify-Daten" : "Verbinde deinen Shop, um Live-Daten zu sehen"}
+            sub={shopConnected ? "Aus deinen Shopify-Daten — nicht im Standard-Dashboard" : "Verbinde deinen Shop, um Live-Daten zu sehen"}
           />
           <InsightsGrid
             insights={insights}
@@ -274,17 +306,37 @@ export default function HomePage() {
           />
         </section>
 
+        {/* ─── Recent library items ───────────────── */}
+        {libraryRecent.length > 0 && (
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <SectionHeader icon={FolderHeart} title="Neulich erstellt" inline />
+              <button
+                onClick={() => router.push("/library")}
+                className="text-[10px] sm:text-[11px] font-semibold text-[#95BF47] hover:underline flex items-center gap-1"
+              >
+                Mediathek <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
+            <div className="flex gap-2 overflow-x-auto -mx-3 px-3 sm:-mx-0 sm:px-0 snap-x snap-mandatory pb-1">
+              {libraryRecent.map((it) => (
+                <RecentLibraryThumb key={it.id} item={it} onOpen={() => router.push("/library")} />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ─── News Section ──────────────────────── */}
         {(posts.length > 0 || session.isAdmin) && (
           <section>
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-2">
               <SectionHeader icon={Newspaper} title="News & Updates" inline />
               {session.isAdmin && (
                 <button
                   onClick={() => setNewsAdminOpen(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition"
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition"
                 >
-                  <Plus className="w-3.5 h-3.5" /> Verwalten
+                  <Plus className="w-3 h-3" /> Verwalten
                 </button>
               )}
             </div>
@@ -292,9 +344,9 @@ export default function HomePage() {
             {posts.length === 0 && session.isAdmin ? (
               <button
                 onClick={() => setNewsAdminOpen(true)}
-                className="w-full p-6 rounded-2xl border border-dashed border-white/10 text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition flex items-center justify-center gap-2 text-sm"
+                className="w-full p-4 rounded-xl border border-dashed border-white/10 text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition flex items-center justify-center gap-1.5 text-xs"
               >
-                <Plus className="w-4 h-4" /> Erste News-Card erstellen
+                <Plus className="w-3.5 h-3.5" /> Erste News-Card erstellen
               </button>
             ) : (
               <NewsRow posts={posts.filter((p) => p.active)} onOpenText={(p) => setActivePost(p)} />
@@ -304,14 +356,9 @@ export default function HomePage() {
 
       </div>
 
-      {/* ─── Modals ──────────────────────────── */}
       <AnimatePresence>
         {newsAdminOpen && (
-          <NewsAdminModal
-            posts={posts}
-            onClose={() => setNewsAdminOpen(false)}
-            onRefresh={loadPosts}
-          />
+          <NewsAdminModal posts={posts} onClose={() => setNewsAdminOpen(false)} onRefresh={loadPosts} />
         )}
         {activePost && activePost.type === "text" && (
           <NewsTextDetail post={activePost} onClose={() => setActivePost(null)} />
@@ -321,7 +368,83 @@ export default function HomePage() {
   );
 }
 
-// ─── Section header ───────────────────────────────────────────
+// ─── Today KPI strip ─────────────────────────────────────────────
+
+function TodayStrip({ today }: { today: NonNullable<Insights["today"]> }) {
+  const positive = today.revenueDeltaPct >= 0;
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      className="grid grid-cols-3 gap-1.5 sm:gap-3"
+    >
+      <KpiCard
+        label="Heute"
+        value={`${today.revenue.toFixed(0)} €`}
+        sub="Umsatz"
+        delta={today.revenueDeltaPct === 0 ? null : `${positive ? "+" : ""}${today.revenueDeltaPct}%`}
+        positive={positive}
+        accent="#10B981"
+      />
+      <KpiCard
+        label="Heute"
+        value={String(today.orders)}
+        sub={today.orders === 1 ? "Bestellung" : "Bestellungen"}
+        delta={today.ordersDelta === 0 ? null : `${today.ordersDelta > 0 ? "+" : ""}${today.ordersDelta}`}
+        positive={today.ordersDelta >= 0}
+        accent="#8B5CF6"
+      />
+      <KpiCard
+        label="Avg"
+        value={
+          today.orders > 0
+            ? `${(today.revenue / today.orders).toFixed(0)} €`
+            : "—"
+        }
+        sub="Warenkorb"
+        accent="#F59E0B"
+      />
+    </motion.div>
+  );
+}
+
+function KpiCard({ label, value, sub, delta, positive, accent }: {
+  label: string;
+  value: string;
+  sub: string;
+  delta?: string | null;
+  positive?: boolean;
+  accent: string;
+}) {
+  return (
+    <div
+      className="rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] p-2.5 sm:p-3.5 overflow-hidden relative"
+    >
+      <div className="absolute top-0 right-0 w-12 h-12 rounded-full opacity-10 blur-xl" style={{ background: accent }} />
+      <div className="relative">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[8px] sm:text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
+          {delta && (
+            <span
+              className={`text-[8px] sm:text-[9px] font-bold tabular-nums px-1 py-0.5 rounded ${
+                positive ? "text-emerald-300 bg-emerald-500/10" : "text-red-300 bg-red-500/10"
+              }`}
+            >
+              {delta}
+            </span>
+          )}
+        </div>
+        <div className="text-base sm:text-xl font-bold tabular-nums leading-none" style={{ color: accent }}>
+          {value}
+        </div>
+        <div className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5 sm:mt-1 truncate">{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Section header ──────────────────────────────────────────
 
 function SectionHeader({ icon: Icon, title, sub, inline }: {
   icon: React.ComponentType<{ className?: string }>;
@@ -330,47 +453,19 @@ function SectionHeader({ icon: Icon, title, sub, inline }: {
   inline?: boolean;
 }) {
   return (
-    <div className={inline ? "" : "mb-3"}>
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 rounded-md bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
-          <Icon className="w-3.5 h-3.5 text-[#95BF47]" />
+    <div className={inline ? "" : "mb-2 sm:mb-3"}>
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
+          <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#95BF47]" />
         </div>
-        <h2 className="text-sm font-bold text-zinc-200">{title}</h2>
+        <h2 className="text-[12px] sm:text-sm font-bold text-zinc-200">{title}</h2>
       </div>
-      {sub && <p className="text-[11px] text-zinc-500 mt-1 ml-8">{sub}</p>}
+      {sub && <p className="text-[10px] sm:text-[11px] text-zinc-500 mt-1 ml-7 sm:ml-8">{sub}</p>}
     </div>
   );
 }
 
-// ─── Credits chip (compact) ───────────────────────────────────
-
-function CreditsChip({ balance, loading }: { balance: number; loading: boolean }) {
-  const empty = balance <= 0 && !loading;
-  const low = !empty && balance < 20 && !loading;
-  const color = empty ? "#ef4444" : low ? "#fbbf24" : "#95BF47";
-  return (
-    <button
-      onClick={() => (window.location.href = "/credits")}
-      className="flex items-center gap-2 px-3 py-2 rounded-xl border transition hover:bg-white/[0.04]"
-      style={{ borderColor: `${color}30`, backgroundColor: `${color}10` }}
-    >
-      {empty ? (
-        <AlertTriangle className="w-4 h-4" style={{ color }} />
-      ) : (
-        <Coins className="w-4 h-4" style={{ color }} />
-      )}
-      <div className="leading-none text-left">
-        <div className="text-[9px] uppercase tracking-widest text-white/40 font-semibold">Credits</div>
-        <div className="text-sm font-bold tabular-nums" style={{ color }}>
-          {loading ? "…" : balance.toLocaleString("de-DE")}
-        </div>
-      </div>
-      <Plus className="w-3.5 h-3.5 text-white/40" />
-    </button>
-  );
-}
-
-// ─── Compact progress card ────────────────────────────────────
+// ─── Compact progress (one-line on mobile) ────────────────────
 
 function CompactProgress({ completed, total, progress, allDone, steps, onClick }: {
   completed: number;
@@ -383,27 +478,24 @@ function CompactProgress({ completed, total, progress, allDone, steps, onClick }
   return (
     <motion.button
       onClick={onClick}
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -1 }}
-      className="w-full glass-strong rounded-2xl border border-white/10 p-4 text-left group"
+      whileTap={{ scale: 0.99 }}
+      className="w-full glass-strong rounded-xl sm:rounded-2xl border border-white/10 p-3 sm:p-4 text-left group"
     >
-      <div className="flex items-center justify-between mb-3 gap-3">
-        <div className="flex items-center gap-2 min-w-0">
-          <Sparkles className="w-4 h-4 text-[#95BF47] shrink-0" />
-          <span className="text-sm font-semibold truncate">
+      <div className="flex items-center justify-between mb-2 gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Sparkles className="w-3.5 h-3.5 text-[#95BF47] shrink-0" />
+          <span className="text-[12px] sm:text-sm font-semibold truncate">
             {allDone ? "Setup abgeschlossen" : "Setup-Fortschritt"}
           </span>
-          <span className="text-[10px] text-zinc-500">·</span>
-          <span className="text-xs font-bold text-[#95BF47] tabular-nums">{completed}/{total}</span>
+          <span className="text-[10px] text-zinc-500 hidden sm:inline">·</span>
+          <span className="text-[11px] sm:text-xs font-bold text-[#95BF47] tabular-nums shrink-0">{completed}/{total}</span>
         </div>
-        <div className="flex items-center gap-1 text-[11px] text-zinc-400 group-hover:text-white transition">
-          <span className="hidden sm:inline">Zum Setup</span>
-          <ChevronRight className="w-3.5 h-3.5" />
-        </div>
+        <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-white transition shrink-0" />
       </div>
 
-      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mb-3">
+      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mb-2 sm:mb-3">
         <motion.div
           className="h-full rounded-full bg-gradient-to-r from-[#95BF47] to-[#B8D96E]"
           initial={{ width: 0 }}
@@ -412,17 +504,18 @@ function CompactProgress({ completed, total, progress, allDone, steps, onClick }
         />
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
+      {/* Step chips — smaller on mobile, scrollable horizontally */}
+      <div className="flex gap-1 overflow-x-auto -mx-1 px-1 sm:flex-wrap sm:overflow-visible">
         {steps.map((s) => (
           <span
             key={s.label}
-            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border ${
+            className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-medium border whitespace-nowrap shrink-0 ${
               s.done
                 ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
                 : "border-white/10 bg-white/[0.03] text-zinc-500"
             }`}
           >
-            {s.done && <Check className="w-2.5 h-2.5" />}
+            {s.done && <Check className="w-2 h-2 sm:w-2.5 sm:h-2.5" />}
             {s.label}
           </span>
         ))}
@@ -431,7 +524,7 @@ function CompactProgress({ completed, total, progress, allDone, steps, onClick }
   );
 }
 
-// ─── Insights grid ────────────────────────────────────────────
+// ─── Insights grid (compact) ─────────────────────────────────
 
 function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
   insights: Insights | null;
@@ -444,9 +537,9 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
   }
   if (loading || !insights) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-3">
         {[...Array(6)].map((_, i) => (
-          <div key={i} className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 h-32 animate-pulse" />
+          <div key={i} className="rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] h-24 sm:h-32 animate-pulse" />
         ))}
       </div>
     );
@@ -456,7 +549,7 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-3">
       <ConversionTrendCard data={insights.conversionTrend || []} />
       <AovBarsCard data={insights.aovWeeks || []} />
       <HotspotsCard data={insights.hotspots || []} />
@@ -469,40 +562,38 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
 }
 
 function InsightsPlaceholder({ onConnect }: { onConnect: () => void }) {
-  const stub = ["Conversion-Trend", "Bestellwert", "Hotspots", "Top-Produkte", "Verpasster Umsatz", "Wiederkehrer"];
+  const stub = ["Conversion", "AOV", "Hotspots", "Top-Produkte", "Verlust", "Wiederkehrer"];
   return (
-    <div className="relative rounded-2xl border border-white/[0.08] bg-white/[0.02] p-6 overflow-hidden">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-5 opacity-40 pointer-events-none">
+    <div className="relative rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-6 overflow-hidden">
+      <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-3 sm:mb-5 opacity-30 pointer-events-none">
         {stub.map((s) => (
-          <div key={s} className="rounded-xl border border-white/10 bg-white/[0.02] p-4 h-24 flex flex-col justify-end">
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500">{s}</div>
-            <div className="h-1.5 bg-white/10 rounded-full mt-2 overflow-hidden">
+          <div key={s} className="rounded-lg border border-white/10 bg-white/[0.02] p-2 sm:p-4 h-16 sm:h-24 flex flex-col justify-end">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 truncate">{s}</div>
+            <div className="h-1 bg-white/10 rounded-full mt-1.5">
               <div className="h-full w-1/2 bg-zinc-600 rounded-full" />
             </div>
           </div>
         ))}
       </div>
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 mb-3">
-          <Store className="w-5 h-5 text-[#95BF47]" />
+        <div className="inline-flex items-center justify-center w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 mb-2">
+          <Store className="w-4 h-4 sm:w-5 sm:h-5 text-[#95BF47]" />
         </div>
-        <h3 className="text-base font-bold mb-1">Verbinde deinen Shopify-Store</h3>
-        <p className="text-xs text-zinc-500 mb-4 max-w-md mx-auto">
-          Wir berechnen Conversion-Trends, Hotspots und versteckten Umsatz aus deinen Bestelldaten — direkt von der Shopify-API.
+        <h3 className="text-sm sm:text-base font-bold mb-1">Verbinde deinen Shopify-Store</h3>
+        <p className="text-[11px] sm:text-xs text-zinc-500 mb-3 sm:mb-4 max-w-md mx-auto">
+          Wir berechnen Conversion-Trends, Hotspots & versteckten Umsatz aus deinen Bestelldaten.
         </p>
         <button
           onClick={onConnect}
-          className="btn-accent px-5 py-2.5 rounded-xl text-sm flex items-center gap-2 mx-auto"
+          className="btn-accent px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 mx-auto"
         >
-          <Store className="w-4 h-4" />
+          <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           Shop verbinden
         </button>
       </div>
     </div>
   );
 }
-
-// ─── Insight cards ────────────────────────────────────────────
 
 function InsightCard({ icon: Icon, title, accent = "#95BF47", children }: {
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
@@ -512,18 +603,18 @@ function InsightCard({ icon: Icon, title, accent = "#95BF47", children }: {
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 10 }}
+      initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-2xl border border-white/[0.08] bg-white/[0.02] p-4 flex flex-col gap-3 min-h-[10rem]"
+      className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] p-2.5 sm:p-4 flex flex-col gap-2 sm:gap-3 min-h-[7rem] sm:min-h-[10rem]"
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5 sm:gap-2">
         <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center border"
+          className="w-5 h-5 sm:w-7 sm:h-7 rounded-md sm:rounded-lg flex items-center justify-center border shrink-0"
           style={{ backgroundColor: `${accent}15`, borderColor: `${accent}30` }}
         >
-          <Icon className="w-3.5 h-3.5" style={{ color: accent }} />
+          <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: accent }} />
         </div>
-        <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">{title}</span>
+        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-300 truncate">{title}</span>
       </div>
       {children}
     </motion.div>
@@ -536,16 +627,16 @@ function ConversionTrendCard({ data }: { data: { date: string; value: number }[]
   const first = data[0]?.value ?? 0;
   const trend = last - first;
   return (
-    <InsightCard icon={Target} title="Conversion-Trend" accent="#10B981">
-      <div className="flex items-baseline gap-2">
-        <div className="text-2xl font-bold tabular-nums">{avg.toFixed(1)}%</div>
-        <div className={`text-xs font-semibold flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-          {trend >= 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+    <InsightCard icon={Target} title="Conversion" accent="#10B981">
+      <div className="flex items-baseline gap-1.5">
+        <div className="text-base sm:text-2xl font-bold tabular-nums">{avg.toFixed(1)}%</div>
+        <div className={`text-[10px] sm:text-xs font-semibold flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+          {trend >= 0 ? <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> : <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
           {trend >= 0 ? "+" : ""}{trend.toFixed(1)}pp
         </div>
       </div>
       <SparkLine data={data.map((d) => d.value)} color="#10B981" />
-      <div className="text-[10px] text-zinc-500">14 Tage · Bestellungen ÷ (Bestellungen + abgebrochene Checkouts)</div>
+      <div className="text-[8px] sm:text-[10px] text-zinc-500">14 Tage</div>
     </InsightCard>
   );
 }
@@ -554,12 +645,11 @@ function AovBarsCard({ data }: { data: { label: string; aov: number }[] }) {
   const max = Math.max(...data.map((d) => d.aov), 1);
   const last = data.at(-1)?.aov ?? 0;
   return (
-    <InsightCard icon={ShoppingBag} title="Bestellwert (AOV)" accent="#8B5CF6">
-      <div className="flex items-baseline gap-2">
-        <div className="text-2xl font-bold tabular-nums">{last.toFixed(2)} €</div>
-        <div className="text-xs text-zinc-500">aktuelle Woche</div>
+    <InsightCard icon={ShoppingBag} title="Bestellwert" accent="#8B5CF6">
+      <div className="flex items-baseline gap-1.5">
+        <div className="text-base sm:text-2xl font-bold tabular-nums">{last.toFixed(2)} €</div>
       </div>
-      <div className="flex items-end gap-1 h-12">
+      <div className="flex items-end gap-0.5 sm:gap-1 h-8 sm:h-12">
         {data.map((d) => (
           <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
             <div
@@ -569,7 +659,7 @@ function AovBarsCard({ data }: { data: { label: string; aov: number }[] }) {
           </div>
         ))}
       </div>
-      <div className="text-[10px] text-zinc-500">8 Wochen · Trend deines durchschnittlichen Warenkorbwerts</div>
+      <div className="text-[8px] sm:text-[10px] text-zinc-500">8 Wochen</div>
     </InsightCard>
   );
 }
@@ -577,19 +667,19 @@ function AovBarsCard({ data }: { data: { label: string; aov: number }[] }) {
 function HotspotsCard({ data }: { data: { hour: number; count: number }[] }) {
   const max = Math.max(...data.map((d) => d.count), 1);
   return (
-    <InsightCard icon={Clock} title="Verkaufs-Hotspots" accent="#F59E0B">
-      <div className="text-[11px] text-zinc-400">Bestellungen pro Uhrzeit (60d)</div>
-      <div className="flex items-end gap-[2px] h-14 mt-1">
+    <InsightCard icon={Clock} title="Hotspots" accent="#F59E0B">
+      <div className="text-[9px] sm:text-[11px] text-zinc-400 -mb-1">Bestellungen / Stunde (60d)</div>
+      <div className="flex items-end gap-[1px] sm:gap-[2px] h-8 sm:h-14 mt-1">
         {data.map((d) => (
           <div
             key={d.hour}
-            title={`${d.hour}:00 — ${d.count} Bestellungen`}
-            className="flex-1 rounded-t-sm bg-gradient-to-t from-[#F59E0B] to-[#FBBF24] opacity-80 hover:opacity-100 transition"
+            title={`${d.hour}:00 — ${d.count}`}
+            className="flex-1 rounded-t-sm bg-gradient-to-t from-[#F59E0B] to-[#FBBF24] opacity-80"
             style={{ height: `${Math.max(2, (d.count / max) * 100)}%` }}
           />
         ))}
       </div>
-      <div className="flex justify-between text-[9px] text-zinc-600 tabular-nums">
+      <div className="flex justify-between text-[7px] sm:text-[9px] text-zinc-600 tabular-nums">
         <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
       </div>
     </InsightCard>
@@ -599,22 +689,22 @@ function HotspotsCard({ data }: { data: { hour: number; count: number }[] }) {
 function ProductRankingCard({ data }: { data: { id: number; title: string; estimatedProfit: number; units: number }[] }) {
   const max = Math.max(...data.map((d) => d.estimatedProfit), 1);
   return (
-    <InsightCard icon={Package} title="Top-Produkte (Gewinn)" accent="#EC4899">
+    <InsightCard icon={Package} title="Top-Produkte" accent="#EC4899">
       {data.length === 0 ? (
-        <div className="text-xs text-zinc-500 mt-2">Noch keine Bestellungen im Zeitraum.</div>
+        <div className="text-[10px] sm:text-xs text-zinc-500 mt-1">Noch keine Bestellungen.</div>
       ) : (
-        <div className="space-y-1.5">
-          {data.slice(0, 5).map((p, i) => (
-            <div key={p.id} className="flex items-center gap-2">
-              <span className="text-[9px] font-bold text-zinc-500 w-3 tabular-nums">{i + 1}</span>
+        <div className="space-y-1 sm:space-y-1.5">
+          {data.slice(0, 4).map((p, i) => (
+            <div key={p.id} className="flex items-center gap-1.5 sm:gap-2">
+              <span className="text-[8px] sm:text-[9px] font-bold text-zinc-500 w-2 sm:w-3 tabular-nums shrink-0">{i + 1}</span>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2 mb-0.5">
-                  <span className="text-[11px] truncate">{p.title}</span>
-                  <span className="text-[10px] font-semibold tabular-nums text-zinc-300 shrink-0">
+                <div className="flex items-center justify-between gap-1 mb-0.5">
+                  <span className="text-[10px] sm:text-[11px] truncate">{p.title}</span>
+                  <span className="text-[9px] sm:text-[10px] font-semibold tabular-nums text-zinc-300 shrink-0">
                     {p.estimatedProfit.toFixed(0)} €
                   </span>
                 </div>
-                <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-1 sm:h-1.5 rounded-full bg-white/5 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[#EC4899] to-[#F472B6]"
                     style={{ width: `${(p.estimatedProfit / max) * 100}%` }}
@@ -625,36 +715,35 @@ function ProductRankingCard({ data }: { data: { id: number; title: string; estim
           ))}
         </div>
       )}
-      <div className="text-[10px] text-zinc-500 mt-auto">Geschätzter Gewinn (≈ 65% Marge) · 60 Tage</div>
+      <div className="text-[8px] sm:text-[10px] text-zinc-500 mt-auto">≈ Gewinn · 60 Tage</div>
     </InsightCard>
   );
 }
 
 function MissedRevenueCard({ data }: { data?: Insights["missedRevenue"] }) {
   if (!data) return null;
-  const trendPositive = data.trendPct < 0; // less missed = good
+  const trendPositive = data.trendPct < 0;
   return (
-    <InsightCard icon={AlertTriangle} title="Verpasster Umsatz" accent="#EF4444">
+    <InsightCard icon={AlertTriangle} title="Verlust" accent="#EF4444">
       <div>
-        <div className="text-2xl font-bold tabular-nums text-red-400">
+        <div className="text-base sm:text-2xl font-bold tabular-nums text-red-400">
           {data.amount.toFixed(0)} €
         </div>
-        <div className="text-[11px] text-zinc-400 mt-0.5">
-          {data.count} abgebrochene Checkouts (30 Tage)
+        <div className="text-[10px] sm:text-[11px] text-zinc-400 mt-0.5">
+          {data.count} Cart-Abandon · 30d
         </div>
       </div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
         <div
-          className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold ${
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold ${
             trendPositive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
           }`}
         >
-          {trendPositive ? <TrendingDown className="w-3 h-3" /> : <TrendingUp className="w-3 h-3" />}
+          {trendPositive ? <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> : <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
           {data.trendPct > 0 ? "+" : ""}{data.trendPct}%
         </div>
-        <span className="text-[10px] text-zinc-500">vs. Vorperiode</span>
+        <span className="text-[8px] sm:text-[10px] text-zinc-500">vs Vorperiode</span>
       </div>
-      <div className="text-[10px] text-zinc-500 mt-auto">Tipp: E-Mail-Erinnerungen an Cart-Abandoners senden.</div>
     </InsightCard>
   );
 }
@@ -662,13 +751,13 @@ function MissedRevenueCard({ data }: { data?: Insights["missedRevenue"] }) {
 function ReturningCard({ data }: { data?: Insights["returning"] }) {
   if (!data) return null;
   return (
-    <InsightCard icon={Users} title="Wiederkehrer-Rate" accent="#06B6D4">
-      <div className="flex items-baseline gap-2">
-        <div className="text-2xl font-bold tabular-nums">{data.ratePct}%</div>
-        <div className="text-[11px] text-zinc-500">{data.customers} Kunden gesamt</div>
+    <InsightCard icon={Users} title="Wiederkehrer" accent="#06B6D4">
+      <div className="flex items-baseline gap-1.5">
+        <div className="text-base sm:text-2xl font-bold tabular-nums">{data.ratePct}%</div>
+        <div className="text-[9px] sm:text-[11px] text-zinc-500">{data.customers} Kunden</div>
       </div>
       <SparkLine data={data.trend.map((t) => t.rate)} color="#06B6D4" />
-      <div className="text-[10px] text-zinc-500">6 Wochen · Anteil mit ≥ 2 Bestellungen</div>
+      <div className="text-[8px] sm:text-[10px] text-zinc-500">6 Wochen</div>
     </InsightCard>
   );
 }
@@ -676,24 +765,24 @@ function ReturningCard({ data }: { data?: Insights["returning"] }) {
 function BestHourCard({ data }: { data?: Insights["bestHour"] }) {
   if (!data) return null;
   return (
-    <InsightCard icon={Clock} title="Beste Conversion-Zeit" accent="#A855F7">
-      <div className="flex items-baseline gap-2">
-        <div className="text-3xl font-bold tabular-nums text-purple-300">{data.label}</div>
-        <div className="text-[11px] text-zinc-500">{data.sharePct}% aller Orders</div>
+    <InsightCard icon={Clock} title="Beste Zeit" accent="#A855F7">
+      <div className="flex items-baseline gap-1.5">
+        <div className="text-xl sm:text-3xl font-bold tabular-nums text-purple-300">{data.label}</div>
+        <div className="text-[9px] sm:text-[11px] text-zinc-500">{data.sharePct}%</div>
       </div>
-      <div className="text-[11px] leading-snug text-zinc-300 bg-purple-500/10 border border-purple-500/20 rounded-lg p-2.5">
-        <Sparkles className="w-3 h-3 inline mr-1 text-purple-400" />
+      <div className="text-[10px] sm:text-[11px] leading-snug text-zinc-300 bg-purple-500/10 border border-purple-500/20 rounded-md sm:rounded-lg p-1.5 sm:p-2.5">
+        <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 inline mr-1 text-purple-400" />
         {data.recommendation}
       </div>
     </InsightCard>
   );
 }
 
-// ─── SparkLine (SVG, no deps) ─────────────────────────────────
+// ─── SparkLine ─────────────────────────────────────────────────
 
 function SparkLine({ data, color }: { data: number[]; color: string }) {
   const w = 200;
-  const h = 40;
+  const h = 36;
   const path = useMemo(() => {
     if (data.length === 0) return "";
     const max = Math.max(...data, 1);
@@ -710,7 +799,7 @@ function SparkLine({ data, color }: { data: number[]; color: string }) {
   }, [data]);
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-10">
+    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-7 sm:h-9">
       <defs>
         <linearGradient id={`grad-${color.replace("#", "")}`} x1="0" x2="0" y1="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.4" />
@@ -727,6 +816,35 @@ function SparkLine({ data, color }: { data: number[]; color: string }) {
   );
 }
 
+// ─── Recent library thumb ───────────────────────────────────
+
+function RecentLibraryThumb({ item, onOpen }: { item: LibraryItem; onOpen: () => void }) {
+  return (
+    <button
+      onClick={onOpen}
+      className="w-20 sm:w-24 shrink-0 snap-start text-left"
+    >
+      <div className="aspect-square rounded-lg sm:rounded-xl overflow-hidden border border-white/[0.08] bg-zinc-900 hover:border-white/20 transition relative">
+        {item.thumbnailUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={item.thumbnailUrl}
+            alt={item.title}
+            loading="lazy"
+            decoding="async"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-rose-500/10">
+            <Mail className="w-4 h-4 text-rose-400" />
+          </div>
+        )}
+      </div>
+      <div className="text-[9px] sm:text-[10px] text-zinc-400 truncate mt-1">{item.title}</div>
+    </button>
+  );
+}
+
 // ─── News row ────────────────────────────────────────────────
 
 function NewsRow({ posts, onOpenText }: {
@@ -735,7 +853,7 @@ function NewsRow({ posts, onOpenText }: {
 }) {
   if (posts.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
       {posts.map((p) => (
         <NewsCard key={p.id} post={p} onOpenText={onOpenText} />
       ))}
@@ -759,47 +877,47 @@ function NewsCard({ post, onOpenText }: {
   return (
     <>
       <motion.button
-        initial={{ opacity: 0, y: 10 }}
+        initial={{ opacity: 0, y: 6 }}
         animate={{ opacity: 1, y: 0 }}
-        whileHover={{ y: -2 }}
         whileTap={{ scale: 0.98 }}
         onClick={handleClick}
-        className="group relative rounded-2xl border border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04] transition overflow-hidden text-left"
+        className="group relative rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] hover:border-white/15 transition overflow-hidden text-left"
       >
         {cover ? (
-          <div className="relative h-40 overflow-hidden">
-            <img src={cover} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+          <div className="relative h-28 sm:h-40 overflow-hidden">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={cover} alt={post.title} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent" />
             {isVideo && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <div className="w-12 h-12 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center group-hover:scale-110 transition">
-                  <Play className="w-5 h-5 text-white ml-0.5" fill="currentColor" />
+                <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-full bg-white/15 backdrop-blur-md border border-white/20 flex items-center justify-center group-hover:scale-110 transition">
+                  <Play className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white ml-0.5" fill="currentColor" />
                 </div>
               </div>
             )}
-            <div className="absolute top-3 left-3">
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest border ${
+            <div className="absolute top-2 left-2">
+              <span className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest border ${
                 isVideo
                   ? "bg-rose-500/20 border-rose-500/30 text-rose-300"
                   : "bg-[#95BF47]/20 border-[#95BF47]/30 text-[#95BF47]"
               }`}>
-                {isVideo ? <Play className="w-2.5 h-2.5" /> : <FileText className="w-2.5 h-2.5" />}
+                {isVideo ? <Play className="w-2 h-2 sm:w-2.5 sm:h-2.5" /> : <FileText className="w-2 h-2 sm:w-2.5 sm:h-2.5" />}
                 {isVideo ? "Video" : "News"}
               </span>
             </div>
-            <div className="absolute bottom-0 left-0 right-0 p-4">
-              <h3 className="text-sm font-bold text-white leading-tight line-clamp-2">{post.title}</h3>
+            <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3.5">
+              <h3 className="text-[12px] sm:text-sm font-bold text-white leading-tight line-clamp-2">{post.title}</h3>
             </div>
           </div>
         ) : (
-          <div className="p-5">
-            <div className="flex items-center gap-2 mb-2">
-              <Megaphone className="w-4 h-4 text-[#95BF47]" />
-              <span className="text-[9px] font-bold uppercase tracking-widest text-[#95BF47]">News</span>
+          <div className="p-3 sm:p-5">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Megaphone className="w-3 h-3 sm:w-4 sm:h-4 text-[#95BF47]" />
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-[#95BF47]">News</span>
             </div>
-            <h3 className="text-sm font-bold leading-snug">{post.title}</h3>
+            <h3 className="text-[12px] sm:text-sm font-bold leading-snug">{post.title}</h3>
             {post.body && (
-              <p className="text-[11px] text-zinc-500 mt-1 line-clamp-2">{post.body.slice(0, 140)}</p>
+              <p className="text-[10px] sm:text-[11px] text-zinc-500 mt-1 line-clamp-2">{post.body.slice(0, 140)}</p>
             )}
           </div>
         )}
@@ -822,29 +940,30 @@ function NewsTextDetail({ post, onClose }: { post: NewsPost; onClose: () => void
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm sm:px-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 60 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-hidden shadow-2xl flex flex-col"
+        className="bg-[#0c0c0c] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[88vh] overflow-hidden shadow-2xl flex flex-col"
       >
         {post.imageUrl && (
-          <div className="relative h-56 shrink-0">
+          <div className="relative h-44 sm:h-56 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-t from-[#0c0c0c] to-transparent" />
             <button
               onClick={onClose}
-              className="absolute top-3 right-3 p-2 rounded-lg bg-black/60 border border-white/10 text-white hover:bg-black/80 transition backdrop-blur-sm"
+              className="absolute top-2 right-2 p-1.5 rounded-lg bg-black/60 border border-white/10 text-white hover:bg-black/80 transition backdrop-blur-sm"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
         )}
-        <div className="p-6 overflow-y-auto">
+        <div className="p-4 sm:p-6 overflow-y-auto">
           {!post.imageUrl && (
             <div className="flex items-center justify-end mb-2">
               <button onClick={onClose} className="p-1.5 hover:bg-white/[0.05] rounded-lg transition">
@@ -852,18 +971,15 @@ function NewsTextDetail({ post, onClose }: { post: NewsPost; onClose: () => void
               </button>
             </div>
           )}
-          <h2 className="text-xl md:text-2xl font-bold leading-tight mb-3">{post.title}</h2>
-          <div className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{post.body}</div>
+          <h2 className="text-lg sm:text-2xl font-bold leading-tight mb-2 sm:mb-3">{post.title}</h2>
+          <div className="text-[13px] sm:text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">{post.body}</div>
         </div>
       </motion.div>
     </motion.div>
   );
 }
 
-// ─── Video modal (YouTube embed) ────────────────────────────
-
 function youtubeEmbedUrl(url: string): string {
-  // Accepts youtu.be/<id>, watch?v=<id>, or already an embed URL
   try {
     const u = new URL(url);
     if (u.hostname.includes("youtu.be")) {
@@ -885,7 +1001,7 @@ function VideoModal({ url, title, onClose }: { url: string; title: string; onClo
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-sm px-2 sm:px-4"
       onClick={onClose}
     >
       <motion.div
@@ -893,11 +1009,11 @@ function VideoModal({ url, title, onClose }: { url: string; title: string; onClo
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl bg-black rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
+        className="w-full max-w-4xl bg-black rounded-xl sm:rounded-2xl border border-white/10 overflow-hidden shadow-2xl"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-          <h3 className="text-sm font-semibold truncate">{title}</h3>
-          <button onClick={onClose} className="p-1.5 hover:bg-white/[0.05] rounded-lg transition shrink-0 ml-2">
+        <div className="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/10">
+          <h3 className="text-xs sm:text-sm font-semibold truncate">{title}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-white/[0.05] rounded-lg transition shrink-0 ml-2">
             <X className="w-4 h-4 text-zinc-400" />
           </button>
         </div>
@@ -930,48 +1046,41 @@ function NewsAdminModal({ posts, onClose, onRefresh }: {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:px-4"
       onClick={onClose}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.95, y: 12 }}
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 60 }}
         onClick={(e) => e.stopPropagation()}
-        className="bg-[#0c0c0c] border border-white/10 rounded-2xl w-full max-w-2xl max-h-[88vh] overflow-hidden shadow-2xl flex flex-col"
+        className="bg-[#0c0c0c] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[88vh] overflow-hidden shadow-2xl flex flex-col"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
-          <h3 className="text-base font-bold flex items-center gap-2">
-            <Newspaper className="w-5 h-5 text-[#95BF47]" />
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
+            <Newspaper className="w-4 h-4 sm:w-5 sm:h-5 text-[#95BF47]" />
             News verwalten
           </h3>
           <div className="flex items-center gap-2">
             {!creating && !editing && (
               <button
                 onClick={() => setCreating(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#95BF47] text-black font-semibold text-xs hover:brightness-110 transition"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#95BF47] text-black font-semibold text-xs hover:brightness-110 transition"
               >
-                <Plus className="w-3.5 h-3.5" /> Neu
+                <Plus className="w-3 h-3" /> Neu
               </button>
             )}
-            <button onClick={onClose} className="p-1.5 hover:bg-white/[0.05] rounded-lg transition">
+            <button onClick={onClose} className="p-1 hover:bg-white/[0.05] rounded-lg transition">
               <X className="w-4 h-4 text-zinc-500" />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5">
+        <div className="flex-1 overflow-y-auto p-4">
           {creating ? (
-            <NewsForm
-              onCancel={() => setCreating(false)}
-              onSaved={() => { setCreating(false); onRefresh(); }}
-            />
+            <NewsForm onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); onRefresh(); }} />
           ) : editing ? (
-            <NewsForm
-              initial={editing}
-              onCancel={() => setEditing(null)}
-              onSaved={() => { setEditing(null); onRefresh(); }}
-            />
+            <NewsForm initial={editing} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); onRefresh(); }} />
           ) : (
             <NewsList posts={posts} onEdit={setEditing} onRefresh={onRefresh} />
           )}
@@ -1011,62 +1120,44 @@ function NewsList({ posts, onEdit, onRefresh }: {
 
   if (posts.length === 0) {
     return (
-      <div className="text-center py-12 text-zinc-500 text-sm">
-        Noch keine News-Cards angelegt. Klick oben auf „Neu&ldquo;, um die erste zu erstellen.
+      <div className="text-center py-10 text-zinc-500 text-sm">
+        Noch keine News-Cards. Tippe oben auf „Neu&ldquo;.
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       {posts.map((p) => (
-        <div key={p.id} className="flex items-center gap-3 p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+        <div key={p.id} className="flex items-center gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
           {(p.imageUrl || p.previewImageUrl) ? (
-            <img
-              src={p.imageUrl || p.previewImageUrl}
-              alt=""
-              className="w-14 h-14 rounded-lg object-cover shrink-0"
-            />
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={p.imageUrl || p.previewImageUrl} alt="" className="w-12 h-12 rounded-lg object-cover shrink-0" />
           ) : (
-            <div className="w-14 h-14 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
-              <FileText className="w-5 h-5 text-zinc-600" />
+            <div className="w-12 h-12 rounded-lg bg-white/[0.04] flex items-center justify-center shrink-0">
+              <FileText className="w-4 h-4 text-zinc-600" />
             </div>
           )}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${
-                p.type === "video"
-                  ? "bg-rose-500/15 text-rose-300"
-                  : "bg-[#95BF47]/15 text-[#95BF47]"
+            <div className="flex items-center gap-1.5 mb-0.5">
+              <span className={`inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest ${
+                p.type === "video" ? "bg-rose-500/15 text-rose-300" : "bg-[#95BF47]/15 text-[#95BF47]"
               }`}>
                 {p.type === "video" ? "Video" : "Text"}
               </span>
-              {!p.active && <span className="text-[9px] text-zinc-500 uppercase">inaktiv</span>}
+              {!p.active && <span className="text-[8px] text-zinc-500 uppercase">inaktiv</span>}
             </div>
-            <div className="text-sm font-semibold truncate">{p.title}</div>
-            {p.body && <div className="text-[10px] text-zinc-500 truncate">{p.body.slice(0, 90)}</div>}
+            <div className="text-xs sm:text-sm font-semibold truncate">{p.title}</div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <button
-              onClick={() => toggleActive(p)}
-              className="p-2 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-lg transition"
-              title={p.active ? "Verstecken" : "Aktivieren"}
-            >
-              {p.active ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => toggleActive(p)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-lg transition">
+              {p.active ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
             </button>
-            <button
-              onClick={() => onEdit(p)}
-              className="p-2 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-lg transition"
-              title="Bearbeiten"
-            >
-              <Pencil className="w-4 h-4" />
+            <button onClick={() => onEdit(p)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-lg transition">
+              <Pencil className="w-3.5 h-3.5" />
             </button>
-            <button
-              onClick={() => handleDelete(p.rowIndex)}
-              className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition"
-              title="Löschen"
-            >
-              <Trash2 className="w-4 h-4" />
+            <button onClick={() => handleDelete(p.rowIndex)} className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
+              <Trash2 className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -1131,32 +1222,27 @@ function NewsForm({ initial, onCancel, onSaved }: {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">
-        {initial ? "Card bearbeiten" : "Neue Card"}
-      </div>
-
-      {/* Type toggle */}
+    <div className="space-y-3">
       <div className="grid grid-cols-2 gap-2">
         <button
           onClick={() => setType("text")}
-          className={`p-3 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2 ${
+          className={`p-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 ${
             type === "text"
               ? "bg-[#95BF47]/15 border-[#95BF47]/40 text-[#95BF47]"
-              : "bg-white/[0.03] border-white/10 text-zinc-400 hover:bg-white/[0.05]"
+              : "bg-white/[0.03] border-white/10 text-zinc-400"
           }`}
         >
-          <FileText className="w-4 h-4" /> Text-News
+          <FileText className="w-3.5 h-3.5" /> Text
         </button>
         <button
           onClick={() => setType("video")}
-          className={`p-3 rounded-xl border text-sm font-semibold transition flex items-center justify-center gap-2 ${
+          className={`p-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2 ${
             type === "video"
               ? "bg-rose-500/15 border-rose-500/40 text-rose-300"
-              : "bg-white/[0.03] border-white/10 text-zinc-400 hover:bg-white/[0.05]"
+              : "bg-white/[0.03] border-white/10 text-zinc-400"
           }`}
         >
-          <Play className="w-4 h-4" /> Video-Card
+          <Play className="w-3.5 h-3.5" /> Video
         </button>
       </div>
 
@@ -1165,7 +1251,7 @@ function NewsForm({ initial, onCancel, onSaved }: {
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Titel *"
-        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-600"
+        className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-600"
       />
 
       {type === "text" ? (
@@ -1173,18 +1259,11 @@ function NewsForm({ initial, onCancel, onSaved }: {
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Text-Inhalt (wird im Detail-Modal angezeigt)"
-            rows={6}
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-600 resize-y"
+            placeholder="Text-Inhalt"
+            rows={5}
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-600 resize-y"
           />
-          <FileUploadField
-            label="Cover-Bild"
-            url={imageUrl}
-            setUrl={setImageUrl}
-            inputRef={imageInputRef}
-            uploading={uploadingImage}
-            onPick={(f) => uploadFile(f, setImageUrl, setUploadingImage)}
-          />
+          <FileUploadField label="Cover-Bild" url={imageUrl} setUrl={setImageUrl} inputRef={imageInputRef} uploading={uploadingImage} onPick={(f) => uploadFile(f, setImageUrl, setUploadingImage)} />
         </>
       ) : (
         <>
@@ -1192,31 +1271,24 @@ function NewsForm({ initial, onCancel, onSaved }: {
             type="url"
             value={youtubeUrl}
             onChange={(e) => setYoutubeUrl(e.target.value)}
-            placeholder="YouTube-URL (z.B. https://youtu.be/abc123)"
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-rose-500/40 transition placeholder:text-zinc-600"
+            placeholder="YouTube-URL"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-rose-500/40 transition placeholder:text-zinc-600"
           />
-          <FileUploadField
-            label="Vorschaubild"
-            url={previewImageUrl}
-            setUrl={setPreviewImageUrl}
-            inputRef={previewInputRef}
-            uploading={uploadingPreview}
-            onPick={(f) => uploadFile(f, setPreviewImageUrl, setUploadingPreview)}
-          />
+          <FileUploadField label="Vorschaubild" url={previewImageUrl} setUrl={setPreviewImageUrl} inputRef={previewInputRef} uploading={uploadingPreview} onPick={(f) => uploadFile(f, setPreviewImageUrl, setUploadingPreview)} />
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Beschreibung (optional)"
             rows={2}
-            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-rose-500/40 transition placeholder:text-zinc-600 resize-y"
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-rose-500/40 transition placeholder:text-zinc-600 resize-y"
           />
         </>
       )}
 
-      <div className="flex gap-2 pt-2">
+      <div className="flex gap-2 pt-1">
         <button
           onClick={onCancel}
-          className="px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-sm text-zinc-300 hover:bg-white/[0.08] transition"
+          className="px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-xs sm:text-sm text-zinc-300 hover:bg-white/[0.08] transition"
         >
           Abbrechen
         </button>
@@ -1224,9 +1296,9 @@ function NewsForm({ initial, onCancel, onSaved }: {
           whileTap={{ scale: 0.97 }}
           onClick={handleSave}
           disabled={saving || !title.trim()}
-          className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-[#95BF47] text-black font-bold text-sm disabled:opacity-40 transition"
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-[#95BF47] text-black font-bold text-xs sm:text-sm disabled:opacity-40 transition"
         >
-          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
           {initial ? "Speichern" : "Erstellen"}
         </motion.button>
       </div>
@@ -1243,22 +1315,22 @@ function FileUploadField({ label, url, setUrl, inputRef, uploading, onPick }: {
   onPick: (f: File) => void;
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">{label}</div>
-      <div className="flex gap-2">
+      <div className="flex gap-1.5">
         <input
           type="text"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           placeholder="URL (oder hochladen)"
-          className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-4 py-3 text-sm outline-none focus:border-white/20 transition placeholder:text-zinc-600"
+          className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2 text-xs sm:text-sm outline-none focus:border-white/20 transition placeholder:text-zinc-600"
         />
         <button
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="px-4 py-3 rounded-xl bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.08] transition shrink-0"
+          className="px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-zinc-400 hover:text-white hover:bg-white/[0.08] transition shrink-0"
         >
-          {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+          {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
         </button>
         <input
           ref={inputRef}
@@ -1270,10 +1342,11 @@ function FileUploadField({ label, url, setUrl, inputRef, uploading, onPick }: {
       </div>
       {url && (
         <div className="relative">
-          <img src={url} alt="Preview" className="w-full h-32 object-cover rounded-lg border border-white/10" />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="Preview" className="w-full h-24 object-cover rounded-lg border border-white/10" />
           <button
             onClick={() => setUrl("")}
-            className="absolute top-2 right-2 p-1 rounded-md bg-black/70 border border-white/10 text-white hover:bg-black/90 transition"
+            className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/70 border border-white/10 text-white hover:bg-black/90 transition"
           >
             <X className="w-3 h-3" />
           </button>

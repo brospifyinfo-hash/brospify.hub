@@ -150,38 +150,39 @@ export default function LibraryPage() {
       <div className="fixed top-20 right-10 w-72 h-72 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-10 w-60 h-60 bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 md:py-10 space-y-6">
+      <div className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-8 space-y-3 sm:space-y-6">
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold flex items-center gap-3">
-                <span className="w-10 h-10 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
-                  <FolderHeart className="w-5 h-5 text-[#95BF47]" />
-                </span>
-                Mediathek
-              </h1>
-              <p className="text-zinc-400 text-sm mt-2">
-                Alle deine KI-generierten Bilder & E-Mail-Vorlagen an einem Ort.
-                <span className="text-zinc-600"> · Kompakt komprimiert, blitzschnell geladen.</span>
-              </p>
+        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center shrink-0">
+                <FolderHeart className="w-4 h-4 sm:w-5 sm:h-5 text-[#95BF47]" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-2xl md:text-3xl font-bold leading-tight">Mediathek</h1>
+                <p className="hidden sm:block text-zinc-400 text-xs sm:text-sm mt-1">
+                  Alle KI-generierten Bilder & E-Mails an einem Ort.
+                </p>
+              </div>
             </div>
-            <div className="text-right">
-              <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Belegt</div>
-              <div className="text-lg font-bold text-[#95BF47] tabular-nums">{items.length} <span className="text-zinc-500 text-xs font-normal">/ 60</span></div>
+            <div className="text-right shrink-0">
+              <div className="text-[8px] sm:text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Belegt</div>
+              <div className="text-sm sm:text-lg font-bold text-[#95BF47] tabular-nums">
+                {items.length}<span className="text-zinc-500 text-[10px] sm:text-xs font-normal">/60</span>
+              </div>
             </div>
           </div>
         </motion.div>
 
-        {/* Filters */}
+        {/* Filters — single row on mobile, horizontal scroll */}
         <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="space-y-3"
+          className="space-y-2"
         >
-          {/* Type filter */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Type filter + search */}
+          <div className="flex items-center gap-1.5">
             {([
               { id: "all", label: "Alles", icon: Sparkles },
               { id: "image", label: "Bilder", icon: ImageIcon },
@@ -192,79 +193,76 @@ export default function LibraryPage() {
                 <button
                   key={t.id}
                   onClick={() => setType(t.id as FilterType)}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition ${
+                  className={`inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-semibold border transition shrink-0 ${
                     type === t.id
                       ? "bg-[#95BF47]/15 border-[#95BF47]/35 text-[#95BF47]"
-                      : "bg-white/[0.03] border-white/10 text-zinc-400 hover:bg-white/[0.06]"
+                      : "bg-white/[0.03] border-white/10 text-zinc-400"
                   }`}
                 >
-                  <Icon className="w-3.5 h-3.5" />
+                  <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                   {t.label}
                 </button>
               );
             })}
-          </div>
-
-          {/* Source filter + search */}
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex flex-wrap items-center gap-1.5 flex-1 min-w-0">
-              {(["all", "upscaler", "bg-remover", "ai-studio", "email-templates"] as FilterSource[]).map((s) => {
-                const meta = s === "all"
-                  ? { label: "Alle Tools", color: "#95BF47", icon: FolderHeart }
-                  : SOURCE_META[s];
-                const Icon = meta.icon;
-                const count = sourceCounts[s] || 0;
-                if (s !== "all" && count === 0) return null;
-                return (
-                  <button
-                    key={s}
-                    onClick={() => setSource(s)}
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold border transition ${
-                      source === s
-                        ? "bg-white/[0.08] border-white/20 text-white"
-                        : "bg-white/[0.02] border-white/[0.06] text-zinc-500 hover:text-zinc-300"
-                    }`}
-                    style={source === s ? { boxShadow: `inset 0 0 0 1px ${meta.color}40` } : undefined}
-                  >
-                    <Icon className="w-3 h-3" style={{ color: meta.color }} />
-                    {meta.label}
-                    {count > 0 && (
-                      <span className="ml-0.5 text-zinc-600 tabular-nums">{count}</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="relative w-full sm:w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Suche…"
-                className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-2 py-1 sm:py-1.5 text-[11px] sm:text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
               />
             </div>
+          </div>
+
+          {/* Source filter — horizontal scroll on mobile */}
+          <div className="flex items-center gap-1 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 pb-1">
+            {(["all", "upscaler", "bg-remover", "ai-studio", "email-templates"] as FilterSource[]).map((s) => {
+              const meta = s === "all"
+                ? { label: "Alle Tools", color: "#95BF47", icon: FolderHeart }
+                : SOURCE_META[s];
+              const Icon = meta.icon;
+              const count = sourceCounts[s] || 0;
+              if (s !== "all" && count === 0) return null;
+              return (
+                <button
+                  key={s}
+                  onClick={() => setSource(s)}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] sm:text-[11px] font-semibold border transition whitespace-nowrap shrink-0 ${
+                    source === s
+                      ? "bg-white/[0.08] border-white/20 text-white"
+                      : "bg-white/[0.02] border-white/[0.06] text-zinc-500"
+                  }`}
+                  style={source === s ? { boxShadow: `inset 0 0 0 1px ${meta.color}40` } : undefined}
+                >
+                  <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" style={{ color: meta.color }} />
+                  {meta.label}
+                  {count > 0 && (
+                    <span className="ml-0.5 text-zinc-600 tabular-nums">{count}</span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         </motion.div>
 
         {/* Body */}
         {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {[...Array(10)].map((_, i) => (
-              <div key={i} className="aspect-square rounded-xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5 sm:gap-3">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="aspect-square rounded-lg sm:rounded-xl bg-white/[0.03] border border-white/[0.06] animate-pulse" />
             ))}
           </div>
         ) : error ? (
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 p-5 text-sm text-red-300 flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 shrink-0" />
+          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3 sm:p-5 text-xs sm:text-sm text-red-300 flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
             {error}
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState hasItems={items.length > 0} />
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-1.5 sm:gap-3">
             {filtered.map((it) => (
               <LibraryGridCard key={it.id} item={it} onOpen={() => setActive(it)} />
             ))}
@@ -298,10 +296,9 @@ function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => vo
 
   return (
     <motion.button
-      whileHover={{ y: -2 }}
-      whileTap={{ scale: 0.97 }}
+      whileTap={{ scale: 0.95 }}
       onClick={onOpen}
-      className="group relative rounded-xl border border-white/[0.08] bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04] transition overflow-hidden text-left"
+      className="group relative rounded-lg sm:rounded-xl border border-white/[0.08] bg-white/[0.02] hover:border-white/20 transition overflow-hidden text-left"
     >
       <div className="aspect-square relative bg-zinc-900">
         {isImage && item.thumbnailUrl ? (
@@ -312,7 +309,6 @@ function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => vo
             loading="lazy"
             decoding="async"
             className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-            // Checkerboard backdrop only for cutouts so transparency is visible
             style={item.source === "bg-remover" ? {
               background: `
                 linear-gradient(45deg, #2a2a2a 25%, transparent 25%),
@@ -320,8 +316,8 @@ function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => vo
                 linear-gradient(45deg, transparent 75%, #2a2a2a 75%),
                 linear-gradient(-45deg, transparent 75%, #2a2a2a 75%)
               `,
-              backgroundSize: "16px 16px",
-              backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+              backgroundSize: "10px 10px",
+              backgroundPosition: "0 0, 0 5px, 5px -5px, -5px 0px",
             } : undefined}
           />
         ) : (
@@ -329,35 +325,29 @@ function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => vo
             className="w-full h-full flex items-center justify-center"
             style={{ background: `linear-gradient(135deg, ${meta.color}20, ${meta.color}05)` }}
           >
-            <Mail className="w-10 h-10 opacity-30" style={{ color: meta.color }} />
+            <Mail className="w-6 h-6 sm:w-10 sm:h-10 opacity-30" style={{ color: meta.color }} />
           </div>
         )}
 
-        {/* Source badge */}
+        {/* Source dot indicator (top-left) — smaller on mobile */}
         <div
-          className="absolute top-2 left-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-widest backdrop-blur-md"
+          className="absolute top-1 left-1 sm:top-2 sm:left-2 inline-flex items-center gap-0.5 sm:gap-1 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-bold uppercase tracking-widest backdrop-blur-md"
           style={{
             background: `${meta.color}25`,
             border: `1px solid ${meta.color}50`,
             color: meta.color,
           }}
         >
-          <Icon className="w-2.5 h-2.5" />
-          {meta.label}
+          <Icon className="w-2 h-2 sm:w-2.5 sm:h-2.5" />
+          <span className="hidden sm:inline">{meta.label}</span>
         </div>
-
-        {/* Hover overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition" />
       </div>
 
-      {/* Footer */}
-      <div className="p-2.5">
-        <div className="text-[11px] font-semibold truncate">{item.title}</div>
-        <div className="text-[9px] text-zinc-500 mt-0.5">
+      {/* Footer — only on tablet+, mobile shows just the thumbnail */}
+      <div className="hidden sm:block p-2">
+        <div className="text-[10px] sm:text-[11px] font-semibold truncate">{item.title}</div>
+        <div className="text-[9px] text-zinc-500 mt-0.5 truncate">
           {formatRelative(item.createdAt)}
-          {item.meta.width && item.meta.height && (
-            <span className="ml-1">· {item.meta.width}×{item.meta.height}</span>
-          )}
         </div>
       </div>
     </motion.button>

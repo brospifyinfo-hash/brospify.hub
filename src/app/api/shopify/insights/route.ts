@@ -116,6 +116,25 @@ export async function GET() {
     const checkouts = checkoutsData.checkouts || [];
     const products = productsData.products || [];
 
+    // ─── Today vs yesterday quick KPI ─────────────────────────────
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const yKey = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    let todayOrders = 0, todayRevenue = 0, ydayOrders = 0, ydayRevenue = 0;
+    for (const o of orders) {
+      const k = dayKey(o.created_at);
+      const v = parseFloat(o.total_price || "0");
+      if (k === todayKey) { todayOrders++; todayRevenue += v; }
+      else if (k === yKey) { ydayOrders++; ydayRevenue += v; }
+    }
+    const today = {
+      orders: todayOrders,
+      revenue: +todayRevenue.toFixed(2),
+      revenueDeltaPct: ydayRevenue > 0
+        ? +(((todayRevenue - ydayRevenue) / ydayRevenue) * 100).toFixed(0)
+        : 0,
+      ordersDelta: todayOrders - ydayOrders,
+    };
+
     // ─── 1. Conversion trend (last 14 days) ──────────────────────
     // Sessions aren't available via REST; we approximate "conversion"
     // as completed orders / (completed orders + abandoned checkouts)
@@ -287,6 +306,7 @@ export async function GET() {
     return NextResponse.json({
       connected: true,
       window: { since: since60, until: now.toISOString(), totalOrders },
+      today,
       conversionTrend: days14.map((d) => ({ date: d.date, value: d.conversion })),
       aovWeeks,
       hotspots,

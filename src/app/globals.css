@@ -29,6 +29,16 @@ html {
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+/* ─── Mobile bottom-tab-bar reserve ─────────────────────────────
+   The mobile tab bar is fixed at the bottom (h-14 + safe-area).
+   This pseudo-element pads the body so trailing content isn't
+   covered by it. Disabled on tablet+ where the bar is hidden.    */
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(3.5rem + var(--safe-bottom, 0px));
+  }
+}
+
 /* Disable the grey tap-flash on iOS — we render our own active states. */
 * {
   -webkit-tap-highlight-color: transparent;
