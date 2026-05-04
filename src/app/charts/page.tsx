@@ -264,22 +264,22 @@ export default function ChartsPage() {
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-6 py-3 sm:py-8 space-y-3 sm:space-y-5">
+      <main className="max-w-6xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3">
         {/* Header */}
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="text-base sm:text-3xl font-bold flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 sm:w-7 sm:h-7 text-[#95BF47] shrink-0" />
+            <h1 className="text-base font-bold flex items-center gap-2">
+              <BarChart3 className="w-5 h-5 text-[#95BF47] shrink-0" />
               <span className="truncate">Winning Charts</span>
             </h1>
-            <p className="text-[11px] sm:text-sm text-zinc-500 mt-0.5 sm:mt-1">
+            <p className="text-[11px] text-zinc-500 mt-0.5">
               Top-Dropshipping-Produkte · Rankings · 1-Klick-Import
             </p>
           </div>
           {totalProducts > 0 && (
             <div className="text-right shrink-0">
-              <div className="text-[8px] sm:text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Produkte</div>
-              <div className="text-sm sm:text-lg font-bold text-[#95BF47] tabular-nums">{totalProducts}</div>
+              <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Produkte</div>
+              <div className="text-sm font-bold text-[#95BF47] tabular-nums">{totalProducts}</div>
             </div>
           )}
         </div>
@@ -294,12 +294,12 @@ export default function ChartsPage() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Produkt suchen…"
-                className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-3 py-1.5 sm:py-2 text-[12px] sm:text-sm outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-3 py-1.5 text-[12px] outline-none focus:border-white/25 transition placeholder:text-zinc-600"
               />
             </div>
             <button
               onClick={() => setHighMarginOnly((v) => !v)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1.5 sm:py-2 rounded-lg text-[10px] sm:text-xs font-semibold border transition shrink-0 ${
+              className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold border transition shrink-0 ${
                 highMarginOnly
                   ? "bg-emerald-500/15 border-emerald-500/35 text-emerald-300"
                   : "bg-white/[0.03] border-white/10 text-zinc-400"
@@ -315,11 +315,11 @@ export default function ChartsPage() {
         {!hasShopifyToken && (
           <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 px-3 py-2.5 rounded-xl">
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            <p className="flex-1 text-[11px] sm:text-xs leading-snug">
+            <p className="flex-1 text-[11px] leading-snug">
               <span className="font-semibold">Shop nicht verbunden.</span>{" "}
               <span className="hidden sm:inline">1-Klick-Import deaktiviert.</span>
             </p>
-            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-2.5 py-1.5 rounded-lg text-[11px] sm:text-xs font-medium">
+            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-2.5 py-1.5 rounded-lg text-[11px] font-medium">
               Verbinden
             </button>
           </div>
@@ -334,64 +334,64 @@ export default function ChartsPage() {
         )}
 
         {filteredCharts.length === 0 ? (
-          <div className="text-center py-12 sm:py-20">
-            <TrendingUp className="w-10 h-10 sm:w-12 sm:h-12 text-zinc-700 mx-auto mb-3" />
-            <h2 className="text-base sm:text-xl font-semibold text-zinc-400">
+          <div className="text-center py-12">
+            <TrendingUp className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
+            <h2 className="text-base font-semibold text-zinc-400">
               {charts.length === 0 ? "Noch keine Produkte" : "Nichts gefunden"}
             </h2>
-            <p className="text-xs sm:text-sm text-zinc-500 mt-1">
+            <p className="text-xs text-zinc-500 mt-1">
               {charts.length === 0
                 ? "Deine Winning Product Charts erscheinen hier."
                 : "Probier einen anderen Suchbegriff oder deaktiviere den Filter."}
             </p>
           </div>
         ) : (
-          <div className="space-y-5 sm:space-y-10">
+          <div className="space-y-5">
             {filteredCharts.map((chart) => (
               <section key={chart.monat}>
-                <h2 className="text-sm sm:text-xl font-bold mb-2.5 sm:mb-5 flex items-center gap-2">
-                  <div className="p-1 sm:p-2 bg-[#95BF47]/10 rounded-md sm:rounded-lg border border-[#95BF47]/20">
-                    <TrendingUp className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-[#95BF47]" />
+                <h2 className="text-sm font-bold mb-2.5 flex items-center gap-2">
+                  <div className="p-1 bg-[#95BF47]/10 rounded-md border border-[#95BF47]/20">
+                    <TrendingUp className="w-3.5 h-3.5 text-[#95BF47]" />
                   </div>
                   <span className="truncate">{formatMonth(chart.monat)}</span>
-                  <span className="text-[10px] sm:text-sm font-normal text-zinc-500 ml-auto shrink-0">{chart.produkte.length}</span>
+                  <span className="text-[10px] font-normal text-zinc-500 ml-auto shrink-0">{chart.produkte.length}</span>
                 </h2>
 
-                <div className="space-y-1.5 sm:space-y-2">
+                <div className="space-y-1.5">
                   {chart.produkte.map((produkt, idx) => {
                     const rank = idx + 1;
                     return (
                       <div
                         key={produkt.id}
-                        className="flex items-center gap-2 sm:gap-3 border border-white/10 bg-white/[0.03] rounded-lg sm:rounded-xl px-2 py-2 sm:px-4 sm:py-3 backdrop-blur-md hover:bg-white/[0.06] transition"
+                        className="flex items-center gap-2 border border-white/10 bg-white/[0.03] rounded-lg px-2 py-2 backdrop-blur-md hover:bg-white/[0.06] transition"
                       >
                         {/* Rank */}
-                        <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-md sm:rounded-xl flex items-center justify-center shrink-0 bg-white/5">
-                          <span className="text-[11px] sm:text-sm font-bold text-zinc-400 tabular-nums">{rank}</span>
+                        <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-white/5">
+                          <span className="text-[11px] font-bold text-zinc-400 tabular-nums">{rank}</span>
                         </div>
 
                         {/* Thumbnail */}
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-md sm:rounded-lg bg-white/5 overflow-hidden shrink-0">
+                        <div className="w-10 h-10 rounded-md bg-white/5 overflow-hidden shrink-0">
                           {produkt.bildUrl ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img src={produkt.bildUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                              <ShoppingBag className="w-3.5 h-3.5 sm:w-5 sm:h-5" />
+                              <ShoppingBag className="w-3.5 h-3.5" />
                             </div>
                           )}
                         </div>
 
                         {/* Title & Stats */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-[11px] sm:text-sm truncate text-zinc-200 leading-tight">{produkt.titel}</h3>
-                          <div className="flex items-center gap-1.5 sm:gap-3 mt-0.5">
-                            <span className="text-sm sm:text-lg font-bold text-[#95BF47] tabular-nums">
+                          <h3 className="font-semibold text-[12px] truncate text-zinc-200 leading-tight">{produkt.titel}</h3>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className="text-sm font-bold text-[#95BF47] tabular-nums">
                               {produkt.extra?.finances?.recommendedSellPrice || produkt.preis}€
                             </span>
                             {produkt.extra?.stats?.trendScore && (
-                              <span className="flex items-center gap-0.5 text-[9px] sm:text-xs text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
-                                <Zap className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                              <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
+                                <Zap className="w-2.5 h-2.5" />
                                 {produkt.extra.stats.trendScore}%
                               </span>
                             )}
@@ -405,24 +405,24 @@ export default function ChartsPage() {
                         </div>
 
                         {/* Buttons */}
-                        <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => setInfoModal({ open: true, produkt })}
-                            className="p-1.5 sm:px-3 sm:py-2 text-zinc-400 bg-white/5 border border-white/10 rounded-md sm:rounded-lg"
+                            className="p-1.5 text-zinc-400 bg-white/5 border border-white/10 rounded-md"
                           >
-                            <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <Info className="w-3.5 h-3.5" />
                           </button>
                           {hasShopifyToken ? (
                             <button
                               onClick={() => { setAiModal({ open: true, produkt }); setAiResult(null); setAiError(""); }}
-                              className="btn-accent p-1.5 sm:px-3 sm:py-2 text-xs sm:text-sm font-medium rounded-md sm:rounded-lg flex items-center gap-1"
+                              className="btn-accent px-2 py-1.5 text-xs font-medium rounded-md flex items-center gap-1"
                             >
-                              <Rocket className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                              <Rocket className="w-3.5 h-3.5" />
                               <span className="hidden sm:inline">Import</span>
                             </button>
                           ) : (
-                            <div className="p-1.5 sm:px-3 sm:py-2 text-zinc-500 bg-white/5 border border-white/10 rounded-md sm:rounded-lg">
-                              <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                            <div className="p-1.5 text-zinc-500 bg-white/5 border border-white/10 rounded-md">
+                              <AlertCircle className="w-3.5 h-3.5" />
                             </div>
                           )}
                         </div>

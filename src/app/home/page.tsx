@@ -222,8 +222,8 @@ export default function HomePage() {
       <div className="fixed top-20 right-6 w-56 h-56 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-6 w-48 h-48 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Mobile: super-tight padding (px-3 py-3). Desktop expands. */}
-      <div className="max-w-5xl mx-auto px-3 sm:px-6 py-3 sm:py-8 space-y-3 sm:space-y-6">
+      {/* Same density on mobile + desktop — desktop just gets extra width */}
+      <div className="max-w-5xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3 sm:space-y-4">
 
         {/* ─── Greeting (compact) ─────────────────────── */}
         <motion.div
@@ -232,13 +232,13 @@ export default function HomePage() {
           className="flex items-center justify-between gap-2"
         >
           <div className="min-w-0">
-            <h1 className="text-base sm:text-2xl md:text-3xl font-bold leading-tight truncate">
+            <h1 className="text-base sm:text-lg font-bold leading-tight truncate">
               {firstName ? `Hi ${firstName} ` : "Willkommen "}
               <span className="text-[#95BF47]">{allDone ? "\u{1F389}" : "\u{1F44B}"}</span>
             </h1>
             {session.shopDomain && (
-              <p className="text-[10px] sm:text-xs text-zinc-500 mt-0.5 flex items-center gap-1 truncate">
-                <Store className="w-2.5 sm:w-3 h-2.5 sm:h-3 shrink-0" />
+              <p className="text-[10px] sm:text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1 truncate">
+                <Store className="w-2.5 h-2.5 shrink-0" />
                 <span className="truncate">{session.shopDomain}</span>
               </p>
             )}
@@ -263,7 +263,7 @@ export default function HomePage() {
         {/* ─── Quick Tiles (4 cols mobile, very compact) ─── */}
         <section>
           <SectionHeader icon={Zap} title="Schnellzugriff" />
-          <div className="grid grid-cols-4 sm:grid-cols-4 md:grid-cols-8 gap-1.5 sm:gap-3">
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
             {QUICK_TILES.map((tile, i) => (
               <motion.button
                 key={tile.title}
@@ -272,21 +272,20 @@ export default function HomePage() {
                 transition={{ delay: 0.02 * i }}
                 whileTap={{ scale: 0.93 }}
                 onClick={() => router.push(tile.href)}
-                className="group relative flex flex-col items-center gap-1.5 sm:gap-2 px-1 py-2.5 sm:p-3.5 rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/15 transition-all overflow-hidden"
+                className="group relative flex flex-col items-center gap-1.5 px-1 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/15 transition-all overflow-hidden"
               >
                 <div
                   className="absolute -top-6 -right-6 w-12 h-12 rounded-full opacity-20 blur-xl group-hover:opacity-35 transition"
                   style={{ background: tile.color }}
                 />
                 <div
-                  className="relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center border shrink-0"
+                  className="relative w-8 h-8 rounded-lg flex items-center justify-center border shrink-0"
                   style={{ backgroundColor: `${tile.color}15`, borderColor: `${tile.color}30` }}
                 >
-                  <tile.icon className="w-4 h-4 sm:w-4.5 sm:h-4.5" style={{ color: tile.color, width: 16, height: 16 }} />
+                  <tile.icon className="w-4 h-4" style={{ color: tile.color, width: 16, height: 16 }} />
                 </div>
                 <div className="relative text-center">
-                  <div className="text-[10px] sm:text-[12px] font-semibold text-white leading-tight">{tile.title}</div>
-                  <div className="hidden sm:block text-[10px] text-zinc-500 mt-0.5">{tile.desc}</div>
+                  <div className="text-[10px] font-semibold text-white leading-tight">{tile.title}</div>
                 </div>
               </motion.button>
             ))}
@@ -420,16 +419,14 @@ function KpiCard({ label, value, sub, delta, positive, accent }: {
   accent: string;
 }) {
   return (
-    <div
-      className="rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] p-2.5 sm:p-3.5 overflow-hidden relative"
-    >
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 overflow-hidden relative">
       <div className="absolute top-0 right-0 w-12 h-12 rounded-full opacity-10 blur-xl" style={{ background: accent }} />
       <div className="relative">
         <div className="flex items-center justify-between mb-1">
-          <span className="text-[8px] sm:text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
+          <span className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
           {delta && (
             <span
-              className={`text-[8px] sm:text-[9px] font-bold tabular-nums px-1 py-0.5 rounded ${
+              className={`text-[9px] font-bold tabular-nums px-1 py-0.5 rounded ${
                 positive ? "text-emerald-300 bg-emerald-500/10" : "text-red-300 bg-red-500/10"
               }`}
             >
@@ -437,10 +434,10 @@ function KpiCard({ label, value, sub, delta, positive, accent }: {
             </span>
           )}
         </div>
-        <div className="text-base sm:text-xl font-bold tabular-nums leading-none" style={{ color: accent }}>
+        <div className="text-base sm:text-lg font-bold tabular-nums leading-none" style={{ color: accent }}>
           {value}
         </div>
-        <div className="text-[9px] sm:text-[10px] text-zinc-500 mt-0.5 sm:mt-1 truncate">{sub}</div>
+        <div className="text-[10px] text-zinc-500 mt-0.5 truncate">{sub}</div>
       </div>
     </div>
   );
@@ -455,14 +452,14 @@ function SectionHeader({ icon: Icon, title, sub, inline }: {
   inline?: boolean;
 }) {
   return (
-    <div className={inline ? "" : "mb-2 sm:mb-3"}>
-      <div className="flex items-center gap-1.5 sm:gap-2">
-        <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-md bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
-          <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#95BF47]" />
+    <div className={inline ? "" : "mb-2"}>
+      <div className="flex items-center gap-1.5">
+        <div className="w-5 h-5 rounded-md bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
+          <Icon className="w-3 h-3 text-[#95BF47]" />
         </div>
-        <h2 className="text-[12px] sm:text-sm font-bold text-zinc-200">{title}</h2>
+        <h2 className="text-[12px] font-bold text-zinc-200">{title}</h2>
       </div>
-      {sub && <p className="text-[10px] sm:text-[11px] text-zinc-500 mt-1 ml-7 sm:ml-8">{sub}</p>}
+      {sub && <p className="text-[10px] text-zinc-500 mt-0.5 ml-6">{sub}</p>}
     </div>
   );
 }
@@ -483,21 +480,21 @@ function CompactProgress({ completed, total, progress, allDone, steps, onClick }
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
       whileTap={{ scale: 0.99 }}
-      className="w-full glass-strong rounded-xl sm:rounded-2xl border border-white/10 p-3 sm:p-4 text-left group"
+      className="w-full glass-strong rounded-xl border border-white/10 p-2.5 sm:p-3 text-left group"
     >
       <div className="flex items-center justify-between mb-2 gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <Sparkles className="w-3.5 h-3.5 text-[#95BF47] shrink-0" />
-          <span className="text-[12px] sm:text-sm font-semibold truncate">
+          <span className="text-[12px] font-semibold truncate">
             {allDone ? "Setup abgeschlossen" : "Setup-Fortschritt"}
           </span>
-          <span className="text-[10px] text-zinc-500 hidden sm:inline">·</span>
-          <span className="text-[11px] sm:text-xs font-bold text-[#95BF47] tabular-nums shrink-0">{completed}/{total}</span>
+          <span className="text-[10px] text-zinc-500">·</span>
+          <span className="text-[11px] font-bold text-[#95BF47] tabular-nums shrink-0">{completed}/{total}</span>
         </div>
         <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-white transition shrink-0" />
       </div>
 
-      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mb-2 sm:mb-3">
+      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mb-2">
         <motion.div
           className="h-full rounded-full bg-gradient-to-r from-[#95BF47] to-[#B8D96E]"
           initial={{ width: 0 }}
@@ -506,18 +503,17 @@ function CompactProgress({ completed, total, progress, allDone, steps, onClick }
         />
       </div>
 
-      {/* Step chips — smaller on mobile, scrollable horizontally */}
       <div className="flex gap-1 overflow-x-auto -mx-1 px-1 sm:flex-wrap sm:overflow-visible">
         {steps.map((s) => (
           <span
             key={s.label}
-            className={`inline-flex items-center gap-0.5 sm:gap-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-medium border whitespace-nowrap shrink-0 ${
+            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium border whitespace-nowrap shrink-0 ${
               s.done
                 ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
                 : "border-white/10 bg-white/[0.03] text-zinc-500"
             }`}
           >
-            {s.done && <Check className="w-2 h-2 sm:w-2.5 sm:h-2.5" />}
+            {s.done && <Check className="w-2 h-2" />}
             {s.label}
           </span>
         ))}
@@ -608,16 +604,16 @@ function InsightCard({ icon: Icon, title, accent = "#95BF47", children }: {
     <motion.div
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] p-2.5 sm:p-4 flex flex-col gap-2 sm:gap-3 min-h-[7rem] sm:min-h-[10rem]"
+      className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-2.5 flex flex-col gap-2 min-h-[8rem]"
     >
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-1.5">
         <div
-          className="w-5 h-5 sm:w-7 sm:h-7 rounded-md sm:rounded-lg flex items-center justify-center border shrink-0"
+          className="w-5 h-5 rounded-md flex items-center justify-center border shrink-0"
           style={{ backgroundColor: `${accent}15`, borderColor: `${accent}30` }}
         >
-          <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5" style={{ color: accent }} />
+          <Icon className="w-3 h-3" style={{ color: accent }} />
         </div>
-        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-zinc-300 truncate">{title}</span>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 truncate">{title}</span>
       </div>
       {children}
     </motion.div>
@@ -632,14 +628,14 @@ function ConversionTrendCard({ data }: { data: { date: string; value: number }[]
   return (
     <InsightCard icon={Target} title="Conversion" accent="#10B981">
       <div className="flex items-baseline gap-1.5">
-        <div className="text-base sm:text-2xl font-bold tabular-nums">{avg.toFixed(1)}%</div>
-        <div className={`text-[10px] sm:text-xs font-semibold flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-          {trend >= 0 ? <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> : <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
+        <div className="text-base font-bold tabular-nums">{avg.toFixed(1)}%</div>
+        <div className={`text-[10px] font-semibold flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+          {trend >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
           {trend >= 0 ? "+" : ""}{trend.toFixed(1)}pp
         </div>
       </div>
       <SparkLine data={data.map((d) => d.value)} color="#10B981" />
-      <div className="text-[8px] sm:text-[10px] text-zinc-500">14 Tage</div>
+      <div className="text-[9px] text-zinc-500">14 Tage</div>
     </InsightCard>
   );
 }
@@ -650,9 +646,9 @@ function AovBarsCard({ data }: { data: { label: string; aov: number }[] }) {
   return (
     <InsightCard icon={ShoppingBag} title="Bestellwert" accent="#8B5CF6">
       <div className="flex items-baseline gap-1.5">
-        <div className="text-base sm:text-2xl font-bold tabular-nums">{last.toFixed(2)} €</div>
+        <div className="text-base font-bold tabular-nums">{last.toFixed(2)} €</div>
       </div>
-      <div className="flex items-end gap-0.5 sm:gap-1 h-8 sm:h-12">
+      <div className="flex items-end gap-[1px] h-8">
         {data.map((d) => (
           <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
             <div
@@ -662,7 +658,7 @@ function AovBarsCard({ data }: { data: { label: string; aov: number }[] }) {
           </div>
         ))}
       </div>
-      <div className="text-[8px] sm:text-[10px] text-zinc-500">8 Wochen</div>
+      <div className="text-[9px] text-zinc-500">8 Wochen</div>
     </InsightCard>
   );
 }
@@ -671,8 +667,8 @@ function HotspotsCard({ data }: { data: { hour: number; count: number }[] }) {
   const max = Math.max(...data.map((d) => d.count), 1);
   return (
     <InsightCard icon={Clock} title="Hotspots" accent="#F59E0B">
-      <div className="text-[9px] sm:text-[11px] text-zinc-400 -mb-1">Bestellungen / Stunde (60d)</div>
-      <div className="flex items-end gap-[1px] sm:gap-[2px] h-8 sm:h-14 mt-1">
+      <div className="text-[10px] text-zinc-400 -mb-0.5">Bestellungen / Stunde (60d)</div>
+      <div className="flex items-end gap-[1px] h-8 mt-0.5">
         {data.map((d) => (
           <div
             key={d.hour}
@@ -682,7 +678,7 @@ function HotspotsCard({ data }: { data: { hour: number; count: number }[] }) {
           />
         ))}
       </div>
-      <div className="flex justify-between text-[7px] sm:text-[9px] text-zinc-600 tabular-nums">
+      <div className="flex justify-between text-[8px] text-zinc-600 tabular-nums">
         <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
       </div>
     </InsightCard>
@@ -694,20 +690,20 @@ function ProductRankingCard({ data }: { data: { id: number; title: string; estim
   return (
     <InsightCard icon={Package} title="Top-Produkte" accent="#EC4899">
       {data.length === 0 ? (
-        <div className="text-[10px] sm:text-xs text-zinc-500 mt-1">Noch keine Bestellungen.</div>
+        <div className="text-[10px] text-zinc-500 mt-1">Noch keine Bestellungen.</div>
       ) : (
-        <div className="space-y-1 sm:space-y-1.5">
+        <div className="space-y-1">
           {data.slice(0, 4).map((p, i) => (
-            <div key={p.id} className="flex items-center gap-1.5 sm:gap-2">
-              <span className="text-[8px] sm:text-[9px] font-bold text-zinc-500 w-2 sm:w-3 tabular-nums shrink-0">{i + 1}</span>
+            <div key={p.id} className="flex items-center gap-1.5">
+              <span className="text-[9px] font-bold text-zinc-500 w-2 tabular-nums shrink-0">{i + 1}</span>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1 mb-0.5">
-                  <span className="text-[10px] sm:text-[11px] truncate">{p.title}</span>
-                  <span className="text-[9px] sm:text-[10px] font-semibold tabular-nums text-zinc-300 shrink-0">
+                  <span className="text-[10px] truncate">{p.title}</span>
+                  <span className="text-[9px] font-semibold tabular-nums text-zinc-300 shrink-0">
                     {p.estimatedProfit.toFixed(0)} €
                   </span>
                 </div>
-                <div className="h-1 sm:h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div className="h-1 rounded-full bg-white/5 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-gradient-to-r from-[#EC4899] to-[#F472B6]"
                     style={{ width: `${(p.estimatedProfit / max) * 100}%` }}
@@ -718,7 +714,7 @@ function ProductRankingCard({ data }: { data: { id: number; title: string; estim
           ))}
         </div>
       )}
-      <div className="text-[8px] sm:text-[10px] text-zinc-500 mt-auto">≈ Gewinn · 60 Tage</div>
+      <div className="text-[9px] text-zinc-500 mt-auto">≈ Gewinn · 60 Tage</div>
     </InsightCard>
   );
 }
@@ -727,28 +723,26 @@ function CrossSellCard({ data }: { data: { a: string; b: string; count: number }
   return (
     <InsightCard icon={Link2} title="Häufig zusammen" accent="#0EA5E9">
       {data.length === 0 ? (
-        <div className="text-[10px] sm:text-xs text-zinc-500 mt-1 leading-snug">
+        <div className="text-[10px] text-zinc-500 mt-1 leading-snug">
           Noch keine Mehrfach-Bestellungen. Sobald Kunden 2+ Produkte zusammen kaufen, zeigen wir Bundle-Empfehlungen.
         </div>
       ) : (
-        <div className="space-y-1 sm:space-y-1.5 flex-1">
+        <div className="space-y-1 flex-1">
           {data.slice(0, 3).map((p, i) => (
-            <div key={i} className="flex items-start gap-1.5 sm:gap-2 text-[10px] sm:text-[11px] leading-tight">
-              <span className="inline-flex items-center justify-center w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-cyan-500/15 text-cyan-300 text-[9px] sm:text-[10px] font-bold shrink-0 tabular-nums">
+            <div key={i} className="flex items-start gap-1.5 text-[10px] leading-tight">
+              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-cyan-500/15 text-cyan-300 text-[9px] font-bold shrink-0 tabular-nums">
                 {p.count}
               </span>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-zinc-200">{p.a}</div>
-                <div className="text-zinc-500 text-[9px] sm:text-[10px] my-0.5 flex items-center gap-1">
-                  <span>+</span>
-                </div>
+                <div className="text-zinc-500 text-[9px] my-0.5">+</div>
                 <div className="truncate text-zinc-200">{p.b}</div>
               </div>
             </div>
           ))}
         </div>
       )}
-      <div className="text-[8px] sm:text-[10px] text-zinc-500 mt-auto">
+      <div className="text-[9px] text-zinc-500 mt-auto">
         {data.length > 0 ? "Bundle-Idee: 2-für-1 Rabatt" : "Bundle-Empfehlung"}
       </div>
     </InsightCard>
@@ -761,23 +755,23 @@ function MissedRevenueCard({ data }: { data?: Insights["missedRevenue"] }) {
   return (
     <InsightCard icon={AlertTriangle} title="Verlust" accent="#EF4444">
       <div>
-        <div className="text-base sm:text-2xl font-bold tabular-nums text-red-400">
+        <div className="text-base font-bold tabular-nums text-red-400">
           {data.amount.toFixed(0)} €
         </div>
-        <div className="text-[10px] sm:text-[11px] text-zinc-400 mt-0.5">
+        <div className="text-[10px] text-zinc-400 mt-0.5">
           {data.count} Cart-Abandon · 30d
         </div>
       </div>
       <div className="flex items-center gap-1">
         <div
-          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] sm:text-[10px] font-semibold ${
+          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold ${
             trendPositive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
           }`}
         >
-          {trendPositive ? <TrendingDown className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> : <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
+          {trendPositive ? <TrendingDown className="w-2.5 h-2.5" /> : <TrendingUp className="w-2.5 h-2.5" />}
           {data.trendPct > 0 ? "+" : ""}{data.trendPct}%
         </div>
-        <span className="text-[8px] sm:text-[10px] text-zinc-500">vs Vorperiode</span>
+        <span className="text-[9px] text-zinc-500">vs Vorperiode</span>
       </div>
     </InsightCard>
   );
@@ -788,11 +782,11 @@ function ReturningCard({ data }: { data?: Insights["returning"] }) {
   return (
     <InsightCard icon={Users} title="Wiederkehrer" accent="#06B6D4">
       <div className="flex items-baseline gap-1.5">
-        <div className="text-base sm:text-2xl font-bold tabular-nums">{data.ratePct}%</div>
-        <div className="text-[9px] sm:text-[11px] text-zinc-500">{data.customers} Kunden</div>
+        <div className="text-base font-bold tabular-nums">{data.ratePct}%</div>
+        <div className="text-[10px] text-zinc-500">{data.customers} Kunden</div>
       </div>
       <SparkLine data={data.trend.map((t) => t.rate)} color="#06B6D4" />
-      <div className="text-[8px] sm:text-[10px] text-zinc-500">6 Wochen</div>
+      <div className="text-[9px] text-zinc-500">6 Wochen</div>
     </InsightCard>
   );
 }
@@ -802,11 +796,11 @@ function BestHourCard({ data }: { data?: Insights["bestHour"] }) {
   return (
     <InsightCard icon={Clock} title="Beste Zeit" accent="#A855F7">
       <div className="flex items-baseline gap-1.5">
-        <div className="text-xl sm:text-3xl font-bold tabular-nums text-purple-300">{data.label}</div>
-        <div className="text-[9px] sm:text-[11px] text-zinc-500">{data.sharePct}%</div>
+        <div className="text-xl font-bold tabular-nums text-purple-300">{data.label}</div>
+        <div className="text-[10px] text-zinc-500">{data.sharePct}%</div>
       </div>
-      <div className="text-[10px] sm:text-[11px] leading-snug text-zinc-300 bg-purple-500/10 border border-purple-500/20 rounded-md sm:rounded-lg p-1.5 sm:p-2.5">
-        <Sparkles className="w-2.5 h-2.5 sm:w-3 sm:h-3 inline mr-1 text-purple-400" />
+      <div className="text-[10px] leading-snug text-zinc-300 bg-purple-500/10 border border-purple-500/20 rounded-md p-1.5">
+        <Sparkles className="w-2.5 h-2.5 inline mr-1 text-purple-400" />
         {data.recommendation}
       </div>
     </InsightCard>

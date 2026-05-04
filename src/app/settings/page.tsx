@@ -201,16 +201,16 @@ export default function SettingsPage() {
 
       <div className="fixed top-32 left-6 w-56 h-56 bg-indigo-500/[0.05] rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="max-w-3xl mx-auto px-3 sm:px-6 py-3 sm:py-8 space-y-3 sm:space-y-4">
+      <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3">
 
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-lg sm:text-3xl font-bold flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 sm:w-7 sm:h-7 text-indigo-400" />
+          <h1 className="text-lg font-bold flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5 text-indigo-400" />
             Einstellungen
           </h1>
-          <p className="text-zinc-400 text-[12px] sm:text-sm mt-1">
-            Verwalte Account, Shop-Verbindung, Branding und Firmendaten.
+          <p className="text-zinc-400 text-[12px] mt-1">
+            Account, Shop-Verbindung, Branding und Firmendaten.
           </p>
         </motion.div>
 
@@ -221,7 +221,7 @@ export default function SettingsPage() {
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
-              className="flex items-center gap-2 text-red-400 text-xs sm:text-sm bg-red-500/10 border border-red-500/20 px-3 py-2.5 rounded-xl"
+              className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 px-3 py-2.5 rounded-xl"
             >
               <AlertCircle className="w-4 h-4 shrink-0" />
               <span className="flex-1">{error}</span>
@@ -257,7 +257,7 @@ export default function SettingsPage() {
               )}
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold truncate">{googleProfile?.name || "Kunde"}</div>
-                <div className="text-[10px] sm:text-xs text-zinc-500 truncate">
+                <div className="text-[10px] text-zinc-500 truncate">
                   {googleProfile?.email || kundenEmail || "Keine E-Mail hinterlegt"}
                 </div>
               </div>
@@ -337,7 +337,7 @@ export default function SettingsPage() {
             {hasShopifyToken && (
               <button
                 onClick={() => router.push("/setup")}
-                className="w-full text-[11px] sm:text-xs text-zinc-400 hover:text-white transition flex items-center justify-center gap-1.5 py-2"
+                className="w-full text-[11px] text-zinc-400 hover:text-white transition flex items-center justify-center gap-1.5 py-2"
               >
                 Shop neu verbinden / wechseln <ChevronRight className="w-3 h-3" />
               </button>
@@ -360,7 +360,7 @@ export default function SettingsPage() {
           <div className="space-y-3">
             {/* Logo upload */}
             <div>
-              <label className="block text-[10px] sm:text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
+              <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
                 Logo
               </label>
               <div className="flex items-center gap-3">
@@ -419,7 +419,7 @@ export default function SettingsPage() {
 
             {/* Tone of voice */}
             <div>
-              <label className="block text-[10px] sm:text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
+              <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
                 Tonalität
               </label>
               <select
@@ -497,7 +497,7 @@ export default function SettingsPage() {
               </div>
             </div>
             <div>
-              <label className="block text-[10px] sm:text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
+              <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
                 Land
               </label>
               <select
@@ -551,7 +551,7 @@ export default function SettingsPage() {
 
             <Link
               href="/legal"
-              className="block text-center w-full py-2 text-[11px] sm:text-xs text-zinc-400 hover:text-white transition"
+              className="block text-center w-full py-2 text-[11px] text-zinc-400 hover:text-white transition"
             >
               → Rechtstexte für deinen Shop generieren
             </Link>
@@ -576,7 +576,7 @@ export default function SettingsPage() {
             </div>
             <Link
               href="/credits"
-              className="btn-accent w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold"
+              className="btn-accent w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold"
             >
               <Plus className="w-4 h-4" />
               Mehr Credits
@@ -610,21 +610,21 @@ function SettingsSection({
       key={id}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl sm:rounded-2xl border border-white/10 bg-white/[0.02] overflow-hidden"
+      className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden"
     >
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-2.5 px-3 py-3 sm:px-4 sm:py-3.5 text-left"
+        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left"
       >
         <div
-          className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0 border"
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
           style={{ backgroundColor: `${color}15`, borderColor: `${color}30` }}
         >
           <Icon className="w-4 h-4" style={{ color }} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="text-[13px] sm:text-sm font-semibold truncate">{title}</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[13px] font-semibold truncate">{title}</span>
             {status === "ok" && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />}
             {status === "warn" && <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />}
             {saving && <Loader2 className="w-3 h-3 text-zinc-400 animate-spin" />}
@@ -638,7 +638,7 @@ function SettingsSection({
               </motion.span>
             )}
           </div>
-          <div className="text-[10px] sm:text-[11px] text-zinc-500 truncate">{desc}</div>
+          <div className="text-[10px] text-zinc-500 truncate">{desc}</div>
         </div>
         <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
           <ChevronDown className="w-4 h-4 text-zinc-500 shrink-0" />
@@ -653,7 +653,7 @@ function SettingsSection({
             transition={{ duration: 0.2 }}
             className="overflow-hidden"
           >
-            <div className="px-3 sm:px-4 pb-3 sm:pb-4 pt-1 border-t border-white/[0.04]">
+            <div className="px-3 pb-3 pt-1 border-t border-white/[0.04]">
               {children}
             </div>
           </motion.div>
@@ -680,8 +680,8 @@ function FormField({
 }) {
   return (
     <div>
-      <label className="block text-[10px] sm:text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5 flex items-center gap-1">
-        {Icon && <Icon className="w-2.5 h-2.5 sm:w-3 sm:h-3" />}
+      <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5 flex items-center gap-1">
+        {Icon && <Icon className="w-3 h-3" />}
         {label}
       </label>
       <input
@@ -730,7 +730,7 @@ function ColorField({ label, value, onChange }: {
 }) {
   return (
     <div>
-      <label className="block text-[10px] sm:text-[11px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
+      <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
         {label}
       </label>
       <div className="flex items-center gap-2">
@@ -764,7 +764,7 @@ function SaveButton({ onClick, saving, saved }: {
       whileTap={{ scale: 0.98 }}
       onClick={onClick}
       disabled={saving}
-      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition ${
+      className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-xs transition ${
         saved
           ? "bg-emerald-500/15 border border-emerald-500/35 text-emerald-300"
           : "bg-[#95BF47] text-black"
@@ -781,11 +781,11 @@ function SaveButton({ onClick, saving, saved }: {
 function KPICard({ label, value, color }: { label: string; value: string; color: string }) {
   return (
     <div
-      className="rounded-lg border p-2 sm:p-2.5 text-center"
+      className="rounded-lg border p-2 text-center"
       style={{ borderColor: `${color}25`, background: `${color}08` }}
     >
-      <div className="text-[8px] sm:text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">{label}</div>
-      <div className="text-[12px] sm:text-sm font-bold mt-0.5 truncate" style={{ color }}>{value}</div>
+      <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">{label}</div>
+      <div className="text-[12px] font-bold mt-0.5 truncate" style={{ color }}>{value}</div>
     </div>
   );
 }

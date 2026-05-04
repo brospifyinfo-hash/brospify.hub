@@ -178,22 +178,22 @@ export default function Navigation() {
 
   return (
     <>
-      {/* ── Top bar (slim on mobile, full on desktop) ─────────── */}
+      {/* ── Top bar (slim everywhere, same density on mobile + desktop) ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 glass-header">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-12 md:h-16 gap-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-6">
+          <div className="flex items-center justify-between h-12 gap-2">
             {/* Logo */}
-            <Link href="/home" className="flex items-center gap-2 group shrink-0">
-              <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-xl">
+            <Link href="/home" className="flex items-center gap-1.5 group shrink-0">
+              <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-lg">
                 {logoUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="Logo" className="h-7 md:h-9 object-contain rounded-lg" />
+                  <img src={logoUrl} alt="Logo" className="h-7 object-contain rounded-lg" />
                 ) : (
                   <BrandLogo size="md" />
                 )}
               </div>
               {!logoUrl && (
-                <span className="text-sm md:text-lg font-bold hidden sm:block">
+                <span className="text-sm font-bold hidden sm:block">
                   Brospify<span className="text-[#95BF47]">Hub</span>
                 </span>
               )}
@@ -207,18 +207,18 @@ export default function Navigation() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
                       isActive
                         ? "text-[#95BF47]"
                         : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
-                    <item.icon className="w-4 h-4" />
-                    <span className="hidden lg:inline">{t.nav[item.labelKey]}</span>
+                    <item.icon className="w-3.5 h-3.5" />
+                    <span>{t.nav[item.labelKey]}</span>
                     {isActive && (
                       <motion.div
                         layoutId="nav-indicator"
-                        className="absolute inset-0 bg-[#95BF47]/8 border border-[#95BF47]/15 rounded-xl"
+                        className="absolute inset-0 bg-[#95BF47]/8 border border-[#95BF47]/15 rounded-lg"
                         style={{ zIndex: -1 }}
                         transition={{ type: "spring", stiffness: 350, damping: 30 }}
                       />
@@ -230,21 +230,21 @@ export default function Navigation() {
               <div ref={aiRef} className="relative">
                 <button
                   onClick={() => setAiOpen(!aiOpen)}
-                  className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-200 ${
                     isAiActive ? "" : "hover:bg-white/[0.04]"
                   }`}
                 >
-                  <Sparkles className="w-4 h-4 text-purple-400" />
-                  <span className="hidden lg:inline ai-gradient-text">AI Tools</span>
+                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <span className="ai-gradient-text">AI Tools</span>
                   <ChevronDown
-                    className={`w-3 h-3 text-zinc-400 transition-transform duration-200 ${
+                    className={`w-2.5 h-2.5 text-zinc-400 transition-transform duration-200 ${
                       aiOpen ? "rotate-180" : ""
                     }`}
                   />
                   {isAiActive && (
                     <motion.div
                       layoutId="nav-indicator"
-                      className="absolute inset-0 bg-purple-500/8 border border-purple-500/15 rounded-xl"
+                      className="absolute inset-0 bg-purple-500/8 border border-purple-500/15 rounded-lg"
                       style={{ zIndex: -1 }}
                       transition={{ type: "spring", stiffness: 350, damping: 30 }}
                     />
@@ -318,16 +318,16 @@ export default function Navigation() {
 
               <Link
                 href="/ai-support"
-                className={`relative flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
                   isAiSupportActive ? "" : "hover:bg-white/[0.04]"
                 }`}
               >
-                <Bot className="w-4 h-4 text-zinc-400" />
-                <span className="hidden lg:inline text-zinc-300">Support</span>
+                <Bot className="w-3.5 h-3.5 text-zinc-400" />
+                <span className="text-zinc-300">Support</span>
                 {isAiSupportActive && (
                   <motion.div
                     layoutId="nav-indicator"
-                    className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-xl"
+                    className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-lg"
                     style={{ zIndex: -1 }}
                     transition={{ type: "spring", stiffness: 350, damping: 30 }}
                   />
@@ -337,14 +337,14 @@ export default function Navigation() {
               {session.isAdmin && (
                 <Link
                   href="/admin"
-                  className={`flex items-center gap-2 px-3 lg:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
                     pathname === "/admin"
                       ? "text-[#95BF47] bg-[#95BF47]/8"
                       : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                   }`}
                 >
-                  <Settings className="w-4 h-4" />
-                  <span className="hidden lg:inline">{t.nav.admin}</span>
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>{t.nav.admin}</span>
                 </Link>
               )}
             </div>
@@ -356,7 +356,7 @@ export default function Navigation() {
               {/* Profile/Logout shown on desktop only — mobile uses bottom tabs */}
               <Link
                 href="/profile"
-                className={`hidden md:flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl transition-all duration-200 ${
+                className={`hidden md:flex items-center gap-1.5 px-1.5 py-1 rounded-lg transition-all duration-200 ${
                   pathname === "/profile"
                     ? "bg-[#95BF47]/8 border border-[#95BF47]/15"
                     : "hover:bg-white/[0.04] border border-transparent"
@@ -367,32 +367,27 @@ export default function Navigation() {
                   <img
                     src={session.googleImage}
                     alt=""
-                    className="w-7 h-7 rounded-lg border border-white/[0.08] object-cover"
+                    className="w-6 h-6 rounded-md border border-white/[0.08] object-cover"
                   />
                 ) : (
-                  <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
-                    <span className="text-[10px] font-bold text-white">
+                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
+                    <span className="text-[9px] font-bold text-white">
                       {(session.googleName || "U")[0].toUpperCase()}
                     </span>
                   </div>
                 )}
-                <div className="hidden xl:block text-left max-w-[120px]">
-                  <div className="text-xs font-semibold text-white truncate leading-tight">
+                <div className="hidden xl:block text-left max-w-[100px]">
+                  <div className="text-[11px] font-semibold text-white truncate leading-tight">
                     {session.googleName || "Profil"}
                   </div>
-                  {session.googleEmail && (
-                    <div className="text-[10px] text-zinc-500 truncate leading-tight">
-                      {session.googleEmail}
-                    </div>
-                  )}
                 </div>
               </Link>
 
               <button
                 onClick={handleLogout}
-                className="hidden md:flex items-center gap-2 px-3 py-2 rounded-xl text-sm text-zinc-500 hover:text-red-400 hover:bg-red-500/8 transition-all duration-200"
+                className="hidden md:flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[12px] text-zinc-500 hover:text-red-400 hover:bg-red-500/8 transition-all duration-200"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
@@ -562,7 +557,7 @@ export default function Navigation() {
       </AnimatePresence>
 
       {/* Spacer for fixed nav (top) */}
-      <div className="h-12 md:h-16" />
+      <div className="h-12" />
     </>
   );
 }

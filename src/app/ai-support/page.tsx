@@ -290,19 +290,19 @@ function AISupportContent() {
       <div className="fixed top-32 right-8 w-56 h-56 bg-purple-500/[0.05] rounded-full blur-[100px] pointer-events-none" />
       <div className="fixed bottom-20 left-8 w-44 h-44 bg-blue-500/[0.04] rounded-full blur-[80px] pointer-events-none" />
 
-      <div className="max-w-3xl mx-auto px-3 sm:px-6 py-3 sm:py-6 space-y-3 sm:space-y-4">
+      <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3">
 
         {/* ─── Header ─── */}
         <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl sm:rounded-2xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-purple-500/20 flex items-center justify-center shrink-0">
-              <Bot className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-purple-500/20 flex items-center justify-center shrink-0">
+              <Bot className="w-4 h-4 text-purple-400" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-base sm:text-2xl font-bold leading-tight">
+              <h1 className="text-base font-bold leading-tight">
                 <span className="ai-gradient-text">Support</span>
               </h1>
-              <p className="text-[10px] sm:text-xs text-zinc-500 truncate">
+              <p className="text-[10px] text-zinc-500 truncate">
                 KI-Chat & deine Support-Tickets
               </p>
             </div>
@@ -314,7 +314,7 @@ function AISupportContent() {
           <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <button
               onClick={() => setView("chat")}
-              className={`px-3 py-2 rounded-lg text-[12px] sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 ${
+              className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition flex items-center justify-center gap-1.5 ${
                 view === "chat" ? "bg-purple-500/15 border border-purple-500/30 text-purple-300" : "text-zinc-400"
               }`}
             >
@@ -322,7 +322,7 @@ function AISupportContent() {
             </button>
             <button
               onClick={() => setView("tickets")}
-              className={`px-3 py-2 rounded-lg text-[12px] sm:text-sm font-semibold transition flex items-center justify-center gap-1.5 ${
+              className={`px-3 py-2 rounded-lg text-[12px] font-semibold transition flex items-center justify-center gap-1.5 ${
                 view === "tickets" ? "bg-amber-500/15 border border-amber-500/30 text-amber-300" : "text-zinc-400"
               }`}
             >
@@ -404,12 +404,12 @@ function TicketsListView({ tickets, loading, onOpenTicket, onStartChat }: {
           <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
         </div>
       ) : tickets.length === 0 ? (
-        <div className="text-center py-10 sm:py-14">
+        <div className="text-center py-10">
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3">
             <Inbox className="w-5 h-5 text-zinc-500" />
           </div>
-          <h3 className="text-sm sm:text-base font-bold mb-1">Noch keine Tickets</h3>
-          <p className="text-[11px] sm:text-xs text-zinc-500 max-w-xs mx-auto mb-4">
+          <h3 className="text-sm font-bold mb-1">Noch keine Tickets</h3>
+          <p className="text-[11px] text-zinc-500 max-w-xs mx-auto mb-4">
             Tickets werden gespeichert, sobald du den KI-Chat eskalierst. Der Verlauf bleibt für dich abrufbar.
           </p>
           <button
@@ -443,19 +443,19 @@ function TicketsListView({ tickets, loading, onOpenTicket, onStartChat }: {
               )}
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-[13px] sm:text-sm font-semibold text-zinc-200 truncate">{ticket.subject}</div>
+              <div className="text-[13px] font-semibold text-zinc-200 truncate">{ticket.subject}</div>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest ${
+                <span className={`text-[10px] font-bold uppercase tracking-widest ${
                   ticket.status === "open" ? "text-amber-400" :
                   ticket.status === "resolved" ? "text-emerald-400" : "text-zinc-500"
                 }`}>
                   {ticket.status === "open" ? "Offen" : ticket.status === "resolved" ? "Gelöst" : "Geschlossen"}
                 </span>
-                <span className="text-[9px] sm:text-[10px] text-zinc-600 flex items-center gap-1">
+                <span className="text-[10px] text-zinc-600 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5" />
                   {formatRelative(ticket.updatedAt)}
                 </span>
-                <span className="text-[9px] sm:text-[10px] text-zinc-600">
+                <span className="text-[10px] text-zinc-600">
                   {ticket.messages.length} Msg
                 </span>
               </div>
@@ -510,7 +510,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
           <ChevronLeft className="w-4 h-4" />
         </button>
         <div className="flex-1 min-w-0">
-          <div className="text-[12px] sm:text-sm font-semibold truncate">{ticket.subject}</div>
+          <div className="text-[12px] font-semibold truncate">{ticket.subject}</div>
           <div className="flex items-center gap-2 mt-0.5">
             <span className={`text-[9px] font-bold uppercase tracking-widest ${
               isOpen ? "text-amber-400" :
@@ -541,7 +541,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
       )}
 
       {/* Messages */}
-      <div className="space-y-2 sm:space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+      <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
         {ticket.messages.length === 0 ? (
           <div className="text-xs text-zinc-500 text-center py-6">Keine Nachrichten.</div>
         ) : (
@@ -552,7 +552,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
               animate={{ opacity: 1, y: 0 }}
               className={`flex gap-2 ${msg.sender === "customer" ? "flex-row-reverse" : ""}`}
             >
-              <div className={`shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl flex items-center justify-center text-[9px] sm:text-[10px] font-bold border ${
+              <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold border ${
                 msg.sender === "admin"
                   ? "bg-[#95BF47]/15 border-[#95BF47]/25 text-[#95BF47]"
                   : msg.sender === "ai"
@@ -561,14 +561,14 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
               }`}>
                 {msg.sender === "admin" ? "A" : msg.sender === "ai" ? "KI" : "Du"}
               </div>
-              <div className={`max-w-[80%] rounded-xl sm:rounded-2xl px-3 py-2 text-[12px] sm:text-sm ${
+              <div className={`max-w-[80%] rounded-xl px-3 py-2 text-[12px] ${
                 msg.sender === "customer"
                   ? "bg-blue-500/10 border border-blue-500/15 text-zinc-100"
                   : msg.sender === "admin"
                   ? "bg-[#95BF47]/8 border border-[#95BF47]/15 text-zinc-100"
                   : "bg-white/[0.04] border border-white/[0.08] text-zinc-200"
               }`}>
-                <div className="text-[9px] sm:text-[10px] text-zinc-500 mb-0.5 font-medium">{msg.name}</div>
+                <div className="text-[10px] text-zinc-500 mb-0.5 font-medium">{msg.name}</div>
                 <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
               </div>
             </motion.div>
@@ -579,7 +579,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
 
       {/* Reply input — only for open tickets */}
       {isOpen ? (
-        <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] p-2.5 sm:p-3">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-2.5">
           <div className="flex items-center gap-2">
             <input
               type="text"
@@ -587,13 +587,13 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
               onChange={(e) => setLiveInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && onSendLive()}
               placeholder="Antwort senden…"
-              className="flex-1 bg-transparent border-none outline-none text-[13px] sm:text-sm text-white placeholder:text-zinc-600"
+              className="flex-1 bg-transparent border-none outline-none text-[13px] text-white placeholder:text-zinc-600"
             />
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={onSendLive}
               disabled={sendingLive || !liveInput.trim()}
-              className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-[#95BF47] flex items-center justify-center text-black disabled:opacity-30 transition shrink-0"
+              className="w-8 h-8 rounded-lg bg-[#95BF47] flex items-center justify-center text-black disabled:opacity-30 transition shrink-0"
             >
               {sendingLive ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </motion.button>
@@ -625,13 +625,13 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="text-center py-6 sm:py-10"
+          className="text-center py-8"
         >
-          <div className="w-12 h-12 sm:w-16 sm:h-16 mx-auto rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-purple-500/15 flex items-center justify-center mb-3">
-            <Sparkles className="w-6 h-6 sm:w-8 sm:h-8 text-purple-400/60" />
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-purple-500/15 flex items-center justify-center mb-3">
+            <Sparkles className="w-6 h-6 text-purple-400/60" />
           </div>
-          <h2 className="text-sm sm:text-base font-bold text-zinc-300 mb-1.5">Wie kann ich helfen?</h2>
-          <p className="text-[11px] sm:text-xs text-zinc-600 max-w-sm mx-auto mb-4">
+          <h2 className="text-sm font-bold text-zinc-300 mb-1.5">Wie kann ich helfen?</h2>
+          <p className="text-[11px] text-zinc-600 max-w-sm mx-auto mb-4">
             Stelle deine Frage, der KI-Agent versucht sie sofort zu lösen. Falls nicht, wird daraus ein Ticket.
           </p>
           <div className="grid grid-cols-2 gap-1.5 max-w-md mx-auto">
@@ -644,7 +644,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
               <button
                 key={q}
                 onClick={() => setInput(q)}
-                className="text-left text-[11px] sm:text-xs text-zinc-400 px-2.5 py-2 rounded-lg sm:rounded-xl border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04] transition flex items-start gap-1.5"
+                className="text-left text-[11px] text-zinc-400 px-2.5 py-2 rounded-lg border border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04] transition flex items-start gap-1.5"
               >
                 <MessageCircle className="w-3 h-3 text-purple-400/60 shrink-0 mt-0.5" />
                 <span className="line-clamp-2">{q}</span>
@@ -653,7 +653,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
           </div>
         </motion.div>
       ) : (
-        <div className="space-y-2 sm:space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
           {messages.map((msg, i) => (
             <motion.div
               key={i}
@@ -661,32 +661,32 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
               animate={{ opacity: 1, y: 0 }}
               className={`flex gap-2 ${msg.role === "user" ? "flex-row-reverse" : ""}`}
             >
-              <div className={`shrink-0 w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl flex items-center justify-center ${
+              <div className={`shrink-0 w-7 h-7 rounded-lg flex items-center justify-center ${
                 msg.role === "assistant"
                   ? "bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-purple-500/15"
                   : "bg-white/[0.06] border border-white/[0.08]"
               }`}>
                 {msg.role === "assistant"
-                  ? <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
-                  : <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-400" />
+                  ? <Bot className="w-3.5 h-3.5 text-purple-400" />
+                  : <User className="w-3.5 h-3.5 text-zinc-400" />
                 }
               </div>
-              <div className={`max-w-[80%] rounded-xl sm:rounded-2xl px-3 py-2 ${
+              <div className={`max-w-[80%] rounded-xl px-3 py-2 ${
                 msg.role === "user"
                   ? "bg-blue-500/10 border border-blue-500/15"
                   : "bg-white/[0.04] border border-white/[0.06]"
               }`}>
-                <p className="text-[12px] sm:text-sm text-zinc-200 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                <p className="text-[12px] text-zinc-200 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
               </div>
             </motion.div>
           ))}
 
           {sending && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2">
-              <div className="w-7 h-7 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-purple-500/15 flex items-center justify-center">
-                <Bot className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-purple-400" />
+              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-purple-500/15 flex items-center justify-center">
+                <Bot className="w-3.5 h-3.5 text-purple-400" />
               </div>
-              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl sm:rounded-2xl px-3 py-2 flex items-center gap-1.5">
+              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0ms" }} />
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "150ms" }} />
                 <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "300ms" }} />
@@ -702,22 +702,22 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
                 initial={{ opacity: 0, scale: 0.96, y: 6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96 }}
-                className="rounded-xl sm:rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/8 to-orange-500/5 p-3 sm:p-4"
+                className="rounded-xl border border-amber-500/20 bg-gradient-to-br from-amber-500/8 to-orange-500/5 p-3"
               >
                 <div className="flex items-start gap-2.5">
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-amber-500/15 border border-amber-500/25 flex items-center justify-center shrink-0">
                     <AlertTriangle className="w-4 h-4 text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-[12px] sm:text-sm font-bold text-amber-300 mb-1">Brauchst du echten Menschen-Support?</h4>
-                    <p className="text-[10px] sm:text-xs text-zinc-400 mb-2.5 leading-relaxed">
+                    <h4 className="text-[12px] font-bold text-amber-300 mb-1">Brauchst du echten Menschen-Support?</h4>
+                    <p className="text-[10px] text-zinc-400 mb-2.5 leading-relaxed">
                       Wir machen daraus ein Live-Ticket — der gesamte Chat-Verlauf wird mitgeschickt und bleibt für dich gespeichert.
                     </p>
                     <motion.button
                       whileTap={{ scale: 0.97 }}
                       onClick={onCreateTicket}
                       disabled={creatingTicket}
-                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold text-[11px] sm:text-xs disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold text-[11px] disabled:opacity-50"
                     >
                       {creatingTicket ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ticket className="w-3.5 h-3.5" />}
                       {creatingTicket ? "Erstelle Ticket…" : "Live-Ticket eröffnen"}
@@ -734,7 +734,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
       )}
 
       {/* Input */}
-      <div className="rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] p-2.5 sm:p-3">
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-2.5">
         <div className="flex items-center gap-2">
           <input
             type="text"
@@ -743,20 +743,20 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && onSend()}
             placeholder="Stelle deine Frage…"
             disabled={sending}
-            className="flex-1 bg-transparent border-none outline-none text-[13px] sm:text-sm text-white placeholder:text-zinc-600 disabled:opacity-50"
+            className="flex-1 bg-transparent border-none outline-none text-[13px] text-white placeholder:text-zinc-600 disabled:opacity-50"
           />
           <motion.button
             whileTap={{ scale: 0.95 }}
             onClick={onSend}
             disabled={sending || !input.trim()}
-            className="w-8 h-8 sm:w-9 sm:h-9 rounded-lg sm:rounded-xl bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white disabled:opacity-30 transition shrink-0"
+            className="w-8 h-8 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center text-white disabled:opacity-30 transition shrink-0"
           >
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
           </motion.button>
         </div>
         <div className="mt-1.5 px-1 flex items-center gap-1.5">
           <Bot className="w-2.5 h-2.5 text-zinc-700" />
-          <span className="text-[9px] sm:text-[10px] text-zinc-700">
+          <span className="text-[10px] text-zinc-700">
             DeepSeek AI{attemptCount > 0 ? ` · Versuch ${attemptCount}/2` : ""}
           </span>
         </div>
