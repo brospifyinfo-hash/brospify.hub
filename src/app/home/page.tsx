@@ -77,6 +77,10 @@ interface NewsPost {
 
 interface Insights {
   connected: boolean;
+  needsReconnect?: boolean;
+  reconnectReason?: string;
+  hasOrders?: boolean;
+  partialErrors?: { kind: string; status?: number; message: string }[];
   window?: { since: string; until: string; totalOrders: number };
   today?: { orders: number; revenue: number; revenueDeltaPct: number; ordersDelta: number };
   conversionTrend?: { date: string; value: number }[];
@@ -531,7 +535,7 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
   onConnect: () => void;
 }) {
   if (!shopConnected) {
-    return <InsightsPlaceholder onConnect={onConnect} />;
+    return <InsightsPlaceholder onConnect={onConnect} mode="not-connected" />;
   }
   if (loading || !insights) {
     return (
@@ -543,7 +547,13 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
     );
   }
   if (insights.connected === false) {
-    return <InsightsPlaceholder onConnect={onConnect} />;
+    return <InsightsPlaceholder onConnect={onConnect} mode="not-connected" />;
+  }
+  if (insights.needsReconnect) {
+    return <InsightsPlaceholder onConnect={onConnect} mode="needs-reconnect" reason={insights.reconnectReason} />;
+  }
+  if (insights.hasOrders === false) {
+    return <InsightsPlaceholder onConnect={onConnect} mode="no-orders" />;
   }
 
   return (
@@ -560,13 +570,37 @@ function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
   );
 }
 
-function InsightsPlaceholder({ onConnect }: { onConnect: () => void }) {
+function InsightsPlaceholder({ onConnect, mode, reason }: {
+  onConnect: () => void;
+  mode: "not-connected" | "needs-reconnect" | "no-orders";
+  reason?: string;
+}) {
   const stub = ["Conversion", "AOV", "Hotspots", "Top-Produkte", "Verlust", "Wiederkehrer"];
+  const config = {
+    "not-connected": {
+      iconColor: "#95BF47",
+      title: "Verbinde deinen Shopify-Store",
+      desc: "Wir berechnen Conversion-Trends, Hotspots & versteckten Umsatz aus deinen Bestelldaten.",
+      cta: "Shop verbinden",
+    },
+    "needs-reconnect": {
+      iconColor: "#F59E0B",
+      title: "Shop muss neu verbunden werden",
+      desc: reason || "Dein Token hat nicht alle Bereiche. Verbinde den Shop neu, dann sind read_orders + read_customers drin.",
+      cta: "Neu verbinden",
+    },
+    "no-orders": {
+      iconColor: "#3B82F6",
+      title: "Noch keine Bestellungen im Zeitraum",
+      desc: "Sobald die ersten Bestellungen reinkommen, zeigen wir dir hier Conversion, Hotspots, Top-Produkte und mehr.",
+      cta: "Setup prüfen",
+    },
+  }[mode];
   return (
-    <div className="relative rounded-xl sm:rounded-2xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-6 overflow-hidden">
-      <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-3 sm:mb-5 opacity-30 pointer-events-none">
+    <div className="relative rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-5 overflow-hidden">
+      <div className="grid grid-cols-3 gap-1.5 mb-3 opacity-30 pointer-events-none">
         {stub.map((s) => (
-          <div key={s} className="rounded-lg border border-white/10 bg-white/[0.02] p-2 sm:p-4 h-16 sm:h-24 flex flex-col justify-end">
+          <div key={s} className="rounded-lg border border-white/10 bg-white/[0.02] p-2 h-16 flex flex-col justify-end">
             <div className="text-[9px] uppercase tracking-widest text-zinc-500 truncate">{s}</div>
             <div className="h-1 bg-white/10 rounded-full mt-1.5">
               <div className="h-full w-1/2 bg-zinc-600 rounded-full" />
@@ -575,19 +609,20 @@ function InsightsPlaceholder({ onConnect }: { onConnect: () => void }) {
         ))}
       </div>
       <div className="text-center">
-        <div className="inline-flex items-center justify-center w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 mb-2">
-          <Store className="w-4 h-4 sm:w-5 sm:h-5 text-[#95BF47]" />
+        <div
+          className="inline-flex items-center justify-center w-9 h-9 rounded-xl border mb-2"
+          style={{ background: `${config.iconColor}15`, borderColor: `${config.iconColor}30` }}
+        >
+          <Store className="w-4 h-4" style={{ color: config.iconColor }} />
         </div>
-        <h3 className="text-sm sm:text-base font-bold mb-1">Verbinde deinen Shopify-Store</h3>
-        <p className="text-[11px] sm:text-xs text-zinc-500 mb-3 sm:mb-4 max-w-md mx-auto">
-          Wir berechnen Conversion-Trends, Hotspots & versteckten Umsatz aus deinen Bestelldaten.
-        </p>
+        <h3 className="text-sm font-bold mb-1">{config.title}</h3>
+        <p className="text-[11px] text-zinc-500 mb-3 max-w-md mx-auto leading-relaxed">{config.desc}</p>
         <button
           onClick={onConnect}
-          className="btn-accent px-4 sm:px-5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-2 mx-auto"
+          className="btn-accent px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 mx-auto"
         >
-          <Store className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-          Shop verbinden
+          <Store className="w-3.5 h-3.5" />
+          {config.cta}
         </button>
       </div>
     </div>

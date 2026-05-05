@@ -87,28 +87,63 @@ export async function GET() {
     const token = kunde.shopifyToken;
 
     // Pull last 60 days of orders + 14 days of checkouts in parallel.
-    // Limit 250 orders should be plenty for a small shop window; if a
-    // shop has more we still get a representative sample for trends.
+    // We track each fetch's failure separately so the UI can tell the
+    // user *why* a chart is empty (missing scope vs no orders yet vs
+    // network error). The previous version silently returned empty
+    // arrays on any failure, so users with old tokens (no read_orders
+    // scope) saw "Shop connected" + zero data instead of a re-connect
+    // prompt.
     const since60 = isoDaysAgo(60);
     const since14 = isoDaysAgo(14);
+
+    const fetchErrors: { kind: string; status?: number; message: string }[] = [];
+    const captureError = (kind: string) => (err: unknown) => {
+      const msg = err instanceof Error ? err.message : String(err);
+      // shopifyFetch throws "Shopify <status>: <body>"
+      const m = msg.match(/^Shopify (\d+):/);
+      const status = m ? parseInt(m[1], 10) : undefined;
+      fetchErrors.push({ kind, status, message: msg.slice(0, 200) });
+      console.warn(`[insights] ${kind} failed (${status ?? "?"}): ${msg.slice(0, 200)}`);
+      if (kind === "orders") return { orders: [] as ShopifyOrderRaw[] };
+      if (kind === "checkouts") return { checkouts: [] as CheckoutRaw[] };
+      return { products: [] as ShopifyProductRaw[] };
+    };
 
     const [ordersData, checkoutsData, productsData] = await Promise.all([
       shopifyFetch<OrdersResponse>({
         domain,
         token,
         path: `/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(since60)}`,
-      }).catch(() => ({ orders: [] as ShopifyOrderRaw[] })),
+      }).catch(captureError("orders")) as Promise<OrdersResponse>,
       shopifyFetch<CheckoutsResponse>({
         domain,
         token,
         path: `/checkouts.json?limit=250&created_at_min=${encodeURIComponent(since14)}`,
-      }).catch(() => ({ checkouts: [] as CheckoutRaw[] })),
+      }).catch(captureError("checkouts")) as Promise<CheckoutsResponse>,
       shopifyFetch<ProductsResponse>({
         domain,
         token,
         path: `/products.json?limit=250&fields=id,title,variants,image`,
-      }).catch(() => ({ products: [] as ShopifyProductRaw[] })),
+      }).catch(captureError("products")) as Promise<ProductsResponse>,
     ]);
+
+    // Detect missing-scope state: 401/403/scope errors on the orders
+    // fetch are the most visible indicator. Tell the UI to ask for a
+    // re-connect with the new scope set.
+    const ordersErr = fetchErrors.find((e) => e.kind === "orders");
+    const needsReconnect = !!ordersErr && (
+      ordersErr.status === 401 ||
+      ordersErr.status === 403 ||
+      /scope|access denied|requires merchant approval/i.test(ordersErr.message)
+    );
+    if (needsReconnect) {
+      return NextResponse.json({
+        connected: true,
+        needsReconnect: true,
+        reconnectReason: "Dein Shop-Token hat keine Orders-Permission. Verbinde den Shop unter /setup neu — dann sind alle neuen Bereiche (read_orders, read_customers) drin.",
+        debug: { fetchErrors },
+      });
+    }
 
     const orders = (ordersData.orders || []).filter(
       (o) => !o.cancelled_at && o.financial_status !== "voided" && o.financial_status !== "refunded"
@@ -351,6 +386,8 @@ export async function GET() {
     // ─── Response ────────────────────────────────────────────────
     return NextResponse.json({
       connected: true,
+      hasOrders: totalOrders > 0,
+      partialErrors: fetchErrors.length > 0 ? fetchErrors : undefined,
       window: { since: since60, until: now.toISOString(), totalOrders },
       today,
       conversionTrend: days14.map((d) => ({ date: d.date, value: d.conversion })),
