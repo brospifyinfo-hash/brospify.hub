@@ -346,6 +346,27 @@ export default function AdminPage() {
     if (activeCustomerKey) loadCustomerDetail(activeCustomerKey);
   }, [activeCustomerKey, loadCustomerDetail]);
 
+  // ── Admin: ensure 500 starter credits for every customer ──
+  const [ensuringStarter, setEnsuringStarter] = useState(false);
+  async function handleEnsureStarter() {
+    if (ensuringStarter) return;
+    if (!confirm("Allen Kunden ohne Starter-Bonus die 500 Credits sicherstellen? Bestehende Kunden mit Bonus werden NICHT doppelt beschenkt.")) return;
+    setEnsuringStarter(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/customers/ensure-starter", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Backfill fehlgeschlagen.");
+      } else {
+        setSuccess(`Starter-Backfill: ${data.granted} neu beschenkt, ${data.skipped} übersprungen${data.errors?.length ? ` · ${data.errors.length} Fehler` : ""}.`);
+        setTimeout(() => setSuccess(""), 5000);
+        await loadCustomers();
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setEnsuringStarter(false); }
+  }
+
   async function handleAdjust() {
     if (!activeCustomerKey || !adjustForm.delta) return;
     setAdjustSaving(true);
@@ -680,7 +701,17 @@ export default function AdminPage() {
                 className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
               >
                 {customersLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-                Aktualisieren
+                <span className="hidden sm:inline">Aktualisieren</span>
+              </button>
+              <button
+                onClick={handleEnsureStarter}
+                disabled={ensuringStarter}
+                title="Allen Kunden ohne Welcome-Bonus die 500 Starter-Credits sicherstellen (idempotent)"
+                className="px-3 py-2 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/30 text-xs text-[#95BF47] hover:bg-[#95BF47]/15 transition flex items-center gap-1.5 font-semibold"
+              >
+                {ensuringStarter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
+                <span className="hidden sm:inline">500 Starter sicherstellen</span>
+                <span className="sm:hidden">+500</span>
               </button>
             </div>
 
