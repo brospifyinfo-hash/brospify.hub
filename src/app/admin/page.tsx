@@ -56,6 +56,31 @@ const EMPTY: EditProduct = {
 
 const SKU_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
 
+// ─── Admin module-level types ───────────────────────────────────
+
+interface AdminStats {
+  generatedAt: string;
+  customers: { total: number; activeLast7d: number; activeLast30d: number; withShopify: number; withGoogle: number; starterGranted: number };
+  credits: { sumBalance: number; sumTotalPurchased: number; sumTotalUsed: number; avgBalance: number; avgUsed: number };
+  heatmap: number[][];
+  daily14d: { date: string; deduct: number; topup: number; admin: number }[];
+  toolUsage: { reason: string; count: number; totalCredits: number }[];
+  topUsers: { lizenzschluessel: string; email: string; shopDomain: string; balance: number; used30d: number; txCount30d: number }[];
+  recentTx: { ts: string; type: string; delta: number; balanceAfter: number; reason: string; ref?: string; customer: string; email: string }[];
+}
+
+interface ActivityEntry {
+  ts: string;
+  type: string;
+  delta: number;
+  balanceAfter: number;
+  reason: string;
+  ref?: string;
+  customerKey: string;
+  email: string;
+  shopDomain: string;
+}
+
 // ─── Drop Zone ───────────────────────────────────────────────────
 
 function ImageDropZone({ images, onAdd, onRemove }: {
@@ -229,7 +254,9 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  const [activeTab, setActiveTab] = useState<"products" | "settings" | "knowledge" | "tickets" | "codes" | "customers">("products");
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings";
+  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [themeUploading, setThemeUploading] = useState(false);
@@ -268,6 +295,67 @@ export default function AdminPage() {
   });
   const [codeSaving, setCodeSaving] = useState(false);
   const [codeBusyRow, setCodeBusyRow] = useState<number | null>(null);
+
+  // ─── Stats / Dashboard ─────────────────────────────────────────
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const loadStats = useCallback(async () => {
+    setStatsLoading(true);
+    try {
+      const res = await fetch("/api/admin/stats");
+      if (res.ok) setStats(await res.json());
+    } catch { /* ignore */ }
+    finally { setStatsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "dashboard" || activeTab === "stats") loadStats();
+  }, [activeTab, loadStats]);
+
+  // ─── Activity feed ──────────────────────────────────────────────
+  const [activity, setActivity] = useState<ActivityEntry[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityFilter, setActivityFilter] = useState<{ type: string; q: string; sinceDays: number }>({ type: "", q: "", sinceDays: 0 });
+  const loadActivity = useCallback(async () => {
+    setActivityLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "100");
+      if (activityFilter.type) params.set("type", activityFilter.type);
+      if (activityFilter.q) params.set("customer", activityFilter.q);
+      if (activityFilter.sinceDays) params.set("sinceDays", String(activityFilter.sinceDays));
+      const res = await fetch(`/api/admin/activity?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setActivity(data.entries || []);
+      }
+    } catch { /* ignore */ }
+    finally { setActivityLoading(false); }
+  }, [activityFilter]);
+
+  useEffect(() => {
+    if (activeTab === "activity") loadActivity();
+  }, [activeTab, loadActivity]);
+
+  // ─── News posts (admin curate via /api/admin/news) ──────────────
+  interface NewsPost { rowIndex: number; id: string; type: "text" | "video"; title: string; body: string; imageUrl: string; youtubeUrl: string; previewImageUrl: string; active: boolean; createdAt: string }
+  const [newsPosts, setNewsPosts] = useState<NewsPost[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const loadNews = useCallback(async () => {
+    setNewsLoading(true);
+    try {
+      const res = await fetch("/api/admin/news");
+      if (res.ok) {
+        const data = await res.json();
+        setNewsPosts(data.posts || []);
+      }
+    } catch { /* ignore */ }
+    finally { setNewsLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "news") loadNews();
+  }, [activeTab, loadNews]);
 
   // ─── Customers (admin overview) ─────────────────────────────────
   interface CustomerSummary {
@@ -640,45 +728,85 @@ export default function AdminPage() {
 
   if (loading) return <div className="min-h-screen bg-mesh flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" /></div>;
 
+  const openTicketsCount = adminTickets.filter(t => t.status === "open").length;
+
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
       <div className="fixed top-40 right-10 w-72 h-72 bg-amber-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-          <h1 className="text-3xl font-bold mb-2 flex items-center gap-3">
-            <Shield className="w-8 h-8 text-amber-400" />
-            Admin Panel
-          </h1>
-          <p className="text-zinc-400">Produkte verwalten &amp; Einstellungen konfigurieren.</p>
-        </motion.div>
-
-        {error && <div className="flex items-center gap-2 text-red-400 text-sm glass border border-red-500/20 px-4 py-3 rounded-xl mb-4"><AlertCircle className="w-4 h-4 shrink-0" /><span>{error}</span><button onClick={() => setError("")} className="ml-auto"><X className="w-4 h-4" /></button></div>}
-        {success && <div className="flex items-center gap-2 text-emerald-400 text-sm glass border border-emerald-500/20 px-4 py-3 rounded-xl mb-4"><Check className="w-4 h-4 shrink-0" /><span>{success}</span></div>}
-
-        {/* Tabs */}
-        <div className="flex flex-wrap gap-1.5 mb-4 -mx-1 px-1 overflow-x-auto">
-          <button onClick={() => setActiveTab("customers")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "customers" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Users className="w-3.5 h-3.5" />Kunden <span className="text-[10px] opacity-70 tabular-nums">({customers.length || "·"})</span>
+      <div className="max-w-7xl mx-auto px-3 sm:px-5 py-3">
+        {/* Mobile header — sidebar trigger + title */}
+        <div className="md:hidden flex items-center justify-between mb-3">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300"
+          >
+            <Settings className="w-3.5 h-3.5" />
+            Bereich
+            <ChevronRight className="w-3 h-3" />
           </button>
-          <button onClick={() => setActiveTab("products")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "products" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <BarChart3 className="w-3.5 h-3.5" />Produkte <span className="text-[10px] opacity-70 tabular-nums">({produkte.length})</span>
-          </button>
-          <button onClick={() => setActiveTab("knowledge")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "knowledge" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Zap className="w-3.5 h-3.5" />KI-Wissen
-          </button>
-          <button onClick={() => setActiveTab("tickets")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "tickets" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Shield className="w-3.5 h-3.5" />Tickets {adminTickets.filter(t => t.status === "open").length > 0 && <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center badge-pulse">{adminTickets.filter(t => t.status === "open").length}</span>}
-          </button>
-          <button onClick={() => setActiveTab("codes")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "codes" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Ticket className="w-3.5 h-3.5" />Codes
-          </button>
-          <button onClick={() => setActiveTab("settings")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "settings" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Settings className="w-3.5 h-3.5" />Settings
-          </button>
+          <div className="flex items-center gap-1.5">
+            <Shield className="w-4 h-4 text-amber-400" />
+            <span className="text-sm font-bold">Admin</span>
+          </div>
         </div>
+
+        <div className="flex gap-4">
+          {/* ─── Sidebar (desktop) ─────────────────── */}
+          <aside className="hidden md:block w-52 shrink-0">
+            <AdminSidebarNav
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              counters={{ customers: customers.length, products: produkte.length, openTickets: openTicketsCount }}
+            />
+          </aside>
+
+          {/* ─── Main content ─────────────────────── */}
+          <main className="flex-1 min-w-0 space-y-3">
+            {/* Desktop title row */}
+            <div className="hidden md:flex items-center justify-between">
+              <div>
+                <h1 className="text-base font-bold flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-amber-400" />
+                  Admin Panel
+                </h1>
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Vollkontrolle über Kunden, Inhalte & System
+                </p>
+              </div>
+            </div>
+
+            {error && <div className="flex items-center gap-2 text-red-400 text-xs glass border border-red-500/20 px-3 py-2 rounded-lg"><AlertCircle className="w-3.5 h-3.5 shrink-0" /><span className="flex-1">{error}</span><button onClick={() => setError("")}><X className="w-3 h-3" /></button></div>}
+            {success && <div className="flex items-center gap-2 text-emerald-400 text-xs glass border border-emerald-500/20 px-3 py-2 rounded-lg"><Check className="w-3.5 h-3.5 shrink-0" /><span>{success}</span></div>}
+
+            {/* ─── Dashboard ──────────────────────── */}
+            {activeTab === "dashboard" && (
+              <DashboardView stats={stats} loading={statsLoading} onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }} />
+            )}
+
+            {/* ─── Statistiken ────────────────────── */}
+            {activeTab === "stats" && (
+              <StatsView stats={stats} loading={statsLoading} />
+            )}
+
+            {/* ─── Aktivität ──────────────────────── */}
+            {activeTab === "activity" && (
+              <ActivityView
+                entries={activity}
+                loading={activityLoading}
+                filter={activityFilter}
+                setFilter={setActivityFilter}
+                onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
+                onRefresh={loadActivity}
+              />
+            )}
+
+            {/* ─── News (Admin News-CRUD) ────────── */}
+            {activeTab === "news" && (
+              <NewsAdminView posts={newsPosts} loading={newsLoading} onRefresh={loadNews} />
+            )}
 
         {/* ─── Customers Tab ─────────────────────────────────── */}
         {activeTab === "customers" && (
@@ -1472,7 +1600,49 @@ export default function AdminPage() {
         </div>
         </>
         )}
-      </main>
+          </main>
+        </div>
+      </div>
+
+      {/* ─── Mobile sidebar (drawer) ────────────────────────── */}
+      <AnimatePresence>
+        {sidebarOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm md:hidden"
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", stiffness: 360, damping: 36 }}
+              className="fixed bottom-0 left-0 right-0 z-50 md:hidden rounded-t-2xl border-t border-white/10 bg-[#0a0a0c]/95 backdrop-blur-xl"
+              style={{ paddingBottom: "calc(var(--safe-bottom, 0px) + 0.75rem)", maxHeight: "85vh" }}
+            >
+              <div className="flex justify-center pt-2">
+                <div className="w-10 h-1 rounded-full bg-white/15" />
+              </div>
+              <div className="flex items-center justify-between px-4 py-2">
+                <div className="text-xs font-bold uppercase tracking-widest text-zinc-300">Admin-Bereich</div>
+                <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg hover:bg-white/[0.05]">
+                  <X className="w-4 h-4 text-zinc-500" />
+                </button>
+              </div>
+              <div className="px-3 pb-3 overflow-y-auto" style={{ maxHeight: "70vh" }}>
+                <AdminSidebarNav
+                  activeTab={activeTab}
+                  setActiveTab={(t) => { setActiveTab(t); setSidebarOpen(false); }}
+                  counters={{ customers: customers.length, products: produkte.length, openTickets: openTicketsCount }}
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ─── EDIT/ADD MODAL ─────────────────────────────────────── */}
       <AnimatePresence>
@@ -1705,4 +1875,588 @@ function formatRelativeShort(iso: string): string {
   const d = Math.floor(h / 24);
   if (d < 30) return `${d}d`;
   return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "2-digit" });
+}
+
+// ─── Admin sidebar nav ─────────────────────────────────────────
+
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings";
+
+const SIDEBAR_GROUPS: {
+  label: string;
+  items: { key: SidebarTab; label: string; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; color: string }[];
+}[] = [
+  {
+    label: "Analyse",
+    items: [
+      { key: "dashboard", label: "Dashboard", icon: BarChart3, color: "#10B981" },
+      { key: "stats", label: "Statistiken", icon: TrendingUp, color: "#06B6D4" },
+      { key: "activity", label: "Aktivität", icon: Zap, color: "#F59E0B" },
+    ],
+  },
+  {
+    label: "Verwaltung",
+    items: [
+      { key: "customers", label: "Kunden", icon: Users, color: "#3B82F6" },
+      { key: "tickets", label: "Tickets", icon: Shield, color: "#F59E0B" },
+      { key: "codes", label: "Voucher-Codes", icon: Ticket, color: "#A855F7" },
+    ],
+  },
+  {
+    label: "Inhalte",
+    items: [
+      { key: "products", label: "Produkte", icon: Gem, color: "#95BF47" },
+      { key: "news", label: "News", icon: ImageIcon, color: "#EC4899" },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { key: "knowledge", label: "KI-Wissen", icon: Sparkles, color: "#8B5CF6" },
+      { key: "settings", label: "Settings", icon: Settings, color: "#71717A" },
+    ],
+  },
+];
+
+function AdminSidebarNav({ activeTab, setActiveTab, counters }: {
+  activeTab: SidebarTab;
+  setActiveTab: (t: SidebarTab) => void;
+  counters: { customers: number; products: number; openTickets: number };
+}) {
+  return (
+    <nav className="space-y-3">
+      {SIDEBAR_GROUPS.map((group) => (
+        <div key={group.label}>
+          <div className="px-2 pb-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
+            {group.label}
+          </div>
+          <div className="space-y-0.5">
+            {group.items.map((item) => {
+              const isActive = activeTab === item.key;
+              const counter =
+                item.key === "customers" && counters.customers > 0 ? counters.customers :
+                item.key === "products" && counters.products > 0 ? counters.products :
+                item.key === "tickets" && counters.openTickets > 0 ? counters.openTickets :
+                null;
+              const counterIsBadge = item.key === "tickets" && counters.openTickets > 0;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setActiveTab(item.key)}
+                  className={`w-full relative flex items-center gap-2 px-2.5 py-2 rounded-lg text-[12px] font-medium transition ${
+                    isActive
+                      ? "bg-white/[0.06] text-white"
+                      : "text-zinc-400 hover:text-zinc-200 hover:bg-white/[0.03]"
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="admin-sidebar-bar"
+                      className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r-full"
+                      style={{ background: item.color }}
+                    />
+                  )}
+                  <item.icon className="w-3.5 h-3.5" style={isActive ? { color: item.color } : undefined} />
+                  <span className="flex-1 text-left">{item.label}</span>
+                  {counter !== null && (
+                    <span
+                      className={`text-[9px] font-bold tabular-nums px-1.5 py-0.5 rounded ${
+                        counterIsBadge
+                          ? "bg-red-500 text-white badge-pulse"
+                          : "bg-white/[0.04] text-zinc-500"
+                      }`}
+                    >
+                      {counter}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+// ─── Dashboard view ────────────────────────────────────────────
+
+function DashboardView({ stats, loading, onJumpToCustomer }: {
+  stats: AdminStats | null;
+  loading: boolean;
+  onJumpToCustomer: (key: string) => void;
+}) {
+  if (loading && !stats) {
+    return (
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+        {[...Array(6)].map((_, i) => (
+          <div key={i} className="h-20 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+  if (!stats) {
+    return <div className="text-center py-10 text-sm text-zinc-500">Keine Daten verfügbar.</div>;
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* KPI Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
+        <BigKpi label="Kunden gesamt" value={stats.customers.total} icon={Users} color="#3B82F6" />
+        <BigKpi label="Aktiv (7d)" value={stats.customers.activeLast7d} icon={Zap} color="#10B981" hint={`${stats.customers.activeLast30d} in 30d`} />
+        <BigKpi label="Σ Balance" value={stats.credits.sumBalance} icon={Coins} color="#95BF47" hint={`Ø ${stats.credits.avgBalance}/Kunde`} />
+        <BigKpi label="Σ Verbraucht" value={stats.credits.sumTotalUsed} icon={ArrowDownCircle} color="#EF4444" hint={`Ø ${stats.credits.avgUsed}/Kunde`} />
+        <BigKpi label="Σ Eingenommen" value={stats.credits.sumTotalPurchased} icon={ArrowUpCircle} color="#A855F7" />
+        <BigKpi label="Shop verbunden" value={stats.customers.withShopify} icon={Store} color="#F59E0B" hint={`von ${stats.customers.total}`} />
+      </div>
+
+      {/* Heatmap + Tool usage */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <DashboardCard title="Aktivität (24h × Wochentag)" icon={Clock} accent="#F59E0B">
+          <ActivityHeatmap data={stats.heatmap} />
+          <div className="text-[9px] text-zinc-500 mt-2">
+            Wann sind deine Kunden aktiv? Heller = mehr Transaktionen. UTC-Stunden.
+          </div>
+        </DashboardCard>
+
+        <DashboardCard title="Tool-Nutzung" icon={Sparkles} accent="#A855F7">
+          {stats.toolUsage.length === 0 ? (
+            <div className="text-xs text-zinc-500 mt-1">Noch keine Tool-Nutzung erfasst.</div>
+          ) : (
+            <div className="space-y-1.5">
+              {stats.toolUsage.map((t) => {
+                const max = Math.max(...stats.toolUsage.map((x) => x.count), 1);
+                return (
+                  <div key={t.reason} className="flex items-center gap-2">
+                    <span className="text-[11px] text-zinc-300 truncate w-32 shrink-0">{t.reason}</span>
+                    <div className="flex-1 h-2 rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#A855F7] to-[#C084FC]"
+                        style={{ width: `${(t.count / max) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold tabular-nums text-zinc-300 w-10 text-right">{t.count}×</span>
+                    <span className="text-[10px] tabular-nums text-zinc-500 w-12 text-right">{t.totalCredits}c</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </DashboardCard>
+      </div>
+
+      {/* Top users + recent feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+        <DashboardCard title="Top-Kunden (30d)" icon={TrendingUp} accent="#10B981">
+          {stats.topUsers.length === 0 ? (
+            <div className="text-xs text-zinc-500 mt-1">Noch keine aktiven Kunden.</div>
+          ) : (
+            <div className="space-y-1">
+              {stats.topUsers.map((u, i) => (
+                <button
+                  key={u.lizenzschluessel}
+                  onClick={() => onJumpToCustomer(u.lizenzschluessel)}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition text-left"
+                >
+                  <span className="text-[10px] font-bold text-zinc-500 w-3 tabular-nums">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-semibold truncate">{u.email || u.lizenzschluessel}</div>
+                    <div className="text-[9px] text-zinc-500 truncate font-mono">{u.shopDomain || u.lizenzschluessel.slice(0, 14)}…</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="text-[12px] font-bold text-emerald-400 tabular-nums">{u.used30d}c</div>
+                    <div className="text-[9px] text-zinc-500">{u.txCount30d} TX · {u.balance}c bal</div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </DashboardCard>
+
+        <DashboardCard title="Letzte Transaktionen" icon={Clock} accent="#3B82F6">
+          {stats.recentTx.length === 0 ? (
+            <div className="text-xs text-zinc-500 mt-1">Keine Transaktionen.</div>
+          ) : (
+            <div className="space-y-1 max-h-[18rem] overflow-y-auto">
+              {stats.recentTx.map((tx, i) => (
+                <button
+                  key={i}
+                  onClick={() => onJumpToCustomer(tx.customer)}
+                  className="w-full text-left"
+                >
+                  <LogRow entry={tx} />
+                </button>
+              ))}
+            </div>
+          )}
+        </DashboardCard>
+      </div>
+    </div>
+  );
+}
+
+function BigKpi({ label, value, icon: Icon, color, hint }: {
+  label: string;
+  value: number;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  color: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border p-2.5 overflow-hidden relative" style={{ borderColor: `${color}25`, background: `${color}08` }}>
+      <div className="absolute top-0 right-0 w-12 h-12 rounded-full opacity-15 blur-xl" style={{ background: color }} />
+      <div className="relative">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500 truncate">{label}</span>
+          <Icon className="w-3 h-3" style={{ color }} />
+        </div>
+        <div className="text-base font-bold tabular-nums" style={{ color }}>{value.toLocaleString("de-DE")}</div>
+        {hint && <div className="text-[9px] text-zinc-500 mt-0.5 truncate">{hint}</div>}
+      </div>
+    </div>
+  );
+}
+
+function DashboardCard({ title, icon: Icon, accent, children }: {
+  title: string;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex items-center gap-1.5 mb-2.5">
+        <Icon className="w-3.5 h-3.5" style={{ color: accent }} />
+        <h3 className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ActivityHeatmap({ data }: { data: number[][] }) {
+  // data[dow][hour]; dow 0=Mon..6=Sun
+  const dayLabels = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  const max = Math.max(1, ...data.flat());
+  return (
+    <div>
+      {/* Hour labels */}
+      <div className="grid gap-px text-[8px] text-zinc-600 tabular-nums mb-1" style={{ gridTemplateColumns: "20px repeat(24, 1fr)" }}>
+        <span />
+        {Array.from({ length: 24 }, (_, h) => (
+          <span key={h} className="text-center">{h % 6 === 0 ? h : ""}</span>
+        ))}
+      </div>
+      {data.map((row, dow) => (
+        <div key={dow} className="grid gap-px mb-px" style={{ gridTemplateColumns: "20px repeat(24, 1fr)" }}>
+          <span className="text-[9px] text-zinc-500 font-semibold flex items-center">{dayLabels[dow]}</span>
+          {row.map((v, h) => {
+            const intensity = v / max;
+            return (
+              <div
+                key={h}
+                title={`${dayLabels[dow]} ${h}:00 — ${v} TX`}
+                className="aspect-square rounded-sm"
+                style={{
+                  background: v === 0
+                    ? "rgba(255,255,255,0.02)"
+                    : `rgba(245, 158, 11, ${0.15 + intensity * 0.85})`,
+                }}
+              />
+            );
+          })}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Statistiken view ──────────────────────────────────────────
+
+function StatsView({ stats, loading }: { stats: AdminStats | null; loading: boolean }) {
+  if (loading && !stats) {
+    return <div className="h-40 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />;
+  }
+  if (!stats) {
+    return <div className="text-center py-10 text-sm text-zinc-500">Keine Daten verfügbar.</div>;
+  }
+
+  const maxDeduct = Math.max(...stats.daily14d.map((d) => d.deduct), 1);
+  const maxTopup = Math.max(...stats.daily14d.map((d) => d.topup), 1);
+  const totalGrowth = stats.customers.starterGranted;
+  const conversionPct = stats.customers.total > 0
+    ? Math.round((stats.customers.activeLast30d / stats.customers.total) * 100)
+    : 0;
+
+  return (
+    <div className="space-y-3">
+      {/* Activity over 14 days */}
+      <DashboardCard title="Credit-Bewegungen (14 Tage)" icon={TrendingUp} accent="#10B981">
+        <div className="flex items-end gap-px h-24 mb-1">
+          {stats.daily14d.map((d) => (
+            <div key={d.date} className="flex-1 flex flex-col items-center justify-end gap-px min-w-0">
+              <div className="w-full flex flex-col items-center gap-px">
+                <div
+                  className="w-full bg-gradient-to-t from-emerald-600 to-emerald-400 rounded-t-sm"
+                  title={`${d.date} · Topups: ${d.topup}`}
+                  style={{ height: `${(d.topup / maxTopup) * 40}px` }}
+                />
+                <div
+                  className="w-full bg-gradient-to-t from-red-600 to-red-400 rounded-t-sm"
+                  title={`${d.date} · Deducts: ${d.deduct}`}
+                  style={{ height: `${(d.deduct / maxDeduct) * 40}px` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-3 text-[10px] text-zinc-500 mt-1">
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-emerald-500" /> Topups</span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-red-500" /> Verbrauch</span>
+        </div>
+      </DashboardCard>
+
+      {/* Mini KPI grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <BigKpi label="Mit Starter" value={totalGrowth} icon={Gem} color="#A855F7" hint={`${stats.customers.total - totalGrowth} ohne`} />
+        <BigKpi label="Aktiv-Quote 30d" value={conversionPct} icon={TrendingUp} color="#10B981" hint="% der Kunden" />
+        <BigKpi label="Mit Google" value={stats.customers.withGoogle} icon={Mail} color="#3B82F6" />
+        <BigKpi label="Σ Käufe" value={stats.credits.sumTotalPurchased} icon={ArrowUpCircle} color="#10B981" />
+      </div>
+
+      {/* Tool ranking with usage */}
+      <DashboardCard title="Tool-Ranking" icon={Sparkles} accent="#A855F7">
+        {stats.toolUsage.length === 0 ? (
+          <div className="text-xs text-zinc-500">Noch keine Tools genutzt.</div>
+        ) : (
+          <div className="space-y-2">
+            {stats.toolUsage.map((t, i) => {
+              const totalCount = stats.toolUsage.reduce((s, x) => s + x.count, 0);
+              const pct = Math.round((t.count / totalCount) * 100);
+              return (
+                <div key={t.reason}>
+                  <div className="flex items-center justify-between text-[11px] mb-0.5">
+                    <span className="font-semibold flex items-center gap-1.5">
+                      <span className="text-zinc-500 w-3 tabular-nums">{i + 1}.</span>
+                      {t.reason}
+                    </span>
+                    <span className="text-zinc-400 tabular-nums">{t.count} Calls · {t.totalCredits} Credits · {pct}%</span>
+                  </div>
+                  <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#A855F7] to-[#EC4899]"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </DashboardCard>
+    </div>
+  );
+}
+
+// ─── Activity feed view ────────────────────────────────────────
+
+function ActivityView({ entries, loading, filter, setFilter, onJumpToCustomer, onRefresh }: {
+  entries: ActivityEntry[];
+  loading: boolean;
+  filter: { type: string; q: string; sinceDays: number };
+  setFilter: (f: { type: string; q: string; sinceDays: number }) => void;
+  onJumpToCustomer: (key: string) => void;
+  onRefresh: () => void;
+}) {
+  return (
+    <div className="space-y-3">
+      {/* Filters */}
+      <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2">
+        <input
+          type="text"
+          value={filter.q}
+          onChange={(e) => setFilter({ ...filter, q: e.target.value })}
+          placeholder="Kunde suchen (License, E-Mail, Shop)…"
+          className="bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+        />
+        <select
+          value={filter.type}
+          onChange={(e) => setFilter({ ...filter, type: e.target.value })}
+          className="bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none"
+        >
+          <option value="">Alle Typen</option>
+          <option value="deduct">Tool-Verbrauch</option>
+          <option value="topup">Käufe</option>
+          <option value="starter">Starter-Bonus</option>
+          <option value="voucher">Voucher</option>
+          <option value="admin-grant,admin-revoke">Admin</option>
+        </select>
+        <select
+          value={filter.sinceDays}
+          onChange={(e) => setFilter({ ...filter, sinceDays: Number(e.target.value) })}
+          className="bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none"
+        >
+          <option value="0">Alle Zeit</option>
+          <option value="1">Heute</option>
+          <option value="7">7 Tage</option>
+          <option value="30">30 Tage</option>
+        </select>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          Aktualisieren
+        </button>
+      </div>
+
+      {/* Feed */}
+      <div className="space-y-1">
+        {loading && entries.length === 0 ? (
+          <div className="space-y-1">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="h-12 rounded-md bg-white/[0.02] border border-white/[0.04] animate-pulse" />
+            ))}
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="text-center py-12 text-sm text-zinc-500">Keine Transaktionen gefunden.</div>
+        ) : (
+          entries.map((entry, i) => (
+            <button
+              key={i}
+              onClick={() => onJumpToCustomer(entry.customerKey)}
+              className="w-full text-left"
+            >
+              <ActivityRow entry={entry} />
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ActivityRow({ entry }: { entry: ActivityEntry }) {
+  const positive = entry.delta >= 0;
+  const typeMeta: Record<string, { color: string; label: string }> = {
+    starter: { color: "#A855F7", label: "Starter" },
+    deduct: { color: "#EF4444", label: "Tool" },
+    topup: { color: "#10B981", label: "Kauf" },
+    voucher: { color: "#0EA5E9", label: "Voucher" },
+    "admin-grant": { color: "#95BF47", label: "Admin+" },
+    "admin-revoke": { color: "#F59E0B", label: "Admin−" },
+  };
+  const meta = typeMeta[entry.type] || { color: "#71717A", label: entry.type };
+
+  return (
+    <div className="flex items-center gap-2 px-2.5 py-2 rounded-md bg-white/[0.02] border border-white/[0.05] hover:bg-white/[0.04] transition">
+      <span
+        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border shrink-0"
+        style={{ background: `${meta.color}15`, borderColor: `${meta.color}30`, color: meta.color }}
+      >
+        {meta.label}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] text-zinc-200 truncate">
+          <span className="font-semibold">{entry.email || entry.customerKey}</span>
+          <span className="text-zinc-500"> · {entry.reason}</span>
+        </div>
+        <div className="text-[9px] text-zinc-600 flex items-center gap-1.5">
+          <Clock className="w-2.5 h-2.5" />
+          {formatRelativeShort(entry.ts)}
+          {entry.ref && <span className="font-mono truncate">· {entry.ref}</span>}
+          {entry.shopDomain && <span className="truncate">· {entry.shopDomain}</span>}
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className={`text-[12px] font-bold tabular-nums ${positive ? "text-emerald-400" : "text-red-400"}`}>
+          {positive ? "+" : ""}{entry.delta}
+        </div>
+        <div className="text-[9px] text-zinc-600 tabular-nums">→ {entry.balanceAfter}</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── News admin view (lightweight CRUD) ────────────────────────
+
+interface NewsPostT { rowIndex: number; id: string; type: "text" | "video"; title: string; body: string; imageUrl: string; youtubeUrl: string; previewImageUrl: string; active: boolean; createdAt: string }
+
+function NewsAdminView({ posts, loading, onRefresh }: {
+  posts: NewsPostT[];
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  async function toggle(p: NewsPostT) {
+    await fetch("/api/admin/news", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rowIndex: p.rowIndex, active: !p.active }),
+    });
+    onRefresh();
+  }
+  async function remove(p: NewsPostT) {
+    if (!confirm("News-Card löschen?")) return;
+    await fetch("/api/admin/news", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rowIndex: p.rowIndex }),
+    });
+    onRefresh();
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-zinc-500">
+          News werden auf der Home-Seite jedes Kunden angezeigt. Erstellen + Bearbeiten geht direkt im Home über das „Verwalten"-Modal.
+        </p>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          Aktualisieren
+        </button>
+      </div>
+      {posts.length === 0 ? (
+        <div className="text-center py-10 text-sm text-zinc-500">Noch keine News.</div>
+      ) : (
+        <div className="space-y-1.5">
+          {posts.map((p) => (
+            <div key={p.id} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+              {(p.imageUrl || p.previewImageUrl) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={p.imageUrl || p.previewImageUrl} alt="" className="w-12 h-12 rounded-md object-cover shrink-0" />
+              ) : (
+                <div className="w-12 h-12 rounded-md bg-white/[0.04] flex items-center justify-center shrink-0">
+                  <ImageIcon className="w-4 h-4 text-zinc-600" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest ${
+                    p.type === "video" ? "bg-rose-500/15 text-rose-300" : "bg-[#95BF47]/15 text-[#95BF47]"
+                  }`}>{p.type}</span>
+                  {!p.active && <span className="text-[8px] text-zinc-600 uppercase">inaktiv</span>}
+                  <span className="text-[9px] text-zinc-600">· {formatRelativeShort(p.createdAt)}</span>
+                </div>
+                <div className="text-[12px] font-semibold truncate">{p.title}</div>
+              </div>
+              <div className="flex items-center gap-0.5 shrink-0">
+                <button onClick={() => toggle(p)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-md transition" title={p.active ? "Verstecken" : "Aktivieren"}>
+                  <Power className="w-3.5 h-3.5" />
+                </button>
+                <button onClick={() => remove(p)} className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-md transition">
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
