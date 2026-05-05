@@ -92,6 +92,20 @@ export interface OnboardingChecklist {
 //   - totalPurchased  lifetime credits the user ever bought
 //   - totalUsed       lifetime credits ever consumed
 //   - fulfilledOrders Shopify order IDs already credited → idempotency
+export interface CreditTransaction {
+  /** ISO timestamp */
+  ts: string;
+  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke";
+  /** Positive for credits added, negative for deductions. */
+  delta: number;
+  /** Resulting balance after this transaction. */
+  balanceAfter: number;
+  /** Human-readable reason — tool name, order id, code, admin note. */
+  reason: string;
+  /** Optional reference (Shopify order id, voucher code, admin user). */
+  ref?: string;
+}
+
 export interface CreditsRecord {
   balance: number;
   totalPurchased: number;
@@ -105,11 +119,27 @@ export interface CreditsRecord {
   // the grant helper from re-crediting the user on every profile
   // load.
   starterGranted?: boolean;
+  // Append-only transaction log for transparency + admin auditing.
+  // Capped at MAX_LOG_ENTRIES; oldest get rolled off.
+  log?: CreditTransaction[];
   lastUpdated?: string;
   // Legacy fields kept so an in-flight migration of an existing
   // profile doesn't lose context. Safe to drop after a few weeks.
   month?: string;
   used?: number;
+}
+
+const MAX_LOG_ENTRIES = 80;
+
+function appendLog(
+  existing: CreditTransaction[] | undefined,
+  entry: CreditTransaction,
+): CreditTransaction[] {
+  const next = [...(existing || []), entry];
+  if (next.length > MAX_LOG_ENTRIES) {
+    return next.slice(next.length - MAX_LOG_ENTRIES);
+  }
+  return next;
 }
 
 export interface KundeProfile {
@@ -140,6 +170,7 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
       fulfilledOrders: [],
       redeemedCodes: {},
       starterGranted: false,
+      log: [],
     };
   }
   // Already the new shape — just guarantee fields exist.
@@ -154,6 +185,7 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
           ? raw.redeemedCodes
           : {},
       starterGranted: raw.starterGranted === true,
+      log: Array.isArray(raw.log) ? raw.log : [],
       lastUpdated: raw.lastUpdated,
     };
   }
@@ -167,6 +199,7 @@ function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
     fulfilledOrders: [],
     redeemedCodes: {},
     starterGranted: false,
+    log: [],
   };
 }
 
@@ -183,25 +216,39 @@ export function getCreditsState(profile: KundeProfile): {
   };
 }
 
+// CRITICAL: Every credit mutation MUST preserve the existing flags
+// (starterGranted, redeemedCodes, fulfilledOrders, log). Earlier
+// versions of these helpers dropped `starterGranted` on every save,
+// which made `ensureStarterGrant` re-grant 500 credits on every
+// subsequent profile load. The current shape passes `credits` as
+// the base and only overrides what changes.
+
 export async function deductCredits(
   rowIndex: number,
   profile: KundeProfile,
-  amount: number
+  amount: number,
+  reason: string = "tool",
 ): Promise<{ success: boolean; remaining: number }> {
   const safeAmount = Math.max(0, Math.round(amount));
   const credits = normalizeCredits(profile.credits);
-  // Free actions (cost 0) always succeed without touching the sheet.
   if (safeAmount === 0) {
     return { success: true, remaining: credits.balance };
   }
   if (credits.balance < safeAmount) {
     return { success: false, remaining: credits.balance };
   }
+  const newBalance = credits.balance - safeAmount;
   const next: CreditsRecord = {
-    balance: credits.balance - safeAmount,
-    totalPurchased: credits.totalPurchased,
+    ...credits,
+    balance: newBalance,
     totalUsed: credits.totalUsed + safeAmount,
-    fulfilledOrders: credits.fulfilledOrders || [],
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: "deduct",
+      delta: -safeAmount,
+      balanceAfter: newBalance,
+      reason,
+    }),
     lastUpdated: new Date().toISOString(),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
@@ -214,7 +261,8 @@ export async function addCredits(
   rowIndex: number,
   profile: KundeProfile,
   amount: number,
-  orderId?: string
+  orderId?: string,
+  reason: string = "topup",
 ): Promise<{ success: boolean; balance: number; alreadyFulfilled: boolean }> {
   const safeAmount = Math.max(0, Math.round(amount));
   const credits = normalizeCredits(profile.credits);
@@ -222,12 +270,20 @@ export async function addCredits(
   if (orderId && fulfilled.includes(orderId)) {
     return { success: true, balance: credits.balance, alreadyFulfilled: true };
   }
+  const newBalance = credits.balance + safeAmount;
   const next: CreditsRecord = {
-    balance: credits.balance + safeAmount,
+    ...credits,
+    balance: newBalance,
     totalPurchased: credits.totalPurchased + safeAmount,
-    totalUsed: credits.totalUsed,
     fulfilledOrders: orderId ? [...fulfilled, orderId] : fulfilled,
-    redeemedCodes: credits.redeemedCodes || {},
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: "topup",
+      delta: safeAmount,
+      balanceAfter: newBalance,
+      reason,
+      ref: orderId,
+    }),
     lastUpdated: new Date().toISOString(),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
@@ -238,9 +294,6 @@ export async function addCredits(
 // set on the credits record we no-op and return the existing profile.
 // Otherwise we add STARTER_CREDITS to the balance, bump
 // totalPurchased so the analytics line up, and persist the flag.
-//
-// Returns the (possibly updated) profile so callers can use it
-// without re-fetching the row.
 export async function ensureStarterGrant(
   rowIndex: number,
   profile: KundeProfile,
@@ -249,13 +302,19 @@ export async function ensureStarterGrant(
   if (credits.starterGranted) {
     return { ...profile, credits };
   }
+  const newBalance = credits.balance + STARTER_CREDITS;
   const next: CreditsRecord = {
-    balance: credits.balance + STARTER_CREDITS,
+    ...credits,
+    balance: newBalance,
     totalPurchased: credits.totalPurchased + STARTER_CREDITS,
-    totalUsed: credits.totalUsed,
-    fulfilledOrders: credits.fulfilledOrders || [],
-    redeemedCodes: credits.redeemedCodes || {},
     starterGranted: true,
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: "starter",
+      delta: STARTER_CREDITS,
+      balanceAfter: newBalance,
+      reason: "Willkommens-Bonus",
+    }),
     lastUpdated: new Date().toISOString(),
   };
   const updated: KundeProfile = { ...profile, credits: next };
@@ -269,19 +328,62 @@ export async function redeemCode(
   rowIndex: number,
   profile: KundeProfile,
   code: string,
-  amount: number
+  amount: number,
 ): Promise<{ success: boolean; balance: number }> {
   const upper = code.trim().toUpperCase();
   const safeAmount = Math.max(0, Math.round(amount));
   const credits = normalizeCredits(profile.credits);
   const ledger = { ...(credits.redeemedCodes || {}) };
   ledger[upper] = (ledger[upper] || 0) + 1;
+  const newBalance = credits.balance + safeAmount;
   const next: CreditsRecord = {
-    balance: credits.balance + safeAmount,
+    ...credits,
+    balance: newBalance,
     totalPurchased: credits.totalPurchased + safeAmount,
-    totalUsed: credits.totalUsed,
-    fulfilledOrders: credits.fulfilledOrders || [],
     redeemedCodes: ledger,
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: "voucher",
+      delta: safeAmount,
+      balanceAfter: newBalance,
+      reason: `Voucher ${upper}`,
+      ref: upper,
+    }),
+    lastUpdated: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, { ...profile, credits: next });
+  return { success: true, balance: next.balance };
+}
+
+// Admin manual adjustment — can be positive (grant) or negative (revoke).
+// Always logged with the admin's identifier so it's auditable.
+export async function adminAdjustCredits(
+  rowIndex: number,
+  profile: KundeProfile,
+  delta: number,
+  adminRef: string,
+  note: string = "",
+): Promise<{ success: boolean; balance: number }> {
+  const credits = normalizeCredits(profile.credits);
+  const safeDelta = Math.round(delta);
+  // Don't let the balance go below 0
+  const newBalance = Math.max(0, credits.balance + safeDelta);
+  const realDelta = newBalance - credits.balance;
+
+  const next: CreditsRecord = {
+    ...credits,
+    balance: newBalance,
+    // Track the adjustment in the right cumulative bucket
+    totalPurchased: realDelta > 0 ? credits.totalPurchased + realDelta : credits.totalPurchased,
+    totalUsed: realDelta < 0 ? credits.totalUsed + Math.abs(realDelta) : credits.totalUsed,
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: realDelta >= 0 ? "admin-grant" : "admin-revoke",
+      delta: realDelta,
+      balanceAfter: newBalance,
+      reason: note || (realDelta >= 0 ? "Admin Gutschrift" : "Admin Abzug"),
+      ref: adminRef,
+    }),
     lastUpdated: new Date().toISOString(),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });

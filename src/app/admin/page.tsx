@@ -7,6 +7,9 @@ import {
   Plus, Pencil, Trash2, Upload, Loader2, X, LogOut, Shield, Save,
   Check, AlertCircle, ImagePlus, BarChart3, DollarSign, Zap, Settings,
   Video, Palette, Image as ImageIcon, Gem, Ticket, Coins, Power,
+  Users, Search, ChevronRight, ChevronLeft, Store, Mail, FileText,
+  TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
+  Clock,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -226,7 +229,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  const [activeTab, setActiveTab] = useState<"products" | "settings" | "knowledge" | "tickets" | "codes">("products");
+  const [activeTab, setActiveTab] = useState<"products" | "settings" | "knowledge" | "tickets" | "codes" | "customers">("products");
   const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [themeUploading, setThemeUploading] = useState(false);
@@ -265,6 +268,110 @@ export default function AdminPage() {
   });
   const [codeSaving, setCodeSaving] = useState(false);
   const [codeBusyRow, setCodeBusyRow] = useState<number | null>(null);
+
+  // ─── Customers (admin overview) ─────────────────────────────────
+  interface CustomerSummary {
+    rowIndex: number;
+    lizenzschluessel: string;
+    status: string;
+    shopDomain: string;
+    kundenEmail: string;
+    bestellnummer: string;
+    sku: string;
+    hasShopifyToken: boolean;
+    hasGoogleLinked: boolean;
+    hasLegalData: boolean;
+    hasBrandKit: boolean;
+    credits: {
+      balance: number;
+      totalPurchased: number;
+      totalUsed: number;
+      starterGranted: boolean;
+      fulfilledOrdersCount: number;
+      redeemedCodesCount: number;
+      logCount: number;
+      lastTransaction?: { ts: string; type: string; delta: number; balanceAfter: number; reason: string; ref?: string };
+    };
+  }
+  interface CustomerDetail extends CustomerSummary {
+    profile: {
+      legal_data?: Record<string, string>;
+      brand_kit?: Record<string, string>;
+      onboarding_checklist?: Record<string, boolean>;
+      linkedGoogleEmail?: string;
+    };
+    fulfilledOrders: string[];
+    redeemedCodes: Record<string, number>;
+    log: { ts: string; type: string; delta: number; balanceAfter: number; reason: string; ref?: string }[];
+  }
+  const [customers, setCustomers] = useState<CustomerSummary[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [activeCustomerKey, setActiveCustomerKey] = useState<string | null>(null);
+  const [customerDetail, setCustomerDetail] = useState<CustomerDetail | null>(null);
+  const [customerDetailLoading, setCustomerDetailLoading] = useState(false);
+  const [adjustForm, setAdjustForm] = useState({ delta: 0, note: "" });
+  const [adjustSaving, setAdjustSaving] = useState(false);
+
+  const loadCustomers = useCallback(async () => {
+    setCustomersLoading(true);
+    try {
+      const res = await fetch("/api/admin/customers");
+      if (res.ok) {
+        const data = await res.json();
+        setCustomers(data.customers || []);
+      }
+    } catch { /* ignore */ }
+    finally { setCustomersLoading(false); }
+  }, []);
+
+  const loadCustomerDetail = useCallback(async (key: string) => {
+    setCustomerDetailLoading(true);
+    setCustomerDetail(null);
+    try {
+      const res = await fetch(`/api/admin/customers?key=${encodeURIComponent(key)}`);
+      if (res.ok) {
+        const data = await res.json();
+        setCustomerDetail(data.customer);
+      }
+    } catch { /* ignore */ }
+    finally { setCustomerDetailLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "customers") loadCustomers();
+  }, [activeTab, loadCustomers]);
+
+  useEffect(() => {
+    if (activeCustomerKey) loadCustomerDetail(activeCustomerKey);
+  }, [activeCustomerKey, loadCustomerDetail]);
+
+  async function handleAdjust() {
+    if (!activeCustomerKey || !adjustForm.delta) return;
+    setAdjustSaving(true);
+    try {
+      const res = await fetch("/api/admin/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: activeCustomerKey,
+          delta: adjustForm.delta,
+          note: adjustForm.note,
+        }),
+      });
+      if (res.ok) {
+        setAdjustForm({ delta: 0, note: "" });
+        await loadCustomerDetail(activeCustomerKey);
+        await loadCustomers();
+        setSuccess(`Credits angepasst (${adjustForm.delta > 0 ? "+" : ""}${adjustForm.delta}).`);
+        setTimeout(() => setSuccess(""), 2500);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Anpassung fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setAdjustSaving(false); }
+  }
 
   const loadProducts = useCallback(async () => {
     try {
@@ -531,23 +638,315 @@ export default function AdminPage() {
         {success && <div className="flex items-center gap-2 text-emerald-400 text-sm glass border border-emerald-500/20 px-4 py-3 rounded-xl mb-4"><Check className="w-4 h-4 shrink-0" /><span>{success}</span></div>}
 
         {/* Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6">
-          <button onClick={() => setActiveTab("products")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "products" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <BarChart3 className="w-4 h-4" />Produkte <span className="text-xs opacity-70">({produkte.length})</span>
+        <div className="flex flex-wrap gap-1.5 mb-4 -mx-1 px-1 overflow-x-auto">
+          <button onClick={() => setActiveTab("customers")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "customers" ? "bg-blue-500/10 text-blue-400 border border-blue-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Users className="w-3.5 h-3.5" />Kunden <span className="text-[10px] opacity-70 tabular-nums">({customers.length || "·"})</span>
           </button>
-          <button onClick={() => setActiveTab("knowledge")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "knowledge" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Zap className="w-4 h-4" />KI-Firmenwissen
+          <button onClick={() => setActiveTab("products")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "products" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <BarChart3 className="w-3.5 h-3.5" />Produkte <span className="text-[10px] opacity-70 tabular-nums">({produkte.length})</span>
           </button>
-          <button onClick={() => setActiveTab("tickets")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "tickets" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Shield className="w-4 h-4" />Tickets {adminTickets.filter(t => t.status === "open").length > 0 && <span className="w-5 h-5 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center badge-pulse">{adminTickets.filter(t => t.status === "open").length}</span>}
+          <button onClick={() => setActiveTab("knowledge")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "knowledge" ? "bg-purple-500/10 text-purple-400 border border-purple-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Zap className="w-3.5 h-3.5" />KI-Wissen
           </button>
-          <button onClick={() => setActiveTab("codes")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "codes" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Ticket className="w-4 h-4" />Gutschein-Codes
+          <button onClick={() => setActiveTab("tickets")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "tickets" ? "bg-amber-500/10 text-amber-400 border border-amber-500/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Shield className="w-3.5 h-3.5" />Tickets {adminTickets.filter(t => t.status === "open").length > 0 && <span className="w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center badge-pulse">{adminTickets.filter(t => t.status === "open").length}</span>}
           </button>
-          <button onClick={() => setActiveTab("settings")} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition ${activeTab === "settings" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
-            <Settings className="w-4 h-4" />Einstellungen
+          <button onClick={() => setActiveTab("codes")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "codes" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Ticket className="w-3.5 h-3.5" />Codes
+          </button>
+          <button onClick={() => setActiveTab("settings")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-medium transition shrink-0 ${activeTab === "settings" ? "bg-[#95BF47]/10 text-[#95BF47] border border-[#95BF47]/20" : "glass border border-white/10 text-zinc-400 hover:text-white"}`}>
+            <Settings className="w-3.5 h-3.5" />Settings
           </button>
         </div>
+
+        {/* ─── Customers Tab ─────────────────────────────────── */}
+        {activeTab === "customers" && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            {/* Search + KPI strip */}
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder="Suche: License, E-Mail, Shop, Bestellnr…"
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+                />
+              </div>
+              <button
+                onClick={loadCustomers}
+                disabled={customersLoading}
+                className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+              >
+                {customersLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                Aktualisieren
+              </button>
+            </div>
+
+            {/* KPI summary */}
+            {customers.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                <KpiTile label="Kunden" value={String(customers.length)} icon={Users} color="#3B82F6" />
+                <KpiTile
+                  label="Σ Balance"
+                  value={customers.reduce((s, c) => s + c.credits.balance, 0).toLocaleString("de-DE")}
+                  icon={Coins}
+                  color="#95BF47"
+                />
+                <KpiTile
+                  label="Σ Verbraucht"
+                  value={customers.reduce((s, c) => s + c.credits.totalUsed, 0).toLocaleString("de-DE")}
+                  icon={TrendingDown}
+                  color="#EF4444"
+                />
+              </div>
+            )}
+
+            {/* List */}
+            <div className="space-y-1.5">
+              {customers
+                .filter((c) => {
+                  const q = customerSearch.trim().toLowerCase();
+                  if (!q) return true;
+                  return (
+                    c.lizenzschluessel.toLowerCase().includes(q) ||
+                    c.kundenEmail.toLowerCase().includes(q) ||
+                    c.shopDomain.toLowerCase().includes(q) ||
+                    c.bestellnummer.toLowerCase().includes(q) ||
+                    c.sku.toLowerCase().includes(q)
+                  );
+                })
+                .map((c) => {
+                  const isLow = c.credits.balance < 20;
+                  const isEmpty = c.credits.balance <= 0;
+                  return (
+                    <button
+                      key={c.lizenzschluessel}
+                      onClick={() => setActiveCustomerKey(c.lizenzschluessel)}
+                      className="w-full flex items-center gap-2.5 p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/15 transition text-left"
+                    >
+                      {/* Status icon */}
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border"
+                        style={{
+                          background: c.hasShopifyToken ? "rgba(149,191,71,0.15)" : "rgba(245,158,11,0.10)",
+                          borderColor: c.hasShopifyToken ? "rgba(149,191,71,0.30)" : "rgba(245,158,11,0.25)",
+                        }}
+                      >
+                        <Store className="w-3.5 h-3.5" style={{ color: c.hasShopifyToken ? "#95BF47" : "#F59E0B" }} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-[12px] font-semibold truncate">
+                          {c.kundenEmail || c.lizenzschluessel}
+                        </div>
+                        <div className="text-[10px] text-zinc-500 truncate flex items-center gap-1.5">
+                          <span className="font-mono">{c.lizenzschluessel.slice(0, 12)}…</span>
+                          {c.shopDomain && (<><span>·</span><span className="truncate">{c.shopDomain}</span></>)}
+                          {c.sku && (<><span>·</span><span>{c.sku}</span></>)}
+                        </div>
+                      </div>
+                      {/* Indicators */}
+                      <div className="hidden sm:flex items-center gap-1">
+                        <Indicator on={c.hasShopifyToken} icon={Store} title="Shop" />
+                        <Indicator on={c.hasGoogleLinked} icon={Mail} title="Google" />
+                        <Indicator on={c.hasLegalData} icon={FileText} title="Legal" />
+                        <Indicator on={c.hasBrandKit} icon={Palette} title="Brand" />
+                      </div>
+                      {/* Balance */}
+                      <div className="text-right shrink-0">
+                        <div className={`text-sm font-bold tabular-nums ${
+                          isEmpty ? "text-red-400" : isLow ? "text-amber-400" : "text-[#95BF47]"
+                        }`}>
+                          {c.credits.balance}
+                        </div>
+                        <div className="text-[9px] text-zinc-600 leading-tight">
+                          {c.credits.totalUsed} verbr.
+                        </div>
+                      </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
+                    </button>
+                  );
+                })}
+              {customers.length === 0 && !customersLoading && (
+                <div className="text-center py-10 text-sm text-zinc-500">Keine Kunden vorhanden.</div>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* ─── Customer Detail Modal ────────────────────────── */}
+        <AnimatePresence>
+          {activeCustomerKey && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setActiveCustomerKey(null)}
+              className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:px-4"
+            >
+              <motion.div
+                initial={{ opacity: 0, y: 60 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 60 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-[#0c0c0c] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl max-h-[92vh] overflow-hidden shadow-2xl flex flex-col"
+              >
+                {/* Header */}
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-white/10 shrink-0">
+                  <button
+                    onClick={() => setActiveCustomerKey(null)}
+                    className="p-1.5 rounded-lg hover:bg-white/[0.05] transition"
+                  >
+                    <X className="w-4 h-4 text-zinc-500" />
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold truncate">
+                      {customerDetail?.kundenEmail || customerDetail?.lizenzschluessel || "Kunde"}
+                    </div>
+                    <div className="text-[10px] text-zinc-500 font-mono truncate">
+                      {activeCustomerKey}
+                    </div>
+                  </div>
+                </div>
+
+                {customerDetailLoading ? (
+                  <div className="flex-1 flex items-center justify-center py-14">
+                    <Loader2 className="w-6 h-6 animate-spin text-zinc-500" />
+                  </div>
+                ) : customerDetail ? (
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {/* Credit summary */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <KpiTile label="Balance" value={String(customerDetail.credits.balance)} icon={Coins} color="#95BF47" />
+                      <KpiTile label="Σ Gekauft" value={String(customerDetail.credits.totalPurchased)} icon={ArrowUpCircle} color="#10B981" />
+                      <KpiTile label="Σ Verbr." value={String(customerDetail.credits.totalUsed)} icon={ArrowDownCircle} color="#EF4444" />
+                    </div>
+
+                    {/* Status row */}
+                    <div className="flex flex-wrap gap-1.5">
+                      <StatusChip on={customerDetail.hasShopifyToken} label="Shop verbunden" />
+                      <StatusChip on={customerDetail.credits.starterGranted} label={`Starter${customerDetail.credits.starterGranted ? " ✓" : " (offen)"}`} />
+                      <StatusChip on={customerDetail.hasGoogleLinked} label={`Google${customerDetail.hasGoogleLinked ? " ✓" : ""}`} />
+                      <StatusChip on={customerDetail.hasLegalData} label={`Firmendaten${customerDetail.hasLegalData ? " ✓" : ""}`} />
+                      <StatusChip on={customerDetail.hasBrandKit} label={`Brand-Kit${customerDetail.hasBrandKit ? " ✓" : ""}`} />
+                    </div>
+
+                    {/* Adjust form */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">
+                        Manuelle Anpassung
+                      </div>
+                      <div className="flex flex-col sm:flex-row gap-1.5">
+                        <input
+                          type="number"
+                          value={adjustForm.delta || ""}
+                          onChange={(e) => setAdjustForm((p) => ({ ...p, delta: Number(e.target.value) || 0 }))}
+                          placeholder="±Credits (z.B. 100 oder -50)"
+                          className="flex-1 sm:max-w-[160px] bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600 font-mono"
+                        />
+                        <input
+                          type="text"
+                          value={adjustForm.note}
+                          onChange={(e) => setAdjustForm((p) => ({ ...p, note: e.target.value }))}
+                          placeholder="Notiz (z.B. Goodwill, Refund …)"
+                          className="flex-1 bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+                        />
+                        <button
+                          onClick={handleAdjust}
+                          disabled={adjustSaving || !adjustForm.delta}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition disabled:opacity-40 ${
+                            adjustForm.delta >= 0
+                              ? "bg-[#95BF47] text-black"
+                              : "bg-red-500/15 border border-red-500/30 text-red-300"
+                          }`}
+                        >
+                          {adjustSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Anwenden"}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-2">
+                        Positive Werte = Gutschrift, negative = Abzug. Wird mit Admin-Email als Audit-Trail geloggt.
+                      </p>
+                    </div>
+
+                    {/* Transaction log */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                          Transaktionen ({customerDetail.log.length})
+                        </div>
+                        <span className="text-[9px] text-zinc-600">Neueste oben</span>
+                      </div>
+                      {customerDetail.log.length === 0 ? (
+                        <div className="text-xs text-zinc-500 text-center py-4">Noch keine Transaktionen.</div>
+                      ) : (
+                        <div className="space-y-1 max-h-[40vh] overflow-y-auto">
+                          {customerDetail.log.map((entry, i) => (
+                            <LogRow key={i} entry={entry} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Profile fields */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">
+                        Profil-Details
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                        <ProfileRow label="License" value={customerDetail.lizenzschluessel} mono />
+                        <ProfileRow label="SKU" value={customerDetail.sku || "—"} />
+                        <ProfileRow label="Status" value={customerDetail.status || "—"} />
+                        <ProfileRow label="Bestellnr." value={customerDetail.bestellnummer || "—"} mono />
+                        <ProfileRow label="E-Mail" value={customerDetail.kundenEmail || "—"} />
+                        <ProfileRow label="Google" value={customerDetail.profile.linkedGoogleEmail || "—"} />
+                        <ProfileRow label="Shop" value={customerDetail.shopDomain || "—"} />
+                        <ProfileRow label="Firma" value={customerDetail.profile.legal_data?.firmenname || "—"} />
+                      </div>
+                    </div>
+
+                    {/* Fulfilled orders + voucher codes */}
+                    {(customerDetail.fulfilledOrders.length > 0 || Object.keys(customerDetail.redeemedCodes).length > 0) && (
+                      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+                        <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                          Käufe & Codes
+                        </div>
+                        {customerDetail.fulfilledOrders.length > 0 && (
+                          <div>
+                            <div className="text-[10px] text-zinc-500 mb-1">Erfüllte Shopify-Orders ({customerDetail.fulfilledOrders.length}):</div>
+                            <div className="flex flex-wrap gap-1">
+                              {customerDetail.fulfilledOrders.map((o) => (
+                                <span key={o} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-300">
+                                  {o}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {Object.keys(customerDetail.redeemedCodes).length > 0 && (
+                          <div>
+                            <div className="text-[10px] text-zinc-500 mb-1">Eingelöste Voucher:</div>
+                            <div className="flex flex-wrap gap-1">
+                              {Object.entries(customerDetail.redeemedCodes).map(([code, count]) => (
+                                <span key={code} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-300">
+                                  {code} × {count}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex-1 flex items-center justify-center py-14 text-sm text-zinc-500">
+                    Detail konnte nicht geladen werden.
+                  </div>
+                )}
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Knowledge Base Tab */}
         {activeTab === "knowledge" && (
@@ -1160,4 +1559,119 @@ export default function AdminPage() {
       </AnimatePresence>
     </div>
   );
+}
+
+// ─── Customer-tab helper components ──────────────────────────────
+
+function KpiTile({ label, value, icon: Icon, color }: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl border p-2.5" style={{ borderColor: `${color}25`, background: `${color}08` }}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
+        <Icon className="w-3 h-3" style={{ color }} />
+      </div>
+      <div className="text-base font-bold tabular-nums truncate" style={{ color }}>{value}</div>
+    </div>
+  );
+}
+
+function Indicator({ on, icon: Icon, title }: {
+  on: boolean;
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+}) {
+  return (
+    <div
+      title={`${title}: ${on ? "ja" : "nein"}`}
+      className={`w-5 h-5 rounded flex items-center justify-center transition ${
+        on ? "bg-emerald-500/10 text-emerald-400" : "bg-white/[0.02] text-zinc-700"
+      }`}
+    >
+      <Icon className="w-2.5 h-2.5" />
+    </div>
+  );
+}
+
+function StatusChip({ on, label }: { on: boolean; label: string }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold border ${
+        on
+          ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300"
+          : "bg-zinc-500/8 border-zinc-500/20 text-zinc-500"
+      }`}
+    >
+      {on && <Check className="w-2.5 h-2.5" />}
+      {label}
+    </span>
+  );
+}
+
+function LogRow({ entry }: {
+  entry: { ts: string; type: string; delta: number; balanceAfter: number; reason: string; ref?: string };
+}) {
+  const positive = entry.delta >= 0;
+  const typeMeta: Record<string, { color: string; label: string }> = {
+    starter: { color: "#A855F7", label: "Starter" },
+    deduct: { color: "#EF4444", label: "Tool" },
+    topup: { color: "#10B981", label: "Kauf" },
+    voucher: { color: "#0EA5E9", label: "Voucher" },
+    "admin-grant": { color: "#95BF47", label: "Admin+" },
+    "admin-revoke": { color: "#F59E0B", label: "Admin−" },
+  };
+  const meta = typeMeta[entry.type] || { color: "#71717A", label: entry.type };
+
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+      <span
+        className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border"
+        style={{ background: `${meta.color}15`, borderColor: `${meta.color}30`, color: meta.color }}
+      >
+        {meta.label}
+      </span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[11px] text-zinc-300 truncate">{entry.reason}</div>
+        <div className="text-[9px] text-zinc-600 flex items-center gap-1.5">
+          <Clock className="w-2.5 h-2.5" />
+          {formatRelativeShort(entry.ts)}
+          {entry.ref && <span className="font-mono truncate">· {entry.ref}</span>}
+        </div>
+      </div>
+      <div className="text-right shrink-0">
+        <div className={`text-[12px] font-bold tabular-nums ${positive ? "text-emerald-400" : "text-red-400"}`}>
+          {positive ? "+" : ""}{entry.delta}
+        </div>
+        <div className="text-[9px] text-zinc-600 tabular-nums">→ {entry.balanceAfter}</div>
+      </div>
+    </div>
+  );
+}
+
+function ProfileRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-white/[0.02] border border-white/[0.04]">
+      <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold shrink-0">{label}</span>
+      <span className={`text-[11px] text-zinc-200 truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+function formatRelativeShort(iso: string): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const diff = Date.now() - t;
+  const m = Math.floor(diff / 60_000);
+  if (m < 1) return "gerade";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d`;
+  return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "2-digit" });
 }
