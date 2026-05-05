@@ -152,6 +152,15 @@ export interface KundeProfile {
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
   onboarding_checklist?: OnboardingChecklist;
+  // ── Admin-only fields ─────────────────────────────────────────
+  /** Free-text note set by admin in the customers panel. */
+  adminNote?: string;
+  /** True for high-value customers — UI shows a star, may be sortable. */
+  vip?: boolean;
+  /** True if admin has blocked the account — sign-in/credit gates can check this. */
+  blocked?: boolean;
+  /** ISO timestamp when blocked, for the audit trail. */
+  blockedAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────

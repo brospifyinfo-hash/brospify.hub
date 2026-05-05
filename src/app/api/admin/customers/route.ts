@@ -53,6 +53,10 @@ interface CustomerDetail extends CustomerSummary {
     brand_kit?: Record<string, string>;
     onboarding_checklist?: Record<string, boolean>;
     linkedGoogleEmail?: string;
+    adminNote?: string;
+    vip?: boolean;
+    blocked?: boolean;
+    blockedAt?: string;
   };
   fulfilledOrders: string[];
   redeemedCodes: Record<string, number>;
@@ -155,6 +159,10 @@ async function getDetail(key: string): Promise<NextResponse> {
         brand_kit: k.profile.brand_kit as Record<string, string> | undefined,
         onboarding_checklist: k.profile.onboarding_checklist as Record<string, boolean> | undefined,
         linkedGoogleEmail: k.profile.linkedGoogleEmail,
+        adminNote: k.profile.adminNote,
+        vip: k.profile.vip === true,
+        blocked: k.profile.blocked === true,
+        blockedAt: k.profile.blockedAt,
       },
       fulfilledOrders,
       redeemedCodes,

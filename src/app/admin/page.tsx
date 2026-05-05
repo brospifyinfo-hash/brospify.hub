@@ -254,7 +254,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
@@ -295,6 +295,33 @@ export default function AdminPage() {
   });
   const [codeSaving, setCodeSaving] = useState(false);
   const [codeBusyRow, setCodeBusyRow] = useState<number | null>(null);
+
+  // ─── System status (health) ────────────────────────────────────
+  interface SystemStatus {
+    generatedAt: string;
+    sheetTabs: { name: string; exists: boolean; rowCount: number; error?: string }[];
+    blob: { count: number; bytesEstimate: number; mbEstimate: number };
+    envChecks: { key: string; label: string; required: boolean; configured: boolean }[];
+    timestamps: { latestKundeIso: string; latestTxIso: string; latestNewsIso: string };
+  }
+  const [systemStatus, setSystemStatus] = useState<SystemStatus | null>(null);
+  const [systemStatusLoading, setSystemStatusLoading] = useState(false);
+  const loadSystemStatus = useCallback(async () => {
+    setSystemStatusLoading(true);
+    try {
+      const res = await fetch("/api/admin/system-status");
+      if (res.ok) setSystemStatus(await res.json());
+    } catch { /* ignore */ }
+    finally { setSystemStatusLoading(false); }
+  }, []);
+
+  // ─── Bulk voucher generator state ──────────────────────────────
+  const [bulkVoucher, setBulkVoucher] = useState({ count: 10, credits: 100, maxPerAccount: 1, prefix: "", note: "" });
+  const [bulkVoucherSaving, setBulkVoucherSaving] = useState(false);
+  const [lastBulkResult, setLastBulkResult] = useState<{ created: string[]; skipped: number } | null>(null);
+
+  // ─── Dashboard auto-refresh ────────────────────────────────────
+  const [dashAutoRefresh, setDashAutoRefresh] = useState(false);
 
   // ─── Stats / Dashboard ─────────────────────────────────────────
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -357,6 +384,115 @@ export default function AdminPage() {
     if (activeTab === "news") loadNews();
   }, [activeTab, loadNews]);
 
+  // ─── New: System status load + Dashboard auto-refresh ──────────
+  useEffect(() => {
+    if (activeTab === "system") loadSystemStatus();
+  }, [activeTab, loadSystemStatus]);
+
+  useEffect(() => {
+    if (!dashAutoRefresh || activeTab !== "dashboard") return;
+    const id = setInterval(() => loadStats(), 30_000);
+    return () => clearInterval(id);
+  }, [dashAutoRefresh, activeTab, loadStats]);
+
+  // ── Customer action handler (note / vip / blocked / reset) ──
+  const [customerActionSaving, setCustomerActionSaving] = useState(false);
+  async function handleCustomerAction(
+    action: "set-note" | "set-vip" | "set-blocked" | "reset-starter",
+    payload?: Record<string, unknown>,
+  ) {
+    if (!activeCustomerKey || customerActionSaving) return;
+    setCustomerActionSaving(true);
+    try {
+      const res = await fetch("/api/admin/customer-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: activeCustomerKey, action, payload }),
+      });
+      if (res.ok) {
+        await loadCustomerDetail(activeCustomerKey);
+        await loadCustomers();
+        setSuccess(`Aktion „${action}" erfolgreich.`);
+        setTimeout(() => setSuccess(""), 2500);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Aktion fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setCustomerActionSaving(false); }
+  }
+
+  // ── Bulk voucher generator ──
+  async function handleBulkVoucher() {
+    if (bulkVoucherSaving) return;
+    setBulkVoucherSaving(true);
+    setLastBulkResult(null);
+    try {
+      const res = await fetch("/api/admin/credit-codes/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(bulkVoucher),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLastBulkResult({ created: data.created, skipped: data.skipped });
+        setSuccess(`${data.created.length} Codes erstellt${data.skipped ? ` (${data.skipped} übersprungen)` : ""}.`);
+        setTimeout(() => setSuccess(""), 4000);
+        await loadCodes();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Bulk-Erstellung fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setBulkVoucherSaving(false); }
+  }
+
+  // ── CSV Export helpers ──
+  function exportCsv(filename: string, headers: string[], rows: (string | number)[][]) {
+    const escape = (v: string | number) => {
+      const s = String(v ?? "");
+      if (s.includes('"') || s.includes(",") || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const csv = [headers.join(","), ...rows.map((r) => r.map(escape).join(","))].join("\r\n");
+    const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function exportCustomersCsv() {
+    exportCsv(
+      `kunden-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["License", "Email", "Shop-Domain", "SKU", "Status", "Balance", "Σ Gekauft", "Σ Verbraucht", "Starter", "Shop verbunden", "Google verknüpft"],
+      customers.map((c) => [
+        c.lizenzschluessel, c.kundenEmail, c.shopDomain, c.sku, c.status,
+        c.credits.balance, c.credits.totalPurchased, c.credits.totalUsed,
+        c.credits.starterGranted ? "ja" : "nein",
+        c.hasShopifyToken ? "ja" : "nein",
+        c.hasGoogleLinked ? "ja" : "nein",
+      ]),
+    );
+  }
+
+  function exportActivityCsv() {
+    exportCsv(
+      `aktivitaet-${new Date().toISOString().slice(0, 10)}.csv`,
+      ["Zeit", "Typ", "Delta", "Balance danach", "Grund", "Referenz", "Kunde-License", "Kunde-Email", "Shop"],
+      activity.map((e) => [
+        e.ts, e.type, e.delta, e.balanceAfter, e.reason, e.ref || "",
+        e.customerKey, e.email, e.shopDomain,
+      ]),
+    );
+  }
+
   // ─── Customers (admin overview) ─────────────────────────────────
   interface CustomerSummary {
     rowIndex: number;
@@ -387,6 +523,10 @@ export default function AdminPage() {
       brand_kit?: Record<string, string>;
       onboarding_checklist?: Record<string, boolean>;
       linkedGoogleEmail?: string;
+      adminNote?: string;
+      vip?: boolean;
+      blocked?: boolean;
+      blockedAt?: string;
     };
     fulfilledOrders: string[];
     redeemedCodes: Record<string, number>;
@@ -783,7 +923,15 @@ export default function AdminPage() {
 
             {/* ─── Dashboard ──────────────────────── */}
             {activeTab === "dashboard" && (
-              <DashboardView stats={stats} loading={statsLoading} onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }} />
+              <DashboardView
+                stats={stats}
+                loading={statsLoading}
+                onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
+                autoRefresh={dashAutoRefresh}
+                setAutoRefresh={setDashAutoRefresh}
+                onJumpTab={(t) => setActiveTab(t)}
+                onRefresh={loadStats}
+              />
             )}
 
             {/* ─── Statistiken ────────────────────── */}
@@ -800,12 +948,18 @@ export default function AdminPage() {
                 setFilter={setActivityFilter}
                 onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
                 onRefresh={loadActivity}
+                onExportCsv={exportActivityCsv}
               />
             )}
 
             {/* ─── News (Admin News-CRUD) ────────── */}
             {activeTab === "news" && (
               <NewsAdminView posts={newsPosts} loading={newsLoading} onRefresh={loadNews} />
+            )}
+
+            {/* ─── System Status ─────────────────── */}
+            {activeTab === "system" && (
+              <SystemStatusView status={systemStatus} loading={systemStatusLoading} onRefresh={loadSystemStatus} />
             )}
 
         {/* ─── Customers Tab ─────────────────────────────────── */}
@@ -840,6 +994,15 @@ export default function AdminPage() {
                 {ensuringStarter ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Coins className="w-3.5 h-3.5" />}
                 <span className="hidden sm:inline">500 Starter sicherstellen</span>
                 <span className="sm:hidden">+500</span>
+              </button>
+              <button
+                onClick={exportCustomersCsv}
+                disabled={customers.length === 0}
+                title="Alle Kunden als CSV exportieren"
+                className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5 disabled:opacity-40"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">CSV</span>
               </button>
             </div>
 
@@ -991,7 +1154,40 @@ export default function AdminPage() {
                       <StatusChip on={customerDetail.hasBrandKit} label={`Brand-Kit${customerDetail.hasBrandKit ? " ✓" : ""}`} />
                     </div>
 
-                    {/* Adjust form */}
+                    {/* ─── Quick credit packs ─── */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">
+                        Quick-Pack vergeben
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {[50, 100, 500, 1000, 2500].map((amount) => (
+                          <button
+                            key={amount}
+                            onClick={async () => {
+                              setAdjustSaving(true);
+                              try {
+                                await fetch("/api/admin/customers", {
+                                  method: "POST",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ key: activeCustomerKey, delta: amount, note: `Quick-Pack +${amount}` }),
+                                });
+                                await loadCustomerDetail(activeCustomerKey!);
+                                await loadCustomers();
+                                setSuccess(`+${amount} Credits gutgeschrieben.`);
+                                setTimeout(() => setSuccess(""), 2500);
+                              } catch { setError("Fehler."); }
+                              finally { setAdjustSaving(false); }
+                            }}
+                            disabled={adjustSaving}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/30 text-[#95BF47] text-xs font-bold hover:bg-[#95BF47]/15 transition disabled:opacity-50 tabular-nums"
+                          >
+                            +{amount}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ─── Manual adjust form ─── */}
                     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
                       <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-2">
                         Manuelle Anpassung
@@ -1024,8 +1220,68 @@ export default function AdminPage() {
                         </button>
                       </div>
                       <p className="text-[10px] text-zinc-600 mt-2">
-                        Positive Werte = Gutschrift, negative = Abzug. Wird mit Admin-Email als Audit-Trail geloggt.
+                        Positive = Gutschrift, negative = Abzug. Mit Admin-Email als Audit-Trail geloggt.
                       </p>
+                    </div>
+
+                    {/* ─── Account moderation ─── */}
+                    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
+                      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500">
+                        Account-Moderation
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                        <button
+                          onClick={() => handleCustomerAction("set-vip", { vip: !customerDetail.profile.vip })}
+                          disabled={customerActionSaving}
+                          className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${
+                            customerDetail.profile.vip
+                              ? "bg-amber-500/15 border border-amber-500/30 text-amber-300"
+                              : "bg-white/[0.04] border border-white/10 text-zinc-300"
+                          }`}
+                        >
+                          <Gem className="w-3.5 h-3.5" />
+                          {customerDetail.profile.vip ? "VIP ✓" : "VIP setzen"}
+                        </button>
+                        <button
+                          onClick={() => handleCustomerAction("set-blocked", { blocked: !customerDetail.profile.blocked })}
+                          disabled={customerActionSaving}
+                          className={`flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold transition disabled:opacity-50 ${
+                            customerDetail.profile.blocked
+                              ? "bg-red-500/15 border border-red-500/30 text-red-300"
+                              : "bg-white/[0.04] border border-white/10 text-zinc-300"
+                          }`}
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          {customerDetail.profile.blocked ? "Entsperren" : "Sperren"}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm("500 Starter-Credits NEU vergeben? Bestehende Balance bleibt, +500 werden draufgeschlagen.")) {
+                              handleCustomerAction("reset-starter");
+                            }
+                          }}
+                          disabled={customerActionSaving}
+                          className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-300 text-xs font-semibold hover:bg-purple-500/15 transition disabled:opacity-50"
+                        >
+                          <Coins className="w-3.5 h-3.5" />
+                          Starter neu
+                        </button>
+                        <button
+                          onClick={() => loadCustomerDetail(activeCustomerKey!)}
+                          disabled={customerActionSaving}
+                          className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-zinc-300 text-xs font-semibold hover:bg-white/[0.08] transition disabled:opacity-50"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Refresh
+                        </button>
+                      </div>
+
+                      {/* Admin note */}
+                      <AdminNoteEditor
+                        initial={customerDetail.profile.adminNote || ""}
+                        saving={customerActionSaving}
+                        onSave={(note) => handleCustomerAction("set-note", { note })}
+                      />
                     </div>
 
                     {/* Transaction log */}
@@ -1419,7 +1675,97 @@ export default function AdminPage() {
 
         {/* Credit Codes Tab */}
         {activeTab === "codes" && (
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl space-y-5">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl space-y-3">
+            {/* ── Bulk-Generator (random codes) ── */}
+            <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] p-3">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <h3 className="text-xs font-bold uppercase tracking-wider">Bulk-Generator (Random-Codes)</h3>
+              </div>
+              <p className="text-[10px] text-zinc-500 mb-2">
+                Erstellt N zufällige Codes im Format <code className="font-mono">XXXXX-XXXXX</code>. Optional mit Prefix.
+              </p>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5 mb-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={bulkVoucher.count}
+                  onChange={(e) => setBulkVoucher({ ...bulkVoucher, count: Math.max(1, Math.min(50, Number(e.target.value) || 1)) })}
+                  placeholder="Anzahl"
+                  className="bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-xs font-mono tabular-nums outline-none focus:border-white/25"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={bulkVoucher.credits}
+                  onChange={(e) => setBulkVoucher({ ...bulkVoucher, credits: Math.max(1, Number(e.target.value) || 1) })}
+                  placeholder="Credits/Code"
+                  className="bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-xs font-mono tabular-nums outline-none focus:border-white/25"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  value={bulkVoucher.maxPerAccount}
+                  onChange={(e) => setBulkVoucher({ ...bulkVoucher, maxPerAccount: Math.max(1, Number(e.target.value) || 1) })}
+                  placeholder="Max/Account"
+                  className="bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-xs font-mono tabular-nums outline-none focus:border-white/25"
+                />
+                <input
+                  type="text"
+                  value={bulkVoucher.prefix}
+                  onChange={(e) => setBulkVoucher({ ...bulkVoucher, prefix: e.target.value.toUpperCase() })}
+                  placeholder="Prefix (opt)"
+                  maxLength={8}
+                  className="bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-xs font-mono uppercase outline-none focus:border-white/25"
+                />
+                <button
+                  onClick={handleBulkVoucher}
+                  disabled={bulkVoucherSaving}
+                  className="px-3 py-1.5 rounded-md bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-bold hover:bg-purple-500/30 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  {bulkVoucherSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  Generieren
+                </button>
+              </div>
+              <input
+                type="text"
+                value={bulkVoucher.note}
+                onChange={(e) => setBulkVoucher({ ...bulkVoucher, note: e.target.value })}
+                placeholder="Notiz für alle (optional)"
+                maxLength={200}
+                className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-xs outline-none focus:border-white/25 placeholder:text-zinc-700"
+              />
+
+              {lastBulkResult && lastBulkResult.created.length > 0 && (
+                <div className="mt-2 rounded-md border border-emerald-500/20 bg-emerald-500/8 p-2">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-[10px] uppercase tracking-widest font-bold text-emerald-300">
+                      ✓ {lastBulkResult.created.length} Codes erstellt
+                    </span>
+                    <button
+                      onClick={() => navigator.clipboard.writeText(lastBulkResult.created.join("\n"))}
+                      className="text-[10px] text-emerald-400 hover:text-emerald-300 transition flex items-center gap-1"
+                    >
+                      <Save className="w-3 h-3" /> Alle kopieren
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1 max-h-32 overflow-y-auto">
+                    {lastBulkResult.created.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => { navigator.clipboard.writeText(c); }}
+                        title="Klick zum Kopieren"
+                        className="px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/15 border border-emerald-500/25 text-emerald-200 hover:bg-emerald-500/25 transition"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Create new code */}
             <div className="glass-strong rounded-2xl border border-[#95BF47]/15 p-5 md:p-6">
               <div className="flex items-center gap-3 mb-4">
@@ -1862,6 +2208,42 @@ function ProfileRow({ label, value, mono }: { label: string; value: string; mono
   );
 }
 
+// ─── Admin note editor (inline save on blur) ───────────────────
+
+function AdminNoteEditor({ initial, saving, onSave }: {
+  initial: string;
+  saving: boolean;
+  onSave: (note: string) => void;
+}) {
+  const [note, setNote] = useState(initial);
+  const [dirty, setDirty] = useState(false);
+  // Keep in-sync if a different customer is loaded
+  useEffect(() => { setNote(initial); setDirty(false); }, [initial]);
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1.5">Admin-Notiz (intern)</div>
+      <textarea
+        value={note}
+        onChange={(e) => { setNote(e.target.value); setDirty(true); }}
+        placeholder="Interne Notiz zu diesem Kunden — nur Admins sehen das."
+        rows={2}
+        className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600 resize-y"
+      />
+      {dirty && (
+        <div className="flex justify-end mt-1">
+          <button
+            onClick={() => { onSave(note); setDirty(false); }}
+            disabled={saving}
+            className="px-2.5 py-1 rounded-md bg-[#95BF47] text-black text-[10px] font-bold disabled:opacity-50"
+          >
+            {saving ? "…" : "Notiz speichern"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function formatRelativeShort(iso: string): string {
   if (!iso) return "";
   const t = new Date(iso).getTime();
@@ -1879,7 +2261,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -1911,6 +2293,7 @@ const SIDEBAR_GROUPS: {
   {
     label: "System",
     items: [
+      { key: "system", label: "System-Status", icon: Power, color: "#10B981" },
       { key: "knowledge", label: "KI-Wissen", icon: Sparkles, color: "#8B5CF6" },
       { key: "settings", label: "Settings", icon: Settings, color: "#71717A" },
     ],
@@ -1980,10 +2363,14 @@ function AdminSidebarNav({ activeTab, setActiveTab, counters }: {
 
 // ─── Dashboard view ────────────────────────────────────────────
 
-function DashboardView({ stats, loading, onJumpToCustomer }: {
+function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoRefresh, onJumpTab, onRefresh }: {
   stats: AdminStats | null;
   loading: boolean;
   onJumpToCustomer: (key: string) => void;
+  autoRefresh: boolean;
+  setAutoRefresh: (v: boolean) => void;
+  onJumpTab: (t: SidebarTab) => void;
+  onRefresh: () => void;
 }) {
   if (loading && !stats) {
     return (
@@ -2000,6 +2387,42 @@ function DashboardView({ stats, loading, onJumpToCustomer }: {
 
   return (
     <div className="space-y-3">
+      {/* Quick actions row */}
+      <div className="flex flex-wrap gap-1.5 items-center">
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+          Aktualisieren
+        </button>
+        <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition ${
+            autoRefresh
+              ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+              : "bg-white/[0.04] border border-white/10 text-zinc-300"
+          }`}
+        >
+          <Clock className="w-3 h-3" />
+          Auto-Refresh {autoRefresh ? "AN (30s)" : "AUS"}
+        </button>
+        <div className="flex-1" />
+        <button
+          onClick={() => onJumpTab("activity")}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs font-semibold hover:bg-amber-500/15 transition"
+        >
+          <Zap className="w-3 h-3" /> Live-Aktivität
+        </button>
+        <button
+          onClick={() => onJumpTab("customers")}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-300 text-xs font-semibold hover:bg-blue-500/15 transition"
+        >
+          <Users className="w-3 h-3" /> Alle Kunden
+        </button>
+      </div>
+
       {/* KPI Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <BigKpi label="Kunden gesamt" value={stats.customers.total} icon={Users} color="#3B82F6" />
@@ -2260,13 +2683,14 @@ function StatsView({ stats, loading }: { stats: AdminStats | null; loading: bool
 
 // ─── Activity feed view ────────────────────────────────────────
 
-function ActivityView({ entries, loading, filter, setFilter, onJumpToCustomer, onRefresh }: {
+function ActivityView({ entries, loading, filter, setFilter, onJumpToCustomer, onRefresh, onExportCsv }: {
   entries: ActivityEntry[];
   loading: boolean;
   filter: { type: string; q: string; sinceDays: number };
   setFilter: (f: { type: string; q: string; sinceDays: number }) => void;
   onJumpToCustomer: (key: string) => void;
   onRefresh: () => void;
+  onExportCsv: () => void;
 }) {
   return (
     <div className="space-y-3">
@@ -2308,6 +2732,17 @@ function ActivityView({ entries, loading, filter, setFilter, onJumpToCustomer, o
         >
           {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
           Aktualisieren
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] text-zinc-500">{entries.length} Einträge geladen</span>
+        <button
+          onClick={onExportCsv}
+          disabled={entries.length === 0}
+          className="px-2.5 py-1 rounded-md bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-40 flex items-center gap-1.5"
+        >
+          <Save className="w-3 h-3" /> CSV-Export
         </button>
       </div>
 
@@ -2382,6 +2817,124 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
 // ─── News admin view (lightweight CRUD) ────────────────────────
 
 interface NewsPostT { rowIndex: number; id: string; type: "text" | "video"; title: string; body: string; imageUrl: string; youtubeUrl: string; previewImageUrl: string; active: boolean; createdAt: string }
+
+// ─── System status view ────────────────────────────────────────
+
+interface SystemStatusT {
+  generatedAt: string;
+  sheetTabs: { name: string; exists: boolean; rowCount: number; error?: string }[];
+  blob: { count: number; bytesEstimate: number; mbEstimate: number };
+  envChecks: { key: string; label: string; required: boolean; configured: boolean }[];
+  timestamps: { latestKundeIso: string; latestTxIso: string; latestNewsIso: string };
+}
+
+function SystemStatusView({ status, loading, onRefresh }: {
+  status: SystemStatusT | null;
+  loading: boolean;
+  onRefresh: () => void;
+}) {
+  if (loading && !status) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-32 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+  if (!status) return <div className="text-center py-10 text-sm text-zinc-500">Keine Daten.</div>;
+
+  const requiredMissing = status.envChecks.filter((e) => e.required && !e.configured).length;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-zinc-500">
+          Health-Check über Sheet-Tabs, Blob-Storage und Environment-Variablen.
+        </p>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          Aktualisieren
+        </button>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <BigKpi label="Sheet-Tabs OK" value={status.sheetTabs.filter((t) => t.exists).length} icon={Check} color="#10B981" hint={`${status.sheetTabs.filter((t) => !t.exists).length} fehlen`} />
+        <BigKpi label="Blob-Items" value={status.blob.count} icon={ImageIcon} color="#3B82F6" hint={`${status.blob.mbEstimate.toFixed(1)} MB`} />
+        <BigKpi label="ENV gesetzt" value={status.envChecks.filter((e) => e.configured).length} icon={Power} color={requiredMissing > 0 ? "#EF4444" : "#10B981"} hint={requiredMissing > 0 ? `${requiredMissing} Pflicht fehlt!` : "alle Pflicht ✓"} />
+        <BigKpi label="Letzte TX" value={0} icon={Clock} color="#A855F7" hint={status.timestamps.latestTxIso ? formatRelativeShort(status.timestamps.latestTxIso) : "—"} />
+      </div>
+
+      {/* Sheet tabs */}
+      <DashboardCard title="Google Sheets — Tab-Status" icon={BarChart3} accent="#10B981">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+          {status.sheetTabs.map((t) => (
+            <div key={t.name} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                t.exists ? "bg-emerald-400" : "bg-red-400"
+              }`} />
+              <span className="text-[12px] font-mono flex-1 truncate">{t.name}</span>
+              <span className="text-[10px] text-zinc-500 tabular-nums">
+                {t.exists ? `${t.rowCount} rows` : "fehlt"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </DashboardCard>
+
+      {/* Env vars */}
+      <DashboardCard title="Environment-Variablen" icon={Power} accent={requiredMissing > 0 ? "#EF4444" : "#10B981"}>
+        <div className="space-y-1">
+          {status.envChecks.map((e) => (
+            <div key={e.key} className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+              <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                e.configured ? "bg-emerald-400" : e.required ? "bg-red-400" : "bg-zinc-600"
+              }`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold truncate">{e.label}</div>
+                <div className="text-[9px] text-zinc-500 font-mono truncate">{e.key}</div>
+              </div>
+              <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded ${
+                e.configured
+                  ? "bg-emerald-500/10 text-emerald-300"
+                  : e.required
+                    ? "bg-red-500/10 text-red-300"
+                    : "bg-zinc-500/10 text-zinc-400"
+              }`}>
+                {e.configured ? "✓ gesetzt" : e.required ? "Pflicht!" : "optional"}
+              </span>
+            </div>
+          ))}
+        </div>
+      </DashboardCard>
+
+      {/* Activity timestamps */}
+      <DashboardCard title="Letzte Aktivität" icon={Clock} accent="#A855F7">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-1.5">
+          <div className="px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Letzte Kunden-Mutation</div>
+            <div className="text-[12px] text-zinc-200 mt-0.5">{status.timestamps.latestKundeIso ? formatRelativeShort(status.timestamps.latestKundeIso) : "—"}</div>
+          </div>
+          <div className="px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Letzte Transaktion</div>
+            <div className="text-[12px] text-zinc-200 mt-0.5">{status.timestamps.latestTxIso ? formatRelativeShort(status.timestamps.latestTxIso) : "—"}</div>
+          </div>
+          <div className="px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Letzte News</div>
+            <div className="text-[12px] text-zinc-200 mt-0.5">{status.timestamps.latestNewsIso ? formatRelativeShort(status.timestamps.latestNewsIso) : "—"}</div>
+          </div>
+        </div>
+        <div className="text-[10px] text-zinc-600 mt-2 text-right">
+          Snapshot von {new Date(status.generatedAt).toLocaleTimeString("de-DE")}
+        </div>
+      </DashboardCard>
+    </div>
+  );
+}
 
 function NewsAdminView({ posts, loading, onRefresh }: {
   posts: NewsPostT[];
