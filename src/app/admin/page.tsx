@@ -411,6 +411,7 @@ export default function AdminPage() {
   const [usersLoading, setUsersLoading] = useState(false);
   const [userSearch, setUserSearch] = useState("");
   const [userBusyKey, setUserBusyKey] = useState<string | null>(null);
+  const [usersAutoRefresh, setUsersAutoRefresh] = useState(true);
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
     try {
@@ -426,6 +427,26 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeTab === "users") loadUsers();
   }, [activeTab, loadUsers]);
+
+  // 24/7 Live-Tracking der Credit-Stände im Users-Tab. Pollt alle 30s
+  // solange Tab + sichtbar ist; pausiert wenn unsichtbar oder Tab
+  // weg vom Users-View, refresht beim Re-Fokus.
+  useEffect(() => {
+    if (!usersAutoRefresh || activeTab !== "users") return;
+    const id = setInterval(() => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        loadUsers();
+      }
+    }, 30_000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") loadUsers();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [usersAutoRefresh, activeTab, loadUsers]);
 
   async function handleSetRole(key: string, role: AdminUserRole) {
     setUserBusyKey(key);
@@ -1262,6 +1283,8 @@ export default function AdminPage() {
                 setSearch={setUserSearch}
                 busyKey={userBusyKey}
                 tierConfig={tierConfig}
+                autoRefresh={usersAutoRefresh}
+                setAutoRefresh={setUsersAutoRefresh}
                 onRefresh={loadUsers}
                 onSetRole={handleSetRole}
                 onSetTier={handleSetTier}
@@ -3777,6 +3800,7 @@ function GodModeKpis({ stats, onJumpTab }: {
 
 function UsersView({
   users, loading, search, setSearch, busyKey, tierConfig,
+  autoRefresh, setAutoRefresh,
   onRefresh, onSetRole, onSetTier, onCancelTier, onImpersonate, onAdjustCredits,
 }: {
   users: AdminUserRow[];
@@ -3785,6 +3809,8 @@ function UsersView({
   setSearch: (v: string) => void;
   busyKey: string | null;
   tierConfig: TierPricing[];
+  autoRefresh: boolean;
+  setAutoRefresh: (v: boolean) => void;
   onRefresh: () => void;
   onSetRole: (key: string, role: AdminUserRole) => void | Promise<void>;
   onSetTier: (key: string, tier: AdminTierKey) => void | Promise<void>;
@@ -3820,12 +3846,24 @@ function UsersView({
           />
         </div>
         <button
+          onClick={() => setAutoRefresh(!autoRefresh)}
+          title="24/7 Live-Tracking — pollt alle 30s wenn Tab sichtbar ist."
+          className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-semibold transition ${
+            autoRefresh
+              ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-300"
+              : "bg-white/[0.04] border border-white/10 text-zinc-300"
+          }`}
+        >
+          <Clock className="w-3 h-3" />
+          Live {autoRefresh ? "AN" : "AUS"}
+        </button>
+        <button
           onClick={onRefresh}
           disabled={loading}
           className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Repeat className="w-3 h-3" />}
-          Aktualisieren
+          Refresh
         </button>
       </div>
 
