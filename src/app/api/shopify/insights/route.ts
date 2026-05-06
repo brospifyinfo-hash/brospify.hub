@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey } from "@/lib/sheets";
 import { shopifyFetch } from "@/lib/shopify";
+import { requireFeature } from "@/lib/tier-guard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -70,9 +71,8 @@ function hourFromIso(iso: string): number {
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session.isLoggedIn) {
-      return NextResponse.json({ connected: false, error: "Nicht autorisiert" }, { status: 401 });
-    }
+    const guard = await requireFeature(session, "shopifyInsights");
+    if (!guard.ok) return guard.response;
 
     if (session.isAdmin || !session.lizenzschluessel) {
       return NextResponse.json({ connected: false });

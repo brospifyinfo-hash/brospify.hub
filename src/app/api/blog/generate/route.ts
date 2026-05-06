@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey, getKundeProfile, deductCredits, CREDIT_LIMITS, getCreditsState } from "@/lib/sheets";
+import { requireFeature } from "@/lib/tier-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session.isLoggedIn || !session.lizenzschluessel) {
+    const guard = await requireFeature(session, "blogGenerator");
+    if (!guard.ok) return guard.response;
+    if (!session.lizenzschluessel) {
       return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
     }
 

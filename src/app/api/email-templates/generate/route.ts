@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { requireFeature } from "@/lib/tier-guard";
 import { generateEmailTemplate, type GenerateInput } from "@/lib/ai-email-generator";
 import { getTemplateById, type EmailTemplateDef } from "@/lib/email-templates";
 import {
@@ -271,9 +272,8 @@ function extractSubject(html: string, fallback: string): { subject: string; body
 
 export async function POST(req: Request) {
   const session = await getSession();
-  if (!session.isLoggedIn) {
-    return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
-  }
+  const guard = await requireFeature(session, "emailTemplates");
+  if (!guard.ok) return guard.response;
 
   let body: RequestBody;
   try {

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey } from "@/lib/sheets";
 import { shopifyFetch } from "@/lib/shopify";
+import { requireFeature } from "@/lib/tier-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,9 @@ interface GraphQLMetafieldsResponse {
 export async function GET() {
   try {
     const session = await getSession();
-    if (!session.isLoggedIn || !session.lizenzschluessel) {
+    const guard = await requireFeature(session, "seoAudit");
+    if (!guard.ok) return guard.response;
+    if (!session.lizenzschluessel) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
@@ -320,7 +323,9 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session.isLoggedIn || !session.lizenzschluessel) {
+    const guard = await requireFeature(session, "seoAudit");
+    if (!guard.ok) return guard.response;
+    if (!session.lizenzschluessel) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 

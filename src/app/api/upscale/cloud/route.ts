@@ -23,6 +23,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { requireFeature } from "@/lib/tier-guard";
 import {
   CREDIT_LIMITS,
   deductCredits,
@@ -57,9 +58,8 @@ export async function POST(req: Request) {
   // 0) Auth + credit gate. Admins bypass the meter; anyone else must
   //    have at least UPSCALE_IMAGE credits before we even hit Replicate.
   const session = await getSession();
-  if (!session.isLoggedIn) {
-    return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
-  }
+  const guard = await requireFeature(session, "upscale");
+  if (!guard.ok) return guard.response;
 
   let kundeRowIndex: number | null = null;
   let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;

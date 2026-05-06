@@ -34,10 +34,12 @@ import {
   ExternalLink,
   Inbox,
   Eye,
+  Lock,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
+import { useTier } from "@/lib/use-tier";
 
 interface SessionInfo {
   isLoggedIn: boolean;
@@ -50,10 +52,10 @@ interface SessionInfo {
 }
 
 const NAV_ITEMS = [
-  { href: "/home", labelKey: "home" as const, icon: Home },
-  { href: "/charts", labelKey: "charts" as const, icon: BarChart3 },
-  { href: "/library", labelKey: "library" as const, icon: FolderHeart },
-  { href: "/themes", labelKey: "themes" as const, icon: Palette },
+  { href: "/home", labelKey: "home" as const, icon: Home, feature: undefined },
+  { href: "/charts", labelKey: "charts" as const, icon: BarChart3, feature: "chartsAnalytics" as const },
+  { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
+  { href: "/themes", labelKey: "themes" as const, icon: Palette, feature: "themesGallery" as const },
 ];
 
 const AI_TOOLS = [
@@ -65,6 +67,7 @@ const AI_TOOLS = [
     color: "from-rose-500/15 to-pink-500/15",
     border: "border-rose-500/15",
     iconColor: "text-rose-400",
+    feature: "emailTemplates" as const,
   },
   {
     href: "/seo",
@@ -74,6 +77,7 @@ const AI_TOOLS = [
     color: "from-blue-500/15 to-cyan-500/15",
     border: "border-blue-500/15",
     iconColor: "text-blue-400",
+    feature: "seoAudit" as const,
   },
   {
     href: "/blog",
@@ -83,6 +87,7 @@ const AI_TOOLS = [
     color: "from-[#95BF47]/15 to-emerald-500/15",
     border: "border-[#95BF47]/15",
     iconColor: "text-[#95BF47]",
+    feature: "blogGenerator" as const,
   },
   {
     href: "/ai-tools/hybrid-upscaler",
@@ -92,6 +97,7 @@ const AI_TOOLS = [
     color: "from-[#95BF47]/15 to-emerald-500/15",
     border: "border-[#95BF47]/15",
     iconColor: "text-[#95BF47]",
+    feature: "upscale" as const,
   },
   {
     href: "/ai-tools/background-remover",
@@ -101,6 +107,7 @@ const AI_TOOLS = [
     color: "from-amber-500/15 to-orange-500/15",
     border: "border-amber-500/15",
     iconColor: "text-amber-400",
+    feature: "bgRemove" as const,
   },
   {
     href: "/ai-tools/ai-studio",
@@ -110,6 +117,7 @@ const AI_TOOLS = [
     color: "from-purple-500/15 to-fuchsia-500/15",
     border: "border-purple-500/15",
     iconColor: "text-purple-400",
+    feature: "aiStudio" as const,
   },
 ] as const;
 
@@ -144,6 +152,7 @@ export default function Navigation() {
   const aiRef = useRef<HTMLDivElement>(null);
   const { logoUrl, brandName } = useBranding();
   const credits = useCredits();
+  const tierState = useTier();
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -249,17 +258,21 @@ export default function Navigation() {
             <div className="hidden md:flex items-center gap-0.5">
               {NAV_ITEMS.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const locked = !!item.feature && !tierState.loading && !tierState.has(item.feature);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
+                    title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
                     className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
                       isActive
                         ? "text-[#95BF47]"
+                        : locked
+                        ? "text-zinc-600 hover:text-zinc-400"
                         : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
                     }`}
                   >
-                    <item.icon className="w-3.5 h-3.5" />
+                    {locked ? <Lock className="w-3 h-3" /> : <item.icon className="w-3.5 h-3.5" />}
                     <span>{t.nav[item.labelKey]}</span>
                     {isActive && (
                       <motion.div
@@ -329,25 +342,39 @@ export default function Navigation() {
                             pathname === tool.href ||
                             pathname.startsWith(tool.href + "/");
                           const Icon = tool.icon;
+                          const locked = !tierState.loading && !tierState.has(tool.feature);
                           return (
                             <Link
                               key={tool.href}
                               href={tool.href}
                               onClick={() => setAiOpen(false)}
+                              title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
                               className={`group flex items-center gap-3.5 p-3 rounded-xl border transition-all duration-200 ${
                                 isActive
                                   ? "border-[#95BF47]/25 bg-[#95BF47]/8"
+                                  : locked
+                                  ? "border-white/[0.03] bg-white/[0.01] opacity-60 hover:opacity-80"
                                   : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.10] hover:bg-white/[0.04]"
                               }`}
                             >
                               <div
-                                className={`w-11 h-11 rounded-xl bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center shrink-0`}
+                                className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center shrink-0`}
                               >
                                 <Icon className={`w-5 h-5 ${tool.iconColor}`} />
+                                {locked && (
+                                  <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
+                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                  </div>
+                                )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-[13.5px] text-white truncate">
+                                <div className="font-semibold text-[13.5px] text-white truncate flex items-center gap-1.5">
                                   {tool.title}
+                                  {locked && (
+                                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0">
+                                      Upgrade
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
                                   {tool.desc}
@@ -523,6 +550,7 @@ export default function Navigation() {
               {AI_TOOLS.map((tool) => {
                 const isActive = pathname === tool.href || pathname.startsWith(tool.href + "/");
                 const Icon = tool.icon;
+                const locked = !tierState.loading && !tierState.has(tool.feature);
                 return (
                   <Link
                     key={tool.href}
@@ -531,20 +559,27 @@ export default function Navigation() {
                     className={`group flex flex-col gap-2 p-3 rounded-xl border transition ${
                       isActive
                         ? "border-[#95BF47]/30 bg-[#95BF47]/8"
+                        : locked
+                        ? "border-white/[0.04] bg-white/[0.01] opacity-60"
                         : "border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04]"
                     }`}
                   >
                     <div
-                      className={`w-9 h-9 rounded-lg bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center`}
+                      className={`relative w-9 h-9 rounded-lg bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center`}
                     >
                       <Icon className={`w-4 h-4 ${tool.iconColor}`} />
+                      {locked && (
+                        <div className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
+                          <Lock className="w-2 h-2 text-amber-400" />
+                        </div>
+                      )}
                     </div>
                     <div>
                       <div className="text-[12.5px] font-semibold text-white leading-tight">
                         {tool.title}
                       </div>
                       <div className="text-[10px] text-zinc-500 mt-0.5 leading-tight">
-                        {tool.desc.split("·")[1]?.trim() || tool.desc}
+                        {locked ? "Upgrade nötig" : tool.desc.split("·")[1]?.trim() || tool.desc}
                       </div>
                     </div>
                   </Link>

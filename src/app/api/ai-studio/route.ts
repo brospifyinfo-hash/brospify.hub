@@ -22,6 +22,7 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import sharp from "sharp";
 import { getSession } from "@/lib/session";
+import { requireFeature } from "@/lib/tier-guard";
 import {
   CREDIT_LIMITS,
   deductCredits,
@@ -51,11 +52,10 @@ const STUDIO_DIM = 1024;
 const CUSTOM_PROMPT_MAX = 500;
 
 export async function POST(req: Request) {
-  // 0) Auth + credit gate
+  // 0) Auth + tier + credit gate
   const session = await getSession();
-  if (!session.isLoggedIn) {
-    return NextResponse.json({ error: "Nicht angemeldet." }, { status: 401 });
-  }
+  const guard = await requireFeature(session, "aiStudio");
+  if (!guard.ok) return guard.response;
 
   let kundeRowIndex: number | null = null;
   let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;

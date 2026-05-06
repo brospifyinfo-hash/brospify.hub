@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 import { list } from "@vercel/blob";
+import { requireFeature } from "@/lib/tier-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,9 @@ async function resolveTheme(themeId?: string): Promise<{ url: string; name: stri
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    if (!session.isLoggedIn || !session.lizenzschluessel) {
+    const guard = await requireFeature(session, "themesGallery");
+    if (!guard.ok) return guard.response;
+    if (!session.lizenzschluessel) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
