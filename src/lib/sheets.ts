@@ -349,10 +349,17 @@ export async function setCreditsBalance(
 // set on the credits record we no-op and return the existing profile.
 // Otherwise we add STARTER_CREDITS to the balance, bump
 // totalPurchased so the analytics line up, and persist the flag.
+//
+// Returns `granted: true` only when this call actually wrote a grant —
+// callers (login route, hourly backfill cron) use that to decide
+// whether to log a SystemLogs audit entry. Bestehende, höhere Balances
+// werden NIE überschrieben — wir addieren immer auf den vorhandenen
+// `balance`, weshalb ein zahlender Kunde der schon 5.000 Credits hat
+// nach dem Grant 5.500 hat, nicht 500.
 export async function ensureStarterGrant(
   rowIndex: number,
   profile: KundeProfile,
-): Promise<KundeProfile> {
+): Promise<KundeProfile & { __granted?: boolean }> {
   const credits = normalizeCredits(profile.credits);
   if (credits.starterGranted) {
     return { ...profile, credits };
@@ -374,7 +381,58 @@ export async function ensureStarterGrant(
   };
   const updated: KundeProfile = { ...profile, credits: next };
   await updateKundeProfile(rowIndex, updated);
-  return updated;
+  return { ...updated, __granted: true };
+}
+
+// Walk every customer row and grant 500 starter credits to anyone who
+// hasn't received them yet. Designed to run from the hourly Vercel
+// cron — keeps everyone in sync regardless of whether they ever
+// finished a login.
+//
+// Non-destructive: bestehende Balances bleiben, der Grant ist additiv.
+// Wir geben uns einen kleinen Delay zwischen Schreibvorgängen damit
+// die Sheets-API bei großen Migrationen nicht ratelimit-t. Throw von
+// einem einzelnen Profil bricht die Schleife nicht ab — wir loggen
+// und machen weiter.
+export async function backfillStarterGrants(): Promise<{
+  scanned: number;
+  granted: number;
+  skipped: number;
+  errors: number;
+  grantedKeys: string[];
+}> {
+  const kunden = await getAllKunden();
+  let granted = 0;
+  let skipped = 0;
+  let errors = 0;
+  const grantedKeys: string[] = [];
+
+  for (const k of kunden) {
+    if (!k.lizenzschluessel) {
+      skipped++;
+      continue;
+    }
+    const credits = normalizeCredits(k.profile.credits);
+    if (credits.starterGranted) {
+      skipped++;
+      continue;
+    }
+    try {
+      await ensureStarterGrant(k.rowIndex, k.profile);
+      granted++;
+      grantedKeys.push(k.lizenzschluessel);
+      // Tiny throttle to stay under Sheets per-minute write quota when
+      // backfilling lots of profiles in one go.
+      if (granted % 5 === 0) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    } catch (err) {
+      console.error(`[backfillStarterGrants] ${k.lizenzschluessel}:`, err);
+      errors++;
+    }
+  }
+
+  return { scanned: kunden.length, granted, skipped, errors, grantedKeys };
 }
 
 // Voucher redemption — bumps balance and records the redemption count

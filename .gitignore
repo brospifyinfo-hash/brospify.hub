@@ -39,6 +39,7 @@ yarn-error.log*
 !package.json
 !package-lock.json
 !tsconfig.json
+!vercel.json
 
 # vercel
 .vercel

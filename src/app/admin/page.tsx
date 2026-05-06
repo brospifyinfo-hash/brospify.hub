@@ -3403,6 +3403,8 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
       {/* ─── AI-API Balances (DeepSeek + Fal + Replicate) ─── */}
       <ApiBalancesCard balances={apiBalances} loading={apiBalancesLoading} />
 
+      {/* ─── Starter-Credit Backfill ─── */}
+      <BackfillStarterCard />
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <BigKpi label="Sheet-Tabs OK" value={status.sheetTabs.filter((t) => t.exists).length} icon={Check} color="#10B981" hint={`${status.sheetTabs.filter((t) => !t.exists).length} fehlen`} />
@@ -4197,6 +4199,108 @@ function TierConfigEditor({
             Zurücksetzen
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Backfill 500-Starter-Credits card (System tab) ───────────────
+// Manueller Trigger für den gleichen Endpoint, den der stündliche
+// Vercel-Cron pingt. Zeigt Ergebnis (gescannt / vergeben / errors).
+// Bestehende Balances bleiben unangetastet — der Grant ist additiv.
+
+function BackfillStarterCard() {
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<{
+    scanned: number;
+    granted: number;
+    skipped: number;
+    errors: number;
+  } | null>(null);
+  const [error, setError] = useState("");
+
+  async function run() {
+    if (running) return;
+    setRunning(true);
+    setError("");
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/credits/backfill-starter", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Backfill fehlgeschlagen.");
+      } else {
+        setResult({
+          scanned: data.scanned,
+          granted: data.granted,
+          skipped: data.skipped,
+          errors: data.errors,
+        });
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div
+      className="rounded-2xl border border-emerald-500/15 p-3"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(149,191,71,0.06) 0%, rgba(255,255,255,0.02) 100%)",
+        backdropFilter: "blur(40px) saturate(180%)",
+        WebkitBackdropFilter: "blur(40px) saturate(180%)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+          <Coins className="w-4 h-4 text-emerald-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-white">Starter-Credits Sync (500c)</h3>
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-emerald-300/80 bg-emerald-500/10 border border-emerald-500/25 rounded px-1.5 py-0.5">
+              Cron · stündlich
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+            Vergibt jedem Profil ohne `starterGranted=true` die 500
+            Willkommens-Credits. Bestehende Balances werden nie
+            überschrieben — der Bonus wird draufgerechnet. Läuft alle
+            60 Minuten via Vercel Cron, kann hier auch manuell
+            ausgelöst werden.
+          </p>
+          <p className="text-[10px] text-zinc-500 mt-1.5">
+            Setze <span className="font-mono text-zinc-400">CRON_SECRET</span> in den
+            Vercel-Env-Vars, damit der Cron-Job zugreifen darf.
+          </p>
+
+          <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+            <button
+              onClick={run}
+              disabled={running}
+              className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs font-semibold hover:bg-emerald-500/25 transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Repeat className="w-3 h-3" />}
+              Jetzt syncen
+            </button>
+            {result && (
+              <div className="text-[11px] text-zinc-300 flex items-center gap-2 flex-wrap">
+                <span><span className="text-zinc-500">Gescannt:</span> <span className="font-bold tabular-nums">{result.scanned}</span></span>
+                <span><span className="text-zinc-500">Vergeben:</span> <span className="font-bold tabular-nums text-emerald-300">{result.granted}</span></span>
+                <span><span className="text-zinc-500">Übersprungen:</span> <span className="font-bold tabular-nums">{result.skipped}</span></span>
+                {result.errors > 0 && (
+                  <span><span className="text-zinc-500">Fehler:</span> <span className="font-bold tabular-nums text-red-300">{result.errors}</span></span>
+                )}
+              </div>
+            )}
+            {error && (
+              <span className="text-[11px] text-red-300">{error}</span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
