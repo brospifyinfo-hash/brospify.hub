@@ -14,26 +14,16 @@ export default function BackgroundRemoverPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 md:py-16">
-          <header className="mb-6 sm:mb-10 text-left">
-            <div className="inline-flex items-center gap-2 mb-3 sm:mb-4">
-              <span
-                className="text-[10px] uppercase tracking-[0.2em] font-semibold"
-                style={{ color: "#95BF47" }}
-              >
-                AI Tools
-              </span>
+        <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-5">
+          <header className="mb-3 sm:mb-4">
+            <div className="text-[9px] uppercase tracking-[0.18em] font-semibold mb-1" style={{ color: "#95BF47" }}>
+              AI Tools
             </div>
-            <h1
-              className="text-[26px] sm:text-[34px] md:text-[42px] font-semibold tracking-tight text-white leading-[1.08]"
-              style={{ letterSpacing: "-0.025em" }}
-            >
-              Magic Background Remover
+            <h1 className="text-[18px] sm:text-[22px] font-semibold tracking-tight text-white leading-tight">
+              Background Remover
             </h1>
-            <p className="mt-2.5 sm:mt-3 text-[13.5px] sm:text-[15px] text-zinc-400 max-w-xl leading-relaxed">
-              Drei Genauigkeits-Modi inkl. Haar/Fell — danach kannst du das
-              Produkt direkt auf eine Farbe, einen Gradient oder ein eigenes
-              Hintergrundbild legen. Komposition läuft lokal &amp; kostet 0 Credits.
+            <p className="mt-1 text-[11px] sm:text-xs text-zinc-500 leading-snug">
+              3 Genauigkeits-Modi · BG ersetzen lokal (0 Credits) · 1-Klick in Mediathek
             </p>
           </header>
 

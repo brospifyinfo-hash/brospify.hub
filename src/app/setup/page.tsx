@@ -106,6 +106,9 @@ function SetupContent() {
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  // True when the user explicitly opens the connect form after Step 1 is
+  // already done (re-connect / change shop / re-copy field flow).
+  const [reconnectMode, setReconnectMode] = useState(false);
 
   const appUrl = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -313,21 +316,39 @@ function SetupContent() {
             icon={Store}
             color="#95BF47"
           >
-            {step1Done && !step1Skipped && (
-              <p className="text-emerald-400 text-xs flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5" />
-                Verbunden: <span className="font-mono">{session.shopDomain || shopDomain}</span>
-              </p>
+            {step1Done && !step1Skipped && !reconnectMode && (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-emerald-400 text-xs flex items-center gap-1.5 min-w-0">
+                  <Check className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Verbunden: <span className="font-mono">{session.shopDomain || shopDomain}</span></span>
+                </p>
+                <button
+                  onClick={() => setReconnectMode(true)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+                >
+                  <Store className="w-3 h-3" />
+                  Neu verbinden / Daten ändern
+                </button>
+              </div>
             )}
 
-            {step1Done && step1Skipped && (
-              <p className="text-amber-400 text-xs flex items-center gap-1.5">
-                <Info className="w-3.5 h-3.5" />
-                Übersprungen — 1-Klick-Import deaktiviert.
-              </p>
+            {step1Done && step1Skipped && !reconnectMode && (
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <p className="text-amber-400 text-xs flex items-center gap-1.5 min-w-0">
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  Übersprungen — 1-Klick-Import deaktiviert.
+                </p>
+                <button
+                  onClick={() => setReconnectMode(true)}
+                  className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/30 text-[11px] text-amber-300 hover:bg-amber-500/20 transition flex items-center gap-1.5"
+                >
+                  <Store className="w-3 h-3" />
+                  Jetzt nachholen
+                </button>
+              </div>
             )}
 
-            {!step1Done && (
+            {(!step1Done || reconnectMode) && (
               <div className="space-y-3">
                 {/* Field-progress bar */}
                 <div>
@@ -427,12 +448,22 @@ function SetupContent() {
                   <Step1Instructions appUrl={appUrl} />
                 </Disclosure>
 
-                <button
-                  onClick={() => setShowSkipModal(true)}
-                  className="w-full py-2 text-zinc-500 hover:text-zinc-300 transition text-[11px] flex items-center justify-center gap-1.5"
-                >
-                  Diesen Schritt überspringen
-                </button>
+                {!step1Done && (
+                  <button
+                    onClick={() => setShowSkipModal(true)}
+                    className="w-full py-2 text-zinc-500 hover:text-zinc-300 transition text-[11px] flex items-center justify-center gap-1.5"
+                  >
+                    Diesen Schritt überspringen
+                  </button>
+                )}
+                {step1Done && reconnectMode && (
+                  <button
+                    onClick={() => setReconnectMode(false)}
+                    className="w-full py-2 text-zinc-500 hover:text-zinc-300 transition text-[11px] flex items-center justify-center gap-1.5"
+                  >
+                    Abbrechen — bestehende Verbindung behalten
+                  </button>
+                )}
               </div>
             )}
           </StepCard>

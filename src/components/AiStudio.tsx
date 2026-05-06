@@ -280,7 +280,7 @@ export default function AiStudio() {
             }}
             onDragLeave={() => setDragActive(false)}
             onClick={() => fileInputRef.current?.click()}
-            className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-5 sm:px-8 py-10 sm:py-12 transition-all duration-300 cursor-pointer"
+            className="relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 transition-all duration-300 cursor-pointer"
             style={{
               background: dragActive
                 ? "rgba(149, 191, 71, 0.06)"
@@ -302,7 +302,7 @@ export default function AiStudio() {
             />
 
             <div
-              className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
+              className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
               style={{
                 background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}10)`,
                 border: `1px solid ${ACCENT}30`,
@@ -312,15 +312,15 @@ export default function AiStudio() {
             </div>
 
             <h3
-              className="text-[19px] sm:text-[22px] font-semibold tracking-tight text-white"
+              className="text-[17px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Produkt hochladen
             </h3>
-            <p className="text-[13px] sm:text-[14px] text-zinc-400 mt-1.5 sm:mt-2 max-w-sm leading-relaxed">
+            <p className="text-[12px] text-zinc-400 mt-1.5 max-w-sm leading-relaxed">
               Tippen oder Datei reinziehen
             </p>
-            <p className="text-[11px] sm:text-[12px] text-zinc-600 mt-1">
+            <p className="text-[10px] text-zinc-600 mt-0.5">
               JPG · PNG · WebP
             </p>
 
@@ -330,7 +330,7 @@ export default function AiStudio() {
                 e.stopPropagation();
                 fileInputRef.current?.click();
               }}
-              className="mt-6 sm:mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98]"
+              className="mt-4 px-5 h-10 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -340,7 +340,7 @@ export default function AiStudio() {
               Datei wählen
             </button>
 
-            <p className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
+            <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
               {CREDIT_COSTS.AI_STUDIO} Credits / Generierung
             </p>
           </div>
@@ -356,14 +356,14 @@ export default function AiStudio() {
 
           {/* Compact preview row */}
           <div
-            className="flex items-center gap-3 sm:gap-4 mb-5 sm:mb-6 rounded-2xl p-2.5 sm:p-3"
+            className="flex items-center gap-2 mb-3 rounded-xl p-2"
             style={{
               background: "rgba(255,255,255,0.03)",
               border: "1px solid rgba(255,255,255,0.08)",
             }}
           >
             <div
-              className="w-14 sm:w-16 h-14 sm:h-16 rounded-xl overflow-hidden shrink-0"
+              className="w-12 h-12 rounded-lg overflow-hidden shrink-0"
               style={{ background: "#0a0a0c" }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -374,10 +374,10 @@ export default function AiStudio() {
               />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] sm:text-[13px] font-semibold text-white">
+              <div className="text-[12px] font-semibold text-white">
                 Bereit zur Verarbeitung
               </div>
-              <div className="text-[11px] sm:text-[11.5px] text-zinc-500 mt-0.5">
+              <div className="text-[10px] text-zinc-500 mt-0.5">
                 Wähle eine Szene unten
               </div>
             </div>
@@ -388,7 +388,7 @@ export default function AiStudio() {
                 setPreparedFile(null);
                 setStage("upload");
               }}
-              className="text-[11.5px] sm:text-[12px] px-3 h-8 rounded-full font-medium text-zinc-300 transition active:scale-[0.97] shrink-0"
+              className="text-[11px] px-2.5 h-7 rounded-full font-medium text-zinc-300 transition active:scale-[0.97] shrink-0"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -409,7 +409,7 @@ export default function AiStudio() {
             setOpen={setShowCustomPrompt}
           />
 
-          <StepHeader step={3} total={3} title="Generieren" className="mt-6 sm:mt-8" />
+          <StepHeader step={3} total={3} title="Generieren" className="mt-4" />
 
           <button
             onClick={handleGenerate}
@@ -465,7 +465,7 @@ export default function AiStudio() {
       {/* ── STAGE: processing ────────────────────────────────── */}
       {stage === "processing" && (
         <div
-          className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6 sm:px-8 py-10 sm:py-12 overflow-hidden"
+          className="relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 overflow-hidden"
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             backdropFilter: "blur(28px) saturate(140%)",
@@ -484,12 +484,12 @@ export default function AiStudio() {
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
             <h3
-              className="mt-5 sm:mt-6 text-[18px] sm:text-[20px] font-semibold tracking-tight text-white"
+              className="mt-3 text-[16px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Szene wird erstellt
             </h3>
-            <p className="mt-1.5 sm:mt-2 text-[12.5px] sm:text-[13px] text-zinc-400">
+            <p className="mt-1 text-[11px] text-zinc-400">
               Verarbeitung läuft · {elapsedSec}s
             </p>
             <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
@@ -502,7 +502,7 @@ export default function AiStudio() {
 
       {/* ── STAGE: done — before/after slider ────────────────── */}
       {stage === "done" && resultUrl && originalUrl && (
-        <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-3">
           <BeforeAfter beforeUrl={originalUrl} afterUrl={resultUrl} />
 
           {resultScene && (
@@ -524,7 +524,7 @@ export default function AiStudio() {
           <div className="flex flex-col sm:flex-row gap-2.5">
             <button
               onClick={handleDownload}
-              className="flex-1 h-12 rounded-2xl text-[14px] sm:text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              className="flex-1 h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -537,7 +537,7 @@ export default function AiStudio() {
             <button
               onClick={handleSaveToLibrary}
               disabled={savingToLibrary || savedToLibrary}
-              className="h-12 px-5 rounded-2xl text-[13px] sm:text-[14px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
+              className="h-11 px-4 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
               style={{
                 background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
                 border: `1px solid ${savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)"}`,
@@ -560,7 +560,7 @@ export default function AiStudio() {
                 setSavedToLibrary(false);
                 setStage("configure");
               }}
-              className="px-4 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-3 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -570,7 +570,7 @@ export default function AiStudio() {
             </button>
             <button
               onClick={reset}
-              className="px-4 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-3 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -585,7 +585,7 @@ export default function AiStudio() {
       {/* ── STAGE: error ─────────────────────────────────────── */}
       {stage === "error" && errorMsg && (
         <div
-          className="rounded-3xl sm:rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-start gap-3 sm:gap-4"
+          className="rounded-2xl p-3 flex items-start gap-2"
           style={{
             background: "rgba(239, 68, 68, 0.08)",
             border: "1px solid rgba(239, 68, 68, 0.20)",
@@ -604,7 +604,7 @@ export default function AiStudio() {
           </div>
           <button
             onClick={reset}
-            className="text-[13px] px-4 h-10 sm:h-9 w-full sm:w-auto rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
+            className="text-[12px] px-3 h-9 rounded-lg font-medium text-red-200 transition-all active:scale-[0.97]"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.10)",
@@ -632,7 +632,7 @@ function StepHeader({
   className?: string;
 }) {
   return (
-    <div className={`flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-4 ${className}`}>
+    <div className={`flex items-center gap-2 mb-2.5 ${className}`}>
       <span
         className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[12px] font-semibold tabular-nums shrink-0"
         style={{
@@ -646,7 +646,7 @@ function StepHeader({
       <span className="text-[10px] uppercase tracking-[0.18em] font-semibold text-zinc-500 hidden sm:inline">
         Schritt {step} / {total}
       </span>
-      <h2 className="text-[14.5px] sm:text-[15px] font-semibold tracking-tight text-white sm:ml-1 truncate">
+      <h2 className="text-[13px] font-semibold tracking-tight text-white truncate">
         {title}
       </h2>
     </div>
@@ -854,7 +854,7 @@ function SceneCard({
   return (
     <button
       onClick={onClick}
-      className="group relative shrink-0 snap-start w-[180px] sm:w-[200px] rounded-2xl overflow-hidden text-left transition-all active:scale-[0.98] hover:-translate-y-0.5"
+      className="group relative shrink-0 snap-start w-[150px] rounded-xl overflow-hidden text-left transition-all active:scale-[0.98] hover:-translate-y-0.5"
       style={{
         border: active ? `1.5px solid ${ACCENT}` : "1px solid rgba(255,255,255,0.10)",
         boxShadow: active
@@ -1034,7 +1034,7 @@ function BeforeAfter({
   return (
     <div
       ref={containerRef}
-      className="relative w-full aspect-square rounded-3xl sm:rounded-[24px] overflow-hidden select-none touch-none"
+      className="relative w-full aspect-square rounded-2xl overflow-hidden select-none touch-none"
       style={{
         border: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",

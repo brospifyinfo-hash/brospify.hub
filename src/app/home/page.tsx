@@ -114,14 +114,14 @@ const SETUP_STEPS: { key: keyof Checklist; label: string }[] = [
 ];
 
 const QUICK_TILES = [
-  { title: "Shop", desc: "Theme", href: "/themes", icon: Palette, color: "#EC4899" },
+  { title: "Setup", desc: "Shop verbinden", href: "/setup", icon: Store, color: "#10B981" },
   { title: "Produkte", desc: "Charts", href: "/charts", icon: Package, color: "#8B5CF6" },
   { title: "Blog", desc: "KI-Writer", href: "/blog", icon: PenTool, color: "#A855F7" },
   { title: "SEO", desc: "Audit", href: "/seo", icon: BarChart3, color: "#06B6D4" },
   { title: "Studio", desc: "Fotos", href: "/ai-tools/ai-studio", icon: Camera, color: "#F59E0B" },
   { title: "Freistellen", desc: "BG weg", href: "/ai-tools/background-remover", icon: Scissors, color: "#F43F5E" },
   { title: "Upscale", desc: "4× HD", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#95BF47" },
-  { title: "Mails", desc: "Templates", href: "/email-templates", icon: Mail, color: "#10B981" },
+  { title: "Mails", desc: "Templates", href: "/email-templates", icon: Mail, color: "#F43F5E" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────

@@ -285,7 +285,7 @@ export default function HybridUpscaler() {
     <div className="font-sf w-full">
       {/* ── Mode + scale picker (above dropzone, also during done) ── */}
       {(stage === "idle" || stage === "done") && (
-        <div className="mb-4 sm:mb-6 space-y-3">
+        <div className="mb-3 space-y-3">
           <ModePicker value={mode} onChange={setMode} disabled={isWorking} />
           <ScalePicker value={scale} onChange={setScale} disabled={isWorking} />
         </div>
@@ -302,7 +302,7 @@ export default function HybridUpscaler() {
             }}
             onDragLeave={() => setDragActive(false)}
             onClick={() => !insufficientCredits && fileInputRef.current?.click()}
-            className={`relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-5 sm:px-8 py-10 sm:py-12 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
+            className={`relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
             style={{
               background: dragActive
                 ? "rgba(149, 191, 71, 0.06)"
@@ -324,7 +324,7 @@ export default function HybridUpscaler() {
             />
 
             <div
-              className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
+              className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
               style={{
                 background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}10)`,
                 border: `1px solid ${ACCENT}30`,
@@ -334,15 +334,15 @@ export default function HybridUpscaler() {
             </div>
 
             <h3
-              className="text-[19px] sm:text-[22px] font-semibold tracking-tight text-white"
+              className="text-[17px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Bild hochladen
             </h3>
-            <p className="text-[13px] sm:text-[14px] text-zinc-400 mt-1.5 sm:mt-2 max-w-sm leading-relaxed">
+            <p className="text-[12px] text-zinc-400 mt-1.5 max-w-sm leading-relaxed">
               Drag &amp; Drop oder klicke, um ein Foto auszuwählen
             </p>
-            <p className="text-[11px] sm:text-[12px] text-zinc-600 mt-1">
+            <p className="text-[10px] text-zinc-600 mt-0.5">
               JPG · PNG · WebP · {scale}× Auflösung
             </p>
 
@@ -353,7 +353,7 @@ export default function HybridUpscaler() {
                 e.stopPropagation();
                 if (!insufficientCredits) fileInputRef.current?.click();
               }}
-              className="mt-6 sm:mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-4 px-5 h-10 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -363,14 +363,14 @@ export default function HybridUpscaler() {
               Datei wählen
             </button>
 
-            <p className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
+            <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
               {CREDIT_COSTS.UPSCALE_IMAGE} Credits / Bild
             </p>
 
             {insufficientCredits && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6"
+                className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center text-center px-6"
                 style={{
                   background: "rgba(7,7,9,0.85)",
                   backdropFilter: "blur(14px)",
@@ -426,7 +426,7 @@ export default function HybridUpscaler() {
       {/* ── Stage: WORKING ───────────────────────────────────── */}
       {isWorking && (
         <div
-          className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6 sm:px-8 py-10 sm:py-12 overflow-hidden"
+          className="relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 overflow-hidden"
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             backdropFilter: "blur(28px) saturate(140%)",
@@ -446,12 +446,12 @@ export default function HybridUpscaler() {
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
             <h3
-              className="mt-5 sm:mt-6 text-[18px] sm:text-[20px] font-semibold tracking-tight text-white"
+              className="mt-3 text-[16px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               {stage === "preparing" ? "Bild wird vorbereitet…" : `Auf ${scale}× hochskaliert`}
             </h3>
-            <p className="mt-1.5 sm:mt-2 text-[12.5px] sm:text-[13px] text-zinc-400">
+            <p className="mt-1 text-[11px] text-zinc-400">
               {stage === "preparing"
                 ? "Optimiere die Quelldatei…"
                 : `${MODES.find((m) => m.id === mode)?.label}-Modus · ${elapsedSec}s`}
@@ -467,13 +467,13 @@ export default function HybridUpscaler() {
 
       {/* ── Stage: DONE — before/after slider ─────────────── */}
       {stage === "done" && upscaledUrl && originalUrl && (
-        <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-3">
           <BeforeAfter beforeUrl={originalUrl} afterUrl={upscaledUrl} />
 
           <div className="flex flex-col sm:flex-row gap-2.5">
             <button
               onClick={handleDownload}
-              className="flex-1 h-12 rounded-2xl text-[14px] sm:text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              className="flex-1 h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -486,7 +486,7 @@ export default function HybridUpscaler() {
             <button
               onClick={handleSaveToLibrary}
               disabled={saving || savedToLibrary}
-              className="h-12 px-5 rounded-2xl text-[14px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
+              className="h-11 px-4 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
               style={{
                 background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
                 border: `1px solid ${savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)"}`,
@@ -498,7 +498,7 @@ export default function HybridUpscaler() {
             </button>
             <button
               onClick={reset}
-              className="px-5 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-4 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -508,7 +508,7 @@ export default function HybridUpscaler() {
             </button>
           </div>
 
-          <p className="text-[11px] sm:text-[12px] text-zinc-500 text-center">
+          <p className="text-[10px] text-zinc-500 text-center">
             Fertig in {elapsedSec}s
             {originalDims && outputDims && ` · ${originalDims.width}×${originalDims.height} → ${outputDims.width}×${outputDims.height}`}
           </p>
@@ -518,7 +518,7 @@ export default function HybridUpscaler() {
       {/* ── Stage: ERROR ──────────────────────────────────────── */}
       {stage === "error" && errorMsg && (
         <div
-          className="rounded-3xl sm:rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-start gap-3 sm:gap-4"
+          className="rounded-2xl p-3 flex items-start gap-2"
           style={{
             background: "rgba(239, 68, 68, 0.08)",
             border: "1px solid rgba(239, 68, 68, 0.20)",
@@ -572,7 +572,7 @@ function ModePicker({ value, onChange, disabled }: {
             key={m.id}
             disabled={disabled}
             onClick={() => onChange(m.id)}
-            className="relative px-2 py-2 rounded-xl text-[11px] sm:text-[12px] font-semibold flex flex-col items-center justify-center gap-1 transition disabled:opacity-50"
+            className="relative px-2 py-2 rounded-xl text-[11px] font-semibold flex flex-col items-center justify-center gap-1 transition disabled:opacity-50"
             style={{
               background: isSelected ? `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}08)` : "transparent",
               border: isSelected ? `1px solid ${ACCENT}40` : "1px solid transparent",
@@ -587,7 +587,7 @@ function ModePicker({ value, onChange, disabled }: {
       })}
 
       {/* Hint row spans full grid */}
-      <p className="col-span-3 px-3 pt-1.5 pb-1 text-[10px] sm:text-[11px] text-zinc-500 leading-snug text-center">
+      <p className="col-span-3 px-3 pt-1.5 pb-1 text-[10px] text-zinc-500 leading-snug text-center">
         {active.hint}
       </p>
     </div>
@@ -666,7 +666,7 @@ function BeforeAfter({ beforeUrl, afterUrl }: { beforeUrl: string; afterUrl: str
   return (
     <div
       ref={containerRef}
-      className="relative w-full rounded-3xl sm:rounded-[24px] overflow-hidden bg-zinc-900 select-none touch-none"
+      className="relative w-full rounded-2xl overflow-hidden bg-zinc-900 select-none touch-none"
       style={{
         border: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",

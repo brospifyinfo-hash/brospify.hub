@@ -367,7 +367,7 @@ export default function MagicBackgroundRemover() {
             }}
             onDragLeave={() => setDragActive(false)}
             onClick={() => !insufficientCredits && fileInputRef.current?.click()}
-            className={`relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-5 sm:px-8 py-10 sm:py-12 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
+            className={`relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 transition-all duration-300 ${insufficientCredits ? "cursor-not-allowed" : "cursor-pointer"}`}
             style={{
               background: dragActive ? "rgba(149, 191, 71, 0.06)" : "rgba(255, 255, 255, 0.03)",
               backdropFilter: "blur(28px) saturate(140%)",
@@ -387,7 +387,7 @@ export default function MagicBackgroundRemover() {
             />
 
             <div
-              className="w-14 sm:w-16 h-14 sm:h-16 rounded-2xl flex items-center justify-center mb-4 sm:mb-6"
+              className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
               style={{
                 background: `linear-gradient(135deg, ${ACCENT}25, ${ACCENT}10)`,
                 border: `1px solid ${ACCENT}30`,
@@ -397,15 +397,15 @@ export default function MagicBackgroundRemover() {
             </div>
 
             <h3
-              className="text-[19px] sm:text-[22px] font-semibold tracking-tight text-white"
+              className="text-[17px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
               Produkt freistellen
             </h3>
-            <p className="text-[13px] sm:text-[14px] text-zinc-400 mt-1.5 sm:mt-2 max-w-sm leading-relaxed">
+            <p className="text-[12px] text-zinc-400 mt-1.5 max-w-sm leading-relaxed">
               Tippen oder Datei reinziehen
             </p>
-            <p className="text-[11px] sm:text-[12px] text-zinc-600 mt-1">
+            <p className="text-[10px] text-zinc-600 mt-0.5">
               JPG · PNG · WebP · transparenter PNG-Output
             </p>
 
@@ -416,7 +416,7 @@ export default function MagicBackgroundRemover() {
                 e.stopPropagation();
                 if (!insufficientCredits) fileInputRef.current?.click();
               }}
-              className="mt-6 sm:mt-8 px-6 h-11 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-4 px-5 h-10 rounded-full text-[14px] font-semibold transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -426,14 +426,14 @@ export default function MagicBackgroundRemover() {
               Datei wählen
             </button>
 
-            <p className="absolute bottom-4 sm:bottom-5 left-1/2 -translate-x-1/2 text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
+            <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
               {CREDIT_COSTS.BG_REMOVE} Credits / Bild
             </p>
 
             {insufficientCredits && (
               <div
                 onClick={(e) => e.stopPropagation()}
-                className="absolute inset-0 rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6"
+                className="absolute inset-0 rounded-2xl flex flex-col items-center justify-center text-center px-6"
                 style={{
                   background: "rgba(7,7,9,0.85)",
                   backdropFilter: "blur(14px)",
@@ -488,7 +488,7 @@ export default function MagicBackgroundRemover() {
 
       {isWorking && (
         <div
-          className="relative aspect-[4/3] sm:aspect-[16/10] rounded-3xl sm:rounded-[28px] flex flex-col items-center justify-center text-center px-6 sm:px-8 py-10 sm:py-12 overflow-hidden"
+          className="relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 overflow-hidden"
           style={{
             background: "rgba(255, 255, 255, 0.03)",
             backdropFilter: "blur(28px) saturate(140%)",
@@ -507,10 +507,10 @@ export default function MagicBackgroundRemover() {
           )}
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
-            <h3 className="mt-5 sm:mt-6 text-[18px] sm:text-[20px] font-semibold tracking-tight text-white">
+            <h3 className="mt-3 text-[16px] font-semibold tracking-tight text-white">
               {stage === "preparing" ? "Bild wird vorbereitet…" : "Hintergrund wird entfernt"}
             </h3>
-            <p className="mt-1.5 sm:mt-2 text-[12.5px] sm:text-[13px] text-zinc-400">
+            <p className="mt-1 text-[11px] text-zinc-400">
               {stage === "preparing"
                 ? "Optimiere die Quelldatei…"
                 : `${BG_PRECISION_OPTIONS.find((p) => p.id === precision)?.label}-Modus · ${elapsedSec}s`}
@@ -529,10 +529,10 @@ export default function MagicBackgroundRemover() {
       )}
 
       {stage === "done" && cutoutUrl && (
-        <div className="space-y-4 sm:space-y-5">
+        <div className="space-y-3">
           {/* Result preview */}
           <div
-            className="relative w-full rounded-3xl sm:rounded-[24px] overflow-hidden"
+            className="relative w-full rounded-2xl overflow-hidden"
             style={{
               border: "1px solid rgba(255,255,255,0.08)",
               boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
@@ -592,7 +592,7 @@ export default function MagicBackgroundRemover() {
           <div className="flex flex-col sm:flex-row gap-2.5">
             <button
               onClick={handleDownload}
-              className="flex-1 h-12 rounded-2xl text-[14px] sm:text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
+              className="flex-1 h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
               style={{
                 background: ACCENT,
                 color: "#0a1604",
@@ -605,7 +605,7 @@ export default function MagicBackgroundRemover() {
             <button
               onClick={handleSaveToLibrary}
               disabled={saving || savedToLibrary || composing}
-              className="h-12 px-5 rounded-2xl text-[14px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
+              className="h-11 px-4 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
               style={{
                 background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
                 border: `1px solid ${savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)"}`,
@@ -617,7 +617,7 @@ export default function MagicBackgroundRemover() {
             </button>
             <button
               onClick={reset}
-              className="px-5 h-12 rounded-2xl text-[13px] sm:text-[14px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-4 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -627,7 +627,7 @@ export default function MagicBackgroundRemover() {
             </button>
           </div>
 
-          <p className="text-[11px] sm:text-[12px] text-zinc-500 text-center">
+          <p className="text-[10px] text-zinc-500 text-center">
             Fertig in {elapsedSec}s · {bgKind === "transparent" ? "transparenter PNG" : "Hintergrund lokal komponiert (kostet 0 Credits)"}
           </p>
         </div>
@@ -635,7 +635,7 @@ export default function MagicBackgroundRemover() {
 
       {stage === "error" && errorMsg && (
         <div
-          className="rounded-3xl sm:rounded-[24px] p-5 sm:p-6 flex flex-col sm:flex-row items-start gap-3 sm:gap-4"
+          className="rounded-2xl p-3 flex items-start gap-2"
           style={{
             background: "rgba(239, 68, 68, 0.08)",
             border: "1px solid rgba(239, 68, 68, 0.20)",
@@ -654,7 +654,7 @@ export default function MagicBackgroundRemover() {
           </div>
           <button
             onClick={reset}
-            className="text-[13px] px-4 h-10 sm:h-9 w-full sm:w-auto rounded-full font-medium text-red-200 transition-all active:scale-[0.97]"
+            className="text-[12px] px-3 h-9 rounded-lg font-medium text-red-200 transition-all active:scale-[0.97]"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.10)",
@@ -680,7 +680,7 @@ function PrecisionToggle({
   disabled?: boolean;
 }) {
   return (
-    <div className="mb-5 sm:mb-6">
+    <div className="mb-3">
       <div className="flex items-center justify-between mb-2 px-1">
         <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">
           Genauigkeit
@@ -726,13 +726,13 @@ function PrecisionToggle({
                   <div className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
                 )}
                 <span
-                  className="text-[12px] sm:text-[13px] font-semibold tracking-tight"
+                  className="text-[12px] font-semibold tracking-tight"
                   style={{ color: active ? "#fff" : "#d4d4d8" }}
                 >
                   {opt.label}
                 </span>
               </div>
-              <p className="text-[10px] sm:text-[10.5px] text-zinc-500 mt-1 leading-snug">
+              <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
                 {opt.hint}
               </p>
             </button>
@@ -763,7 +763,7 @@ function BackgroundPanel({
 }) {
   return (
     <div
-      className="rounded-3xl sm:rounded-[24px] p-4 sm:p-5 space-y-3.5"
+      className="rounded-2xl p-3 space-y-2.5"
       style={{
         background: "rgba(255,255,255,0.03)",
         border: "1px solid rgba(255,255,255,0.08)",
@@ -772,7 +772,7 @@ function BackgroundPanel({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }} />
-          <h4 className="text-[12px] sm:text-[13px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
+          <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
             Hintergrund hinzufügen
           </h4>
         </div>
@@ -800,7 +800,7 @@ function BackgroundPanel({
                 }
                 onKind(t.id);
               }}
-              className="px-2 py-1.5 rounded-lg text-[11px] sm:text-[12px] font-semibold transition"
+              className="px-2 py-1.5 rounded-lg text-[11px] font-semibold transition"
               style={{
                 background: active ? "rgba(149,191,71,0.15)" : "transparent",
                 border: active ? `1px solid ${ACCENT}40` : "1px solid transparent",

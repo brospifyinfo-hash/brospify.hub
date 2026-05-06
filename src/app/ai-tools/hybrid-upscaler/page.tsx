@@ -14,26 +14,16 @@ export default function HybridUpscalerPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-10 md:py-16">
-          <header className="mb-10 text-center sm:text-left">
-            <div className="inline-flex items-center gap-2 mb-4">
-              <span
-                className="text-[10px] uppercase tracking-[0.2em] font-semibold"
-                style={{ color: "#95BF47" }}
-              >
-                AI Tools
-              </span>
+        <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-5">
+          <header className="mb-3 sm:mb-4">
+            <div className="text-[9px] uppercase tracking-[0.18em] font-semibold mb-1" style={{ color: "#95BF47" }}>
+              AI Tools
             </div>
-            <h1
-              className="text-[34px] sm:text-[42px] font-semibold tracking-tight text-white leading-[1.05]"
-              style={{ letterSpacing: "-0.025em" }}
-            >
+            <h1 className="text-[18px] sm:text-[22px] font-semibold tracking-tight text-white leading-tight">
               Image Upscaler
             </h1>
-            <p className="mt-3 text-[15px] text-zinc-400 max-w-xl mx-auto sm:mx-0 leading-relaxed">
-              Drei Modi für Foto, Gesichter oder Grafik — wähle 2× oder 4×
-              und vergleich Vorher/Nachher direkt im Slider. Speicher das
-              Ergebnis in einem Klick in deine Mediathek.
+            <p className="mt-1 text-[11px] sm:text-xs text-zinc-500 leading-snug">
+              3 Modi · 2× / 4× · Before-After-Slider · 1-Klick in Mediathek
             </p>
           </header>
 

@@ -24,6 +24,7 @@ import {
   Camera,
   Plus,
   FolderHeart,
+  Store,
   User as UserIcon,
   FileText,
   Shield,
@@ -733,6 +734,7 @@ function ProfileAccountGroup({ session, pathname, onNavigate }: {
                   Shop
                 </span>
               </div>
+              <SubItem href="/setup" icon={Store} label="Shop verbinden / Setup" active={pathname === "/setup"} onClick={onNavigate} />
               <SubItem href="/legal" icon={Scale} label="Rechtstexte für deinen Shop" active={pathname === "/legal"} onClick={onNavigate} />
 
               {/* Brospify Hub legal */}

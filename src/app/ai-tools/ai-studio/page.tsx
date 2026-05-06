@@ -14,26 +14,16 @@ export default function AiStudioPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 md:py-16">
-          <header className="mb-6 sm:mb-10 text-left">
-            <div className="inline-flex items-center gap-2 mb-3 sm:mb-4">
-              <span
-                className="text-[10px] uppercase tracking-[0.2em] font-semibold"
-                style={{ color: "#95BF47" }}
-              >
-                AI Tools
-              </span>
+        <div className="max-w-3xl mx-auto px-3 sm:px-5 py-3 sm:py-5">
+          <header className="mb-3 sm:mb-4">
+            <div className="text-[9px] uppercase tracking-[0.18em] font-semibold mb-1" style={{ color: "#95BF47" }}>
+              AI Tools
             </div>
-            <h1
-              className="text-[26px] sm:text-[34px] md:text-[42px] font-semibold tracking-tight text-white leading-[1.08]"
-              style={{ letterSpacing: "-0.025em" }}
-            >
-              AI Studio: Produkt-Fotografie
+            <h1 className="text-[18px] sm:text-[22px] font-semibold tracking-tight text-white leading-tight">
+              AI Studio
             </h1>
-            <p className="mt-2.5 sm:mt-3 text-[13.5px] sm:text-[15px] text-zinc-400 max-w-xl leading-relaxed">
-              Stelle dein Produkt in eine professionelle Szene — Marmor,
-              Studio, Natur und mehr. Die KI passt Belichtung, Position
-              und Schatten passend zur Umgebung an.
+            <p className="mt-1 text-[11px] sm:text-xs text-zinc-500 leading-snug">
+              Produkt in Studio-Szene · realistische Schatten · KI-Belichtung
             </p>
           </header>
 
