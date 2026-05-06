@@ -11,6 +11,7 @@ import {
   getAllKunden,
   type CreditTransaction,
 } from "@/lib/sheets";
+import { CREDIT_PRICE_EUR, costForReason } from "@/lib/ai-costs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +60,18 @@ interface StatsResponse {
   topUsers: TopUser[];
   /** Most-recent N transactions across the whole platform. */
   recentTx: (CreditTransaction & { customer: string; email: string })[];
+  /** Money side: actual API cost vs. credit-pack revenue (current month). */
+  money: {
+    monthLabel: string;            // "2026-05"
+    costThisMonthEur: number;      // sum of deduct × per-call EUR cost
+    costAllTimeEur: number;        // same, all-time
+    revenueThisMonthEur: number;   // sum of topup credits × CREDIT_PRICE_EUR
+    revenueAllTimeEur: number;     // same, all-time
+    profitThisMonthEur: number;
+    profitMarginPct: number;       // (rev-cost)/rev × 100, 0 if no revenue
+    /** Per-tool monthly breakdown: count + EUR cost + credits charged. */
+    toolBreakdown: { reason: string; label: string; provider: string; calls: number; costEur: number; creditsCharged: number }[];
+  };
 }
 
 function dayOfWeekDe(d: Date): number {
@@ -92,6 +105,14 @@ export async function GET() {
     }
     const toolMap = new Map<string, { count: number; total: number }>();
     const allTx: (CreditTransaction & { customer: string; email: string })[] = [];
+
+    // ── Money rollups ──
+    const monthIso = new Date().toISOString().slice(0, 7); // "2026-05"
+    let costThisMonthEur = 0;
+    let costAllTimeEur = 0;
+    let revenueThisMonthCredits = 0;
+    let revenueAllTimeCredits = 0;
+    const monthlyToolMap = new Map<string, { calls: number; costEur: number; creditsCharged: number }>();
 
     let activeLast7d = 0;
     let activeLast30d = 0;
@@ -142,13 +163,32 @@ export async function GET() {
           }
         }
 
-        // Tool usage (from deduct entries)
+        // Tool usage + cost (from deduct entries)
         if (tx.type === "deduct") {
           const reason = tx.reason || "unknown";
           const t = toolMap.get(reason) || { count: 0, total: 0 };
           t.count++;
           t.total += Math.abs(tx.delta);
           toolMap.set(reason, t);
+
+          const cost = costForReason(reason);
+          costAllTimeEur += cost.eur;
+          if (tx.ts.startsWith(monthIso)) {
+            costThisMonthEur += cost.eur;
+            const m = monthlyToolMap.get(reason) || { calls: 0, costEur: 0, creditsCharged: 0 };
+            m.calls++;
+            m.costEur += cost.eur;
+            m.creditsCharged += Math.abs(tx.delta);
+            monthlyToolMap.set(reason, m);
+          }
+        }
+
+        // Revenue tracking (topup entries only)
+        if (tx.type === "topup") {
+          revenueAllTimeCredits += tx.delta;
+          if (tx.ts.startsWith(monthIso)) {
+            revenueThisMonthCredits += tx.delta;
+          }
         }
 
         // Top user / activity
@@ -234,6 +274,38 @@ export async function GET() {
       toolUsage,
       topUsers,
       recentTx,
+      money: (() => {
+        const revenueThisMonthEur = +(revenueThisMonthCredits * CREDIT_PRICE_EUR).toFixed(2);
+        const revenueAllTimeEur = +(revenueAllTimeCredits * CREDIT_PRICE_EUR).toFixed(2);
+        const cm = +costThisMonthEur.toFixed(2);
+        const profitThisMonthEur = +(revenueThisMonthEur - cm).toFixed(2);
+        const margin = revenueThisMonthEur > 0
+          ? +(((revenueThisMonthEur - cm) / revenueThisMonthEur) * 100).toFixed(1)
+          : 0;
+        const toolBreakdown = Array.from(monthlyToolMap.entries())
+          .map(([reason, v]) => {
+            const meta = costForReason(reason);
+            return {
+              reason,
+              label: meta.label,
+              provider: meta.provider,
+              calls: v.calls,
+              costEur: +v.costEur.toFixed(4),
+              creditsCharged: v.creditsCharged,
+            };
+          })
+          .sort((a, b) => b.costEur - a.costEur);
+        return {
+          monthLabel: monthIso,
+          costThisMonthEur: cm,
+          costAllTimeEur: +costAllTimeEur.toFixed(2),
+          revenueThisMonthEur,
+          revenueAllTimeEur,
+          profitThisMonthEur,
+          profitMarginPct: margin,
+          toolBreakdown,
+        };
+      })(),
     };
 
     return NextResponse.json(out);

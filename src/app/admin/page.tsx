@@ -67,6 +67,16 @@ interface AdminStats {
   toolUsage: { reason: string; count: number; totalCredits: number }[];
   topUsers: { lizenzschluessel: string; email: string; shopDomain: string; balance: number; used30d: number; txCount30d: number }[];
   recentTx: { ts: string; type: string; delta: number; balanceAfter: number; reason: string; ref?: string; customer: string; email: string }[];
+  money: {
+    monthLabel: string;
+    costThisMonthEur: number;
+    costAllTimeEur: number;
+    revenueThisMonthEur: number;
+    revenueAllTimeEur: number;
+    profitThisMonthEur: number;
+    profitMarginPct: number;
+    toolBreakdown: { reason: string; label: string; provider: string; calls: number; costEur: number; creditsCharged: number }[];
+  };
 }
 
 interface ActivityEntry {
@@ -79,6 +89,18 @@ interface ActivityEntry {
   customerKey: string;
   email: string;
   shopDomain: string;
+}
+
+interface ApiBalance {
+  provider: "deepseek" | "fal" | "replicate";
+  label: string;
+  configured: boolean;
+  status: "ok" | "low" | "empty" | "unknown" | "not-configured";
+  balanceUsd?: number;
+  balanceEur?: number;
+  raw?: string;
+  error?: string;
+  endpoint?: string;
 }
 
 // ─── Drop Zone ───────────────────────────────────────────────────
@@ -296,6 +318,21 @@ export default function AdminPage() {
   const [codeSaving, setCodeSaving] = useState(false);
   const [codeBusyRow, setCodeBusyRow] = useState<number | null>(null);
 
+  // ─── API balances (DeepSeek + Fal + Replicate) ─────────────────
+  const [apiBalances, setApiBalances] = useState<ApiBalance[]>([]);
+  const [apiBalancesLoading, setApiBalancesLoading] = useState(false);
+  const loadApiBalances = useCallback(async () => {
+    setApiBalancesLoading(true);
+    try {
+      const res = await fetch("/api/admin/api-balances");
+      if (res.ok) {
+        const data = await res.json();
+        setApiBalances(data.providers || []);
+      }
+    } catch { /* ignore */ }
+    finally { setApiBalancesLoading(false); }
+  }, []);
+
   // ─── System status (health) ────────────────────────────────────
   interface SystemStatus {
     generatedAt: string;
@@ -386,8 +423,11 @@ export default function AdminPage() {
 
   // ─── New: System status load + Dashboard auto-refresh ──────────
   useEffect(() => {
-    if (activeTab === "system") loadSystemStatus();
-  }, [activeTab, loadSystemStatus]);
+    if (activeTab === "system") {
+      loadSystemStatus();
+      loadApiBalances();
+    }
+  }, [activeTab, loadSystemStatus, loadApiBalances]);
 
   useEffect(() => {
     if (!dashAutoRefresh || activeTab !== "dashboard") return;
@@ -959,7 +999,14 @@ export default function AdminPage() {
 
             {/* ─── System Status ─────────────────── */}
             {activeTab === "system" && (
-              <SystemStatusView status={systemStatus} loading={systemStatusLoading} onRefresh={loadSystemStatus} />
+              <SystemStatusView
+                status={systemStatus}
+                loading={systemStatusLoading}
+                onRefresh={loadSystemStatus}
+                apiBalances={apiBalances}
+                apiBalancesLoading={apiBalancesLoading}
+                onRefreshBalances={loadApiBalances}
+              />
             )}
 
         {/* ─── Customers Tab ─────────────────────────────────── */}
@@ -2498,7 +2545,11 @@ function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoR
         </button>
       </div>
 
+      {/* Money — costs vs. revenue (this month) */}
+      <MoneySection money={stats.money} />
+
       {/* KPI Grid */}
+      <SectionTitle title="Kunden & Credits (Stand jetzt)" desc="Schnapsschuss aller Kunden im System. Balance = Credits, die noch in deren Konten liegen." />
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <BigKpi label="Kunden gesamt" value={stats.customers.total} icon={Users} color="#3B82F6" />
         <BigKpi label="Aktiv (7d)" value={stats.customers.activeLast7d} icon={Zap} color="#10B981" hint={`${stats.customers.activeLast30d} in 30d`} />
@@ -2589,6 +2640,115 @@ function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoR
           )}
         </DashboardCard>
       </div>
+    </div>
+  );
+}
+
+// ─── Section title with description (used for grouping in Dashboard) ─
+
+function SectionTitle({ title, desc }: { title: string; desc?: string }) {
+  return (
+    <div className="pt-1">
+      <div className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest">{title}</div>
+      {desc && <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">{desc}</div>}
+    </div>
+  );
+}
+
+// ─── Money section (cost / revenue / profit this month) ───────────────
+
+interface MoneyData {
+  monthLabel: string;
+  costThisMonthEur: number;
+  costAllTimeEur: number;
+  revenueThisMonthEur: number;
+  revenueAllTimeEur: number;
+  profitThisMonthEur: number;
+  profitMarginPct: number;
+  toolBreakdown: { reason: string; label: string; provider: string; calls: number; costEur: number; creditsCharged: number }[];
+}
+
+function MoneySection({ money }: { money: MoneyData }) {
+  const profitGood = money.profitThisMonthEur >= 0;
+  const maxCost = Math.max(...money.toolBreakdown.map((t) => t.costEur), 0.0001);
+
+  return (
+    <div className="rounded-2xl border border-emerald-500/15 bg-gradient-to-br from-emerald-500/[0.04] to-purple-500/[0.04] p-3 space-y-3">
+      <div>
+        <div className="text-[11px] font-bold text-zinc-300 uppercase tracking-widest flex items-center gap-1.5">
+          💰 Geld dieser Monat ({money.monthLabel})
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-0.5 leading-snug">
+          Was du an AI-API-Calls bezahlst (geschätzt nach Provider-Preisen) vs. was Kunden für Credits gezahlt haben.
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.05] p-2.5">
+          <div className="text-[9px] uppercase tracking-widest text-emerald-300/80 font-semibold">Umsatz</div>
+          <div className="text-base font-bold tabular-nums text-emerald-300 mt-0.5">
+            {money.revenueThisMonthEur.toFixed(2)} €
+          </div>
+          <div className="text-[9px] text-zinc-500 mt-0.5">All-Time {money.revenueAllTimeEur.toFixed(0)} €</div>
+        </div>
+        <div className="rounded-xl border border-red-500/25 bg-red-500/[0.05] p-2.5">
+          <div className="text-[9px] uppercase tracking-widest text-red-300/80 font-semibold">AI-Kosten</div>
+          <div className="text-base font-bold tabular-nums text-red-300 mt-0.5">
+            {money.costThisMonthEur.toFixed(2)} €
+          </div>
+          <div className="text-[9px] text-zinc-500 mt-0.5">All-Time {money.costAllTimeEur.toFixed(0)} €</div>
+        </div>
+        <div
+          className="rounded-xl border p-2.5"
+          style={{
+            borderColor: profitGood ? "rgba(149,191,71,0.3)" : "rgba(239,68,68,0.3)",
+            background: profitGood ? "rgba(149,191,71,0.05)" : "rgba(239,68,68,0.05)",
+          }}
+        >
+          <div
+            className="text-[9px] uppercase tracking-widest font-semibold"
+            style={{ color: profitGood ? "#95BF47" : "#fca5a5" }}
+          >
+            Profit (geschätzt)
+          </div>
+          <div
+            className="text-base font-bold tabular-nums mt-0.5"
+            style={{ color: profitGood ? "#95BF47" : "#fca5a5" }}
+          >
+            {profitGood && money.profitThisMonthEur > 0 ? "+" : ""}
+            {money.profitThisMonthEur.toFixed(2)} €
+          </div>
+          <div className="text-[9px] text-zinc-500 mt-0.5">{money.profitMarginPct}% Marge</div>
+        </div>
+      </div>
+
+      {money.toolBreakdown.length > 0 && (
+        <div>
+          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">
+            Kosten pro Tool (diesen Monat)
+          </div>
+          <div className="space-y-1">
+            {money.toolBreakdown.map((t) => (
+              <div key={t.reason} className="flex items-center gap-2">
+                <span className="text-[10px] truncate w-32 shrink-0 text-zinc-300">{t.label}</span>
+                <div className="flex-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-400"
+                    style={{ width: `${(t.costEur / maxCost) * 100}%` }}
+                  />
+                </div>
+                <span className="text-[10px] tabular-nums text-zinc-400 w-14 text-right">{t.calls}× Calls</span>
+                <span className="text-[10px] tabular-nums font-bold text-red-300 w-14 text-right">
+                  {t.costEur < 0.01 ? "<0.01" : t.costEur.toFixed(2)} €
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-[9px] text-zinc-600 mt-2 leading-snug">
+            <strong>Schätzwerte</strong> — Replicate Real-ESRGAN ~€0,01/Call, Fal BiRefNet ~€0,037, Fal IC-Light ~€0,046, DeepSeek-Mails ~€0,004.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -2688,6 +2848,11 @@ function StatsView({ stats, loading }: { stats: AdminStats | null; loading: bool
 
   return (
     <div className="space-y-3">
+      <SectionTitle title="Statistiken" desc="Wachstums- und Aktivitäts-Trends. Sieh wie Käufe (grün) vs. Verbrauch (rot) je Tag aussehen." />
+
+      {/* Money block at top of stats */}
+      <MoneySection money={stats.money} />
+
       {/* Activity over 14 days */}
       <DashboardCard title="Credit-Bewegungen (14 Tage)" icon={TrendingUp} accent="#10B981">
         <div className="flex items-end gap-px h-24 mb-1">
@@ -2758,6 +2923,10 @@ function StatsView({ stats, loading }: { stats: AdminStats | null; loading: bool
 
 // ─── Activity feed view ────────────────────────────────────────
 
+// Add a heading + caption above the activity feed when the parent
+// renders this view, so the admin knows exactly what each filter
+// does and what a transaction row means.
+
 function ActivityView({ entries, loading, filter, setFilter, onJumpToCustomer, onRefresh, onExportCsv }: {
   entries: ActivityEntry[];
   loading: boolean;
@@ -2769,6 +2938,11 @@ function ActivityView({ entries, loading, filter, setFilter, onJumpToCustomer, o
 }) {
   return (
     <div className="space-y-3">
+      <SectionTitle
+        title="Live-Aktivität (alle Credit-Bewegungen)"
+        desc="Jede Transaktion in einer Liste — Tool-Verbrauch, Käufe, Voucher, Starter-Boni, Admin-Anpassungen. Klick auf eine Zeile springt zum Kunden."
+      />
+
       {/* Filters */}
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2">
         <input
@@ -2903,10 +3077,13 @@ interface SystemStatusT {
   timestamps: { latestKundeIso: string; latestTxIso: string; latestNewsIso: string };
 }
 
-function SystemStatusView({ status, loading, onRefresh }: {
+function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalancesLoading, onRefreshBalances }: {
   status: SystemStatusT | null;
   loading: boolean;
   onRefresh: () => void;
+  apiBalances: ApiBalance[];
+  apiBalancesLoading: boolean;
+  onRefreshBalances: () => void;
 }) {
   if (loading && !status) {
     return (
@@ -2925,17 +3102,21 @@ function SystemStatusView({ status, loading, onRefresh }: {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-zinc-500">
-          Health-Check über Sheet-Tabs, Blob-Storage und Environment-Variablen.
+          Health-Check über Sheet-Tabs, Blob-Storage, Environment-Variablen und AI-API-Balances.
         </p>
         <button
-          onClick={onRefresh}
-          disabled={loading}
+          onClick={() => { onRefresh(); onRefreshBalances(); }}
+          disabled={loading || apiBalancesLoading}
           className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
         >
-          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          {(loading || apiBalancesLoading) ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
           Aktualisieren
         </button>
       </div>
+
+      {/* ─── AI-API Balances (DeepSeek + Fal + Replicate) ─── */}
+      <ApiBalancesCard balances={apiBalances} loading={apiBalancesLoading} />
+
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <BigKpi label="Sheet-Tabs OK" value={status.sheetTabs.filter((t) => t.exists).length} icon={Check} color="#10B981" hint={`${status.sheetTabs.filter((t) => !t.exists).length} fehlen`} />
@@ -3008,6 +3189,74 @@ function SystemStatusView({ status, loading, onRefresh }: {
         </div>
       </DashboardCard>
     </div>
+  );
+}
+
+// ─── API Balances card (System tab) ────────────────────────────
+
+function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loading: boolean }) {
+  if (loading && balances.length === 0) {
+    return <div className="h-32 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />;
+  }
+  if (balances.length === 0) {
+    return null;
+  }
+  const lowOrEmpty = balances.filter((b) => b.status === "low" || b.status === "empty");
+
+  return (
+    <DashboardCard
+      title="AI-API Balances (Provider-Konten)"
+      icon={Coins}
+      accent={lowOrEmpty.length > 0 ? "#EF4444" : "#10B981"}
+    >
+      <p className="text-[10px] text-zinc-500 mb-2 leading-snug">
+        Was du noch bei jedem Provider auf dem Konto hast. Wenn ein Konto leer ist, fallen die entsprechenden Tools aus —
+        rote Karten brauchen sofort Top-Up.
+      </p>
+      <div className="space-y-1.5">
+        {balances.map((b) => {
+          const meta = {
+            ok: { color: "#10B981", label: "OK" },
+            low: { color: "#F59E0B", label: "Niedrig" },
+            empty: { color: "#EF4444", label: "Leer!" },
+            unknown: { color: "#71717A", label: "Unbekannt" },
+            "not-configured": { color: "#71717A", label: "Nicht konfiguriert" },
+          }[b.status];
+
+          return (
+            <div
+              key={b.provider}
+              className="flex items-center gap-2 px-2.5 py-2 rounded-lg border"
+              style={{
+                background: `${meta.color}10`,
+                borderColor: `${meta.color}30`,
+              }}
+            >
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.color }} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[12px] font-semibold truncate">{b.label}</div>
+                <div className="text-[9px] text-zinc-500 truncate">
+                  {b.balanceEur !== undefined
+                    ? `${b.balanceEur.toFixed(2)} € (${b.balanceUsd?.toFixed(2)} $)`
+                    : b.raw || b.error || "—"}
+                </div>
+              </div>
+              <span
+                className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0"
+                style={{ background: `${meta.color}20`, color: meta.color }}
+              >
+                {meta.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {lowOrEmpty.length > 0 && (
+        <div className="mt-2 text-[10px] text-red-300 leading-snug">
+          ⚠️ {lowOrEmpty.length} Provider {lowOrEmpty.length === 1 ? "ist" : "sind"} im niedrigen / leeren Bereich. Lade dort sofort auf, sonst fallen Tool-Calls aus.
+        </div>
+      )}
+    </DashboardCard>
   );
 }
 
