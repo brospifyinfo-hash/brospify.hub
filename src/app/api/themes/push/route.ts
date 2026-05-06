@@ -1,36 +1,64 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 import { list } from "@vercel/blob";
 
 export const dynamic = "force-dynamic";
 
-// Read theme URL from global settings (stored in Vercel Blob)
-async function getThemeUrl(): Promise<string | null> {
-  try {
-    const { blobs } = await list({ prefix: "brospifyhub-settings.json", limit: 1 });
-    if (blobs.length > 0 && blobs[0].url) {
-      const res = await fetch(blobs[0].url, { cache: "no-store" });
-      if (res.ok) {
-        const data = await res.json();
-        return data.themeFileUrl || null;
-      }
-    }
-  } catch (err) {
-    console.error("[ThemePush] Failed to read settings:", err);
-  }
-  return null;
+interface ThemeEntry {
+  id: string;
+  name: string;
+  fileUrl: string;
+  fileName?: string;
+  version?: string;
 }
 
-export async function POST() {
+// Pull theme info from settings blob; supports both new themes[] gallery
+// and the legacy single-theme fields.
+async function resolveTheme(themeId?: string): Promise<{ url: string; name: string } | null> {
   try {
-    // 1. Auth check — must be logged-in customer (not admin)
+    const { blobs } = await list({ prefix: "brospifyhub-settings.json", limit: 1 });
+    if (blobs.length === 0 || !blobs[0].url) return null;
+    const res = await fetch(blobs[0].url, { cache: "no-store" });
+    if (!res.ok) return null;
+    const data = await res.json();
+
+    const themes: ThemeEntry[] = Array.isArray(data.themes) ? data.themes : [];
+
+    // Explicit themeId requested → must match
+    if (themeId) {
+      const t = themes.find((x) => x.id === themeId);
+      if (t && t.fileUrl) {
+        return { url: t.fileUrl, name: t.name || "Brospify Theme" };
+      }
+      // Fallback: legacy "legacy" id maps to single-theme fields
+      if (themeId === "legacy" && data.themeFileUrl) {
+        return { url: data.themeFileUrl, name: data.themeFileName || "Brospify Premium Theme" };
+      }
+      return null;
+    }
+
+    // No id → first theme in gallery, or legacy single theme
+    if (themes.length > 0 && themes[0].fileUrl) {
+      return { url: themes[0].fileUrl, name: themes[0].name || "Brospify Theme" };
+    }
+    if (data.themeFileUrl) {
+      return { url: data.themeFileUrl, name: data.themeFileName || "Brospify Premium Theme" };
+    }
+    return null;
+  } catch (err) {
+    console.error("[ThemePush] Failed to read settings:", err);
+    return null;
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
     const session = await getSession();
     if (!session.isLoggedIn || !session.lizenzschluessel) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
-    // 2. Get customer data for Shopify token + domain
     const kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde || !kunde.shopifyToken || !kunde.shopDomain) {
       return NextResponse.json(
@@ -42,24 +70,22 @@ export async function POST() {
     const accessToken = kunde.shopifyToken;
     const domain = kunde.shopDomain.replace(/^https?:\/\//, "").replace(/\/$/, "");
 
-    console.log("[ThemePush] Customer:", session.lizenzschluessel);
-    console.log("[ThemePush] Shop domain:", domain);
-    console.log("[ThemePush] Token length:", accessToken.length);
+    let themeId: string | undefined;
+    try {
+      const body = await req.json();
+      if (body && typeof body.themeId === "string") themeId = body.themeId;
+    } catch { /* no body, that's fine — fall back to first/legacy */ }
 
-    // 3. Get theme ZIP URL from admin settings
-    const themeZipUrl = await getThemeUrl();
-    if (!themeZipUrl) {
+    const theme = await resolveTheme(themeId);
+    if (!theme) {
       return NextResponse.json(
         { error: "Kein Theme hinterlegt. Der Admin muss zuerst ein Theme hochladen." },
         { status: 400 }
       );
     }
 
-    console.log("[ThemePush] Theme ZIP URL:", themeZipUrl);
+    console.log("[ThemePush] Customer:", session.lizenzschluessel, "Shop:", domain, "Theme:", theme.name);
 
-    // 4. Push theme to Shopify via Admin REST API
-    //    POST /admin/api/2024-01/themes.json
-    //    Shopify will download the ZIP from the src URL and install it
     const shopifyRes = await fetch(
       `https://${domain}/admin/api/2024-01/themes.json`,
       {
@@ -70,8 +96,8 @@ export async function POST() {
         },
         body: JSON.stringify({
           theme: {
-            name: "Brospify Premium Theme",
-            src: themeZipUrl,
+            name: theme.name,
+            src: theme.url,
           },
         }),
       }
@@ -85,11 +111,7 @@ export async function POST() {
       responseData = { raw: responseText };
     }
 
-    console.log("[ThemePush] Shopify status:", shopifyRes.status);
-    console.log("[ThemePush] SHOPIFY THEME RESPONSE:", JSON.stringify(responseData));
-
     if (!shopifyRes.ok) {
-      // Shopify token invalid or missing scope
       if (shopifyRes.status === 401 || shopifyRes.status === 403) {
         return NextResponse.json(
           {
@@ -99,7 +121,6 @@ export async function POST() {
         );
       }
 
-      // Other Shopify errors
       const errorMsg =
         responseData?.errors ||
         responseData?.error ||
@@ -110,11 +131,8 @@ export async function POST() {
       );
     }
 
-    // 5. Success — Shopify accepted the theme upload
-    const theme = responseData?.theme;
-    console.log("[ThemePush] Success! Theme ID:", theme?.id, "Role:", theme?.role);
+    const installedTheme = responseData?.theme;
 
-    // Update onboarding checklist
     try {
       const profile = await getKundeProfile(kunde.rowIndex);
       await updateKundeProfile(kunde.rowIndex, {
@@ -126,10 +144,10 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       theme: {
-        id: theme?.id,
-        name: theme?.name,
-        role: theme?.role,
-        previewable: theme?.previewable,
+        id: installedTheme?.id,
+        name: installedTheme?.name,
+        role: installedTheme?.role,
+        previewable: installedTheme?.previewable,
       },
     });
   } catch (error) {
