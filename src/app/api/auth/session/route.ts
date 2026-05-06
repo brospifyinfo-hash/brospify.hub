@@ -17,5 +17,7 @@ export async function GET() {
     googleName: session.googleName || null,
     googleEmail: session.googleEmail || null,
     googleImage: session.googleImage || null,
+    lizenzschluessel: session.lizenzschluessel || null,
+    impersonatedBy: session.impersonatedBy || null,
   });
 }

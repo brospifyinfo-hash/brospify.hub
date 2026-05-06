@@ -1,12 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { ensureStarterGrant, getAllKunden, getKundeProfile } from "@/lib/sheets";
+import {
+  ensureSignupAt,
+  ensureStarterGrant,
+  findKundeByGoogleEmail,
+  getKundeProfile,
+  logSystemEvent,
+} from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 // After Google sign-in, this route maps the Google email to a Kunden entry
-// and creates an iron-session (same as license key login)
+// and creates an iron-session (same as license key login).
 export async function GET(req: NextRequest) {
   try {
     const authSession = await auth();
@@ -15,23 +21,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL("/?error=no_email", req.url));
     }
 
-    const email = authSession.user.email.toLowerCase();
-    const kunden = await getAllKunden();
-
-    // Match by kunden email OR by linked Google email in Profil_JSON
-    let kunde = kunden.find(
-      (k) => k.kundenEmail.toLowerCase() === email
-    );
-
-    if (!kunde) {
-      // Check if any customer has linked this Google email
-      for (const k of kunden) {
-        if (k.profile?.linkedGoogleEmail?.toLowerCase() === email) {
-          kunde = k;
-          break;
-        }
-      }
-    }
+    const email = authSession.user.email;
+    const kunde = await findKundeByGoogleEmail(email);
 
     if (!kunde) {
       return NextResponse.redirect(
@@ -39,10 +30,23 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (kunde.profile.blocked === true) {
+      void logSystemEvent({
+        level: "warn",
+        actor: email,
+        action: "auth.login.blocked",
+        target: kunde.lizenzschluessel,
+        details: { method: "google" },
+      });
+      return NextResponse.redirect(new URL("/?error=blocked", req.url));
+    }
+
+    const isAdminRole = kunde.profile.role === "admin";
+
     // Create iron-session (same fields as license key login)
     const session = await getSession();
     session.isLoggedIn = true;
-    session.isAdmin = false;
+    session.isAdmin = isAdminRole;
     session.lizenzschluessel = kunde.lizenzschluessel;
     session.sku = kunde.sku;
     session.shopDomain = kunde.shopDomain || undefined;
@@ -60,10 +64,22 @@ export async function GET(req: NextRequest) {
 
     await session.save();
 
-    // Apply the one-time welcome grant (idempotent), then check
-    // onboarding status.
+    // Profile housekeeping
     const rawProfile = await getKundeProfile(kunde.rowIndex);
-    const profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
+    let profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
+    profile = await ensureSignupAt(kunde.rowIndex, profile);
+
+    void logSystemEvent({
+      level: "audit",
+      actor: email,
+      action: isAdminRole ? "auth.login.admin" : "auth.login",
+      target: kunde.lizenzschluessel,
+      details: { method: "google" },
+    });
+
+    if (isAdminRole) {
+      return NextResponse.redirect(new URL("/admin", req.url));
+    }
 
     if (!profile.hasCompletedOnboarding) {
       return NextResponse.redirect(new URL("/onboarding", req.url));

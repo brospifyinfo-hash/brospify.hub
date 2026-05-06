@@ -19,6 +19,13 @@ export interface SessionData {
   googleName?: string;
   googleEmail?: string;
   googleImage?: string;
+  // ── Impersonation ─────────────────────────────────────────────
+  // When an admin impersonates a customer we save the original admin
+  // session here so /api/admin/impersonate/exit can restore it
+  // without a fresh login. `originalSession` is a JSON-serialised
+  // SessionData snapshot (sans this field, to avoid recursion).
+  impersonatedBy?: string;
+  originalSession?: string;
 }
 
 const sessionOptions = {

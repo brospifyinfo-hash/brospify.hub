@@ -142,6 +142,9 @@ function appendLog(
   return next;
 }
 
+export type UserRole = "admin" | "user";
+export type TierKey = "free" | "starter" | "pro" | "business";
+
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
   brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
@@ -161,6 +164,18 @@ export interface KundeProfile {
   blocked?: boolean;
   /** ISO timestamp when blocked, for the audit trail. */
   blockedAt?: string;
+  // ── Role & subscription ────────────────────────────────────────
+  // Hat-Jonas master licence stays as a separate hardcoded admin entry
+  // outside this field; everyone else reads admin status from `role`.
+  role?: UserRole;
+  /** Active subscription tier. Falls back to "free" when undefined. */
+  tier?: TierKey;
+  /** ISO timestamp the current tier started — used for MRR & churn math. */
+  tierSince?: string;
+  /** Set when the user (or admin) cancels the tier. Empty when active. */
+  tierCanceledAt?: string;
+  /** First-seen timestamp. Backfilled to oldest credits.log entry on read if missing. */
+  signupAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
@@ -1520,4 +1535,206 @@ export function pickLibraryItemsToEvict(
     (a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""),
   );
   return sorted.slice(0, items.length - cap);
+}
+
+// ─── ROLE & SUBSCRIPTION HELPERS ──────────────────────────────────
+// Admin promotion / demotion + tier overrides. Both end up writing
+// the customer's Profil_JSON cell (column J) with merged fields, so
+// they cooperate with every other helper that touches the profile.
+
+export async function setUserRole(
+  rowIndex: number,
+  profile: KundeProfile,
+  role: UserRole,
+): Promise<KundeProfile> {
+  const next: KundeProfile = { ...profile, role };
+  await updateKundeProfile(rowIndex, next);
+  return next;
+}
+
+// Set or change a user's tier. Records `tierSince` when the tier
+// actually changes and clears any prior cancellation marker.
+export async function setUserTier(
+  rowIndex: number,
+  profile: KundeProfile,
+  tier: TierKey,
+): Promise<KundeProfile> {
+  const isChange = (profile.tier || "free") !== tier;
+  const next: KundeProfile = {
+    ...profile,
+    tier,
+    tierSince: isChange ? new Date().toISOString() : profile.tierSince,
+    tierCanceledAt: "",
+  };
+  await updateKundeProfile(rowIndex, next);
+  return next;
+}
+
+// Soft cancel — keeps `tier` so the user retains current-period
+// access; sets `tierCanceledAt` so churn metrics pick it up.
+export async function cancelUserTier(
+  rowIndex: number,
+  profile: KundeProfile,
+): Promise<KundeProfile> {
+  const next: KundeProfile = {
+    ...profile,
+    tierCanceledAt: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, next);
+  return next;
+}
+
+// Locate a customer by their Google email — checks both the primary
+// `kundenEmail` column and the `linkedGoogleEmail` profile field so
+// the admin promotion flow works regardless of where the user stored
+// the address. Case-insensitive.
+export async function findKundeByGoogleEmail(email: string): Promise<Kunde | null> {
+  if (!email) return null;
+  const target = email.trim().toLowerCase();
+  const all = await getAllKunden();
+  return (
+    all.find((k) => (k.kundenEmail || "").trim().toLowerCase() === target) ||
+    all.find((k) => (k.profile.linkedGoogleEmail || "").trim().toLowerCase() === target) ||
+    null
+  );
+}
+
+// Record `signupAt` if missing. Used the first time we see a profile
+// without one — backfills with `now()` rather than guessing from the
+// log so all future date math has a real anchor.
+export async function ensureSignupAt(
+  rowIndex: number,
+  profile: KundeProfile,
+): Promise<KundeProfile> {
+  if (profile.signupAt) return profile;
+  const next: KundeProfile = { ...profile, signupAt: new Date().toISOString() };
+  await updateKundeProfile(rowIndex, next);
+  return next;
+}
+
+// ─── SYSTEM LOGS (Tab "SystemLogs") ───────────────────────────────
+// Append-only audit feed for admin actions, impersonation, role
+// changes, tier overrides, and significant errors. Lives in its own
+// sheet tab so it doesn't bloat any single profile JSON.
+//
+// Columns: A=ID, B=Timestamp, C=Level, D=Actor, E=Action, F=Target,
+//          G=Details_JSON
+
+export type SystemLogLevel = "info" | "warn" | "error" | "audit";
+
+export interface SystemLogEntry {
+  rowIndex: number;
+  id: string;
+  ts: string;
+  level: SystemLogLevel;
+  /** Email or licence-key of whoever triggered the event. */
+  actor: string;
+  /** Short verb phrase, e.g. "role.promote", "impersonate.start". */
+  action: string;
+  /** Affected customer key / email / id. Empty for system-wide events. */
+  target: string;
+  details: Record<string, unknown>;
+}
+
+const SYSTEM_LOGS_HEADERS = [
+  "ID", "Timestamp", "Level", "Actor", "Action", "Target", "Details_JSON",
+];
+
+const SYSTEM_LOGS_MAX_ROWS = 5000;
+
+function rowToSystemLog(row: string[], index: number): SystemLogEntry {
+  let details: Record<string, unknown> = {};
+  try { details = JSON.parse(row[6] || "{}"); } catch { details = {}; }
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    ts: row[1] || "",
+    level: (row[2] as SystemLogLevel) || "info",
+    actor: row[3] || "",
+    action: row[4] || "",
+    target: row[5] || "",
+    details,
+  };
+}
+
+// Append a row. Best-effort — never throws into the calling route so
+// a sheet outage can't break a critical action like promote/demote.
+export async function logSystemEvent(input: {
+  level: SystemLogLevel;
+  actor: string;
+  action: string;
+  target?: string;
+  details?: Record<string, unknown>;
+}): Promise<void> {
+  try {
+    const sheets = getSheets();
+    await ensureSheet("SystemLogs", SYSTEM_LOGS_HEADERS);
+    const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "SystemLogs!A:G",
+      valueInputOption: "RAW",
+      requestBody: {
+        values: [[
+          id,
+          new Date().toISOString(),
+          input.level,
+          input.actor || "",
+          input.action || "",
+          input.target || "",
+          JSON.stringify(input.details || {}),
+        ]],
+      },
+    });
+  } catch (err) {
+    console.error("[SystemLogs] append error:", err);
+  }
+}
+
+export async function getSystemLogs(
+  filters: {
+    limit?: number;
+    level?: SystemLogLevel;
+    sinceDays?: number;
+    actorContains?: string;
+    actionContains?: string;
+  } = {},
+): Promise<SystemLogEntry[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("SystemLogs", SYSTEM_LOGS_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "SystemLogs!A2:G",
+    });
+    const rows = res.data.values || [];
+    const parsed = rows
+      .map((row, i) => rowToSystemLog(row, i))
+      .filter((e) => e.id);
+
+    const cutoff =
+      filters.sinceDays && filters.sinceDays > 0
+        ? Date.now() - filters.sinceDays * 24 * 60 * 60 * 1000
+        : 0;
+
+    const filtered = parsed.filter((e) => {
+      if (filters.level && e.level !== filters.level) return false;
+      if (cutoff && Date.parse(e.ts) < cutoff) return false;
+      if (filters.actorContains && !e.actor.toLowerCase().includes(filters.actorContains.toLowerCase())) return false;
+      if (filters.actionContains && !e.action.toLowerCase().includes(filters.actionContains.toLowerCase())) return false;
+      return true;
+    });
+
+    // Cap to most recent SYSTEM_LOGS_MAX_ROWS for memory safety —
+    // older entries fall off the bottom in a future GC pass.
+    const recent = filtered.slice(-SYSTEM_LOGS_MAX_ROWS);
+    // Newest first
+    recent.reverse();
+
+    const limit = filters.limit && filters.limit > 0 ? filters.limit : 200;
+    return recent.slice(0, limit);
+  } catch (err) {
+    console.error("[SystemLogs] read error:", err);
+    return [];
+  }
 }

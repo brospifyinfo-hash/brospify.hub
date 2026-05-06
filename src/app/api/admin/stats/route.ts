@@ -10,8 +10,10 @@ import { getSession } from "@/lib/session";
 import {
   getAllKunden,
   type CreditTransaction,
+  type TierKey,
 } from "@/lib/sheets";
 import { CREDIT_PRICE_EUR, costForReason } from "@/lib/ai-costs";
+import { getTierConfig, isActiveSub, resolveTier } from "@/lib/tiers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +23,12 @@ interface ToolUsage {
   reason: string;
   count: number;
   totalCredits: number;
+}
+
+interface SkuBreakdown {
+  sku: string;
+  count: number;
+  activeSubs: number;
 }
 
 interface TopUser {
@@ -41,6 +49,7 @@ interface StatsResponse {
     withShopify: number;
     withGoogle: number;
     starterGranted: number;
+    admins: number;
   };
   credits: {
     sumBalance: number;
@@ -49,6 +58,31 @@ interface StatsResponse {
     avgBalance: number;
     avgUsed: number;
   };
+  /** Subscription rollups — drives the new MRR / churn / signup KPIs. */
+  subscriptions: {
+    activeTotal: number;
+    /** Per-tier active counts, keyed by TierKey. Always includes every tier. */
+    byTier: Record<TierKey, number>;
+    /** Live MRR in EUR (sum of active tier prices). */
+    mrrEur: number;
+    /** Tier price config snapshot used for this calculation. */
+    pricing: { key: TierKey; label: string; priceEur: number }[];
+    /** New paid subscriptions in the last 30 days. */
+    newPaid30d: number;
+    /** Cancellations in the last 30 days. */
+    churn30d: number;
+    /** churn / activeAtStart ratio, 0–100. 0 if no active. */
+    churnRatePct: number;
+  };
+  /** Signup rollups for the "Neuanmeldungen 30d" card. */
+  signups: {
+    last7d: number;
+    last30d: number;
+    /** Daily counts oldest first, length 30. */
+    daily30d: { date: string; count: number }[];
+  };
+  /** Top SKU categories — replaces the missing theme rental KPI. */
+  topSkus: SkuBreakdown[];
   /** 24×7 grid: heatmap[dayOfWeek][hour] = transaction count.
    *  dayOfWeek: 0 = Mon … 6 = Sun (German convention). */
   heatmap: number[][];
@@ -91,6 +125,11 @@ export async function GET() {
 
   try {
     const kunden = await getAllKunden();
+    const tierPricing = await getTierConfig();
+    const tierPriceMap = new Map<TierKey, number>(
+      tierPricing.map((t) => [t.key, t.priceEur]),
+    );
+
     const now = Date.now();
     const t7d = now - 7 * 24 * 60 * 60 * 1000;
     const t30d = now - 30 * 24 * 60 * 60 * 1000;
@@ -103,6 +142,12 @@ export async function GET() {
       const d = new Date(now - i * 24 * 60 * 60 * 1000);
       dailyMap.set(d.toISOString().slice(0, 10), { deduct: 0, topup: 0, admin: 0 });
     }
+    // 30-day signup buckets
+    const signupDailyMap = new Map<string, number>();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(now - i * 24 * 60 * 60 * 1000);
+      signupDailyMap.set(d.toISOString().slice(0, 10), 0);
+    }
     const toolMap = new Map<string, { count: number; total: number }>();
     const allTx: (CreditTransaction & { customer: string; email: string })[] = [];
 
@@ -114,11 +159,25 @@ export async function GET() {
     let revenueAllTimeCredits = 0;
     const monthlyToolMap = new Map<string, { calls: number; costEur: number; creditsCharged: number }>();
 
+    // ── Subscription rollups ──
+    const subsByTier: Record<TierKey, number> = { free: 0, starter: 0, pro: 0, business: 0 };
+    let mrrEur = 0;
+    let newPaid30d = 0;
+    let churn30d = 0;
+
+    // ── Signup rollups ──
+    let signupLast7d = 0;
+    let signupLast30d = 0;
+
+    // ── SKU rollups ──
+    const skuMap = new Map<string, { count: number; activeSubs: number }>();
+
     let activeLast7d = 0;
     let activeLast30d = 0;
     let withShopify = 0;
     let withGoogle = 0;
     let starterGranted = 0;
+    let admins = 0;
     let sumBalance = 0;
     let sumTotalPurchased = 0;
     let sumTotalUsed = 0;
@@ -135,6 +194,38 @@ export async function GET() {
       if (k.shopifyToken) withShopify++;
       if (k.profile.linkedGoogleEmail) withGoogle++;
       if (c?.starterGranted) starterGranted++;
+      if (k.profile.role === "admin") admins++;
+
+      // ── Subscription / tier roll-up ──
+      const tier = resolveTier(k.profile.tier);
+      subsByTier[tier]++;
+      if (isActiveSub(k.profile)) {
+        mrrEur += tierPriceMap.get(tier) || 0;
+        const since = Date.parse(k.profile.tierSince || "");
+        if (Number.isFinite(since) && since >= t30d) newPaid30d++;
+      }
+      const canceledTs = Date.parse(k.profile.tierCanceledAt || "");
+      if (Number.isFinite(canceledTs) && canceledTs >= t30d) churn30d++;
+
+      // ── Signup roll-up ──
+      const signupTs = Date.parse(k.profile.signupAt || "");
+      if (Number.isFinite(signupTs)) {
+        if (signupTs >= t7d) signupLast7d++;
+        if (signupTs >= t30d) {
+          signupLast30d++;
+          const dayKey = new Date(signupTs).toISOString().slice(0, 10);
+          if (signupDailyMap.has(dayKey)) {
+            signupDailyMap.set(dayKey, (signupDailyMap.get(dayKey) || 0) + 1);
+          }
+        }
+      }
+
+      // ── SKU breakdown — count both totals and active subs per SKU ──
+      const skuKey = k.sku || "—";
+      const sku = skuMap.get(skuKey) || { count: 0, activeSubs: 0 };
+      sku.count++;
+      if (isActiveSub(k.profile)) sku.activeSubs++;
+      skuMap.set(skuKey, sku);
 
       // Activity rollups
       let userActive7d = false;
@@ -252,6 +343,22 @@ export async function GET() {
       ...v,
     }));
 
+    const activeSubsTotal =
+      subsByTier.starter + subsByTier.pro + subsByTier.business;
+    const churnRatePct =
+      activeSubsTotal + churn30d > 0
+        ? +((churn30d / (activeSubsTotal + churn30d)) * 100).toFixed(1)
+        : 0;
+
+    const topSkus: SkuBreakdown[] = Array.from(skuMap.entries())
+      .map(([sku, v]) => ({ sku, count: v.count, activeSubs: v.activeSubs }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 8);
+
+    const signupDaily30d = Array.from(signupDailyMap.entries()).map(
+      ([date, count]) => ({ date, count }),
+    );
+
     const out: StatsResponse = {
       generatedAt: new Date().toISOString(),
       customers: {
@@ -261,6 +368,7 @@ export async function GET() {
         withShopify,
         withGoogle,
         starterGranted,
+        admins,
       },
       credits: {
         sumBalance,
@@ -269,6 +377,21 @@ export async function GET() {
         avgBalance: customerCount > 0 ? Math.round(sumBalance / customerCount) : 0,
         avgUsed: customerCount > 0 ? Math.round(sumTotalUsed / customerCount) : 0,
       },
+      subscriptions: {
+        activeTotal: activeSubsTotal,
+        byTier: subsByTier,
+        mrrEur: +mrrEur.toFixed(2),
+        pricing: tierPricing,
+        newPaid30d,
+        churn30d,
+        churnRatePct,
+      },
+      signups: {
+        last7d: signupLast7d,
+        last30d: signupLast30d,
+        daily30d: signupDaily30d,
+      },
+      topSkus,
       heatmap,
       daily14d,
       toolUsage,

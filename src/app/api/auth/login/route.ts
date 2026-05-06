@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ensureStarterGrant, findKundeByKey, getKundeProfile } from "@/lib/sheets";
+import {
+  ensureSignupAt,
+  ensureStarterGrant,
+  findKundeByKey,
+  getKundeProfile,
+  logSystemEvent,
+} from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
@@ -15,12 +21,20 @@ export async function POST(req: NextRequest) {
 
     const trimmedKey = lizenzschluessel.trim();
 
-    // Admin check
+    // Master admin key — hardcoded escape hatch that always works,
+    // independent of any DB role state. Kept on top intentionally.
     if (trimmedKey === "Hat-Jonas") {
       const session = await getSession();
       session.isLoggedIn = true;
       session.isAdmin = true;
       await session.save();
+      void logSystemEvent({
+        level: "audit",
+        actor: "Hat-Jonas",
+        action: "auth.login.master",
+        target: "",
+        details: { method: "master-key" },
+      });
       return NextResponse.json({ redirect: "/admin" });
     }
 
@@ -33,9 +47,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (kunde.profile.blocked === true) {
+      void logSystemEvent({
+        level: "warn",
+        actor: kunde.lizenzschluessel,
+        action: "auth.login.blocked",
+        target: kunde.lizenzschluessel,
+        details: { method: "key" },
+      });
+      return NextResponse.json(
+        { error: "Dieser Account wurde deaktiviert. Bitte kontaktiere den Support." },
+        { status: 403 }
+      );
+    }
+
+    const isAdminRole = kunde.profile.role === "admin";
+
     const session = await getSession();
     session.isLoggedIn = true;
-    session.isAdmin = false;
+    session.isAdmin = isAdminRole;
     session.lizenzschluessel = kunde.lizenzschluessel;
     session.sku = kunde.sku;
     session.shopDomain = kunde.shopDomain || undefined;
@@ -49,14 +79,23 @@ export async function POST(req: NextRequest) {
     }
     await session.save();
 
-    // Check onboarding status from Profil_JSON. Apply the one-time
-    // welcome credit grant on the way through — idempotent, so a
-    // returning customer with an already-granted balance is unaffected.
+    // Profile housekeeping: starter grant + signupAt backfill.
     const rawProfile = await getKundeProfile(kunde.rowIndex);
-    const profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
+    let profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
+    profile = await ensureSignupAt(kunde.rowIndex, profile);
 
-    // First-time login: send to the onboarding picker (the legacy
-    // `/language` page was removed). Returning users go straight home.
+    void logSystemEvent({
+      level: "audit",
+      actor: kunde.lizenzschluessel,
+      action: isAdminRole ? "auth.login.admin" : "auth.login",
+      target: kunde.lizenzschluessel,
+      details: { method: "key" },
+    });
+
+    if (isAdminRole) {
+      return NextResponse.json({ redirect: "/admin" });
+    }
+
     if (!profile.hasCompletedOnboarding) {
       return NextResponse.json({ redirect: "/onboarding" });
     }

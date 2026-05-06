@@ -9,7 +9,7 @@ import {
   Video, Palette, Image as ImageIcon, Gem, Ticket, Coins, Power,
   Users, Search, ChevronRight, ChevronLeft, Store, Mail, FileText,
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
-  Clock,
+  Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -58,10 +58,26 @@ const SKU_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
 
 // ─── Admin module-level types ───────────────────────────────────
 
+type AdminTierKey = "free" | "starter" | "pro" | "business";
+type AdminUserRole = "admin" | "user";
+
+interface TierPricing { key: AdminTierKey; label: string; priceEur: number }
+
 interface AdminStats {
   generatedAt: string;
-  customers: { total: number; activeLast7d: number; activeLast30d: number; withShopify: number; withGoogle: number; starterGranted: number };
+  customers: { total: number; activeLast7d: number; activeLast30d: number; withShopify: number; withGoogle: number; starterGranted: number; admins: number };
   credits: { sumBalance: number; sumTotalPurchased: number; sumTotalUsed: number; avgBalance: number; avgUsed: number };
+  subscriptions: {
+    activeTotal: number;
+    byTier: Record<AdminTierKey, number>;
+    mrrEur: number;
+    pricing: TierPricing[];
+    newPaid30d: number;
+    churn30d: number;
+    churnRatePct: number;
+  };
+  signups: { last7d: number; last30d: number; daily30d: { date: string; count: number }[] };
+  topSkus: { sku: string; count: number; activeSubs: number }[];
   heatmap: number[][];
   daily14d: { date: string; deduct: number; topup: number; admin: number }[];
   toolUsage: { reason: string; count: number; totalCredits: number }[];
@@ -77,6 +93,36 @@ interface AdminStats {
     profitMarginPct: number;
     toolBreakdown: { reason: string; label: string; provider: string; calls: number; costEur: number; creditsCharged: number }[];
   };
+}
+
+interface AdminUserRow {
+  rowIndex: number;
+  lizenzschluessel: string;
+  status: string;
+  shopDomain: string;
+  email: string;
+  sku: string;
+  role: AdminUserRole;
+  tier: AdminTierKey;
+  tierSince: string;
+  tierCanceledAt: string;
+  signupAt: string;
+  hasShopify: boolean;
+  hasGoogle: boolean;
+  blocked: boolean;
+  vip: boolean;
+  credits: { balance: number; totalPurchased: number; totalUsed: number };
+  lastTransaction?: { ts: string; type: string; delta: number; balanceAfter: number; reason: string; ref?: string };
+}
+
+interface AdminLogEntry {
+  id: string;
+  ts: string;
+  level: "info" | "warn" | "error" | "audit";
+  actor: string;
+  action: string;
+  target: string;
+  details: Record<string, unknown>;
 }
 
 interface ActivityEntry {
@@ -276,7 +322,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   const [settingsData, setSettingsData] = useState({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "" });
@@ -359,6 +405,204 @@ export default function AdminPage() {
 
   // ─── Dashboard auto-refresh ────────────────────────────────────
   const [dashAutoRefresh, setDashAutoRefresh] = useState(false);
+
+  // ─── Users tab (role + tier management) ─────────────────────────
+  const [users, setUsers] = useState<AdminUserRow[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [userBusyKey, setUserBusyKey] = useState<string | null>(null);
+  const loadUsers = useCallback(async () => {
+    setUsersLoading(true);
+    try {
+      const res = await fetch("/api/admin/users");
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.users || []);
+      }
+    } catch { /* ignore */ }
+    finally { setUsersLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "users") loadUsers();
+  }, [activeTab, loadUsers]);
+
+  async function handleSetRole(key: string, role: AdminUserRole) {
+    setUserBusyKey(key);
+    try {
+      const res = await fetch("/api/admin/users/role", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, role }),
+      });
+      if (res.ok) {
+        setSuccess(role === "admin" ? "Zum Admin befördert." : "Zum normalen User zurückgestuft.");
+        setTimeout(() => setSuccess(""), 2500);
+        await loadUsers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Rollen-Update fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setUserBusyKey(null); }
+  }
+
+  async function handleSetTier(key: string, tier: AdminTierKey) {
+    setUserBusyKey(key);
+    try {
+      const res = await fetch("/api/admin/users/tier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, tier }),
+      });
+      if (res.ok) {
+        setSuccess(`Tier auf ${tier} gesetzt.`);
+        setTimeout(() => setSuccess(""), 2500);
+        await loadUsers();
+        await loadStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Tier-Update fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setUserBusyKey(null); }
+  }
+
+  async function handleCancelTier(key: string) {
+    if (!confirm("Tier wirklich kündigen? Der User behält den Zugang bis zum Periodenende.")) return;
+    setUserBusyKey(key);
+    try {
+      const res = await fetch("/api/admin/users/tier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, cancel: true }),
+      });
+      if (res.ok) {
+        setSuccess("Tier gekündigt.");
+        setTimeout(() => setSuccess(""), 2500);
+        await loadUsers();
+        await loadStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Kündigung fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setUserBusyKey(null); }
+  }
+
+  async function handleImpersonate(key: string, email: string) {
+    if (!confirm(`In den Account von ${email || key} wechseln? Du kannst jederzeit über das Banner zurück.`)) return;
+    setUserBusyKey(key);
+    try {
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        router.push(data.redirect || "/home");
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Impersonate fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setUserBusyKey(null); }
+  }
+
+  async function handleQuickAdjustCredits(key: string) {
+    const input = prompt("Neuer Credit-Stand (absoluter Wert):");
+    if (input === null) return;
+    const target = Number(input);
+    if (!Number.isFinite(target) || target < 0) {
+      setError("Ungültige Zahl.");
+      return;
+    }
+    setUserBusyKey(key);
+    try {
+      const res = await fetch("/api/admin/customer-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, action: "set-credits", payload: { balance: target } }),
+      });
+      if (res.ok) {
+        setSuccess(`Credits auf ${target} gesetzt.`);
+        setTimeout(() => setSuccess(""), 2500);
+        await loadUsers();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Credits-Update fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setUserBusyKey(null); }
+  }
+
+  // ─── System logs ───────────────────────────────────────────────
+  const [logs, setLogs] = useState<AdminLogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logFilter, setLogFilter] = useState<{ level: "" | "info" | "warn" | "error" | "audit"; sinceDays: number; q: string }>({ level: "", sinceDays: 30, q: "" });
+  const loadLogs = useCallback(async () => {
+    setLogsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set("limit", "300");
+      if (logFilter.level) params.set("level", logFilter.level);
+      if (logFilter.sinceDays > 0) params.set("sinceDays", String(logFilter.sinceDays));
+      if (logFilter.q) params.set("actor", logFilter.q);
+      const res = await fetch(`/api/admin/logs?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setLogs(data.entries || []);
+      }
+    } catch { /* ignore */ }
+    finally { setLogsLoading(false); }
+  }, [logFilter]);
+
+  useEffect(() => {
+    if (activeTab === "logs") loadLogs();
+  }, [activeTab, loadLogs]);
+
+  // ─── Tier config (admin-editable price table) ─────────────────
+  const [tierConfig, setTierConfig] = useState<TierPricing[]>([]);
+  const [tierConfigLoading, setTierConfigLoading] = useState(false);
+  const [tierConfigSaving, setTierConfigSaving] = useState(false);
+  const loadTierConfig = useCallback(async () => {
+    setTierConfigLoading(true);
+    try {
+      const res = await fetch("/api/admin/tiers");
+      if (res.ok) {
+        const data = await res.json();
+        setTierConfig(data.tiers || []);
+      }
+    } catch { /* ignore */ }
+    finally { setTierConfigLoading(false); }
+  }, []);
+
+  async function saveTierConfig(next: TierPricing[]) {
+    setTierConfigSaving(true);
+    try {
+      const res = await fetch("/api/admin/tiers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tiers: next }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setTierConfig(data.tiers || []);
+        setSuccess("Tier-Preise gespeichert.");
+        setTimeout(() => setSuccess(""), 2500);
+        await loadStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Speichern fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setTierConfigSaving(false); }
+  }
+
+  useEffect(() => {
+    if (activeTab === "settings") loadTierConfig();
+  }, [activeTab, loadTierConfig]);
 
   // ─── Stats / Dashboard ─────────────────────────────────────────
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -1006,6 +1250,35 @@ export default function AdminPage() {
                 apiBalances={apiBalances}
                 apiBalancesLoading={apiBalancesLoading}
                 onRefreshBalances={loadApiBalances}
+              />
+            )}
+
+            {/* ─── Users (Rollen + Tier + Impersonate) ──────────── */}
+            {activeTab === "users" && (
+              <UsersView
+                users={users}
+                loading={usersLoading}
+                search={userSearch}
+                setSearch={setUserSearch}
+                busyKey={userBusyKey}
+                tierConfig={tierConfig}
+                onRefresh={loadUsers}
+                onSetRole={handleSetRole}
+                onSetTier={handleSetTier}
+                onCancelTier={handleCancelTier}
+                onImpersonate={handleImpersonate}
+                onAdjustCredits={handleQuickAdjustCredits}
+              />
+            )}
+
+            {/* ─── System-Logs ───────────────────────────────────── */}
+            {activeTab === "logs" && (
+              <LogsView
+                entries={logs}
+                loading={logsLoading}
+                filter={logFilter}
+                setFilter={setLogFilter}
+                onRefresh={loadLogs}
               />
             )}
 
@@ -1724,6 +1997,14 @@ export default function AdminPage() {
             <button onClick={saveSettings} disabled={settingsLoading} className="btn-accent px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
               {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Einstellungen speichern</>}
             </button>
+
+            {/* \u2500\u2500 Tier / Abo-Preise (admin-editable) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+            <TierConfigEditor
+              tiers={tierConfig}
+              loading={tierConfigLoading}
+              saving={tierConfigSaving}
+              onSave={saveTierConfig}
+            />
           </motion.div>
         )}
 
@@ -2383,7 +2664,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -2400,6 +2681,7 @@ const SIDEBAR_GROUPS: {
   {
     label: "Verwaltung",
     items: [
+      { key: "users", label: "User & Rollen", icon: UserCog, color: "#F472B6" },
       { key: "customers", label: "Kunden", icon: Users, color: "#3B82F6" },
       { key: "tickets", label: "Tickets", icon: Shield, color: "#F59E0B" },
       { key: "codes", label: "Voucher-Codes", icon: Ticket, color: "#A855F7" },
@@ -2416,6 +2698,7 @@ const SIDEBAR_GROUPS: {
     label: "System",
     items: [
       { key: "system", label: "System-Status", icon: Power, color: "#10B981" },
+      { key: "logs", label: "System-Logs", icon: ScrollText, color: "#FB7185" },
       { key: "knowledge", label: "KI-Wissen", icon: Sparkles, color: "#8B5CF6" },
       { key: "settings", label: "Settings", icon: Settings, color: "#71717A" },
     ],
@@ -2544,6 +2827,9 @@ function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoR
           <Users className="w-3 h-3" /> Alle Kunden
         </button>
       </div>
+
+      {/* God-Mode KPI strip — Apple-style glass cards */}
+      <GodModeKpis stats={stats} onJumpTab={onJumpTab} />
 
       {/* Money — costs vs. revenue (this month) */}
       <MoneySection money={stats.money} />
@@ -3334,6 +3620,584 @@ function NewsAdminView({ posts, loading, onRefresh }: {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── God-Mode KPI strip (top of Dashboard view) ───────────────────
+// Apple-style glass cards with the four headline metrics: Active subs,
+// MRR, Signups vs Churn, total credits in system. Tapping a card
+// jumps to the most relevant detail view.
+
+function GodModeKpis({ stats, onJumpTab }: {
+  stats: AdminStats;
+  onJumpTab: (t: SidebarTab) => void;
+}) {
+  const subs = stats.subscriptions;
+  const signups = stats.signups;
+  const tierLabelMap = new Map(subs.pricing.map((p) => [p.key, p.label]));
+
+  // Sparkline path for the 30d signup line
+  const points = signups.daily30d;
+  const max = Math.max(...points.map((p) => p.count), 1);
+  const w = 120, h = 28;
+  const stepX = points.length > 1 ? w / (points.length - 1) : 0;
+  const path = points
+    .map((p, i) => `${i === 0 ? "M" : "L"} ${(i * stepX).toFixed(1)} ${(h - (p.count / max) * (h - 4) - 2).toFixed(1)}`)
+    .join(" ");
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+      {/* MRR card */}
+      <button
+        onClick={() => onJumpTab("users")}
+        className="text-left p-3 rounded-2xl border border-white/[0.08] backdrop-blur-2xl transition hover:border-white/[0.16] hover:translate-y-[-1px]"
+        style={{
+          background: "linear-gradient(180deg, rgba(149,191,71,0.10) 0%, rgba(255,255,255,0.02) 100%)",
+          backdropFilter: "blur(40px) saturate(180%)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        }}
+      >
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-6 h-6 rounded-lg bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center">
+            <Euro className="w-3 h-3 text-[#95BF47]" />
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400">MRR</span>
+        </div>
+        <div className="font-mono text-[26px] leading-none font-bold text-white tabular-nums">
+          {subs.mrrEur.toLocaleString("de-DE", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+          <span className="text-[14px] text-zinc-500 ml-1">€</span>
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-1.5">
+          aus {subs.activeTotal} aktiven Abos · {subs.newPaid30d} neu in 30d
+        </div>
+      </button>
+
+      {/* Active subs by tier */}
+      <button
+        onClick={() => onJumpTab("users")}
+        className="text-left p-3 rounded-2xl border border-white/[0.08] backdrop-blur-2xl transition hover:border-white/[0.16] hover:translate-y-[-1px]"
+        style={{
+          background: "linear-gradient(180deg, rgba(168,85,247,0.10) 0%, rgba(255,255,255,0.02) 100%)",
+          backdropFilter: "blur(40px) saturate(180%)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        }}
+      >
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-6 h-6 rounded-lg bg-purple-500/15 border border-purple-500/25 flex items-center justify-center">
+            <Crown className="w-3 h-3 text-purple-300" />
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400">Aktive Abos</span>
+        </div>
+        <div className="font-mono text-[26px] leading-none font-bold text-white tabular-nums">
+          {subs.activeTotal}
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
+          {(["starter", "pro", "business"] as const).map((k) => (
+            <span key={k} className="tabular-nums">
+              {tierLabelMap.get(k) || k}: <span className="text-zinc-300 font-semibold">{subs.byTier[k]}</span>
+            </span>
+          ))}
+        </div>
+      </button>
+
+      {/* Signups vs Churn */}
+      <button
+        onClick={() => onJumpTab("logs")}
+        className="text-left p-3 rounded-2xl border border-white/[0.08] backdrop-blur-2xl transition hover:border-white/[0.16] hover:translate-y-[-1px]"
+        style={{
+          background: "linear-gradient(180deg, rgba(59,130,246,0.10) 0%, rgba(255,255,255,0.02) 100%)",
+          backdropFilter: "blur(40px) saturate(180%)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        }}
+      >
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-6 h-6 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center">
+            <TrendingUp className="w-3 h-3 text-blue-300" />
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400">Signups · Churn (30d)</span>
+        </div>
+        <div className="flex items-end gap-2">
+          <div className="font-mono text-[26px] leading-none font-bold text-emerald-300 tabular-nums">
+            +{signups.last30d}
+          </div>
+          <span className="text-zinc-600 text-sm">/</span>
+          <div className="font-mono text-[20px] leading-none font-bold text-red-300 tabular-nums">
+            −{subs.churn30d}
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-1.5">
+          <svg width={w} height={h} className="overflow-visible shrink-0">
+            <defs>
+              <linearGradient id="signupGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#34D399" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#34D399" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={`${path} L ${w} ${h} L 0 ${h} Z`} fill="url(#signupGrad)" />
+            <path d={path} stroke="#34D399" strokeWidth="1.5" fill="none" />
+          </svg>
+          <div className="text-[10px] text-zinc-500 leading-tight">
+            7d: <span className="text-zinc-300">+{signups.last7d}</span><br/>
+            Churn: <span className="text-zinc-300">{subs.churnRatePct}%</span>
+          </div>
+        </div>
+      </button>
+
+      {/* Credits in system */}
+      <button
+        onClick={() => onJumpTab("activity")}
+        className="text-left p-3 rounded-2xl border border-white/[0.08] backdrop-blur-2xl transition hover:border-white/[0.16] hover:translate-y-[-1px]"
+        style={{
+          background: "linear-gradient(180deg, rgba(245,158,11,0.10) 0%, rgba(255,255,255,0.02) 100%)",
+          backdropFilter: "blur(40px) saturate(180%)",
+          WebkitBackdropFilter: "blur(40px) saturate(180%)",
+        }}
+      >
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-6 h-6 rounded-lg bg-amber-500/15 border border-amber-500/25 flex items-center justify-center">
+            <Coins className="w-3 h-3 text-amber-300" />
+          </div>
+          <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400">Credits im System</span>
+        </div>
+        <div className="font-mono text-[26px] leading-none font-bold text-white tabular-nums">
+          {stats.credits.sumBalance.toLocaleString("de-DE")}
+        </div>
+        <div className="text-[10px] text-zinc-500 mt-1.5">
+          gekauft: <span className="text-zinc-300">{stats.credits.sumTotalPurchased.toLocaleString("de-DE")}</span> · verbraucht: <span className="text-zinc-300">{stats.credits.sumTotalUsed.toLocaleString("de-DE")}</span>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+// ─── Users View (role + tier management) ──────────────────────────
+
+function UsersView({
+  users, loading, search, setSearch, busyKey, tierConfig,
+  onRefresh, onSetRole, onSetTier, onCancelTier, onImpersonate, onAdjustCredits,
+}: {
+  users: AdminUserRow[];
+  loading: boolean;
+  search: string;
+  setSearch: (v: string) => void;
+  busyKey: string | null;
+  tierConfig: TierPricing[];
+  onRefresh: () => void;
+  onSetRole: (key: string, role: AdminUserRole) => void | Promise<void>;
+  onSetTier: (key: string, tier: AdminTierKey) => void | Promise<void>;
+  onCancelTier: (key: string) => void | Promise<void>;
+  onImpersonate: (key: string, email: string) => void | Promise<void>;
+  onAdjustCredits: (key: string) => void | Promise<void>;
+}) {
+  const filtered = users.filter((u) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      u.email.toLowerCase().includes(q) ||
+      u.lizenzschluessel.toLowerCase().includes(q) ||
+      u.shopDomain.toLowerCase().includes(q) ||
+      u.sku.toLowerCase().includes(q)
+    );
+  });
+
+  const tierLabelMap = new Map(tierConfig.map((t) => [t.key, t.label]));
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Header */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[220px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Suche: E-Mail, License, Shop, SKU…"
+            className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+          />
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Repeat className="w-3 h-3" />}
+          Aktualisieren
+        </button>
+      </div>
+
+      {/* Counts row */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-2.5">
+          <div className="text-[9px] uppercase tracking-[0.16em] text-zinc-500 font-bold">Total</div>
+          <div className="text-lg font-bold tabular-nums">{users.length}</div>
+        </div>
+        <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.04] p-2.5">
+          <div className="text-[9px] uppercase tracking-[0.16em] text-amber-300/80 font-bold">Admins</div>
+          <div className="text-lg font-bold tabular-nums text-amber-200">{users.filter((u) => u.role === "admin").length}</div>
+        </div>
+        <div className="rounded-xl border border-red-500/20 bg-red-500/[0.04] p-2.5">
+          <div className="text-[9px] uppercase tracking-[0.16em] text-red-300/80 font-bold">Blockiert</div>
+          <div className="text-lg font-bold tabular-nums text-red-200">{users.filter((u) => u.blocked).length}</div>
+        </div>
+      </div>
+
+      {/* User list (cards on mobile, dense rows on desktop) */}
+      <div className="rounded-2xl border border-white/[0.08] overflow-hidden"
+        style={{ background: "rgba(10,10,12,0.6)", backdropFilter: "blur(24px) saturate(180%)" }}
+      >
+        {/* Header row (desktop) */}
+        <div className="hidden lg:grid grid-cols-[1.4fr_1fr_0.6fr_0.7fr_0.8fr_0.9fr_auto] gap-2 px-3 py-2 border-b border-white/[0.06] text-[9px] uppercase tracking-[0.16em] text-zinc-500 font-bold">
+          <div>User</div>
+          <div>License / Shop</div>
+          <div>Rolle</div>
+          <div>Tier</div>
+          <div>Credits</div>
+          <div>Signup</div>
+          <div className="text-right">Aktionen</div>
+        </div>
+
+        {loading && users.length === 0 ? (
+          <div className="p-6 text-center text-xs text-zinc-500">
+            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+            Lade User…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="p-6 text-center text-xs text-zinc-500">Keine User gefunden.</div>
+        ) : (
+          <div className="divide-y divide-white/[0.04]">
+            {filtered.map((u) => {
+              const busy = busyKey === u.lizenzschluessel;
+              const tierLabel = tierLabelMap.get(u.tier) || u.tier;
+              const isAdmin = u.role === "admin";
+              const subActive = u.tier !== "free" && !u.tierCanceledAt;
+              return (
+                <div
+                  key={u.lizenzschluessel}
+                  className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr_0.6fr_0.7fr_0.8fr_0.9fr_auto] gap-2 px-3 py-2.5 items-center hover:bg-white/[0.02] transition"
+                >
+                  {/* User */}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      {isAdmin && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
+                      {u.vip && !isAdmin && <Sparkles className="w-3 h-3 text-purple-400 shrink-0" />}
+                      <div className="text-[12px] font-semibold text-white truncate">{u.email || "—"}</div>
+                    </div>
+                    <div className="text-[10px] text-zinc-500 truncate font-mono">{u.lizenzschluessel}</div>
+                  </div>
+
+                  {/* License / Shop */}
+                  <div className="min-w-0 hidden lg:block">
+                    <div className="text-[11px] text-zinc-300 truncate">{u.shopDomain || "—"}</div>
+                    <div className="text-[10px] text-zinc-500 truncate">SKU {u.sku || "—"}{u.blocked ? " · BLOCKIERT" : ""}</div>
+                  </div>
+
+                  {/* Role badge */}
+                  <div>
+                    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      isAdmin ? "bg-amber-500/15 border border-amber-500/30 text-amber-200" : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
+                    }`}>
+                      {isAdmin ? "Admin" : "User"}
+                    </span>
+                  </div>
+
+                  {/* Tier */}
+                  <div>
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                      u.tier === "business" ? "bg-purple-500/15 border border-purple-500/30 text-purple-200"
+                      : u.tier === "pro" ? "bg-[#95BF47]/15 border border-[#95BF47]/30 text-[#95BF47]"
+                      : u.tier === "starter" ? "bg-blue-500/15 border border-blue-500/30 text-blue-200"
+                      : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
+                    }`}>
+                      {tierLabel}
+                    </span>
+                    {u.tierCanceledAt && (
+                      <span className="block text-[9px] text-red-400 mt-0.5">gekündigt</span>
+                    )}
+                  </div>
+
+                  {/* Credits */}
+                  <div className="text-right lg:text-left">
+                    <div className="text-[12px] font-bold text-emerald-300 tabular-nums">{u.credits.balance.toLocaleString("de-DE")}c</div>
+                    <div className="text-[9px] text-zinc-500 tabular-nums">−{u.credits.totalUsed} · +{u.credits.totalPurchased}</div>
+                  </div>
+
+                  {/* Signup */}
+                  <div className="text-[10px] text-zinc-500 hidden lg:block">
+                    {u.signupAt ? new Date(u.signupAt).toLocaleDateString("de-DE") : "—"}
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center gap-1 lg:justify-end">
+                    {/* Tier dropdown */}
+                    <select
+                      disabled={busy || tierConfig.length === 0}
+                      value={u.tier}
+                      onChange={(e) => onSetTier(u.lizenzschluessel, e.target.value as AdminTierKey)}
+                      className="bg-white/[0.04] border border-white/[0.08] rounded text-[10px] px-1.5 py-1 outline-none focus:border-white/25"
+                    >
+                      {tierConfig.length === 0 ? (
+                        <option value={u.tier}>{u.tier}</option>
+                      ) : (
+                        tierConfig.map((t) => (
+                          <option key={t.key} value={t.key}>{t.label} {t.priceEur > 0 ? `· ${t.priceEur}€` : ""}</option>
+                        ))
+                      )}
+                    </select>
+                    {subActive && (
+                      <button
+                        onClick={() => onCancelTier(u.lizenzschluessel)}
+                        disabled={busy}
+                        title="Tier kündigen"
+                        className="p-1 rounded hover:bg-red-500/10 text-red-400 transition disabled:opacity-40"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                    {/* Role toggle */}
+                    <button
+                      onClick={() => onSetRole(u.lizenzschluessel, isAdmin ? "user" : "admin")}
+                      disabled={busy}
+                      title={isAdmin ? "Zum User zurückstufen" : "Zum Admin befördern"}
+                      className={`p-1 rounded transition disabled:opacity-40 ${
+                        isAdmin
+                          ? "hover:bg-zinc-500/10 text-zinc-400"
+                          : "hover:bg-amber-500/15 text-amber-300"
+                      }`}
+                    >
+                      {isAdmin ? <UserCog className="w-3 h-3" /> : <Crown className="w-3 h-3" />}
+                    </button>
+                    {/* Adjust credits */}
+                    <button
+                      onClick={() => onAdjustCredits(u.lizenzschluessel)}
+                      disabled={busy}
+                      title="Credits manuell setzen"
+                      className="p-1 rounded hover:bg-emerald-500/10 text-emerald-300 transition disabled:opacity-40"
+                    >
+                      <Coins className="w-3 h-3" />
+                    </button>
+                    {/* Impersonate */}
+                    <button
+                      onClick={() => onImpersonate(u.lizenzschluessel, u.email)}
+                      disabled={busy}
+                      title="In diesen Account einloggen"
+                      className="p-1 rounded hover:bg-blue-500/10 text-blue-300 transition disabled:opacity-40"
+                    >
+                      <Eye className="w-3 h-3" />
+                    </button>
+                    {busy && <Loader2 className="w-3 h-3 animate-spin text-zinc-400 ml-1" />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── System-Logs view ────────────────────────────────────────────
+
+function LogsView({
+  entries, loading, filter, setFilter, onRefresh,
+}: {
+  entries: AdminLogEntry[];
+  loading: boolean;
+  filter: { level: "" | "info" | "warn" | "error" | "audit"; sinceDays: number; q: string };
+  setFilter: (f: { level: "" | "info" | "warn" | "error" | "audit"; sinceDays: number; q: string }) => void;
+  onRefresh: () => void;
+}) {
+  const colorFor = (lvl: string) => {
+    if (lvl === "error") return { bg: "bg-red-500/10", border: "border-red-500/25", text: "text-red-300" };
+    if (lvl === "warn") return { bg: "bg-amber-500/10", border: "border-amber-500/25", text: "text-amber-300" };
+    if (lvl === "audit") return { bg: "bg-purple-500/10", border: "border-purple-500/25", text: "text-purple-300" };
+    return { bg: "bg-blue-500/10", border: "border-blue-500/25", text: "text-blue-300" };
+  };
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Filter bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={filter.level}
+          onChange={(e) => setFilter({ ...filter, level: e.target.value as typeof filter.level })}
+          className="bg-white/[0.04] border border-white/10 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-white/25"
+        >
+          <option value="">Alle Level</option>
+          <option value="audit">Audit</option>
+          <option value="info">Info</option>
+          <option value="warn">Warn</option>
+          <option value="error">Error</option>
+        </select>
+        <select
+          value={filter.sinceDays}
+          onChange={(e) => setFilter({ ...filter, sinceDays: Number(e.target.value) })}
+          className="bg-white/[0.04] border border-white/10 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-white/25"
+        >
+          <option value={1}>Letzte 24h</option>
+          <option value={7}>Letzte 7 Tage</option>
+          <option value={30}>Letzte 30 Tage</option>
+          <option value={0}>Alles</option>
+        </select>
+        <input
+          type="text"
+          value={filter.q}
+          onChange={(e) => setFilter({ ...filter, q: e.target.value })}
+          placeholder="Filter Actor (E-Mail/Key)"
+          className="flex-1 min-w-[160px] bg-white/[0.04] border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-white/25 placeholder:text-zinc-600"
+        />
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Repeat className="w-3 h-3" />}
+          Refresh
+        </button>
+      </div>
+
+      {/* Entry list */}
+      <div
+        className="rounded-2xl border border-white/[0.08] overflow-hidden"
+        style={{ background: "rgba(10,10,12,0.6)", backdropFilter: "blur(24px) saturate(180%)" }}
+      >
+        {loading && entries.length === 0 ? (
+          <div className="p-6 text-center text-xs text-zinc-500">
+            <Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />
+            Lade Logs…
+          </div>
+        ) : entries.length === 0 ? (
+          <div className="p-6 text-center text-xs text-zinc-500">Keine Einträge.</div>
+        ) : (
+          <div className="divide-y divide-white/[0.04] max-h-[70vh] overflow-y-auto">
+            {entries.map((e) => {
+              const c = colorFor(e.level);
+              const detailKeys = Object.keys(e.details || {});
+              return (
+                <div key={e.id} className="px-3 py-2 hover:bg-white/[0.02] transition">
+                  <div className="flex items-start gap-2">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${c.bg} ${c.border} ${c.text} border shrink-0`}>
+                      {e.level}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[12px] font-semibold text-zinc-200 font-mono">{e.action}</span>
+                        {e.target && (
+                          <span className="text-[10px] text-zinc-500 font-mono truncate">→ {e.target}</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 mt-0.5 flex items-center gap-2 flex-wrap">
+                        <span>{new Date(e.ts).toLocaleString("de-DE")}</span>
+                        <span className="text-zinc-600">·</span>
+                        <span className="font-mono">{e.actor}</span>
+                      </div>
+                      {detailKeys.length > 0 && (
+                        <div className="text-[10px] text-zinc-400 mt-1 font-mono break-all">
+                          {detailKeys.slice(0, 4).map((k) => (
+                            <span key={k} className="mr-2">
+                              <span className="text-zinc-500">{k}=</span>
+                              {String((e.details as Record<string, unknown>)[k]).slice(0, 60)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── Tier-Settings editor (inside Settings tab) ───────────────────
+
+function TierConfigEditor({
+  tiers, loading, saving, onSave,
+}: {
+  tiers: TierPricing[];
+  loading: boolean;
+  saving: boolean;
+  onSave: (next: TierPricing[]) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState<TierPricing[]>(tiers);
+
+  // Keep the draft in sync when the parent list arrives.
+  useEffect(() => {
+    setDraft(tiers);
+  }, [tiers]);
+
+  const dirty = JSON.stringify(draft) !== JSON.stringify(tiers);
+
+  return (
+    <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+      <div>
+        <h3 className="font-semibold flex items-center gap-2"><Crown className="w-5 h-5 text-amber-400" />Abo-Tiers & Preise</h3>
+        <p className="text-zinc-400 text-xs mt-1">Label und Monatspreis pro Tier. MRR auf dem Dashboard wird live aus diesen Werten + den aktiven Abos berechnet.</p>
+      </div>
+
+      {loading && draft.length === 0 ? (
+        <div className="text-xs text-zinc-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" />Lade Tier-Konfig…</div>
+      ) : (
+        <div className="space-y-2">
+          {draft.map((t, i) => (
+            <div key={t.key} className="grid grid-cols-[80px_1fr_120px] gap-2 items-center">
+              <div className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-500 truncate">{t.key}</div>
+              <input
+                type="text"
+                value={t.label}
+                onChange={(e) => {
+                  const next = [...draft];
+                  next[i] = { ...t, label: e.target.value };
+                  setDraft(next);
+                }}
+                className="input-glass text-xs"
+                placeholder="Anzeigename"
+                maxLength={40}
+              />
+              <div className="relative">
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={t.priceEur}
+                  onChange={(e) => {
+                    const next = [...draft];
+                    next[i] = { ...t, priceEur: Number(e.target.value) || 0 };
+                    setDraft(next);
+                  }}
+                  className="input-glass text-xs pr-7 w-full text-right tabular-nums"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500">€/mo</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-2">
+        <button
+          onClick={() => onSave(draft)}
+          disabled={!dirty || saving}
+          className="btn-accent px-4 py-2 rounded-xl font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Tier-Preise speichern
+        </button>
+        {dirty && !saving && (
+          <button
+            onClick={() => setDraft(tiers)}
+            className="text-xs text-zinc-400 hover:text-zinc-200 transition"
+          >
+            Zurücksetzen
+          </button>
+        )}
+      </div>
     </div>
   );
 }

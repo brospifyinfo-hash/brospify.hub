@@ -33,6 +33,7 @@ import {
   Undo2,
   ExternalLink,
   Inbox,
+  Eye,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -44,6 +45,8 @@ interface SessionInfo {
   googleName?: string;
   googleEmail?: string;
   googleImage?: string;
+  lizenzschluessel?: string | null;
+  impersonatedBy?: string | null;
 }
 
 const NAV_ITEMS = [
@@ -176,11 +179,49 @@ export default function Navigation() {
     (tool) => pathname === tool.href || pathname.startsWith(tool.href + "/"),
   );
   const isAiSupportActive = pathname === "/ai-support";
+  const isImpersonating = !!session.impersonatedBy;
+
+  async function exitImpersonation() {
+    try {
+      const res = await fetch("/api/admin/impersonate/exit", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        router.push(data.redirect || "/admin");
+      }
+    } catch { /* ignore */ }
+  }
 
   return (
     <>
+      {/* ── Impersonation banner (visible across the app) ── */}
+      {isImpersonating && (
+        <div
+          className="fixed top-0 left-0 right-0 z-[60] flex items-center justify-center gap-2 px-3 py-1.5 text-[11px] font-semibold border-b border-amber-500/40"
+          style={{
+            background: "linear-gradient(90deg, rgba(245,158,11,0.95) 0%, rgba(217,119,6,0.95) 100%)",
+            color: "#1a1108",
+          }}
+        >
+          <Eye className="w-3.5 h-3.5" />
+          <span className="truncate">
+            Impersonating <span className="font-mono">{session.lizenzschluessel || "user"}</span>
+            {session.impersonatedBy && <span className="opacity-80"> · als {session.impersonatedBy}</span>}
+          </span>
+          <button
+            onClick={exitImpersonation}
+            className="ml-2 px-2 py-0.5 rounded bg-black/20 hover:bg-black/30 transition flex items-center gap-1"
+          >
+            <Undo2 className="w-3 h-3" />
+            Zurück
+          </button>
+        </div>
+      )}
+
       {/* ── Top bar (slim everywhere, same density on mobile + desktop) ── */}
-      <nav className="fixed top-0 left-0 right-0 z-50 glass-header">
+      <nav
+        className="fixed left-0 right-0 z-50 glass-header"
+        style={{ top: isImpersonating ? "28px" : "0" }}
+      >
         <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-6">
           <div className="flex items-center justify-between h-12 gap-2">
             {/* Logo */}
@@ -557,8 +598,8 @@ export default function Navigation() {
         )}
       </AnimatePresence>
 
-      {/* Spacer for fixed nav (top) */}
-      <div className="h-12" />
+      {/* Spacer for fixed nav (top) — extra 28px when impersonation banner is on */}
+      <div style={{ height: isImpersonating ? "76px" : "48px" }} />
     </>
   );
 }
