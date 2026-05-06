@@ -395,10 +395,10 @@ export default function AdminPage() {
     return () => clearInterval(id);
   }, [dashAutoRefresh, activeTab, loadStats]);
 
-  // ── Customer action handler (note / vip / blocked / reset) ──
+  // ── Customer action handler (note / vip / blocked / reset / set-credits) ──
   const [customerActionSaving, setCustomerActionSaving] = useState(false);
   async function handleCustomerAction(
-    action: "set-note" | "set-vip" | "set-blocked" | "reset-starter",
+    action: "set-note" | "set-vip" | "set-blocked" | "reset-starter" | "set-credits",
     payload?: Record<string, unknown>,
   ) {
     if (!activeCustomerKey || customerActionSaving) return;
@@ -1153,6 +1153,13 @@ export default function AdminPage() {
                       <StatusChip on={customerDetail.hasLegalData} label={`Firmendaten${customerDetail.hasLegalData ? " ✓" : ""}`} />
                       <StatusChip on={customerDetail.hasBrandKit} label={`Brand-Kit${customerDetail.hasBrandKit ? " ✓" : ""}`} />
                     </div>
+
+                    {/* ─── Exact credit balance setter (overwrite) ─── */}
+                    <ExactCreditsSetter
+                      currentBalance={customerDetail.credits.balance}
+                      saving={customerActionSaving}
+                      onSet={(target) => handleCustomerAction("set-credits", { balance: target })}
+                    />
 
                     {/* ─── Quick credit packs ─── */}
                     <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
@@ -2204,6 +2211,74 @@ function ProfileRow({ label, value, mono }: { label: string; value: string; mono
     <div className="flex items-center justify-between gap-2 px-2 py-1 rounded bg-white/[0.02] border border-white/[0.04]">
       <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold shrink-0">{label}</span>
       <span className={`text-[11px] text-zinc-200 truncate ${mono ? "font-mono" : ""}`}>{value}</span>
+    </div>
+  );
+}
+
+// ─── Exact credits setter (overwrite balance) ──────────────────
+// Single most-requested admin action: type a number, press Setzen,
+// the customer's balance becomes exactly that number. The change is
+// audited as admin-grant or admin-revoke depending on direction.
+
+function ExactCreditsSetter({ currentBalance, saving, onSet }: {
+  currentBalance: number;
+  saving: boolean;
+  onSet: (target: number) => void;
+}) {
+  const [value, setValue] = useState<string>(String(currentBalance));
+  // Re-sync the field whenever the customer changes (currentBalance
+  // changes as a side-effect of a different account being loaded)
+  useEffect(() => { setValue(String(currentBalance)); }, [currentBalance]);
+
+  const target = Number(value);
+  const valid = Number.isFinite(target) && target >= 0 && target <= 10_000_000;
+  const dirty = valid && target !== currentBalance;
+  const delta = valid ? target - currentBalance : 0;
+
+  return (
+    <div className="rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/[0.06] to-amber-500/[0.02] p-3">
+      <div className="flex items-center gap-1.5 mb-2">
+        <Coins className="w-3.5 h-3.5 text-amber-400" />
+        <div className="text-[10px] uppercase tracking-widest font-semibold text-amber-300">
+          Credit-Balance exakt setzen
+        </div>
+      </div>
+      <div className="flex flex-col sm:flex-row gap-1.5">
+        <input
+          type="number"
+          min={0}
+          max={10_000_000}
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="flex-1 sm:max-w-[180px] bg-white/[0.04] border border-amber-500/20 rounded-lg px-2.5 py-2 text-sm font-mono tabular-nums outline-none focus:border-amber-500/40 transition"
+          placeholder="z.B. 1500"
+        />
+        <button
+          onClick={() => {
+            if (!valid || !dirty) return;
+            if (confirm(`Balance auf exakt ${target.toLocaleString("de-DE")} Credits setzen? (Aktuell: ${currentBalance.toLocaleString("de-DE")})`)) {
+              onSet(target);
+            }
+          }}
+          disabled={saving || !valid || !dirty}
+          className="px-4 py-2 rounded-lg bg-amber-500 text-black text-xs font-bold hover:brightness-110 transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Setzen"}
+        </button>
+      </div>
+      <div className="text-[10px] text-zinc-500 mt-1.5 leading-snug">
+        Überschreibt die Balance KOMPLETT (kein +/−). Aktuell:{" "}
+        <span className="font-mono font-semibold text-zinc-300">{currentBalance.toLocaleString("de-DE")}</span>
+        {dirty && (
+          <>
+            {" "}→ <span className="font-mono font-semibold text-amber-300">{target.toLocaleString("de-DE")}</span>
+            {" "}<span className={delta >= 0 ? "text-emerald-400" : "text-red-400"}>
+              ({delta > 0 ? "+" : ""}{delta.toLocaleString("de-DE")})
+            </span>
+          </>
+        )}
+        . Wird im Activity-Log als admin-grant/revoke geführt.
+      </div>
     </div>
   );
 }

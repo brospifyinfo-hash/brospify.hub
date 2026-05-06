@@ -299,6 +299,37 @@ export async function addCredits(
   return { success: true, balance: next.balance, alreadyFulfilled: false };
 }
 
+// Set the balance to an EXACT value, ignoring whatever it was before.
+// Writes a single audit-log entry of type "admin-grant" (positive
+// delta) or "admin-revoke" (negative delta) so the change is traceable
+// in the activity feed. Used by /api/admin/customer-action set-credits.
+export async function setCreditsBalance(
+  rowIndex: number,
+  profile: KundeProfile,
+  newBalance: number,
+  ref?: string,
+): Promise<{ success: boolean; balance: number; delta: number }> {
+  const target = Math.max(0, Math.round(newBalance));
+  const credits = normalizeCredits(profile.credits);
+  const delta = target - credits.balance;
+  const isGrant = delta >= 0;
+  const next: CreditsRecord = {
+    ...credits,
+    balance: target,
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: isGrant ? "admin-grant" : "admin-revoke",
+      delta,
+      balanceAfter: target,
+      reason: `Admin set balance → ${target}`,
+      ref,
+    }),
+    lastUpdated: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, { ...profile, credits: next });
+  return { success: true, balance: target, delta };
+}
+
 // One-time welcome grant. Idempotent: if `starterGranted` is already
 // set on the credits record we no-op and return the existing profile.
 // Otherwise we add STARTER_CREDITS to the balance, bump

@@ -20,6 +20,7 @@ import {
   ensureStarterGrant,
   findKundeByKey,
   getKundeProfile,
+  setCreditsBalance,
   updateKundeProfile,
 } from "@/lib/sheets";
 
@@ -89,6 +90,27 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: true,
         balance: updated.credits?.balance ?? 0,
+      });
+    }
+
+    case "set-credits": {
+      const target = Number(body.payload?.balance);
+      if (!Number.isFinite(target) || target < 0 || target > 10_000_000) {
+        return NextResponse.json(
+          { error: "balance muss zwischen 0 und 10.000.000 liegen." },
+          { status: 400 },
+        );
+      }
+      const result = await setCreditsBalance(
+        kunde.rowIndex,
+        profile,
+        target,
+        `admin:${session.googleEmail || "unknown"}`,
+      );
+      return NextResponse.json({
+        success: true,
+        balance: result.balance,
+        delta: result.delta,
       });
     }
 

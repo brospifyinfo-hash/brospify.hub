@@ -249,9 +249,14 @@ export default function HomePage() {
           </div>
         </motion.div>
 
-        {/* ─── Today KPI strip (only when shop connected) ───── */}
-        {shopConnected && insights?.today && (
-          <TodayStrip today={insights.today} />
+        {/* ─── Reconnect banner (visible above everything when scopes missing) ── */}
+        {shopConnected && insights?.needsReconnect && (
+          <ReconnectBanner reason={insights.reconnectReason} onClick={() => router.push("/setup")} />
+        )}
+
+        {/* ─── Today KPI strip — always visible if shop connected ──── */}
+        {shopConnected && (
+          <TodayStrip today={insights?.today ?? { orders: 0, revenue: 0, revenueDeltaPct: 0, ordersDelta: 0 }} />
         )}
 
         {/* ─── Compact setup progress (1 line on mobile) ─── */}
@@ -374,6 +379,32 @@ export default function HomePage() {
 }
 
 // ─── Today KPI strip ─────────────────────────────────────────────
+
+function ReconnectBanner({ reason, onClick }: { reason?: string; onClick: () => void }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3 flex items-start gap-2"
+    >
+      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+      <div className="flex-1 min-w-0">
+        <div className="text-[12px] font-bold text-amber-300 leading-tight">
+          Shop muss neu verbunden werden
+        </div>
+        <div className="text-[10px] text-amber-200/80 mt-0.5 leading-snug">
+          {reason || "Dein Token hat keine read_orders-Permission. Reconnect bringt alle Charts zurück."}
+        </div>
+      </div>
+      <button
+        onClick={onClick}
+        className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 text-black text-[11px] font-bold hover:brightness-110 transition"
+      >
+        Setup
+      </button>
+    </motion.div>
+  );
+}
 
 function TodayStrip({ today }: { today: NonNullable<Insights["today"]> }) {
   const positive = today.revenueDeltaPct >= 0;
