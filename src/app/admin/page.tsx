@@ -15,6 +15,15 @@ import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
 import { safeFetch } from "@/lib/safe-fetch";
 import { refreshBranding } from "@/lib/branding";
+import {
+  type TierDefinition,
+  type FeatureFlag,
+  type LimitKey,
+  FEATURE_FLAGS,
+  FEATURE_LABELS,
+  LIMIT_KEYS,
+  LIMIT_LABELS,
+} from "@/lib/tiers-shared";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -65,6 +74,7 @@ type AdminTierKey = "free" | "starter" | "pro" | "business";
 type AdminUserRole = "admin" | "user";
 
 interface TierPricing { key: AdminTierKey; label: string; priceEur: number }
+type AdminTier = TierDefinition;
 
 interface AdminStats {
   generatedAt: string;
@@ -325,7 +335,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -612,7 +622,7 @@ export default function AdminPage() {
   }, [activeTab, loadLogs]);
 
   // ─── Tier config (admin-editable price table) ─────────────────
-  const [tierConfig, setTierConfig] = useState<TierPricing[]>([]);
+  const [tierConfig, setTierConfig] = useState<AdminTier[]>([]);
   const [tierConfigLoading, setTierConfigLoading] = useState(false);
   const [tierConfigSaving, setTierConfigSaving] = useState(false);
   const loadTierConfig = useCallback(async () => {
@@ -627,7 +637,7 @@ export default function AdminPage() {
     finally { setTierConfigLoading(false); }
   }, []);
 
-  async function saveTierConfig(next: TierPricing[]) {
+  async function saveTierConfig(next: AdminTier[]) {
     setTierConfigSaving(true);
     try {
       const res = await fetch("/api/admin/tiers", {
@@ -650,7 +660,7 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (activeTab === "settings") loadTierConfig();
+    if (activeTab === "settings" || activeTab === "tiers") loadTierConfig();
   }, [activeTab, loadTierConfig]);
 
   // ─── Stats / Dashboard ─────────────────────────────────────────
@@ -1386,6 +1396,18 @@ export default function AdminPage() {
                   onCancelTier={handleCancelTier}
                   onImpersonate={handleImpersonate}
                   onAdjustCredits={handleQuickAdjustCredits}
+                />
+              </AdminErrorBoundary>
+            )}
+
+            {/* ─── Abo-Modelle (Tier-Editor) ─────────────────────── */}
+            {activeTab === "tiers" && (
+              <AdminErrorBoundary label="Abo-Modelle">
+                <TiersFullEditor
+                  tiers={tierConfig}
+                  loading={tierConfigLoading}
+                  saving={tierConfigSaving}
+                  onSave={saveTierConfig}
                 />
               </AdminErrorBoundary>
             )}
@@ -2234,13 +2256,6 @@ export default function AdminPage() {
               {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Einstellungen speichern</>}
             </button>
 
-            {/* \u2500\u2500 Tier / Abo-Preise (admin-editable) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
-            <TierConfigEditor
-              tiers={tierConfig}
-              loading={tierConfigLoading}
-              saving={tierConfigSaving}
-              onSave={saveTierConfig}
-            />
           </motion.div>
           </AdminErrorBoundary>
         )}
@@ -2905,7 +2920,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -2924,6 +2939,7 @@ const SIDEBAR_GROUPS: {
     items: [
       { key: "users", label: "User & Rollen", icon: UserCog, color: "#F472B6" },
       { key: "customers", label: "Kunden", icon: Users, color: "#3B82F6" },
+      { key: "tiers", label: "Abo-Modelle", icon: Crown, color: "#F59E0B" },
       { key: "tickets", label: "Tickets", icon: Shield, color: "#F59E0B" },
       { key: "codes", label: "Voucher-Codes", icon: Ticket, color: "#A855F7" },
     ],
@@ -4041,7 +4057,7 @@ function UsersView({
   search: string;
   setSearch: (v: string) => void;
   busyKey: string | null;
-  tierConfig: TierPricing[];
+  tierConfig: AdminTier[];
   autoRefresh: boolean;
   setAutoRefresh: (v: boolean) => void;
   onRefresh: () => void;
@@ -4214,7 +4230,7 @@ function UsersView({
                         <option value={u.tier}>{u.tier}</option>
                       ) : (
                         tierConfig.map((t) => (
-                          <option key={t.key} value={t.key}>{t.label} {t.priceEur > 0 ? `· ${t.priceEur}€` : ""}</option>
+                          <option key={t.key} value={t.key}>{t.label} {t.priceMonthlyEur > 0 ? `· ${t.priceMonthlyEur}€` : ""}</option>
                         ))
                       )}
                     </select>
@@ -4388,89 +4404,460 @@ function LogsView({
   );
 }
 
-// ─── Tier-Settings editor (inside Settings tab) ───────────────────
+// ─── Tier-Settings editor — full schema (Tiers tab) ───────────────
 
-function TierConfigEditor({
+const TIER_COLORS: Record<AdminTierKey, string> = {
+  free: "#71717A",
+  starter: "#06B6D4",
+  pro: "#A855F7",
+  business: "#F59E0B",
+};
+
+function TiersFullEditor({
   tiers, loading, saving, onSave,
 }: {
-  tiers: TierPricing[];
+  tiers: AdminTier[];
   loading: boolean;
   saving: boolean;
-  onSave: (next: TierPricing[]) => void | Promise<void>;
+  onSave: (next: AdminTier[]) => void | Promise<void>;
 }) {
-  const [draft, setDraft] = useState<TierPricing[]>(tiers);
+  const [draft, setDraft] = useState<AdminTier[]>(tiers);
+  const [openKey, setOpenKey] = useState<AdminTierKey | null>(null);
 
-  // Keep the draft in sync when the parent list arrives.
   useEffect(() => {
     setDraft(tiers);
-  }, [tiers]);
+    if (!openKey && tiers.length) setOpenKey(tiers[0].key);
+  }, [tiers, openKey]);
 
   const dirty = JSON.stringify(draft) !== JSON.stringify(tiers);
 
+  function patch(idx: number, patch: Partial<AdminTier>) {
+    const next = [...draft];
+    next[idx] = { ...next[idx], ...patch };
+    setDraft(next);
+  }
+
+  function patchFeature(idx: number, flag: FeatureFlag, value: boolean) {
+    const next = [...draft];
+    next[idx] = { ...next[idx], features: { ...next[idx].features, [flag]: value } };
+    setDraft(next);
+  }
+
+  function patchLimit(idx: number, key: LimitKey, value: number) {
+    const next = [...draft];
+    next[idx] = { ...next[idx], limits: { ...next[idx].limits, [key]: value } };
+    setDraft(next);
+  }
+
+  function patchBullet(idx: number, line: number, value: string) {
+    const next = [...draft];
+    const bullets = [...next[idx].bullets];
+    bullets[line] = value;
+    next[idx] = { ...next[idx], bullets };
+    setDraft(next);
+  }
+
+  function addBullet(idx: number) {
+    const next = [...draft];
+    next[idx] = { ...next[idx], bullets: [...next[idx].bullets, ""] };
+    setDraft(next);
+  }
+
+  function removeBullet(idx: number, line: number) {
+    const next = [...draft];
+    next[idx] = { ...next[idx], bullets: next[idx].bullets.filter((_, i) => i !== line) };
+    setDraft(next);
+  }
+
+  if (loading && draft.length === 0) {
+    return (
+      <div className="text-xs text-zinc-500 flex items-center gap-2 p-6">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />Lade Abo-Konfiguration…
+      </div>
+    );
+  }
+
   return (
-    <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
-      <div>
-        <h3 className="font-semibold flex items-center gap-2"><Crown className="w-5 h-5 text-amber-400" />Abo-Tiers & Preise</h3>
-        <p className="text-zinc-400 text-xs mt-1">Label und Monatspreis pro Tier. MRR auf dem Dashboard wird live aus diesen Werten + den aktiven Abos berechnet.</p>
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-bold flex items-center gap-2">
+            <Crown className="w-4 h-4 text-amber-400" />
+            Abo-Modelle &amp; Berechtigungen
+          </h2>
+          <p className="text-zinc-400 text-xs mt-1 max-w-2xl">
+            Vollkontrolle pro Tier: Name, Preis, Credits, Limits und Feature-Berechtigungen.
+            Änderungen wirken auf alle Kunden mit dem entsprechenden Tier.
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {dirty && !saving && (
+            <button
+              onClick={() => setDraft(tiers)}
+              className="text-xs text-zinc-400 hover:text-zinc-200 px-3 py-2 rounded-lg border border-white/10 hover:bg-white/5 transition"
+            >
+              Zurücksetzen
+            </button>
+          )}
+          <button
+            onClick={() => onSave(draft)}
+            disabled={!dirty || saving}
+            className="btn-accent px-4 py-2 rounded-xl font-semibold flex items-center gap-2 text-xs disabled:opacity-50"
+          >
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Speichern
+          </button>
+        </div>
       </div>
 
-      {loading && draft.length === 0 ? (
-        <div className="text-xs text-zinc-500 flex items-center gap-2"><Loader2 className="w-3 h-3 animate-spin" />Lade Tier-Konfig…</div>
-      ) : (
-        <div className="space-y-2">
-          {draft.map((t, i) => (
-            <div key={t.key} className="grid grid-cols-[80px_1fr_120px] gap-2 items-center">
-              <div className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-500 truncate">{t.key}</div>
-              <input
-                type="text"
-                value={t.label}
-                onChange={(e) => {
-                  const next = [...draft];
-                  next[i] = { ...t, label: e.target.value };
-                  setDraft(next);
-                }}
-                className="input-glass text-xs"
-                placeholder="Anzeigename"
-                maxLength={40}
-              />
-              <div className="relative">
+      {/* Compact tier picker */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {draft.map((t) => {
+          const isOpen = openKey === t.key;
+          return (
+            <button
+              key={t.key}
+              onClick={() => setOpenKey(t.key)}
+              className={`relative rounded-xl px-3 py-2.5 text-left border transition ${
+                isOpen
+                  ? "bg-white/[0.06] border-white/20"
+                  : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]"
+              }`}
+              style={isOpen ? { boxShadow: `inset 3px 0 0 ${TIER_COLORS[t.key]}` } : undefined}
+            >
+              <div className="text-[9px] uppercase tracking-[0.16em] font-bold" style={{ color: TIER_COLORS[t.key] }}>
+                {t.key}
+              </div>
+              <div className="text-sm font-bold mt-0.5 truncate">{t.label}</div>
+              <div className="text-[10px] text-zinc-500 mt-0.5 tabular-nums">
+                {t.priceMonthlyEur > 0 ? `${t.priceMonthlyEur} €/Mo` : "kostenlos"}
+              </div>
+              {t.highlighted && (
+                <span className="absolute top-1 right-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">
+                  ★
+                </span>
+              )}
+              {t.hidden && (
+                <span className="absolute top-1 right-1 text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/20 text-red-300">
+                  hidden
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Detail editor for active tier */}
+      {draft.map((t, idx) => {
+        if (t.key !== openKey) return null;
+        return (
+          <motion.div
+            key={t.key}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            {/* Identity & Marketing */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400">Identität &amp; Marketing</h3>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Anzeigename</label>
+                  <input
+                    type="text"
+                    value={t.label}
+                    onChange={(e) => patch(idx, { label: e.target.value })}
+                    placeholder="Pro"
+                    maxLength={40}
+                    className="input-glass w-full text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">CTA-Text</label>
+                  <input
+                    type="text"
+                    value={t.ctaLabel}
+                    onChange={(e) => patch(idx, { ctaLabel: e.target.value })}
+                    placeholder="Pro werden"
+                    maxLength={40}
+                    className="input-glass w-full text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Tagline (1 Zeile)</label>
                 <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={t.priceEur}
-                  onChange={(e) => {
-                    const next = [...draft];
-                    next[i] = { ...t, priceEur: Number(e.target.value) || 0 };
-                    setDraft(next);
-                  }}
-                  className="input-glass text-xs pr-7 w-full text-right tabular-nums"
+                  type="text"
+                  value={t.tagline}
+                  onChange={(e) => patch(idx, { tagline: e.target.value })}
+                  placeholder="Für ambitionierte Stores"
+                  maxLength={80}
+                  className="input-glass w-full text-sm"
                 />
-                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-500">€/mo</span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Beschreibung</label>
+                <textarea
+                  value={t.description}
+                  onChange={(e) => patch(idx, { description: e.target.value })}
+                  rows={2}
+                  placeholder="Längere Beschreibung für die Pricing-Seite"
+                  maxLength={500}
+                  className="input-glass w-full resize-none text-xs"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={t.highlighted}
+                    onChange={(e) => patch(idx, { highlighted: e.target.checked })}
+                    className="w-4 h-4 accent-amber-500"
+                  />
+                  „Most popular"-Badge
+                </label>
+                <label className="flex items-center gap-2 text-xs">
+                  <input
+                    type="checkbox"
+                    checked={t.hidden}
+                    onChange={(e) => patch(idx, { hidden: e.target.checked })}
+                    className="w-4 h-4 accent-red-500"
+                  />
+                  Auf Pricing-Seite verstecken (intern)
+                </label>
               </div>
             </div>
-          ))}
-        </div>
-      )}
 
-      <div className="flex items-center gap-2 pt-2">
-        <button
-          onClick={() => onSave(draft)}
-          disabled={!dirty || saving}
-          className="btn-accent px-4 py-2 rounded-xl font-semibold flex items-center gap-2 text-sm disabled:opacity-50"
-        >
-          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-          Tier-Preise speichern
-        </button>
-        {dirty && !saving && (
-          <button
-            onClick={() => setDraft(tiers)}
-            className="text-xs text-zinc-400 hover:text-zinc-200 transition"
-          >
-            Zurücksetzen
-          </button>
-        )}
-      </div>
+            {/* Pricing */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400 flex items-center gap-2">
+                <Euro className="w-3.5 h-3.5" />
+                Preise &amp; Trial
+              </h3>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Monatlich (€)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={t.priceMonthlyEur}
+                    onChange={(e) => patch(idx, { priceMonthlyEur: Number(e.target.value) || 0 })}
+                    className="input-glass w-full text-sm tabular-nums"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Jährlich (€)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={t.priceYearlyEur}
+                    onChange={(e) => patch(idx, { priceYearlyEur: Number(e.target.value) || 0 })}
+                    className="input-glass w-full text-sm tabular-nums"
+                  />
+                  <p className="text-[9px] text-zinc-600 mt-0.5">0 = keine jährliche Option</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Trial (Tage)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="1"
+                    value={t.trialDays}
+                    onChange={(e) => patch(idx, { trialDays: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    className="input-glass w-full text-sm tabular-nums"
+                  />
+                  <p className="text-[9px] text-zinc-600 mt-0.5">0 = kein Trial</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Credits */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-4">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400 flex items-center gap-2">
+                <Coins className="w-3.5 h-3.5" />
+                Credits
+              </h3>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Start-Credits (einmalig)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="100"
+                    value={t.startingCredits}
+                    onChange={(e) => patch(idx, { startingCredits: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    className="input-glass w-full text-sm tabular-nums"
+                  />
+                  <p className="text-[9px] text-zinc-600 mt-0.5">Bei erster Tier-Aktivierung</p>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">Monatliches Allowance</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="100"
+                    value={t.monthlyCreditAllowance}
+                    onChange={(e) => patch(idx, { monthlyCreditAllowance: Math.max(0, Math.round(Number(e.target.value) || 0)) })}
+                    className="input-glass w-full text-sm tabular-nums"
+                  />
+                  <p className="text-[9px] text-zinc-600 mt-0.5">Wiederkehrend pro Abrechnung</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Limits */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-3">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400 flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5" />
+                  Limits
+                </h3>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  <code className="bg-white/[0.04] px-1 py-0.5 rounded">-1</code> = unbegrenzt
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+                {LIMIT_KEYS.map((lk) => (
+                  <div key={lk} className="flex items-center justify-between gap-2">
+                    <label className="text-[11px] text-zinc-300 flex-1 truncate">{LIMIT_LABELS[lk]}</label>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={() => patchLimit(idx, lk, t.limits[lk] === -1 ? 0 : -1)}
+                        className={`text-[9px] px-1.5 py-1 rounded uppercase tracking-wider font-bold transition ${
+                          t.limits[lk] === -1
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-white/[0.04] border border-white/10 text-zinc-500 hover:text-zinc-300"
+                        }`}
+                      >
+                        ∞
+                      </button>
+                      <input
+                        type="number"
+                        min={-1}
+                        step="1"
+                        value={t.limits[lk]}
+                        onChange={(e) => patchLimit(idx, lk, Math.round(Number(e.target.value) || 0))}
+                        disabled={t.limits[lk] === -1}
+                        className="input-glass w-20 text-xs tabular-nums text-right disabled:opacity-40"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Features */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400 flex items-center gap-2">
+                <Sparkles className="w-3.5 h-3.5" />
+                Berechtigungen / Features
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                {FEATURE_FLAGS.map((flag) => {
+                  const enabled = t.features[flag];
+                  return (
+                    <label
+                      key={flag}
+                      className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg cursor-pointer transition ${
+                        enabled
+                          ? "bg-emerald-500/[0.08] border border-emerald-500/15"
+                          : "bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04]"
+                      }`}
+                    >
+                      <span className={`text-[11px] truncate ${enabled ? "text-emerald-200" : "text-zinc-400"}`}>
+                        {FEATURE_LABELS[flag]}
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        onChange={(e) => patchFeature(idx, flag, e.target.checked)}
+                        className="w-4 h-4 accent-emerald-500 shrink-0"
+                      />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Bullets */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400 flex items-center gap-2">
+                    <FileText className="w-3.5 h-3.5" />
+                    Pricing-Bullets
+                  </h3>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">Stichpunkte unter dem Preis auf der Pricing-Seite</p>
+                </div>
+                <button
+                  onClick={() => addBullet(idx)}
+                  className="text-[10px] px-2.5 py-1.5 rounded-lg border border-white/10 hover:bg-white/5 transition flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  Hinzufügen
+                </button>
+              </div>
+
+              <div className="space-y-1.5">
+                {t.bullets.map((b, line) => (
+                  <div key={line} className="flex items-center gap-2">
+                    <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                    <input
+                      type="text"
+                      value={b}
+                      onChange={(e) => patchBullet(idx, line, e.target.value)}
+                      placeholder={`Bullet #${line + 1}`}
+                      maxLength={120}
+                      className="input-glass flex-1 text-xs"
+                    />
+                    <button
+                      onClick={() => removeBullet(idx, line)}
+                      className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-red-400 transition"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+                {t.bullets.length === 0 && (
+                  <p className="text-[10px] text-zinc-600 italic">Noch keine Bullets — klicke „Hinzufügen".</p>
+                )}
+              </div>
+            </div>
+
+            {/* Sticky save bar */}
+            {dirty && (
+              <div className="sticky bottom-3 flex items-center justify-end gap-2 glass-strong border border-amber-500/20 rounded-xl px-3 py-2.5 backdrop-blur-md">
+                <span className="text-[11px] text-amber-300">Ungespeicherte Änderungen</span>
+                <button
+                  onClick={() => setDraft(tiers)}
+                  className="text-[11px] text-zinc-400 hover:text-zinc-200 px-3 py-1.5"
+                >
+                  Verwerfen
+                </button>
+                <button
+                  onClick={() => onSave(draft)}
+                  disabled={saving}
+                  className="btn-accent px-4 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5 disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Speichern
+                </button>
+              </div>
+            )}
+          </motion.div>
+        );
+      })}
     </div>
   );
 }

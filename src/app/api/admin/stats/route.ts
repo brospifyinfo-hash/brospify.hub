@@ -127,7 +127,7 @@ export async function GET() {
     const kunden = await getAllKunden();
     const tierPricing = await getTierConfig();
     const tierPriceMap = new Map<TierKey, number>(
-      tierPricing.map((t) => [t.key, t.priceEur]),
+      tierPricing.map((t) => [t.key, t.priceMonthlyEur]),
     );
 
     const now = Date.now();
@@ -381,7 +381,7 @@ export async function GET() {
         activeTotal: activeSubsTotal,
         byTier: subsByTier,
         mrrEur: +mrrEur.toFixed(2),
-        pricing: tierPricing,
+        pricing: tierPricing.map((t) => ({ key: t.key, label: t.label, priceEur: t.priceMonthlyEur })),
         newPaid30d,
         churn30d,
         churnRatePct,
