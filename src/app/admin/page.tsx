@@ -4262,19 +4262,21 @@ function BackfillStarterCard() {
           <div className="flex items-center gap-2 flex-wrap">
             <h3 className="text-sm font-bold text-white">Starter-Credits Sync (500c)</h3>
             <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-emerald-300/80 bg-emerald-500/10 border border-emerald-500/25 rounded px-1.5 py-0.5">
-              Cron · stündlich
+              Cron · täglich 03:00 UTC
             </span>
           </div>
           <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
             Vergibt jedem Profil ohne `starterGranted=true` die 500
             Willkommens-Credits. Bestehende Balances werden nie
-            überschrieben — der Bonus wird draufgerechnet. Läuft alle
-            60 Minuten via Vercel Cron, kann hier auch manuell
-            ausgelöst werden.
+            überschrieben — der Bonus wird draufgerechnet. Läuft 1×
+            täglich via Vercel Cron (Hobby-Limit), zusätzlich bei jedem
+            Login automatisch und hier per Klick auf Knopfdruck.
           </p>
           <p className="text-[10px] text-zinc-500 mt-1.5">
             Setze <span className="font-mono text-zinc-400">CRON_SECRET</span> in den
-            Vercel-Env-Vars, damit der Cron-Job zugreifen darf.
+            Vercel-Env-Vars, damit der Cron-Job zugreifen darf. Für
+            häufigeres Syncen: externer Uptime-Monitor (UptimeRobot,
+            cron-job.org) der diese URL pingt — oder Vercel Pro.
           </p>
 
           <div className="flex items-center gap-2 mt-2.5 flex-wrap">

@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/admin/credits/backfill-starter",
-      "schedule": "0 * * * *"
+      "schedule": "0 3 * * *"
     }
   ]
 }
