@@ -14,6 +14,7 @@ import {
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
 import { safeFetch } from "@/lib/safe-fetch";
+import { refreshBranding } from "@/lib/branding";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -340,6 +341,7 @@ export default function AdminPage() {
   }
   interface SettingsData {
     logoUrl: string;
+    brandName: string;
     youtubeUrl: string;
     themeFileUrl: string;
     themeFileName: string;
@@ -351,7 +353,7 @@ export default function AdminPage() {
     themeChangelog: string;
     themes: ThemeEntry[];
   }
-  const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
+  const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", brandName: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [themeBusyId, setThemeBusyId] = useState<string | null>(null);
   const [themePreviewBusyId, setThemePreviewBusyId] = useState<string | null>(null);
@@ -1088,6 +1090,7 @@ export default function AdminPage() {
     fetch("/api/admin/settings").then(r => r.json()).then(data => {
       setSettingsData({
         logoUrl: data.logoUrl || "",
+        brandName: data.brandName || "",
         youtubeUrl: data.youtubeUrl || "",
         themeFileUrl: data.themeFileUrl || "",
         themeFileName: data.themeFileName || "",
@@ -1106,8 +1109,12 @@ export default function AdminPage() {
     setSettingsLoading(true); setError("");
     try {
       const res = await fetch("/api/admin/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settingsData) });
-      if (res.ok) { setSuccess("Einstellungen gespeichert."); setTimeout(() => setSuccess(""), 3000); }
-      else { const d = await res.json(); setError(d.error || "Fehler."); }
+      if (res.ok) {
+        setSuccess("Einstellungen gespeichert.");
+        setTimeout(() => setSuccess(""), 3000);
+        // Push the new logo / brand-name to every open tab + this page
+        refreshBranding();
+      } else { const d = await res.json(); setError(d.error || "Fehler."); }
     } catch { setError("Speichern fehlgeschlagen."); }
     finally { setSettingsLoading(false); }
   }
@@ -1984,8 +1991,25 @@ export default function AdminPage() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-2xl">
             {/* Logo Upload */}
             <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
-              <h3 className="font-semibold flex items-center gap-2"><ImageIcon className="w-5 h-5 text-[#95BF47]" />Firmenlogo (White-Label)</h3>
-              <p className="text-zinc-400 text-xs">Lade dein Logo hoch. Es ersetzt das Standard-Logo auf allen Seiten (Login, Navigation, etc.).</p>
+              <h3 className="font-semibold flex items-center gap-2"><ImageIcon className="w-5 h-5 text-[#95BF47]" />Firmenlogo &amp; Brand-Name (White-Label)</h3>
+              <p className="text-zinc-400 text-xs">Logo + Markenname ersetzen das Standard-„BrospifyHub" auf allen Seiten (Login, Navigation, Header).</p>
+
+              {/* Brand Name */}
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1">Markenname (Text-Fallback wenn kein Logo)</label>
+                <input
+                  type="text"
+                  value={settingsData.brandName}
+                  onChange={e => setSettingsData({ ...settingsData, brandName: e.target.value })}
+                  placeholder="z.B. MeinShop, Brand X — leer lassen für Standard"
+                  className="input-glass w-full"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">Erscheint nur im Header wenn kein Logo gesetzt ist. Auf der Login-Seite wird er auch als Titel genutzt.</p>
+              </div>
+
+              <div className="border-t border-white/[0.06] pt-4 -mx-6 px-6 -mb-2">
+                <p className="text-xs text-zinc-400 mb-3 font-semibold">Logo-Upload</p>
+              </div>
 
               {/* File Upload */}
               <div className="flex items-center gap-3">

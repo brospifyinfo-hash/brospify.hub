@@ -142,7 +142,7 @@ export default function Navigation() {
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
-  const { logoUrl } = useBranding();
+  const { logoUrl, brandName } = useBranding();
   const credits = useCredits();
 
   useEffect(() => {
@@ -236,7 +236,11 @@ export default function Navigation() {
               </div>
               {!logoUrl && (
                 <span className="text-sm font-bold hidden sm:block">
-                  Brospify<span className="text-[#95BF47]">Hub</span>
+                  {brandName ? (
+                    brandName
+                  ) : (
+                    <>Brospify<span className="text-[#95BF47]">Hub</span></>
+                  )}
                 </span>
               )}
             </Link>

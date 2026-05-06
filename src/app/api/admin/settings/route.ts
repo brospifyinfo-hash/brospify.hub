@@ -20,6 +20,7 @@ export interface ThemeEntry {
 
 interface AppSettings {
   logoUrl?: string;
+  brandName?: string;
   youtubeUrl?: string;
   // Legacy single-theme fields — kept for backward compat
   themeFileUrl?: string;
@@ -126,6 +127,7 @@ export async function POST(req: NextRequest) {
     const updated: AppSettings = {
       ...current,
       ...(body.logoUrl !== undefined && { logoUrl: body.logoUrl }),
+      ...(body.brandName !== undefined && { brandName: body.brandName }),
       ...(body.youtubeUrl !== undefined && { youtubeUrl: body.youtubeUrl }),
       ...(body.themeFileUrl !== undefined && { themeFileUrl: body.themeFileUrl }),
       ...(body.themeFileName !== undefined && { themeFileName: body.themeFileName }),

@@ -24,7 +24,7 @@ export default function LoginPage() {
 
 function LoginContent() {
   const { t } = useI18n();
-  const { logoUrl } = useBranding();
+  const { logoUrl, brandName } = useBranding();
   const [key, setKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -91,7 +91,11 @@ function LoginContent() {
           </motion.div>
           {!logoUrl && (
             <h1 className="text-3xl font-bold tracking-tight">
-              Managed <span className="text-[#95BF47]">Hub</span>
+              {brandName ? (
+                brandName
+              ) : (
+                <>Managed <span className="text-[#95BF47]">Hub</span></>
+              )}
             </h1>
           )}
           <p className="text-white/40 mt-2">{t.login.title}</p>

@@ -5,36 +5,105 @@ import { useState, useEffect } from "react";
 interface BrandingData {
   logoUrl: string;
   brandName: string;
+  brandAccent: string;
   loading: boolean;
 }
 
-let cachedLogoUrl: string | null = null;
+interface CachedBranding {
+  logoUrl: string;
+  brandName: string;
+  brandAccent: string;
+}
+
+let cached: CachedBranding | null = null;
+const subscribers = new Set<() => void>();
+
+function notifySubscribers() {
+  subscribers.forEach((fn) => fn());
+}
+
+async function fetchBranding(): Promise<CachedBranding> {
+  try {
+    const res = await fetch("/api/branding", { cache: "no-store" });
+    if (!res.ok) return { logoUrl: "", brandName: "", brandAccent: "" };
+    const data = await res.json();
+    return {
+      logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+      brandName: typeof data.brandName === "string" ? data.brandName : "",
+      brandAccent: typeof data.brandAccent === "string" ? data.brandAccent : "",
+    };
+  } catch {
+    return { logoUrl: "", brandName: "", brandAccent: "" };
+  }
+}
+
+// Listen for cross-tab updates from admin save
+if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+  try {
+    const ch = new BroadcastChannel("brospify-branding");
+    ch.onmessage = (e) => {
+      if (e.data && e.data.type === "refresh") {
+        cached = null;
+        fetchBranding().then((data) => {
+          cached = data;
+          notifySubscribers();
+        });
+      }
+    };
+  } catch { /* BroadcastChannel not available */ }
+}
 
 export function useBranding(): BrandingData {
-  const [logoUrl, setLogoUrl] = useState(cachedLogoUrl || "");
-  const [loading, setLoading] = useState(!cachedLogoUrl);
+  const [data, setData] = useState<CachedBranding>(
+    cached || { logoUrl: "", brandName: "", brandAccent: "" }
+  );
+  const [loading, setLoading] = useState(!cached);
 
   useEffect(() => {
-    if (cachedLogoUrl !== null) {
-      setLogoUrl(cachedLogoUrl);
+    let mounted = true;
+
+    const sub = () => {
+      if (mounted && cached) setData(cached);
+    };
+    subscribers.add(sub);
+
+    if (cached) {
+      setData(cached);
       setLoading(false);
-      return;
+    } else {
+      fetchBranding().then((d) => {
+        cached = d;
+        if (mounted) {
+          setData(d);
+          setLoading(false);
+        }
+      });
     }
 
-    fetch("/api/admin/settings")
-      .then((r) => (r.ok ? r.json() : {}))
-      .then((data: { logoUrl?: string }) => {
-        const url = data.logoUrl || "";
-        cachedLogoUrl = url;
-        setLogoUrl(url);
-      })
-      .catch(() => {
-        cachedLogoUrl = "";
-      })
-      .finally(() => setLoading(false));
+    return () => {
+      mounted = false;
+      subscribers.delete(sub);
+    };
   }, []);
 
-  return { logoUrl, brandName: "Hub", loading };
+  return { ...data, loading };
+}
+
+// Call this from the admin page after a successful settings save to push
+// the new logo/brand to every tab + the current page without a hard reload.
+export function refreshBranding() {
+  cached = null;
+  fetchBranding().then((data) => {
+    cached = data;
+    notifySubscribers();
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        const ch = new BroadcastChannel("brospify-branding");
+        ch.postMessage({ type: "refresh" });
+        ch.close();
+      } catch { /* ignore */ }
+    }
+  });
 }
 
 export function BrandLogo({
@@ -56,6 +125,7 @@ export function BrandLogo({
   const iconSize = sizeMap[size];
 
   if (logoUrl) {
+    // eslint-disable-next-line @next/next/no-img-element
     return (
       <img
         src={logoUrl}
