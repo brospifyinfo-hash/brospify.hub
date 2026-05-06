@@ -35,6 +35,8 @@ import {
   Inbox,
   Eye,
   Lock,
+  Crown,
+  Check,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -147,9 +149,11 @@ export default function Navigation() {
   const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
+  const accountRef = useRef<HTMLDivElement>(null);
   const { logoUrl, brandName } = useBranding();
   const credits = useCredits();
   const tierState = useTier();
@@ -172,10 +176,28 @@ export default function Navigation() {
       if (aiRef.current && !aiRef.current.contains(e.target as Node)) {
         setAiOpen(false);
       }
+      if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
+        setAccountOpen(false);
+      }
+    }
+    function handleKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setAiOpen(false);
+        setAccountOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleKey);
+    };
   }, []);
+
+  // Close dropdowns on route change
+  useEffect(() => {
+    setAccountOpen(false);
+  }, [pathname]);
 
   async function handleLogout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -316,27 +338,47 @@ export default function Navigation() {
                       initial={{ opacity: 0, y: -8, scale: 0.96 }}
                       animate={{ opacity: 1, y: 0, scale: 1 }}
                       exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                      transition={{ duration: 0.15 }}
-                      className="absolute top-full mt-2 right-0 w-[380px] p-3 rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60"
+                      transition={{ duration: 0.16 }}
+                      className="absolute top-full mt-2 right-0 w-[400px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
                       style={{
                         background: "rgba(12,12,14,0.97)",
                         backdropFilter: "blur(48px) saturate(180%)",
+                        WebkitBackdropFilter: "blur(48px) saturate(180%)",
                       }}
                     >
-                      <div className="px-3 pt-1 pb-2 flex items-center justify-between">
-                        <span className="text-[10px] uppercase tracking-[0.14em] font-semibold text-zinc-500">
-                          AI Suite · {AI_TOOLS.length} Tools
-                        </span>
-                        <Link
-                          href="/credits"
-                          onClick={() => setAiOpen(false)}
-                          className="text-[10px] font-mono text-[#95BF47] hover:text-white transition flex items-center gap-1"
-                        >
-                          🪙 {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
-                          <Plus className="w-2.5 h-2.5" />
-                        </Link>
+                      {/* Gradient header */}
+                      <div className="relative px-4 pt-3 pb-2 border-b border-white/[0.06] overflow-hidden">
+                        <div
+                          className="absolute inset-0 opacity-50 pointer-events-none"
+                          style={{
+                            background:
+                              "radial-gradient(circle at 20% 50%, rgba(168,85,247,0.16), transparent 60%), radial-gradient(circle at 90% 50%, rgba(96,165,250,0.12), transparent 60%)",
+                          }}
+                        />
+                        <div className="relative flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500/30 to-blue-500/30 border border-white/10 flex items-center justify-center">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
+                            </div>
+                            <div>
+                              <div className="text-[11px] font-bold text-white">AI Suite</div>
+                              <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">
+                                {AI_TOOLS.length} Tools
+                              </div>
+                            </div>
+                          </div>
+                          <Link
+                            href="/credits"
+                            onClick={() => setAiOpen(false)}
+                            className="flex items-center gap-1 text-[10px] font-mono text-[#95BF47] hover:text-white transition px-2 py-1 rounded-md border border-[#95BF47]/15 hover:border-[#95BF47]/30 hover:bg-[#95BF47]/[0.08]"
+                          >
+                            🪙 {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
+                            <Plus className="w-2.5 h-2.5" />
+                          </Link>
+                        </div>
                       </div>
-                      <div className="space-y-1.5">
+
+                      <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
                         {AI_TOOLS.map((tool) => {
                           const isActive =
                             pathname === tool.href ||
@@ -349,18 +391,18 @@ export default function Navigation() {
                               href={tool.href}
                               onClick={() => setAiOpen(false)}
                               title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
-                              className={`group flex items-center gap-3.5 p-3 rounded-xl border transition-all duration-200 ${
+                              className={`nav-lift group flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-200 ${
                                 isActive
                                   ? "border-[#95BF47]/25 bg-[#95BF47]/8"
                                   : locked
-                                  ? "border-white/[0.03] bg-white/[0.01] opacity-60 hover:opacity-80"
-                                  : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.10] hover:bg-white/[0.04]"
+                                  ? "border-white/[0.03] bg-white/[0.01] opacity-55 hover:opacity-80"
+                                  : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.05]"
                               }`}
                             >
                               <div
-                                className={`relative w-11 h-11 rounded-xl bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center shrink-0`}
+                                className={`relative w-10 h-10 rounded-xl bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center shrink-0 transition group-hover:scale-105`}
                               >
-                                <Icon className={`w-5 h-5 ${tool.iconColor}`} />
+                                <Icon className={`w-4.5 h-4.5 ${tool.iconColor}`} />
                                 {locked && (
                                   <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
                                     <Lock className="w-2.5 h-2.5 text-amber-400" />
@@ -368,18 +410,24 @@ export default function Navigation() {
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-[13.5px] text-white truncate flex items-center gap-1.5">
+                                <div className="font-semibold text-[13px] text-white truncate flex items-center gap-1.5">
                                   {tool.title}
                                   {locked && (
-                                    <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0">
+                                    <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0 border border-amber-500/20">
                                       Upgrade
                                     </span>
                                   )}
+                                  {isActive && !locked && (
+                                    <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47]/15 text-[#95BF47] font-bold shrink-0 border border-[#95BF47]/20">
+                                      Aktiv
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
+                                <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">
                                   {tool.desc}
                                 </div>
                               </div>
+                              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
                             </Link>
                           );
                         })}
@@ -406,62 +454,61 @@ export default function Navigation() {
                   />
                 )}
               </Link>
-
-              {session.isAdmin && (
-                <Link
-                  href="/admin"
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
-                    pathname === "/admin"
-                      ? "text-[#95BF47] bg-[#95BF47]/8"
-                      : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <Settings className="w-3.5 h-3.5" />
-                  <span>{t.nav.admin}</span>
-                </Link>
-              )}
             </div>
 
             {/* Right Side */}
             <div className="flex items-center gap-1.5 sm:gap-2">
               <CreditsPill balance={credits.balance} loading={credits.loading} />
 
-              {/* Profile/Logout shown on desktop only — mobile uses bottom tabs */}
-              <Link
-                href="/profile"
-                className={`hidden md:flex items-center gap-1.5 px-1.5 py-1 rounded-lg transition-all duration-200 ${
-                  pathname === "/profile"
-                    ? "bg-[#95BF47]/8 border border-[#95BF47]/15"
-                    : "hover:bg-white/[0.04] border border-transparent"
-                }`}
-              >
-                {session.googleImage ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={session.googleImage}
-                    alt=""
-                    className="w-6 h-6 rounded-md border border-white/[0.08] object-cover"
-                  />
-                ) : (
-                  <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center">
-                    <span className="text-[9px] font-bold text-white">
-                      {(session.googleName || "U")[0].toUpperCase()}
+              {/* Account mega-dropdown — desktop only */}
+              <div ref={accountRef} className="relative hidden md:block">
+                <button
+                  onClick={() => setAccountOpen((v) => !v)}
+                  className={`flex items-center gap-1.5 pl-1 pr-1.5 py-1 rounded-lg border transition-all duration-200 ${
+                    accountOpen
+                      ? "bg-white/[0.06] border-white/[0.12]"
+                      : "border-transparent hover:bg-white/[0.04] hover:border-white/[0.08]"
+                  }`}
+                >
+                  {session.googleImage ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={session.googleImage}
+                      alt=""
+                      className="w-6 h-6 rounded-md border border-white/[0.08] object-cover"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded-md bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/[0.08] flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-white">
+                        {(session.googleName || "U")[0].toUpperCase()}
+                      </span>
+                    </div>
+                  )}
+                  {tierState.tier && tierState.tier.key !== "free" && !session.isAdmin && (
+                    <TierBadge tier={tierState.tier.label} kind={tierState.tier.key} compact />
+                  )}
+                  {session.isAdmin && (
+                    <span className="hidden lg:inline text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300">
+                      Admin
                     </span>
-                  </div>
-                )}
-                <div className="hidden xl:block text-left max-w-[100px]">
-                  <div className="text-[11px] font-semibold text-white truncate leading-tight">
-                    {session.googleName || "Profil"}
-                  </div>
-                </div>
-              </Link>
+                  )}
+                  <ChevronDown
+                    className={`w-3 h-3 text-zinc-500 transition-transform ${accountOpen ? "rotate-180" : ""}`}
+                  />
+                </button>
 
-              <button
-                onClick={handleLogout}
-                className="hidden md:flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[12px] text-zinc-500 hover:text-red-400 hover:bg-red-500/8 transition-all duration-200"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
+                <AnimatePresence>
+                  {accountOpen && (
+                    <AccountMenu
+                      session={session}
+                      tierState={tierState}
+                      pathname={pathname}
+                      onClose={() => setAccountOpen(false)}
+                      onLogout={handleLogout}
+                    />
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
@@ -927,6 +974,308 @@ function CreditsPill({ balance, loading }: { balance: number; loading: boolean }
         {loading ? "···" : balance.toLocaleString("de-DE")}
       </motion.span>
       <Plus className="w-2.5 sm:w-3 h-2.5 sm:h-3 opacity-70" style={{ color: accent }} />
+    </Link>
+  );
+}
+
+// ─── Tier Badge ─────────────────────────────────────────────────
+// Small chip rendered next to the avatar on desktop. Color-coded so
+// the user instantly sees which plan they're on.
+
+const TIER_CHIP_STYLES: Record<string, { bg: string; text: string; border: string }> = {
+  free:     { bg: "bg-zinc-500/15",   text: "text-zinc-300",   border: "border-zinc-500/25" },
+  starter:  { bg: "bg-cyan-500/15",   text: "text-cyan-300",   border: "border-cyan-500/25" },
+  pro:      { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-500/30" },
+  business: { bg: "bg-amber-500/15",  text: "text-amber-300",  border: "border-amber-500/30" },
+};
+
+function TierBadge({ tier, kind, compact }: { tier: string; kind: string; compact?: boolean }) {
+  const style = TIER_CHIP_STYLES[kind] || TIER_CHIP_STYLES.free;
+  return (
+    <span
+      className={`hidden lg:inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded border ${style.bg} ${style.text} ${style.border} ${compact ? "px-1.5 py-0.5" : "px-2 py-1"}`}
+    >
+      {kind === "business" && <Crown className="w-2.5 h-2.5" />}
+      {tier}
+    </span>
+  );
+}
+
+// ─── Account mega-dropdown ──────────────────────────────────────
+// Replaces the simple avatar+logout in the desktop header. Mirrors the
+// content that mobile users see in the "Mehr" bottom-sheet so desktop
+// no longer hides Profil / Settings / Setup / Rechtstexte / external
+// policies. Click-outside + Escape close it.
+
+interface AccountMenuProps {
+  session: SessionInfo;
+  tierState: ReturnType<typeof useTier>;
+  pathname: string;
+  onClose: () => void;
+  onLogout: () => void;
+}
+
+function AccountMenu({ session, tierState, pathname, onClose, onLogout }: AccountMenuProps) {
+  const tier = tierState.tier;
+  const tierKey = tier?.key || "free";
+  const chipStyle = TIER_CHIP_STYLES[tierKey] || TIER_CHIP_STYLES.free;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+      transition={{ duration: 0.16 }}
+      className="absolute top-full mt-2 right-0 w-[320px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+      style={{
+        background: "rgba(12,12,14,0.97)",
+        backdropFilter: "blur(48px) saturate(180%)",
+        WebkitBackdropFilter: "blur(48px) saturate(180%)",
+      }}
+    >
+      {/* Header — avatar + name + tier chip */}
+      <div className="relative p-4 border-b border-white/[0.06] overflow-hidden">
+        {/* Subtle gradient accent based on tier color */}
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none"
+          style={{
+            background:
+              tierKey === "business"
+                ? "radial-gradient(circle at top right, rgba(251,191,36,0.14), transparent 65%)"
+                : tierKey === "pro"
+                ? "radial-gradient(circle at top right, rgba(168,85,247,0.14), transparent 65%)"
+                : tierKey === "starter"
+                ? "radial-gradient(circle at top right, rgba(6,182,212,0.12), transparent 65%)"
+                : "radial-gradient(circle at top right, rgba(149,191,71,0.10), transparent 65%)",
+          }}
+        />
+        <div className="relative flex items-center gap-3">
+          {session.googleImage ? (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={session.googleImage}
+              alt=""
+              className="w-12 h-12 rounded-xl border border-white/[0.10] object-cover shrink-0"
+            />
+          ) : (
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/[0.10] flex items-center justify-center shrink-0">
+              <span className="text-base font-bold text-white">
+                {(session.googleName || "U")[0].toUpperCase()}
+              </span>
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-bold truncate">{session.googleName || "Profil"}</div>
+            {session.googleEmail && (
+              <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
+            )}
+            <div className="mt-1.5 flex items-center gap-1.5">
+              {session.isAdmin ? (
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                  <Shield className="w-2.5 h-2.5" /> Admin
+                </span>
+              ) : tier ? (
+                <span
+                  className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${chipStyle.bg} ${chipStyle.text} ${chipStyle.border}`}
+                >
+                  {tierKey === "business" && <Crown className="w-2.5 h-2.5" />}
+                  {tier.label}
+                </span>
+              ) : null}
+              {tier && tier.priceMonthlyEur > 0 && !session.isAdmin && (
+                <span className="text-[9px] text-zinc-500 tabular-nums">
+                  {tier.priceMonthlyEur} €/Mo
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Menu groups */}
+      <div className="p-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
+        <MenuGroup label="Account">
+          <MenuItem
+            href="/profile"
+            icon={UserIcon}
+            label="Mein Profil"
+            active={pathname === "/profile"}
+            onClick={onClose}
+          />
+          <MenuItem
+            href="/settings"
+            icon={Settings}
+            label="Einstellungen"
+            active={pathname === "/settings"}
+            onClick={onClose}
+          />
+          <MenuItem
+            href="/credits"
+            icon={Plus}
+            label="Credits"
+            active={pathname === "/credits"}
+            onClick={onClose}
+            sub="Aufladen & Verlauf"
+          />
+        </MenuGroup>
+
+        <MenuGroup label="Shop">
+          <MenuItem
+            href="/setup"
+            icon={Store}
+            label="Shop verbinden"
+            active={pathname === "/setup"}
+            onClick={onClose}
+          />
+          <MenuItem
+            href="/legal"
+            icon={Scale}
+            label="Rechtstexte für deinen Shop"
+            active={pathname === "/legal"}
+            onClick={onClose}
+          />
+        </MenuGroup>
+
+        <MenuGroup label="Support">
+          <MenuItem
+            href="/ai-support"
+            icon={Bot}
+            label="AI Support"
+            active={pathname === "/ai-support" && !pathname.includes("ticket")}
+            onClick={onClose}
+          />
+          <MenuItem
+            href="/ai-support?view=tickets"
+            icon={Inbox}
+            label="Meine Tickets"
+            active={false}
+            onClick={onClose}
+          />
+        </MenuGroup>
+
+        <MenuGroup label="Rechtliches">
+          <MenuItem
+            href="https://brospify.com/policies/legal-notice"
+            icon={FileText}
+            label="Impressum"
+            external
+            onClick={onClose}
+          />
+          <MenuItem
+            href="https://brospify.com/policies/privacy-policy"
+            icon={Shield}
+            label="Datenschutz"
+            external
+            onClick={onClose}
+          />
+          <MenuItem
+            href="https://brospify.com/policies/terms-of-service"
+            icon={Receipt}
+            label="AGB"
+            external
+            onClick={onClose}
+          />
+          <MenuItem
+            href="https://brospify.com/policies/refund-policy"
+            icon={Undo2}
+            label="Widerrufsbelehrung"
+            external
+            onClick={onClose}
+          />
+        </MenuGroup>
+
+        {session.isAdmin && (
+          <MenuGroup label="Verwaltung">
+            <MenuItem
+              href="/admin"
+              icon={Settings}
+              label="Admin-Panel"
+              active={pathname === "/admin"}
+              onClick={onClose}
+              accent
+            />
+          </MenuGroup>
+        )}
+      </div>
+
+      {/* Logout footer */}
+      <div className="p-2 border-t border-white/[0.06]">
+        <button
+          onClick={() => {
+            onClose();
+            onLogout();
+          }}
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-red-500/15 bg-red-500/[0.05] text-red-300 hover:bg-red-500/[0.10] hover:border-red-500/25 transition"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span className="text-[12.5px] font-semibold flex-1 text-left">Abmelden</span>
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function MenuGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-1">
+      <div className="px-2 pt-1.5 pb-1">
+        <span className="text-[8.5px] font-bold uppercase tracking-[0.16em] text-zinc-600">{label}</span>
+      </div>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+function MenuItem({
+  href,
+  icon: Icon,
+  label,
+  active,
+  external,
+  onClick,
+  accent,
+  sub,
+}: {
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  active?: boolean;
+  external?: boolean;
+  onClick?: () => void;
+  accent?: boolean;
+  sub?: string;
+}) {
+  const className = `group flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 border ${
+    active
+      ? "bg-[#95BF47]/10 border-[#95BF47]/20 text-[#95BF47]"
+      : accent
+      ? "bg-amber-500/[0.06] border-amber-500/15 text-amber-200 hover:bg-amber-500/10"
+      : "border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.06]"
+  }`;
+  const inner = (
+    <>
+      <Icon className={`w-3.5 h-3.5 shrink-0 ${active ? "text-[#95BF47]" : "text-zinc-500 group-hover:text-zinc-300"}`} />
+      <div className="flex-1 min-w-0">
+        <div className="text-[12.5px] font-medium truncate leading-tight">{label}</div>
+        {sub && <div className="text-[10px] text-zinc-600 truncate">{sub}</div>}
+      </div>
+      {external ? (
+        <ExternalLink className="w-3 h-3 text-zinc-600 shrink-0" />
+      ) : (
+        <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
+      )}
+    </>
+  );
+  if (external) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={className}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} onClick={onClick} className={className}>
+      {inner}
     </Link>
   );
 }

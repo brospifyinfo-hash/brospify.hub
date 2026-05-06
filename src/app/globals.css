@@ -195,6 +195,33 @@ textarea.input-glass {
   50% { background-position: 100% 50%; }
 }
 
+/* ─── Custom Scrollbar — used inside dropdowns/sheets ─── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.08) transparent;
+}
+
+/* ─── Nav Lift — subtle vertical hover lift for menu items ─── */
+.nav-lift {
+  transition: transform 0.18s cubic-bezier(0.4, 0, 0.2, 1), background 0.18s, border-color 0.18s;
+}
+.nav-lift:hover {
+  transform: translateY(-1px);
+}
+
 /* ─── Check Animation ─── */
 @keyframes check-pop {
   0% { transform: scale(0) rotate(-45deg); opacity: 0; }
