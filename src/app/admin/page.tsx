@@ -12,6 +12,8 @@ import {
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
+import { safeFetch } from "@/lib/safe-fetch";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -414,14 +416,14 @@ export default function AdminPage() {
   const [usersAutoRefresh, setUsersAutoRefresh] = useState(true);
   const loadUsers = useCallback(async () => {
     setUsersLoading(true);
-    try {
-      const res = await fetch("/api/admin/users");
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users || []);
-      }
-    } catch { /* ignore */ }
-    finally { setUsersLoading(false); }
+    const data = await safeFetch<{ users?: AdminUserRow[] }>(
+      "/api/admin/users",
+      { coalesceKey: "admin/users" },
+    );
+    if (data && Array.isArray(data.users)) {
+      setUsers(data.users);
+    }
+    setUsersLoading(false);
   }, []);
 
   useEffect(() => {
@@ -564,19 +566,19 @@ export default function AdminPage() {
   const [logFilter, setLogFilter] = useState<{ level: "" | "info" | "warn" | "error" | "audit"; sinceDays: number; q: string }>({ level: "", sinceDays: 30, q: "" });
   const loadLogs = useCallback(async () => {
     setLogsLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", "300");
-      if (logFilter.level) params.set("level", logFilter.level);
-      if (logFilter.sinceDays > 0) params.set("sinceDays", String(logFilter.sinceDays));
-      if (logFilter.q) params.set("actor", logFilter.q);
-      const res = await fetch(`/api/admin/logs?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setLogs(data.entries || []);
-      }
-    } catch { /* ignore */ }
-    finally { setLogsLoading(false); }
+    const params = new URLSearchParams();
+    params.set("limit", "300");
+    if (logFilter.level) params.set("level", logFilter.level);
+    if (logFilter.sinceDays > 0) params.set("sinceDays", String(logFilter.sinceDays));
+    if (logFilter.q) params.set("actor", logFilter.q);
+    const data = await safeFetch<{ entries?: AdminLogEntry[] }>(
+      `/api/admin/logs?${params.toString()}`,
+      { coalesceKey: `admin/logs?${params.toString()}` },
+    );
+    if (data && Array.isArray(data.entries)) {
+      setLogs(data.entries);
+    }
+    setLogsLoading(false);
   }, [logFilter]);
 
   useEffect(() => {
@@ -630,11 +632,14 @@ export default function AdminPage() {
   const [statsLoading, setStatsLoading] = useState(false);
   const loadStats = useCallback(async () => {
     setStatsLoading(true);
-    try {
-      const res = await fetch("/api/admin/stats");
-      if (res.ok) setStats(await res.json());
-    } catch { /* ignore */ }
-    finally { setStatsLoading(false); }
+    const data = await safeFetch<AdminStats>(
+      "/api/admin/stats",
+      { coalesceKey: "admin/stats", timeoutMs: 45_000 },
+    );
+    if (data && (data.customers || data.subscriptions)) {
+      setStats(data);
+    }
+    setStatsLoading(false);
   }, []);
 
   useEffect(() => {
@@ -647,19 +652,19 @@ export default function AdminPage() {
   const [activityFilter, setActivityFilter] = useState<{ type: string; q: string; sinceDays: number }>({ type: "", q: "", sinceDays: 0 });
   const loadActivity = useCallback(async () => {
     setActivityLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", "100");
-      if (activityFilter.type) params.set("type", activityFilter.type);
-      if (activityFilter.q) params.set("customer", activityFilter.q);
-      if (activityFilter.sinceDays) params.set("sinceDays", String(activityFilter.sinceDays));
-      const res = await fetch(`/api/admin/activity?${params.toString()}`);
-      if (res.ok) {
-        const data = await res.json();
-        setActivity(data.entries || []);
-      }
-    } catch { /* ignore */ }
-    finally { setActivityLoading(false); }
+    const params = new URLSearchParams();
+    params.set("limit", "100");
+    if (activityFilter.type) params.set("type", activityFilter.type);
+    if (activityFilter.q) params.set("customer", activityFilter.q);
+    if (activityFilter.sinceDays) params.set("sinceDays", String(activityFilter.sinceDays));
+    const data = await safeFetch<{ entries?: ActivityEntry[] }>(
+      `/api/admin/activity?${params.toString()}`,
+      { coalesceKey: `admin/activity?${params.toString()}` },
+    );
+    if (data && Array.isArray(data.entries)) {
+      setActivity(data.entries);
+    }
+    setActivityLoading(false);
   }, [activityFilter]);
 
   useEffect(() => {
@@ -1228,85 +1233,100 @@ export default function AdminPage() {
 
             {/* ─── Dashboard ──────────────────────── */}
             {activeTab === "dashboard" && (
-              <DashboardView
-                stats={stats}
-                loading={statsLoading}
-                onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
-                autoRefresh={dashAutoRefresh}
-                setAutoRefresh={setDashAutoRefresh}
-                onJumpTab={(t) => setActiveTab(t)}
-                onRefresh={loadStats}
-              />
+              <AdminErrorBoundary label="Dashboard">
+                <DashboardView
+                  stats={stats}
+                  loading={statsLoading}
+                  onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
+                  autoRefresh={dashAutoRefresh}
+                  setAutoRefresh={setDashAutoRefresh}
+                  onJumpTab={(t) => setActiveTab(t)}
+                  onRefresh={loadStats}
+                />
+              </AdminErrorBoundary>
             )}
 
             {/* ─── Statistiken ────────────────────── */}
             {activeTab === "stats" && (
-              <StatsView stats={stats} loading={statsLoading} />
+              <AdminErrorBoundary label="Statistiken">
+                <StatsView stats={stats} loading={statsLoading} />
+              </AdminErrorBoundary>
             )}
 
             {/* ─── Aktivität ──────────────────────── */}
             {activeTab === "activity" && (
-              <ActivityView
-                entries={activity}
-                loading={activityLoading}
-                filter={activityFilter}
-                setFilter={setActivityFilter}
-                onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
-                onRefresh={loadActivity}
-                onExportCsv={exportActivityCsv}
-              />
+              <AdminErrorBoundary label="Aktivität">
+                <ActivityView
+                  entries={activity}
+                  loading={activityLoading}
+                  filter={activityFilter}
+                  setFilter={setActivityFilter}
+                  onJumpToCustomer={(k) => { setActiveCustomerKey(k); setActiveTab("customers"); }}
+                  onRefresh={loadActivity}
+                  onExportCsv={exportActivityCsv}
+                />
+              </AdminErrorBoundary>
             )}
 
             {/* ─── News (Admin News-CRUD) ────────── */}
             {activeTab === "news" && (
-              <NewsAdminView posts={newsPosts} loading={newsLoading} onRefresh={loadNews} />
+              <AdminErrorBoundary label="News">
+                <NewsAdminView posts={newsPosts} loading={newsLoading} onRefresh={loadNews} />
+              </AdminErrorBoundary>
             )}
 
             {/* ─── System Status ─────────────────── */}
             {activeTab === "system" && (
-              <SystemStatusView
-                status={systemStatus}
-                loading={systemStatusLoading}
-                onRefresh={loadSystemStatus}
-                apiBalances={apiBalances}
-                apiBalancesLoading={apiBalancesLoading}
-                onRefreshBalances={loadApiBalances}
-              />
+              <AdminErrorBoundary label="System-Status">
+                <SystemStatusView
+                  status={systemStatus}
+                  loading={systemStatusLoading}
+                  onRefresh={loadSystemStatus}
+                  apiBalances={apiBalances}
+                  apiBalancesLoading={apiBalancesLoading}
+                  onRefreshBalances={loadApiBalances}
+                />
+              </AdminErrorBoundary>
             )}
 
             {/* ─── Users (Rollen + Tier + Impersonate) ──────────── */}
             {activeTab === "users" && (
-              <UsersView
-                users={users}
-                loading={usersLoading}
-                search={userSearch}
-                setSearch={setUserSearch}
-                busyKey={userBusyKey}
-                tierConfig={tierConfig}
-                autoRefresh={usersAutoRefresh}
-                setAutoRefresh={setUsersAutoRefresh}
-                onRefresh={loadUsers}
-                onSetRole={handleSetRole}
-                onSetTier={handleSetTier}
-                onCancelTier={handleCancelTier}
-                onImpersonate={handleImpersonate}
-                onAdjustCredits={handleQuickAdjustCredits}
-              />
+              <AdminErrorBoundary label="User & Rollen">
+                <UsersView
+                  users={users}
+                  loading={usersLoading}
+                  search={userSearch}
+                  setSearch={setUserSearch}
+                  busyKey={userBusyKey}
+                  tierConfig={tierConfig}
+                  autoRefresh={usersAutoRefresh}
+                  setAutoRefresh={setUsersAutoRefresh}
+                  onRefresh={loadUsers}
+                  onSetRole={handleSetRole}
+                  onSetTier={handleSetTier}
+                  onCancelTier={handleCancelTier}
+                  onImpersonate={handleImpersonate}
+                  onAdjustCredits={handleQuickAdjustCredits}
+                />
+              </AdminErrorBoundary>
             )}
 
             {/* ─── System-Logs ───────────────────────────────────── */}
             {activeTab === "logs" && (
-              <LogsView
-                entries={logs}
-                loading={logsLoading}
-                filter={logFilter}
-                setFilter={setLogFilter}
-                onRefresh={loadLogs}
-              />
+              <AdminErrorBoundary label="System-Logs">
+                <LogsView
+                  entries={logs}
+                  loading={logsLoading}
+                  filter={logFilter}
+                  setFilter={setLogFilter}
+                  onRefresh={loadLogs}
+                />
+              </AdminErrorBoundary>
             )}
 
         {/* ─── Customers Tab ─────────────────────────────────── */}
         {activeTab === "customers" && (
+          <AdminErrorBoundary label="Kunden">
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
             {/* Search + KPI strip */}
             <div className="flex items-center gap-2">
@@ -1438,6 +1458,7 @@ export default function AdminPage() {
               )}
             </div>
           </motion.div>
+          </AdminErrorBoundary>
         )}
 
         {/* ─── Customer Detail Modal ────────────────────────── */}
@@ -1715,6 +1736,7 @@ export default function AdminPage() {
 
         {/* Knowledge Base Tab */}
         {activeTab === "knowledge" && (
+          <AdminErrorBoundary label="KI-Wissen">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-3xl">
             <div className="glass-strong rounded-2xl border border-purple-500/15 p-6 space-y-4">
               <div className="flex items-center gap-3 mb-2">
@@ -1747,10 +1769,12 @@ export default function AdminPage() {
               )}
             </div>
           </motion.div>
+          </AdminErrorBoundary>
         )}
 
         {/* Tickets Tab */}
         {activeTab === "tickets" && (
+          <AdminErrorBoundary label="Tickets">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-4xl">
             {ticketsLoading ? (
               <div className="flex items-center justify-center py-20"><Loader2 className="w-6 h-6 animate-spin text-amber-400" /></div>
@@ -1879,10 +1903,12 @@ export default function AdminPage() {
               </div>
             )}
           </motion.div>
+          </AdminErrorBoundary>
         )}
 
         {/* Settings Tab */}
         {activeTab === "settings" && (
+          <AdminErrorBoundary label="Settings">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-6 max-w-2xl">
             {/* Logo Upload */}
             <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
@@ -2029,10 +2055,12 @@ export default function AdminPage() {
               onSave={saveTierConfig}
             />
           </motion.div>
+          </AdminErrorBoundary>
         )}
 
         {/* Credit Codes Tab */}
         {activeTab === "codes" && (
+          <AdminErrorBoundary label="Voucher-Codes">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-5xl space-y-3">
             {/* ── Bulk-Generator (random codes) ── */}
             <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] p-3">
@@ -2260,10 +2288,12 @@ export default function AdminPage() {
               )}
             </div>
           </motion.div>
+          </AdminErrorBoundary>
         )}
 
         {/* Products Tab */}
         {activeTab === "products" && (
+          <AdminErrorBoundary label="Produkte">
         <>
         <div className="flex flex-wrap gap-3 mb-6">
           <button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 btn-accent rounded-xl text-sm font-medium"><Plus className="w-4 h-4" />Produkt hinzuf&uuml;gen</button>
@@ -2303,6 +2333,7 @@ export default function AdminPage() {
           {filtered.length === 0 && <div className="col-span-full text-center py-12 text-zinc-500">Keine Produkte gefunden.</div>}
         </div>
         </>
+          </AdminErrorBoundary>
         )}
           </main>
         </div>
@@ -3658,18 +3689,33 @@ function GodModeKpis({ stats, onJumpTab }: {
   stats: AdminStats;
   onJumpTab: (t: SidebarTab) => void;
 }) {
-  const subs = stats.subscriptions;
-  const signups = stats.signups;
-  const tierLabelMap = new Map(subs.pricing.map((p) => [p.key, p.label]));
+  // Defensive: an older /api/admin/stats response (cached by the
+  // browser between deploys) may lack subscriptions/signups entirely.
+  // Don't crash, just fall back to neutral zeros.
+  const subs = stats.subscriptions ?? {
+    activeTotal: 0,
+    byTier: { free: 0, starter: 0, pro: 0, business: 0 },
+    mrrEur: 0,
+    pricing: [],
+    newPaid30d: 0,
+    churn30d: 0,
+    churnRatePct: 0,
+  };
+  const signups = stats.signups ?? { last7d: 0, last30d: 0, daily30d: [] };
+  const byTier = subs.byTier ?? { free: 0, starter: 0, pro: 0, business: 0 };
+  const pricing = Array.isArray(subs.pricing) ? subs.pricing : [];
+  const tierLabelMap = new Map(pricing.map((p) => [p.key, p.label]));
 
-  // Sparkline path for the 30d signup line
-  const points = signups.daily30d;
+  // Sparkline path for the 30d signup line — guarded against empty.
+  const points = Array.isArray(signups.daily30d) ? signups.daily30d : [];
   const max = Math.max(...points.map((p) => p.count), 1);
   const w = 120, h = 28;
   const stepX = points.length > 1 ? w / (points.length - 1) : 0;
-  const path = points
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${(i * stepX).toFixed(1)} ${(h - (p.count / max) * (h - 4) - 2).toFixed(1)}`)
-    .join(" ");
+  const path = points.length === 0
+    ? `M 0 ${h / 2} L ${w} ${h / 2}`
+    : points
+        .map((p, i) => `${i === 0 ? "M" : "L"} ${(i * stepX).toFixed(1)} ${(h - (p.count / max) * (h - 4) - 2).toFixed(1)}`)
+        .join(" ");
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
@@ -3720,7 +3766,7 @@ function GodModeKpis({ stats, onJumpTab }: {
         <div className="text-[10px] text-zinc-500 mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
           {(["starter", "pro", "business"] as const).map((k) => (
             <span key={k} className="tabular-nums">
-              {tierLabelMap.get(k) || k}: <span className="text-zinc-300 font-semibold">{subs.byTier[k]}</span>
+              {tierLabelMap.get(k) || k}: <span className="text-zinc-300 font-semibold">{byTier[k] ?? 0}</span>
             </span>
           ))}
         </div>
@@ -3786,10 +3832,10 @@ function GodModeKpis({ stats, onJumpTab }: {
           <span className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400">Credits im System</span>
         </div>
         <div className="font-mono text-[26px] leading-none font-bold text-white tabular-nums">
-          {stats.credits.sumBalance.toLocaleString("de-DE")}
+          {(stats.credits?.sumBalance ?? 0).toLocaleString("de-DE")}
         </div>
         <div className="text-[10px] text-zinc-500 mt-1.5">
-          gekauft: <span className="text-zinc-300">{stats.credits.sumTotalPurchased.toLocaleString("de-DE")}</span> · verbraucht: <span className="text-zinc-300">{stats.credits.sumTotalUsed.toLocaleString("de-DE")}</span>
+          gekauft: <span className="text-zinc-300">{(stats.credits?.sumTotalPurchased ?? 0).toLocaleString("de-DE")}</span> · verbraucht: <span className="text-zinc-300">{(stats.credits?.sumTotalUsed ?? 0).toLocaleString("de-DE")}</span>
         </div>
       </button>
     </div>
