@@ -335,7 +335,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -2096,203 +2096,18 @@ export default function AdminPage() {
               <input type="text" value={settingsData.youtubeUrl} onChange={e => setSettingsData({ ...settingsData, youtubeUrl: e.target.value })} placeholder="https://youtube.com/watch?v=..." className="input-glass w-full" />
             </div>
 
-            {/* Themes — Multi-Gallery */}
-            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
-              <div className="flex items-center justify-between gap-3 flex-wrap">
-                <div>
-                  <h3 className="font-semibold flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" />Themes</h3>
-                  <p className="text-zinc-400 text-sm">Lade beliebig viele Themes hoch (.zip + Vorschaubild). Kunden sehen die Galerie und pushen mit 1 Klick.</p>
-                </div>
-                <button onClick={addNewTheme} className="btn-accent px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2">
-                  <Plus className="w-4 h-4" /> Theme hinzufügen
-                </button>
-              </div>
-
-              {settingsData.themes.length === 0 && (
-                <div className="text-center py-8 text-zinc-500 text-sm border border-dashed border-white/10 rounded-xl">
-                  Noch keine Themes. Klicke oben rechts auf <span className="text-purple-300 font-semibold">Theme hinzufügen</span>.
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {settingsData.themes.map((t) => {
-                  const tierAccess = Array.isArray(t.tierAccess) ? t.tierAccess : [];
-                  const isActive = t.active !== false;
-                  const toggleTierAccess = (k: AdminTierKey) => {
-                    const has = tierAccess.includes(k);
-                    const next = has ? tierAccess.filter(x => x !== k) : [...tierAccess, k];
-                    updateTheme(t.id, { tierAccess: next });
-                  };
-                  return (
-                  <div key={t.id} className={`rounded-xl border bg-white/[0.02] p-4 space-y-3 ${isActive ? "border-white/10" : "border-red-500/20 opacity-70"}`}>
-                    {/* Preview image */}
-                    <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10">
-                      {t.previewImageUrl ? (
-                        <img src={t.previewImageUrl} alt={t.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-xs gap-1">
-                          <ImageIcon className="w-8 h-8" />
-                          <span>Kein Vorschaubild</span>
-                        </div>
-                      )}
-                      <label className="absolute bottom-2 right-2 cursor-pointer">
-                        <span className="flex items-center gap-1.5 px-3 py-1.5 bg-black/70 backdrop-blur border border-white/20 rounded-lg text-[11px] font-semibold hover:bg-black/90 transition">
-                          {themePreviewBusyId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
-                          Vorschau
-                        </span>
-                        <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadThemePreview(t.id, e.target.files[0])} />
-                      </label>
-                      <div className="absolute top-2 left-2 flex gap-1.5">
-                        <button
-                          onClick={() => updateTheme(t.id, { active: !isActive })}
-                          title={isActive ? "Theme deaktivieren" : "Theme aktivieren"}
-                          className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
-                            isActive
-                              ? "bg-emerald-500/80 border-emerald-400 text-white"
-                              : "bg-zinc-700/80 border-zinc-600 text-zinc-200"
-                          }`}
-                        >
-                          {isActive ? "Aktiv" : "Inaktiv"}
-                        </button>
-                      </div>
-                      <button
-                        onClick={() => removeTheme(t.id)}
-                        title="Theme entfernen"
-                        className="absolute top-2 right-2 w-7 h-7 bg-red-500/80 hover:bg-red-500 border border-red-400 rounded-lg flex items-center justify-center"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-white" />
-                      </button>
-                    </div>
-
-                    {/* Title + Version */}
-                    <div className="grid grid-cols-3 gap-2">
-                      <input
-                        type="text"
-                        value={t.name}
-                        onChange={e => updateTheme(t.id, { name: e.target.value })}
-                        placeholder="Titel"
-                        className="input-glass col-span-2 w-full text-sm font-semibold"
-                      />
-                      <input
-                        type="text"
-                        value={t.version || ""}
-                        onChange={e => updateTheme(t.id, { version: e.target.value })}
-                        placeholder="v1.0"
-                        className="input-glass w-full text-sm tabular-nums"
-                      />
-                    </div>
-
-                    {/* Description */}
-                    <textarea
-                      value={t.description || ""}
-                      onChange={e => updateTheme(t.id, { description: e.target.value })}
-                      rows={2}
-                      placeholder="Beschreibung (z.B. Conversion-optimiert für Mode-Brands)"
-                      className="input-glass w-full text-xs resize-none"
-                    />
-
-                    {/* ZIP upload */}
-                    <div className="flex gap-2 items-center">
-                      <label className="flex-1 cursor-pointer">
-                        <span className="flex items-center justify-center gap-2 px-3 py-2 glass hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium transition">
-                          {themeBusyId === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
-                          {t.fileUrl ? "Theme-ZIP ersetzen" : "Theme-ZIP hochladen"}
-                        </span>
-                        <input type="file" accept=".zip" className="hidden" onChange={e => e.target.files?.[0] && uploadThemeZip(t.id, e.target.files[0])} />
-                      </label>
-                      {t.fileUrl && (
-                        <span className="text-xs text-emerald-400 flex items-center gap-1 shrink-0">
-                          <Check className="w-3 h-3" />
-                          {t.fileName ? t.fileName.slice(0, 18) + (t.fileName.length > 18 ? "…" : "") : "Hochgeladen"}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Direct URL */}
-                    <input
-                      type="text"
-                      value={t.fileUrl}
-                      onChange={e => updateTheme(t.id, { fileUrl: e.target.value })}
-                      placeholder="Oder direkte ZIP-URL"
-                      className="input-glass w-full text-[10px] font-mono"
-                    />
-
-                    {/* Preview Video — YouTube or upload URL */}
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Vorschau-Video</label>
-                      <input
-                        type="text"
-                        value={t.previewVideoUrl || ""}
-                        onChange={e => updateTheme(t.id, { previewVideoUrl: e.target.value })}
-                        placeholder="YouTube-Link oder MP4-URL"
-                        className="input-glass w-full text-[11px] font-mono"
-                      />
-                    </div>
-
-                    {/* Price */}
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Einmalkauf-Preis</label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={0}
-                          step={1}
-                          value={Number.isFinite(t.priceEur) ? (t.priceEur as number) : 0}
-                          onChange={e => updateTheme(t.id, { priceEur: Math.max(0, Number(e.target.value) || 0) })}
-                          className="input-glass w-24 text-sm tabular-nums"
-                        />
-                        <span className="text-zinc-400 text-xs">€</span>
-                        <span className="text-zinc-600 text-[10px] ml-2">
-                          ≈ {Math.round((Number(t.priceEur) || 0) * 50)} Credits
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Tier access toggles */}
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">
-                        Zugriff über Abo
-                      </label>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {(["starter", "pro", "business"] as const).map((k) => {
-                          const on = tierAccess.includes(k);
-                          return (
-                            <button
-                              key={k}
-                              type="button"
-                              onClick={() => toggleTierAccess(k)}
-                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition ${
-                                on
-                                  ? "bg-[#95BF47]/15 border-[#95BF47]/40 text-[#95BF47]"
-                                  : "bg-white/[0.02] border-white/10 text-zinc-500 hover:text-zinc-300"
-                              }`}
-                              style={on ? { boxShadow: `0 0 0 1px ${TIER_COLORS[k]}30` } : undefined}
-                            >
-                              {k}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <p className="text-[10px] text-zinc-600 mt-1">
-                        Diese Pläne dürfen das Theme nutzen. Andere User sehen es, aber müssen einmalig freischalten.
-                      </p>
-                    </div>
-
-                    {/* Changelog */}
-                    <details className="group">
-                      <summary className="text-xs text-zinc-400 cursor-pointer hover:text-zinc-200 select-none">Changelog (optional)</summary>
-                      <textarea
-                        value={t.changelog || ""}
-                        onChange={e => updateTheme(t.id, { changelog: e.target.value })}
-                        rows={3}
-                        placeholder={"v1.0 — Initial release\nv1.1 — Faster product page"}
-                        className="input-glass w-full text-[11px] font-mono resize-none mt-2"
-                      />
-                    </details>
-                  </div>
-                  );
-                })}
-              </div>
+            {/* Themes-Verwaltung in eigenen Tab verschoben */}
+            <div className="glass-strong rounded-2xl border border-purple-500/20 p-5 space-y-2 bg-purple-500/[0.03]">
+              <h3 className="font-semibold flex items-center gap-2 text-sm"><Palette className="w-4 h-4 text-purple-400" />Themes verwalten</h3>
+              <p className="text-zinc-400 text-xs">
+                Theme-Vorlagen, Preise, Vorschau-Videos und Tier-Berechtigungen findest du jetzt im eigenen Tab <span className="text-purple-300 font-semibold">„Themes"</span> in der Sidebar.
+              </p>
+              <button
+                onClick={() => setActiveTab("themes")}
+                className="btn-accent px-3 py-1.5 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5"
+              >
+                <Palette className="w-3.5 h-3.5" /> Zum Themes-Tab
+              </button>
             </div>
 
             {/* Brand Kit */}
@@ -2340,6 +2155,242 @@ export default function AdminPage() {
               {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Einstellungen speichern</>}
             </button>
 
+          </motion.div>
+          </AdminErrorBoundary>
+        )}
+
+        {/* Themes Tab — dedicated admin area for theme templates */}
+        {activeTab === "themes" && (
+          <AdminErrorBoundary label="Themes">
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 max-w-6xl">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div>
+                <h2 className="text-sm font-bold flex items-center gap-2">
+                  <Palette className="w-4 h-4 text-purple-400" />
+                  Theme-Vorlagen
+                </h2>
+                <p className="text-zinc-400 text-xs mt-1 max-w-2xl leading-relaxed">
+                  Lege Themes an, lade ZIPs + Vorschau-Bilder/Videos hoch, setze Preise und entscheide, welche Abos welche Themes nutzen dürfen. Inaktive Themes sind in der Kunden-Galerie nicht sichtbar.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={addNewTheme}
+                  className="btn-accent px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Theme hinzufügen
+                </button>
+                <button
+                  onClick={saveSettings}
+                  disabled={settingsLoading}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 border border-[#95BF47]/40 bg-[#95BF47]/10 text-[#95BF47] hover:bg-[#95BF47]/20 transition disabled:opacity-50"
+                >
+                  {settingsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Save className="w-3.5 h-3.5" /> Speichern</>}
+                </button>
+              </div>
+            </div>
+
+            {/* Empty state */}
+            {settingsData.themes.length === 0 && (
+              <div className="text-center py-10 text-zinc-500 text-sm border border-dashed border-white/10 rounded-xl">
+                Noch keine Themes. Klicke oben rechts auf <span className="text-purple-300 font-semibold">Theme hinzufügen</span>.
+              </div>
+            )}
+
+            {/* Theme cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {settingsData.themes.map((t) => {
+                const tierAccess = Array.isArray(t.tierAccess) ? t.tierAccess : [];
+                const isActive = t.active !== false;
+                const toggleTierAccess = (k: AdminTierKey) => {
+                  const has = tierAccess.includes(k);
+                  const next = has ? tierAccess.filter(x => x !== k) : [...tierAccess, k];
+                  updateTheme(t.id, { tierAccess: next });
+                };
+                return (
+                <div key={t.id} className={`rounded-xl border bg-white/[0.02] p-4 space-y-3 ${isActive ? "border-white/10" : "border-red-500/20 opacity-70"}`}>
+                  {/* Preview image */}
+                  <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10">
+                    {t.previewImageUrl ? (
+                      <img src={t.previewImageUrl} alt={t.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-xs gap-1">
+                        <ImageIcon className="w-8 h-8" />
+                        <span>Kein Vorschaubild</span>
+                      </div>
+                    )}
+                    <label className="absolute bottom-2 right-2 cursor-pointer">
+                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-black/70 backdrop-blur border border-white/20 rounded-lg text-[11px] font-semibold hover:bg-black/90 transition">
+                        {themePreviewBusyId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+                        Vorschau
+                      </span>
+                      <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadThemePreview(t.id, e.target.files[0])} />
+                    </label>
+                    <div className="absolute top-2 left-2 flex gap-1.5">
+                      <button
+                        onClick={() => updateTheme(t.id, { active: !isActive })}
+                        title={isActive ? "Theme deaktivieren" : "Theme aktivieren"}
+                        className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
+                          isActive
+                            ? "bg-emerald-500/80 border-emerald-400 text-white"
+                            : "bg-zinc-700/80 border-zinc-600 text-zinc-200"
+                        }`}
+                      >
+                        {isActive ? "Aktiv" : "Inaktiv"}
+                      </button>
+                    </div>
+                    <button
+                      onClick={() => removeTheme(t.id)}
+                      title="Theme entfernen"
+                      className="absolute top-2 right-2 w-7 h-7 bg-red-500/80 hover:bg-red-500 border border-red-400 rounded-lg flex items-center justify-center"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-white" />
+                    </button>
+                  </div>
+
+                  {/* Title + Version */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <input
+                      type="text"
+                      value={t.name}
+                      onChange={e => updateTheme(t.id, { name: e.target.value })}
+                      placeholder="Titel"
+                      className="input-glass col-span-2 w-full text-sm font-semibold"
+                    />
+                    <input
+                      type="text"
+                      value={t.version || ""}
+                      onChange={e => updateTheme(t.id, { version: e.target.value })}
+                      placeholder="v1.0"
+                      className="input-glass w-full text-sm tabular-nums"
+                    />
+                  </div>
+
+                  {/* Description */}
+                  <textarea
+                    value={t.description || ""}
+                    onChange={e => updateTheme(t.id, { description: e.target.value })}
+                    rows={2}
+                    placeholder="Beschreibung (z.B. Conversion-optimiert für Mode-Brands)"
+                    className="input-glass w-full text-xs resize-none"
+                  />
+
+                  {/* ZIP upload */}
+                  <div className="flex gap-2 items-center">
+                    <label className="flex-1 cursor-pointer">
+                      <span className="flex items-center justify-center gap-2 px-3 py-2 glass hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium transition">
+                        {themeBusyId === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                        {t.fileUrl ? "Theme-ZIP ersetzen" : "Theme-ZIP hochladen"}
+                      </span>
+                      <input type="file" accept=".zip" className="hidden" onChange={e => e.target.files?.[0] && uploadThemeZip(t.id, e.target.files[0])} />
+                    </label>
+                    {t.fileUrl && (
+                      <span className="text-xs text-emerald-400 flex items-center gap-1 shrink-0">
+                        <Check className="w-3 h-3" />
+                        {t.fileName ? t.fileName.slice(0, 18) + (t.fileName.length > 18 ? "…" : "") : "Hochgeladen"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Direct URL */}
+                  <input
+                    type="text"
+                    value={t.fileUrl}
+                    onChange={e => updateTheme(t.id, { fileUrl: e.target.value })}
+                    placeholder="Oder direkte ZIP-URL"
+                    className="input-glass w-full text-[10px] font-mono"
+                  />
+
+                  {/* Preview Video — YouTube or upload URL */}
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Vorschau-Video</label>
+                    <input
+                      type="text"
+                      value={t.previewVideoUrl || ""}
+                      onChange={e => updateTheme(t.id, { previewVideoUrl: e.target.value })}
+                      placeholder="YouTube-Link oder MP4-URL"
+                      className="input-glass w-full text-[11px] font-mono"
+                    />
+                  </div>
+
+                  {/* Price */}
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Einmalkauf-Preis</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={Number.isFinite(t.priceEur) ? (t.priceEur as number) : 0}
+                        onChange={e => updateTheme(t.id, { priceEur: Math.max(0, Number(e.target.value) || 0) })}
+                        className="input-glass w-24 text-sm tabular-nums"
+                      />
+                      <span className="text-zinc-400 text-xs">€</span>
+                      <span className="text-zinc-600 text-[10px] ml-2">
+                        ≈ {Math.round((Number(t.priceEur) || 0) * 50)} Credits
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tier access toggles */}
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">
+                      Zugriff über Abo
+                    </label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {(["starter", "pro", "business"] as const).map((k) => {
+                        const on = tierAccess.includes(k);
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => toggleTierAccess(k)}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition ${
+                              on
+                                ? "bg-[#95BF47]/15 border-[#95BF47]/40 text-[#95BF47]"
+                                : "bg-white/[0.02] border-white/10 text-zinc-500 hover:text-zinc-300"
+                            }`}
+                            style={on ? { boxShadow: `0 0 0 1px ${TIER_COLORS[k]}30` } : undefined}
+                          >
+                            {k}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-zinc-600 mt-1">
+                      Diese Pläne dürfen das Theme nutzen. Andere User sehen es, aber müssen einmalig freischalten.
+                    </p>
+                  </div>
+
+                  {/* Changelog */}
+                  <details className="group">
+                    <summary className="text-xs text-zinc-400 cursor-pointer hover:text-zinc-200 select-none">Changelog (optional)</summary>
+                    <textarea
+                      value={t.changelog || ""}
+                      onChange={e => updateTheme(t.id, { changelog: e.target.value })}
+                      rows={3}
+                      placeholder={"v1.0 — Initial release\nv1.1 — Faster product page"}
+                      className="input-glass w-full text-[11px] font-mono resize-none mt-2"
+                    />
+                  </details>
+                </div>
+                );
+              })}
+            </div>
+
+            {/* Sticky save shortcut at the bottom too */}
+            {settingsData.themes.length > 0 && (
+              <div className="sticky bottom-2 flex justify-end">
+                <button
+                  onClick={saveSettings}
+                  disabled={settingsLoading}
+                  className="btn-accent px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-lg"
+                >
+                  {settingsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <><Save className="w-3.5 h-3.5" /> Alle Themes speichern</>}
+                </button>
+              </div>
+            )}
           </motion.div>
           </AdminErrorBoundary>
         )}
@@ -3004,7 +3055,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "news" | "knowledge" | "settings" | "system" | "logs";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "news" | "knowledge" | "settings" | "system" | "logs";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -3032,6 +3083,7 @@ const SIDEBAR_GROUPS: {
     label: "Inhalte",
     items: [
       { key: "products", label: "Produkte", icon: Gem, color: "#95BF47" },
+      { key: "themes", label: "Themes", icon: Palette, color: "#A855F7" },
       { key: "news", label: "News", icon: ImageIcon, color: "#EC4899" },
     ],
   },
