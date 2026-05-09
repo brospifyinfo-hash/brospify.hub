@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
       actor,
       action: "tier.cancel",
       target: kunde.lizenzschluessel,
-      details: { tier: profile.tier || "free" },
+      details: { tier: profile.tier || "" },
     });
     return NextResponse.json({ success: true, canceled: true });
   }
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const prev = profile.tier || "free";
+  const prev = profile.tier || "";
   await setUserTier(kunde.rowIndex, profile, body.tier);
 
   void logSystemEvent({

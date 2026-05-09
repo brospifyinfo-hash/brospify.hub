@@ -41,8 +41,10 @@ export type TierGuardResult = TierGuardOk | TierGuardFail;
 /**
  * Resolve the current customer's tier definition. Admins always
  * resolve to the highest paid tier (`business`) so they can test
- * everything; regular users resolve from their Kunden row, defaulting
- * to `free` when no row or tier is set.
+ * everything; regular users resolve from their Kunden row.
+ *
+ * Free tier was removed — users without an active paid subscription
+ * resolve to `null`, which is treated as "no plan" by every guard.
  */
 export async function getCurrentTier(session: SessionLike): Promise<TierDefinition | null> {
   if (!session.isLoggedIn) return null;
@@ -55,15 +57,16 @@ export async function getCurrentTier(session: SessionLike): Promise<TierDefiniti
   }
 
   const lk = session.lizenzschluessel;
-  if (!lk) return findByKey("free") || all[0] || null;
+  if (!lk) return null;
 
   try {
     const kunde = await findKundeByKey(lk);
-    if (!kunde) return findByKey("free") || all[0] || null;
-    const key: TierKey = kunde.profile?.tier || "free";
-    return findByKey(key) || findByKey("free") || all[0] || null;
+    if (!kunde) return null;
+    const raw = kunde.profile?.tier;
+    if (!raw) return null;
+    return findByKey(raw as TierKey) || null;
   } catch {
-    return findByKey("free") || all[0] || null;
+    return null;
   }
 }
 
@@ -93,8 +96,16 @@ export async function requireFeature(
   if (!tier) {
     return {
       ok: false,
-      reason: "unauthenticated",
-      response: NextResponse.json({ error: "Tier konnte nicht aufgelöst werden" }, { status: 401 }),
+      reason: "feature_locked",
+      response: NextResponse.json(
+        {
+          error: "FEATURE_LOCKED",
+          message: "Dieses Feature setzt ein aktives Abo voraus. Bitte wähle einen Plan.",
+          tier: null,
+          requiredFeature: flag,
+        },
+        { status: 403 },
+      ),
     };
   }
 

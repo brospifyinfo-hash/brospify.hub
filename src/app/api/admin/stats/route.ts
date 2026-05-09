@@ -160,7 +160,7 @@ export async function GET() {
     const monthlyToolMap = new Map<string, { calls: number; costEur: number; creditsCharged: number }>();
 
     // ── Subscription rollups ──
-    const subsByTier: Record<TierKey, number> = { free: 0, starter: 0, pro: 0, business: 0 };
+    const subsByTier: Record<TierKey, number> = { starter: 0, pro: 0, business: 0 };
     let mrrEur = 0;
     let newPaid30d = 0;
     let churn30d = 0;
@@ -198,8 +198,8 @@ export async function GET() {
 
       // ── Subscription / tier roll-up ──
       const tier = resolveTier(k.profile.tier);
-      subsByTier[tier]++;
-      if (isActiveSub(k.profile)) {
+      if (tier) subsByTier[tier]++;
+      if (isActiveSub(k.profile) && tier) {
         mrrEur += tierPriceMap.get(tier) || 0;
         const since = Date.parse(k.profile.tierSince || "");
         if (Number.isFinite(since) && since >= t30d) newPaid30d++;

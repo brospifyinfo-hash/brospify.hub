@@ -70,7 +70,7 @@ const SKU_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
 
 // ─── Admin module-level types ───────────────────────────────────
 
-type AdminTierKey = "free" | "starter" | "pro" | "business";
+type AdminTierKey = "starter" | "pro" | "business";
 type AdminUserRole = "admin" | "user";
 
 interface TierPricing { key: AdminTierKey; label: string; priceEur: number }
@@ -116,7 +116,7 @@ interface AdminUserRow {
   email: string;
   sku: string;
   role: AdminUserRole;
-  tier: AdminTierKey;
+  tier: AdminTierKey | "";
   tierSince: string;
   tierCanceledAt: string;
   signupAt: string;
@@ -346,7 +346,11 @@ export default function AdminPage() {
     version?: string;
     description?: string;
     previewImageUrl?: string;
+    previewVideoUrl?: string;
     changelog?: string;
+    priceEur?: number;
+    active?: boolean;
+    tierAccess?: AdminTierKey[];
     createdAt: string;
   }
   interface SettingsData {
@@ -1136,10 +1140,14 @@ export default function AdminPage() {
       name: "Neues Theme",
       fileUrl: "",
       fileName: "",
-      version: "",
+      version: "1.0.0",
       description: "",
       previewImageUrl: "",
+      previewVideoUrl: "",
       changelog: "",
+      priceEur: 0,
+      active: true,
+      tierAccess: ["business"],
       createdAt: new Date().toISOString(),
     };
     setSettingsData(prev => ({ ...prev, themes: [...prev.themes, next] }));
@@ -2107,8 +2115,16 @@ export default function AdminPage() {
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {settingsData.themes.map((t) => (
-                  <div key={t.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4 space-y-3">
+                {settingsData.themes.map((t) => {
+                  const tierAccess = Array.isArray(t.tierAccess) ? t.tierAccess : [];
+                  const isActive = t.active !== false;
+                  const toggleTierAccess = (k: AdminTierKey) => {
+                    const has = tierAccess.includes(k);
+                    const next = has ? tierAccess.filter(x => x !== k) : [...tierAccess, k];
+                    updateTheme(t.id, { tierAccess: next });
+                  };
+                  return (
+                  <div key={t.id} className={`rounded-xl border bg-white/[0.02] p-4 space-y-3 ${isActive ? "border-white/10" : "border-red-500/20 opacity-70"}`}>
                     {/* Preview image */}
                     <div className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10">
                       {t.previewImageUrl ? (
@@ -2126,6 +2142,19 @@ export default function AdminPage() {
                         </span>
                         <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadThemePreview(t.id, e.target.files[0])} />
                       </label>
+                      <div className="absolute top-2 left-2 flex gap-1.5">
+                        <button
+                          onClick={() => updateTheme(t.id, { active: !isActive })}
+                          title={isActive ? "Theme deaktivieren" : "Theme aktivieren"}
+                          className={`px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border ${
+                            isActive
+                              ? "bg-emerald-500/80 border-emerald-400 text-white"
+                              : "bg-zinc-700/80 border-zinc-600 text-zinc-200"
+                          }`}
+                        >
+                          {isActive ? "Aktiv" : "Inaktiv"}
+                        </button>
+                      </div>
                       <button
                         onClick={() => removeTheme(t.id)}
                         title="Theme entfernen"
@@ -2135,13 +2164,13 @@ export default function AdminPage() {
                       </button>
                     </div>
 
-                    {/* Name + Version */}
+                    {/* Title + Version */}
                     <div className="grid grid-cols-3 gap-2">
                       <input
                         type="text"
                         value={t.name}
                         onChange={e => updateTheme(t.id, { name: e.target.value })}
-                        placeholder="Theme-Name"
+                        placeholder="Titel"
                         className="input-glass col-span-2 w-full text-sm font-semibold"
                       />
                       <input
@@ -2158,7 +2187,7 @@ export default function AdminPage() {
                       value={t.description || ""}
                       onChange={e => updateTheme(t.id, { description: e.target.value })}
                       rows={2}
-                      placeholder="Kurzbeschreibung (z.B. Conversion-optimiert für Mode-Brands)"
+                      placeholder="Beschreibung (z.B. Conversion-optimiert für Mode-Brands)"
                       className="input-glass w-full text-xs resize-none"
                     />
 
@@ -2188,6 +2217,67 @@ export default function AdminPage() {
                       className="input-glass w-full text-[10px] font-mono"
                     />
 
+                    {/* Preview Video — YouTube or upload URL */}
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Vorschau-Video</label>
+                      <input
+                        type="text"
+                        value={t.previewVideoUrl || ""}
+                        onChange={e => updateTheme(t.id, { previewVideoUrl: e.target.value })}
+                        placeholder="YouTube-Link oder MP4-URL"
+                        className="input-glass w-full text-[11px] font-mono"
+                      />
+                    </div>
+
+                    {/* Price */}
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Einmalkauf-Preis</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={Number.isFinite(t.priceEur) ? (t.priceEur as number) : 0}
+                          onChange={e => updateTheme(t.id, { priceEur: Math.max(0, Number(e.target.value) || 0) })}
+                          className="input-glass w-24 text-sm tabular-nums"
+                        />
+                        <span className="text-zinc-400 text-xs">€</span>
+                        <span className="text-zinc-600 text-[10px] ml-2">
+                          ≈ {Math.round((Number(t.priceEur) || 0) * 50)} Credits
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Tier access toggles */}
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1.5">
+                        Zugriff über Abo
+                      </label>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {(["starter", "pro", "business"] as const).map((k) => {
+                          const on = tierAccess.includes(k);
+                          return (
+                            <button
+                              key={k}
+                              type="button"
+                              onClick={() => toggleTierAccess(k)}
+                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider border transition ${
+                                on
+                                  ? "bg-[#95BF47]/15 border-[#95BF47]/40 text-[#95BF47]"
+                                  : "bg-white/[0.02] border-white/10 text-zinc-500 hover:text-zinc-300"
+                              }`}
+                              style={on ? { boxShadow: `0 0 0 1px ${TIER_COLORS[k]}30` } : undefined}
+                            >
+                              {k}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <p className="text-[10px] text-zinc-600 mt-1">
+                        Diese Pläne dürfen das Theme nutzen. Andere User sehen es, aber müssen einmalig freischalten.
+                      </p>
+                    </div>
+
                     {/* Changelog */}
                     <details className="group">
                       <summary className="text-xs text-zinc-400 cursor-pointer hover:text-zinc-200 select-none">Changelog (optional)</summary>
@@ -2200,7 +2290,8 @@ export default function AdminPage() {
                       />
                     </details>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -2243,13 +2334,6 @@ export default function AdminPage() {
               <h3 className="font-semibold flex items-center gap-2"><Zap className="w-5 h-5 text-purple-400" />Tone of Voice (KI-Anweisung)</h3>
               <p className="text-zinc-400 text-sm">Beschreibe den Tonfall für KI-generierte Produkttexte. Z.B. &quot;Locker, modern, Gen-Z, mit Emojis&quot;</p>
               <textarea value={settingsData.toneOfVoice} onChange={e => setSettingsData({...settingsData, toneOfVoice: e.target.value})} rows={3} placeholder="z.B. Professionell aber locker, deutsche Sprache, Vertrauen aufbauen, Emojis sparsam einsetzen..." className="input-glass w-full resize-none" />
-            </div>
-
-            {/* Theme Changelog */}
-            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
-              <h3 className="font-semibold flex items-center gap-2"><Palette className="w-5 h-5 text-purple-400" />Theme Changelog</h3>
-              <p className="text-zinc-400 text-sm">Versionsinformationen die Kunden auf der Theme-Seite sehen.</p>
-              <textarea value={settingsData.themeChangelog} onChange={e => setSettingsData({...settingsData, themeChangelog: e.target.value})} rows={4} placeholder={"v1.0.0 \u2014 Initiales Release\nv1.1.0 \u2014 Neue Produktseite, schnellere Ladezeit..."} className="input-glass w-full resize-none font-mono text-xs" />
             </div>
 
             <button onClick={saveSettings} disabled={settingsLoading} className="btn-accent px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
@@ -3897,7 +3981,7 @@ function GodModeKpis({ stats, onJumpTab }: {
   // Don't crash, just fall back to neutral zeros.
   const subs = stats.subscriptions ?? {
     activeTotal: 0,
-    byTier: { free: 0, starter: 0, pro: 0, business: 0 },
+    byTier: { starter: 0, pro: 0, business: 0 },
     mrrEur: 0,
     pricing: [],
     newPaid30d: 0,
@@ -4158,9 +4242,9 @@ function UsersView({
           <div className="divide-y divide-white/[0.04]">
             {filtered.map((u) => {
               const busy = busyKey === u.lizenzschluessel;
-              const tierLabel = tierLabelMap.get(u.tier) || u.tier;
+              const tierLabel = u.tier ? (tierLabelMap.get(u.tier as AdminTierKey) || u.tier) : "";
               const isAdmin = u.role === "admin";
-              const subActive = u.tier !== "free" && !u.tierCanceledAt;
+              const subActive = !!u.tier && !u.tierCanceledAt;
               return (
                 <div
                   key={u.lizenzschluessel}
@@ -4199,7 +4283,7 @@ function UsersView({
                       : u.tier === "starter" ? "bg-blue-500/15 border border-blue-500/30 text-blue-200"
                       : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
                     }`}>
-                      {tierLabel}
+                      {u.tier ? tierLabel : "Kein Plan"}
                     </span>
                     {u.tierCanceledAt && (
                       <span className="block text-[9px] text-red-400 mt-0.5">gekündigt</span>
@@ -4222,12 +4306,17 @@ function UsersView({
                     {/* Tier dropdown */}
                     <select
                       disabled={busy || tierConfig.length === 0}
-                      value={u.tier}
-                      onChange={(e) => onSetTier(u.lizenzschluessel, e.target.value as AdminTierKey)}
+                      value={u.tier || ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (!v) onCancelTier(u.lizenzschluessel);
+                        else onSetTier(u.lizenzschluessel, v as AdminTierKey);
+                      }}
                       className="bg-white/[0.04] border border-white/[0.08] rounded text-[10px] px-1.5 py-1 outline-none focus:border-white/25"
                     >
+                      <option value="">Kein Plan</option>
                       {tierConfig.length === 0 ? (
-                        <option value={u.tier}>{u.tier}</option>
+                        u.tier ? <option value={u.tier}>{u.tier}</option> : null
                       ) : (
                         tierConfig.map((t) => (
                           <option key={t.key} value={t.key}>{t.label} {t.priceMonthlyEur > 0 ? `· ${t.priceMonthlyEur}€` : ""}</option>
@@ -4407,7 +4496,6 @@ function LogsView({
 // ─── Tier-Settings editor — full schema (Tiers tab) ───────────────
 
 const TIER_COLORS: Record<AdminTierKey, string> = {
-  free: "#71717A",
   starter: "#06B6D4",
   pro: "#A855F7",
   business: "#F59E0B",

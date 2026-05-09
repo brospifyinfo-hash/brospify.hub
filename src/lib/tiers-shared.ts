@@ -2,7 +2,7 @@
 // No server imports. Use this from client components and React UIs.
 // The server-side getter/setter live in `./tiers.ts`.
 
-export const TIER_KEYS = ["free", "starter", "pro", "business"] as const;
+export const TIER_KEYS = ["starter", "pro", "business"] as const;
 export type TierKey = (typeof TIER_KEYS)[number];
 
 export const FEATURE_FLAGS = [
@@ -105,41 +105,6 @@ function allFeatures(): TierFeatures {
 }
 
 export const DEFAULT_TIERS: TierDefinition[] = [
-  {
-    key: "free",
-    label: "Free",
-    hidden: false,
-    highlighted: false,
-    tagline: "Zum Reinschnuppern",
-    description: "Kostenlos starten und das Hub kennenlernen.",
-    ctaLabel: "Kostenlos starten",
-    priceMonthlyEur: 0,
-    priceYearlyEur: 0,
-    trialDays: 0,
-    startingCredits: 500,
-    monthlyCreditAllowance: 0,
-    limits: {
-      maxProducts: 5,
-      maxBlogsPerMonth: 1,
-      maxEmailsPerMonth: 2,
-      maxAiChatsPerMonth: 10,
-      maxAiStudioJobsPerMonth: 3,
-      maxBgRemovesPerMonth: 5,
-      maxUpscalesPerMonth: 5,
-      maxStores: 1,
-      maxThemesInstall: 1,
-      maxTeamMembers: 1,
-    },
-    features: {
-      ...emptyFeatures(),
-      aiChat: true,
-      seoAudit: true,
-      themesGallery: true,
-      library: true,
-      chartsAnalytics: true,
-    },
-    bullets: ["500 Start-Credits", "1 Shop verbunden", "Basis-Tools"],
-  },
   {
     key: "starter",
     label: "Starter",
@@ -249,13 +214,14 @@ export function isTierKey(v: unknown): v is TierKey {
   return typeof v === "string" && (TIER_KEYS as readonly string[]).includes(v);
 }
 
-export function resolveTier(tier: TierKey | undefined | null): TierKey {
-  return tier || "free";
+export function resolveTier(tier: TierKey | string | undefined | null): TierKey | null {
+  if (!tier) return null;
+  return (TIER_KEYS as readonly string[]).includes(tier) ? (tier as TierKey) : null;
 }
 
-export function isActiveSub(profile: { tier?: TierKey; tierSince?: string; tierCanceledAt?: string }): boolean {
+export function isActiveSub(profile: { tier?: TierKey | string; tierSince?: string; tierCanceledAt?: string }): boolean {
   const tier = resolveTier(profile.tier);
-  if (tier === "free") return false;
+  if (!tier) return false;
   if (!profile.tierSince) return false;
   if (profile.tierCanceledAt) return false;
   return true;

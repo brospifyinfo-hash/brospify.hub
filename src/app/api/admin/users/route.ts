@@ -28,7 +28,7 @@ interface UserRow {
   email: string;
   sku: string;
   role: UserRole;
-  tier: TierKey;
+  tier: TierKey | "";
   tierSince: string;
   tierCanceledAt: string;
   signupAt: string;
@@ -62,7 +62,7 @@ function rowFor(k: Awaited<ReturnType<typeof getAllKunden>>[number]): UserRow {
     email: k.kundenEmail,
     sku: k.sku,
     role: (k.profile.role as UserRole) || "user",
-    tier: (k.profile.tier as TierKey) || "free",
+    tier: (k.profile.tier as TierKey) || "",
     tierSince: k.profile.tierSince || "",
     tierCanceledAt: k.profile.tierCanceledAt || "",
     signupAt: k.profile.signupAt || "",

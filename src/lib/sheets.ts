@@ -143,7 +143,7 @@ function appendLog(
 }
 
 export type UserRole = "admin" | "user";
-export type TierKey = "free" | "starter" | "pro" | "business";
+export type TierKey = "starter" | "pro" | "business";
 
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
@@ -176,6 +176,10 @@ export interface KundeProfile {
   tierCanceledAt?: string;
   /** First-seen timestamp. Backfilled to oldest credits.log entry on read if missing. */
   signupAt?: string;
+  /** Theme IDs the user has unlocked via one-time purchase. Access requires
+   *  an active subscription — if `tierCanceledAt` is set or no tier, these
+   *  are read but the push gate still rejects. */
+  themesPurchased?: string[];
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
@@ -1617,7 +1621,7 @@ export async function setUserTier(
   profile: KundeProfile,
   tier: TierKey,
 ): Promise<KundeProfile> {
-  const isChange = (profile.tier || "free") !== tier;
+  const isChange = (profile.tier || "") !== tier;
   const next: KundeProfile = {
     ...profile,
     tier,

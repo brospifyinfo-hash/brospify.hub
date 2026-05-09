@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 import { list } from "@vercel/blob";
-import { requireFeature } from "@/lib/tier-guard";
+import { isActiveSub, type TierKey } from "@/lib/tiers-shared";
+import { getCurrentTier } from "@/lib/tier-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +13,14 @@ interface ThemeEntry {
   fileUrl: string;
   fileName?: string;
   version?: string;
+  active?: boolean;
+  tierAccess?: TierKey[];
+  priceEur?: number;
 }
 
 // Pull theme info from settings blob; supports both new themes[] gallery
 // and the legacy single-theme fields.
-async function resolveTheme(themeId?: string): Promise<{ url: string; name: string } | null> {
+async function resolveTheme(themeId?: string): Promise<ThemeEntry | null> {
   try {
     const { blobs } = await list({ prefix: "brospifyhub-settings.json", limit: 1 });
     if (blobs.length === 0 || !blobs[0].url) return null;
@@ -26,25 +30,34 @@ async function resolveTheme(themeId?: string): Promise<{ url: string; name: stri
 
     const themes: ThemeEntry[] = Array.isArray(data.themes) ? data.themes : [];
 
-    // Explicit themeId requested → must match
     if (themeId) {
       const t = themes.find((x) => x.id === themeId);
-      if (t && t.fileUrl) {
-        return { url: t.fileUrl, name: t.name || "Brospify Theme" };
-      }
-      // Fallback: legacy "legacy" id maps to single-theme fields
+      if (t && t.fileUrl) return t;
       if (themeId === "legacy" && data.themeFileUrl) {
-        return { url: data.themeFileUrl, name: data.themeFileName || "Brospify Premium Theme" };
+        return {
+          id: "legacy",
+          name: data.themeFileName || "Brospify Premium Theme",
+          fileUrl: data.themeFileUrl,
+          fileName: data.themeFileName,
+          tierAccess: ["starter", "pro", "business"],
+          active: true,
+          priceEur: 0,
+        };
       }
       return null;
     }
 
-    // No id → first theme in gallery, or legacy single theme
-    if (themes.length > 0 && themes[0].fileUrl) {
-      return { url: themes[0].fileUrl, name: themes[0].name || "Brospify Theme" };
-    }
+    if (themes.length > 0 && themes[0].fileUrl) return themes[0];
     if (data.themeFileUrl) {
-      return { url: data.themeFileUrl, name: data.themeFileName || "Brospify Premium Theme" };
+      return {
+        id: "legacy",
+        name: data.themeFileName || "Brospify Premium Theme",
+        fileUrl: data.themeFileUrl,
+        fileName: data.themeFileName,
+        tierAccess: ["starter", "pro", "business"],
+        active: true,
+        priceEur: 0,
+      };
     }
     return null;
   } catch (err) {
@@ -56,9 +69,7 @@ async function resolveTheme(themeId?: string): Promise<{ url: string; name: stri
 export async function POST(req: NextRequest) {
   try {
     const session = await getSession();
-    const guard = await requireFeature(session, "themesGallery");
-    if (!guard.ok) return guard.response;
-    if (!session.lizenzschluessel) {
+    if (!session.isLoggedIn || !session.lizenzschluessel) {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
@@ -80,11 +91,50 @@ export async function POST(req: NextRequest) {
     } catch { /* no body, that's fine — fall back to first/legacy */ }
 
     const theme = await resolveTheme(themeId);
-    if (!theme) {
+    if (!theme || theme.active === false) {
       return NextResponse.json(
         { error: "Kein Theme hinterlegt. Der Admin muss zuerst ein Theme hochladen." },
         { status: 400 }
       );
+    }
+
+    // ── Per-theme access gate ───────────────────────────────────
+    // Admins always pass. Otherwise: must have an active sub AND
+    // either a tier that grants access, or a one-time purchase
+    // record. The one-time purchase is honoured ONLY while the
+    // sub stays active — no purchase grants permanent access.
+    if (!session.isAdmin) {
+      if (!isActiveSub(kunde.profile)) {
+        return NextResponse.json(
+          {
+            error: "FEATURE_LOCKED",
+            message:
+              "Theme-Push setzt ein aktives Abo voraus. Bitte wähle einen Plan.",
+          },
+          { status: 403 },
+        );
+      }
+      const tier = await getCurrentTier(session);
+      const tierKey = tier?.key ?? null;
+      const tierAccess = Array.isArray(theme.tierAccess) ? theme.tierAccess : [];
+      const inTier = !!tierKey && tierAccess.includes(tierKey);
+      const purchased = Array.isArray(kunde.profile.themesPurchased)
+        ? kunde.profile.themesPurchased
+        : [];
+      const isPurchased = purchased.includes(theme.id);
+      if (!inTier && !isPurchased) {
+        return NextResponse.json(
+          {
+            error: "FEATURE_LOCKED",
+            message:
+              "Dieses Theme ist in deinem Plan nicht enthalten. Upgrade oder einmalig freischalten.",
+            themeId: theme.id,
+            priceEur: typeof theme.priceEur === "number" ? theme.priceEur : 0,
+            tierAccess,
+          },
+          { status: 403 },
+        );
+      }
     }
 
     console.log("[ThemePush] Customer:", session.lizenzschluessel, "Shop:", domain, "Theme:", theme.name);
@@ -100,7 +150,7 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           theme: {
             name: theme.name,
-            src: theme.url,
+            src: theme.fileUrl,
           },
         }),
       }

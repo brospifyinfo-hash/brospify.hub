@@ -484,7 +484,7 @@ export default function Navigation() {
                       </span>
                     </div>
                   )}
-                  {tierState.tier && tierState.tier.key !== "free" && !session.isAdmin && (
+                  {tierState.tier && !session.isAdmin && (
                     <TierBadge tier={tierState.tier.label} kind={tierState.tier.key} compact />
                   )}
                   {session.isAdmin && (
@@ -983,14 +983,15 @@ function CreditsPill({ balance, loading }: { balance: number; loading: boolean }
 // the user instantly sees which plan they're on.
 
 const TIER_CHIP_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  free:     { bg: "bg-zinc-500/15",   text: "text-zinc-300",   border: "border-zinc-500/25" },
   starter:  { bg: "bg-cyan-500/15",   text: "text-cyan-300",   border: "border-cyan-500/25" },
   pro:      { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-500/30" },
   business: { bg: "bg-amber-500/15",  text: "text-amber-300",  border: "border-amber-500/30" },
 };
 
+const NEUTRAL_CHIP_STYLE = { bg: "bg-zinc-500/15", text: "text-zinc-300", border: "border-zinc-500/25" };
+
 function TierBadge({ tier, kind, compact }: { tier: string; kind: string; compact?: boolean }) {
-  const style = TIER_CHIP_STYLES[kind] || TIER_CHIP_STYLES.free;
+  const style = TIER_CHIP_STYLES[kind] || NEUTRAL_CHIP_STYLE;
   return (
     <span
       className={`hidden lg:inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded border ${style.bg} ${style.text} ${style.border} ${compact ? "px-1.5 py-0.5" : "px-2 py-1"}`}
@@ -1017,8 +1018,8 @@ interface AccountMenuProps {
 
 function AccountMenu({ session, tierState, pathname, onClose, onLogout }: AccountMenuProps) {
   const tier = tierState.tier;
-  const tierKey = tier?.key || "free";
-  const chipStyle = TIER_CHIP_STYLES[tierKey] || TIER_CHIP_STYLES.free;
+  const tierKey = tier?.key || "";
+  const chipStyle = TIER_CHIP_STYLES[tierKey] || NEUTRAL_CHIP_STYLE;
 
   return (
     <motion.div

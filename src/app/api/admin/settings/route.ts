@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { put, list } from "@vercel/blob";
+import { TIER_KEYS, type TierKey } from "@/lib/tiers-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,16 @@ export interface ThemeEntry {
   version?: string;
   description?: string;
   previewImageUrl?: string;
+  /** YouTube link or uploaded video URL — full URL, no embed transform. */
+  previewVideoUrl?: string;
   changelog?: string;
+  /** One-time purchase price in EUR, when access is locked behind a tier. */
+  priceEur?: number;
+  /** Visible to customers when true. Inactive themes are hidden everywhere. */
+  active?: boolean;
+  /** Which tiers grant access without a one-time purchase. Empty array = nobody
+   *  gets it through the subscription, only via one-time purchase. */
+  tierAccess?: TierKey[];
   createdAt: string;
 }
 
@@ -37,10 +47,24 @@ interface AppSettings {
 
 // Auto-migrate: if there are no themes[] but a legacy themeFileUrl exists,
 // surface it as the first entry so the UI shows everything in one place.
+// Also backfill new fields (active, tierAccess, priceEur) onto every theme so
+// downstream code can rely on them.
 function withMigratedThemes(s: AppSettings): AppSettings {
-  if (Array.isArray(s.themes) && s.themes.length > 0) return s;
+  const ensureFields = (t: ThemeEntry): ThemeEntry => ({
+    ...t,
+    active: t.active === undefined ? true : t.active,
+    tierAccess: Array.isArray(t.tierAccess)
+      ? t.tierAccess.filter((k): k is TierKey =>
+          (TIER_KEYS as readonly string[]).includes(k))
+      : [...TIER_KEYS],
+    priceEur: typeof t.priceEur === "number" && t.priceEur >= 0 ? t.priceEur : 0,
+  });
+
+  if (Array.isArray(s.themes) && s.themes.length > 0) {
+    return { ...s, themes: s.themes.map(ensureFields) };
+  }
   if (!s.themeFileUrl) return { ...s, themes: [] };
-  const legacy: ThemeEntry = {
+  const legacy: ThemeEntry = ensureFields({
     id: "legacy",
     name: s.themeFileName || "Brospify Theme",
     fileUrl: s.themeFileUrl,
@@ -48,7 +72,7 @@ function withMigratedThemes(s: AppSettings): AppSettings {
     version: s.themeVersion,
     changelog: s.themeChangelog,
     createdAt: new Date(0).toISOString(),
-  };
+  });
   return { ...s, themes: [legacy] };
 }
 
@@ -96,8 +120,15 @@ function sanitizeThemes(input: unknown): ThemeEntry[] | undefined {
   for (const raw of input) {
     if (!raw || typeof raw !== "object") continue;
     const t = raw as Record<string, unknown>;
+    // We accept themes without a fileUrl during admin editing — the
+    // admin can save a draft entry before they upload the ZIP. The
+    // push endpoint guards against missing fileUrl at execution time.
     const fileUrl = typeof t.fileUrl === "string" ? t.fileUrl : "";
-    if (!fileUrl) continue;
+    const tierAccessRaw = Array.isArray(t.tierAccess) ? t.tierAccess : [];
+    const tierAccess = tierAccessRaw.filter((k): k is TierKey =>
+      typeof k === "string" && (TIER_KEYS as readonly string[]).includes(k));
+    const priceRaw = typeof t.priceEur === "number" ? t.priceEur : Number(t.priceEur);
+    const priceEur = Number.isFinite(priceRaw) && priceRaw >= 0 ? Math.round(priceRaw * 100) / 100 : 0;
     out.push({
       id: typeof t.id === "string" && t.id ? t.id : `theme_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name: typeof t.name === "string" && t.name ? t.name : "Theme",
@@ -106,7 +137,11 @@ function sanitizeThemes(input: unknown): ThemeEntry[] | undefined {
       version: typeof t.version === "string" ? t.version : undefined,
       description: typeof t.description === "string" ? t.description : undefined,
       previewImageUrl: typeof t.previewImageUrl === "string" ? t.previewImageUrl : undefined,
+      previewVideoUrl: typeof t.previewVideoUrl === "string" ? t.previewVideoUrl : undefined,
       changelog: typeof t.changelog === "string" ? t.changelog : undefined,
+      priceEur,
+      active: t.active === undefined ? true : !!t.active,
+      tierAccess,
       createdAt: typeof t.createdAt === "string" ? t.createdAt : new Date().toISOString(),
     });
   }
