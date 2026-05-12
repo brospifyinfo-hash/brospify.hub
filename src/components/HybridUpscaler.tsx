@@ -24,6 +24,13 @@ import {
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
+import {
+  useResilientJob,
+  readJobResponse,
+  JobDebugPanel,
+  OrphanResumeBanner,
+  TerminalJobError,
+} from "@/lib/resilient-job";
 
 const ACCENT = "#95BF47";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -62,10 +69,17 @@ const MODES: readonly ModeOption[] = [
   },
 ];
 
+interface UpscaleResponse {
+  url: string;
+  creditsRemaining?: number;
+}
+
 export default function HybridUpscaler() {
   const credits = useCredits();
+  const job = useResilientJob<UpscaleResponse>("upscale");
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [lastInput, setLastInput] = useState<{ file: File; mode: UpscaleMode; scale: Scale } | null>(null);
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [originalDims, setOriginalDims] = useState<{ width: number; height: number } | null>(null);
@@ -175,6 +189,7 @@ export default function HybridUpscaler() {
       setStage("processing");
       startTimer();
       credits.optimisticDeduct(CREDIT_COSTS.UPSCALE_IMAGE);
+      setLastInput({ file: payload, mode, scale });
       await runUpscale(payload, mode, scale);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -183,39 +198,36 @@ export default function HybridUpscaler() {
 
   async function runUpscale(file: File, modeId: UpscaleMode, scaleN: Scale) {
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("mode", modeId);
-      fd.append("scale", String(scaleN));
-      const res = await fetch("/api/upscale/cloud", {
-        method: "POST",
-        body: fd,
+      const data = await job.run({
+        hint: `${modeId.toUpperCase()} · ${scaleN}×`,
+        onAttemptStart: (n) => { if (n > 1) credits.refresh(); },
+        attempt: async () => {
+          const fd = new FormData();
+          fd.append("file", file);
+          fd.append("mode", modeId);
+          fd.append("scale", String(scaleN));
+          const res = await fetch("/api/upscale/cloud", { method: "POST", body: fd });
+          return await readJobResponse<UpscaleResponse>(res);
+        },
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.url) {
-        if (typeof data?.creditsRemaining === "number") {
-          credits.setBalance(data.creditsRemaining);
-        } else {
-          credits.refresh();
-        }
-        throw new Error(
-          (data && data.error) || `Verarbeitung fehlgeschlagen (Status ${res.status}).`,
-        );
-      }
       if (typeof data.creditsRemaining === "number") {
         credits.setBalance(data.creditsRemaining);
       } else {
         credits.refresh();
       }
       stopTimer();
-      setUpscaledUrl(data.url as string);
-      void measureRemoteImage(data.url as string).then(setOutputDims);
+      setUpscaledUrl(data.url);
+      void measureRemoteImage(data.url).then(setOutputDims);
       setStage("done");
     } catch (err) {
       stopTimer();
-      setErrorMsg(
-        err instanceof Error ? err.message : "Unbekannter Fehler bei der Verarbeitung.",
-      );
+      credits.refresh();
+      const msg = err instanceof TerminalJobError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "Unbekannter Fehler bei der Verarbeitung.";
+      setErrorMsg(msg);
       setStage("error");
     }
   }
@@ -462,6 +474,28 @@ export default function HybridUpscaler() {
               </p>
             )}
           </div>
+        </div>
+      )}
+      {stage === "processing" && (
+        <div className="mt-3">
+          <JobDebugPanel state={job.state} />
+        </div>
+      )}
+      {job.hasOrphan && stage !== "processing" && (
+        <div className="mb-3">
+          <OrphanResumeBanner
+            toolLabel="Hybrid-Upscaler"
+            onRetry={() => {
+              if (lastInput) {
+                setStage("processing");
+                startTimer();
+                runUpscale(lastInput.file, lastInput.mode, lastInput.scale);
+              } else {
+                job.clearOrphan();
+              }
+            }}
+            onDismiss={job.clearOrphan}
+          />
         </div>
       )}
 

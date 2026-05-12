@@ -38,6 +38,12 @@ import NextLink from "next/link";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
+import {
+  useResilientJob,
+  readJobResponse,
+  JobDebugPanel,
+  TerminalJobError,
+} from "@/lib/resilient-job";
 
 interface ShopifyImage {
   id: number;
@@ -60,6 +66,7 @@ export default function BlogPage() {
   const credits = useCredits();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const blogJob = useResilientJob<{ blog: { title: string; seo_title?: string; seo_description?: string; tags?: string; body_html: string }; creditsRemaining?: number }>("blog-generate");
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -196,29 +203,26 @@ export default function BlogPage() {
     setError("");
     credits.optimisticDeduct(CREDIT_COSTS.BLOG_GENERATE);
     try {
-      const res = await fetch("/api/blog/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          topic,
-          language,
-          products: selectedProducts.map((p) => ({
-            title: p.title,
-            description: p.description,
-            images: p.images,
-          })),
-        }),
+      const data = await blogJob.run({
+        hint: `Thema: ${topic.slice(0, 60)}`,
+        onAttemptStart: (n) => { if (n > 1) credits.refresh(); },
+        attempt: async () => {
+          const res = await fetch("/api/blog/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              topic,
+              language,
+              products: selectedProducts.map((p) => ({
+                title: p.title,
+                description: p.description,
+                images: p.images,
+              })),
+            }),
+          });
+          return await readJobResponse<{ blog: { title: string; seo_title?: string; seo_description?: string; tags?: string; body_html: string }; creditsRemaining?: number }>(res);
+        },
       });
-      const data = await res.json();
-      if (!res.ok) {
-        if (typeof data.creditsRemaining === "number") {
-          credits.setBalance(data.creditsRemaining);
-        } else {
-          credits.refresh();
-        }
-        setError(data.error || "Generierung fehlgeschlagen.");
-        return;
-      }
       const blog = data.blog;
       setBlogTitle(blog.title);
       setSeoTitle(blog.seo_title || blog.title);
@@ -232,9 +236,10 @@ export default function BlogPage() {
       }
       setSuccess("Blog-Artikel generiert! Bearbeite ihn im Editor.");
       setTimeout(() => setSuccess(""), 4000);
-    } catch {
+    } catch (err) {
       credits.refresh();
-      setError("Verbindungsfehler.");
+      const msg = err instanceof TerminalJobError ? err.message : "Verbindungsfehler.";
+      setError(msg);
     } finally {
       setGenerating(false);
     }
@@ -551,6 +556,10 @@ export default function BlogPage() {
                 </p>
               )}
             </div>
+
+            {generating && (
+              <JobDebugPanel state={blogJob.state} />
+            )}
 
             {/* Blog Title */}
             <input

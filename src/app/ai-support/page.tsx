@@ -34,6 +34,12 @@ import {
   Lock,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import {
+  useResilientJob,
+  readJobResponse,
+  JobDebugPanel,
+  TerminalJobError,
+} from "@/lib/resilient-job";
 
 interface ChatMsg {
   role: "user" | "assistant";
@@ -87,6 +93,7 @@ function AISupportContent() {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const chatJob = useResilientJob<{ reply: string; shouldEscalate?: boolean }>("ai-chat");
   const [attemptCount, setAttemptCount] = useState(0);
   const [showEscalation, setShowEscalation] = useState(false);
   const [creatingTicket, setCreatingTicket] = useState(false);
@@ -195,19 +202,20 @@ function AISupportContent() {
     setAttemptCount(newAttempt);
 
     try {
-      const res = await fetch("/api/ai-chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
-          attemptCount: newAttempt,
-        }),
+      const data = await chatJob.run({
+        hint: "AI-Antwort wird erstellt",
+        attempt: async () => {
+          const res = await fetch("/api/ai-chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
+              attemptCount: newAttempt,
+            }),
+          });
+          return await readJobResponse<{ reply: string; shouldEscalate?: boolean }>(res);
+        },
       });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error || "Fehler bei der KI-Anfrage.");
-        return;
-      }
       const assistantMsg: ChatMsg = {
         role: "assistant",
         content: data.reply,
@@ -215,8 +223,9 @@ function AISupportContent() {
       };
       setMessages([...newMessages, assistantMsg]);
       if (data.shouldEscalate) setShowEscalation(true);
-    } catch {
-      setError("Verbindungsfehler.");
+    } catch (err) {
+      const msg = err instanceof TerminalJobError ? err.message : "Verbindungsfehler.";
+      setError(msg);
     } finally {
       setSending(false);
     }
@@ -382,6 +391,7 @@ function AISupportContent() {
             onCreateTicket={handleCreateTicket}
             creatingTicket={creatingTicket}
             messagesEndRef={messagesEndRef}
+            jobState={chatJob.state}
           />
         )}
       </div>
@@ -606,7 +616,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
 
 // ─── Chat View ──────────────────────────────────────────────────
 
-function ChatView({ messages, input, setInput, sending, onSend, attemptCount, showEscalation, onCreateTicket, creatingTicket, messagesEndRef }: {
+function ChatView({ messages, input, setInput, sending, onSend, attemptCount, showEscalation, onCreateTicket, creatingTicket, messagesEndRef, jobState }: {
   messages: ChatMsg[];
   input: string;
   setInput: (v: string) => void;
@@ -617,6 +627,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
   onCreateTicket: () => void;
   creatingTicket: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  jobState: import("@/lib/resilient-job").ResilientJobState;
 }) {
   return (
     <div className="space-y-3">
@@ -682,16 +693,19 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
           ))}
 
           {sending && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-purple-500/15 flex items-center justify-center">
-                <Bot className="w-3.5 h-3.5 text-purple-400" />
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-2">
+              <div className="flex gap-2">
+                <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500/15 to-purple-500/15 border border-purple-500/15 flex items-center justify-center">
+                  <Bot className="w-3.5 h-3.5 text-purple-400" />
+                </div>
+                <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "150ms" }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  <span className="text-[10px] text-zinc-500 ml-0.5">denkt nach…</span>
+                </div>
               </div>
-              <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "300ms" }} />
-                <span className="text-[10px] text-zinc-500 ml-0.5">denkt nach…</span>
-              </div>
+              <JobDebugPanel state={jobState} compact />
             </motion.div>
           )}
 

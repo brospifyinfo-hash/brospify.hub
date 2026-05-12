@@ -31,6 +31,13 @@ import {
   AI_STUDIO_SCENES,
   type AiStudioScene,
 } from "@/lib/ai-studio-scenes";
+import {
+  useResilientJob,
+  readJobResponse,
+  JobDebugPanel,
+  OrphanResumeBanner,
+  TerminalJobError,
+} from "@/lib/resilient-job";
 
 const ACCENT = "#95BF47";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -40,8 +47,14 @@ const CUSTOM_PROMPT_MAX = 500;
 
 type Stage = "upload" | "configure" | "processing" | "done" | "error";
 
+interface AiStudioResponse {
+  url: string;
+  creditsRemaining?: number;
+}
+
 export default function AiStudio() {
   const credits = useCredits();
+  const job = useResilientJob<AiStudioResponse>("ai-studio");
   const [stage, setStage] = useState<Stage>("upload");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -207,42 +220,40 @@ export default function AiStudio() {
     credits.optimisticDeduct(CREDIT_COSTS.AI_STUDIO);
 
     try {
-      const fd = new FormData();
-      fd.append("file", preparedFile);
-      fd.append("sceneId", scene.id);
-      const trimmedPrompt = customPrompt.trim().slice(0, CUSTOM_PROMPT_MAX);
-      if (trimmedPrompt) fd.append("customPrompt", trimmedPrompt);
-
-      const res = await fetch("/api/ai-studio", {
-        method: "POST",
-        body: fd,
+      const data = await job.run({
+        hint: `Szene: ${scene.label}`,
+        onAttemptStart: (n) => {
+          if (n > 1) credits.refresh();
+        },
+        attempt: async () => {
+          const fd = new FormData();
+          fd.append("file", preparedFile);
+          fd.append("sceneId", scene.id);
+          const trimmedPrompt = customPrompt.trim().slice(0, CUSTOM_PROMPT_MAX);
+          if (trimmedPrompt) fd.append("customPrompt", trimmedPrompt);
+          const res = await fetch("/api/ai-studio", { method: "POST", body: fd });
+          return await readJobResponse<AiStudioResponse>(res);
+        },
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.url) {
-        if (typeof data?.creditsRemaining === "number") {
-          credits.setBalance(data.creditsRemaining);
-        } else {
-          credits.refresh();
-        }
-        throw new Error(
-          (data && data.error) || `Verarbeitung fehlgeschlagen (Status ${res.status}).`,
-        );
-      }
       if (typeof data.creditsRemaining === "number") {
         credits.setBalance(data.creditsRemaining);
       } else {
         credits.refresh();
       }
       stopTimer();
-      setResultUrl(data.url as string);
+      setResultUrl(data.url);
       setResultScene(scene);
       setSavedToLibrary(false);
       setStage("done");
     } catch (err) {
       stopTimer();
-      setErrorMsg(
-        err instanceof Error ? err.message : "Unbekannter Fehler bei der Verarbeitung.",
-      );
+      credits.refresh();
+      const msg = err instanceof TerminalJobError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "Unbekannter Fehler bei der Verarbeitung.";
+      setErrorMsg(msg);
       setStage("error");
     }
   }
@@ -464,39 +475,56 @@ export default function AiStudio() {
 
       {/* ── STAGE: processing ────────────────────────────────── */}
       {stage === "processing" && (
-        <div
-          className="relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 overflow-hidden"
-          style={{
-            background: "rgba(255, 255, 255, 0.03)",
-            backdropFilter: "blur(28px) saturate(140%)",
-            WebkitBackdropFilter: "blur(28px) saturate(140%)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            boxShadow: "0 24px 60px -30px rgba(0,0,0,0.5)",
-          }}
-        >
-          {originalUrl && (
-            <img
-              src={originalUrl}
-              alt=""
-              className="absolute inset-0 w-full h-full object-contain opacity-15 blur-md"
-            />
-          )}
-          <div className="relative z-10 flex flex-col items-center max-w-sm">
-            <Spinner color={ACCENT} />
-            <h3
-              className="mt-3 text-[16px] font-semibold tracking-tight text-white"
-              style={{ letterSpacing: "-0.022em" }}
-            >
-              Szene wird erstellt
-            </h3>
-            <p className="mt-1 text-[11px] text-zinc-400">
-              Verarbeitung läuft · {elapsedSec}s
-            </p>
-            <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
-              Die KI integriert dein Produkt in die neue Szene mit
-              passender Belichtung und realistischen Schatten.
-            </p>
+        <div className="space-y-3">
+          <div
+            className="relative aspect-[4/3] sm:aspect-[16/9] rounded-2xl flex flex-col items-center justify-center text-center px-4 sm:px-6 py-6 sm:py-8 overflow-hidden"
+            style={{
+              background: "rgba(255, 255, 255, 0.03)",
+              backdropFilter: "blur(28px) saturate(140%)",
+              WebkitBackdropFilter: "blur(28px) saturate(140%)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              boxShadow: "0 24px 60px -30px rgba(0,0,0,0.5)",
+            }}
+          >
+            {originalUrl && (
+              <img
+                src={originalUrl}
+                alt=""
+                className="absolute inset-0 w-full h-full object-contain opacity-15 blur-md"
+              />
+            )}
+            <div className="relative z-10 flex flex-col items-center max-w-sm">
+              <Spinner color={ACCENT} />
+              <h3
+                className="mt-3 text-[16px] font-semibold tracking-tight text-white"
+                style={{ letterSpacing: "-0.022em" }}
+              >
+                Szene wird erstellt
+              </h3>
+              <p className="mt-1 text-[11px] text-zinc-400">
+                Verarbeitung läuft · {elapsedSec}s
+              </p>
+              <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
+                Die KI integriert dein Produkt in die neue Szene mit
+                passender Belichtung und realistischen Schatten.
+              </p>
+            </div>
           </div>
+          <JobDebugPanel state={job.state} />
+        </div>
+      )}
+
+      {/* ── Orphan resume banner ─────────────────────────────── */}
+      {job.hasOrphan && stage !== "processing" && (
+        <div className="mb-3">
+          <OrphanResumeBanner
+            toolLabel="AI Studio"
+            onRetry={() => {
+              if (preparedFile) handleGenerate();
+              else job.clearOrphan();
+            }}
+            onDismiss={job.clearOrphan}
+          />
         </div>
       )}
 

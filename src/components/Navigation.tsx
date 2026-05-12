@@ -854,6 +854,7 @@ function ProfileAccountGroup({ session, pathname, onNavigate }: {
               </div>
               <SubItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={onNavigate} />
               <SubItem href="/settings" icon={Settings} label="Einstellungen" active={pathname === "/settings"} onClick={onNavigate} />
+              <SubItem href="/tiers" icon={Crown} label="Abo-Modelle" active={pathname === "/tiers"} onClick={onNavigate} />
 
               {/* Shop */}
               <div className="px-1 pt-2 pb-0.5">
@@ -1117,6 +1118,14 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             active={pathname === "/credits"}
             onClick={onClose}
             sub="Aufladen & Verlauf"
+          />
+          <MenuItem
+            href="/tiers"
+            icon={Crown}
+            label="Abo-Modelle"
+            active={pathname === "/tiers"}
+            onClick={onClose}
+            sub={tier ? `Aktuell: ${tier.label}` : "Plan wählen"}
           />
         </MenuGroup>
 

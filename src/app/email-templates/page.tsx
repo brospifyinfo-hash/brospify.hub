@@ -55,6 +55,12 @@ import {
 import { DeployButton } from "@/components/email/DeployButton";
 import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS as CREDIT_LIMITS } from "@/lib/credit-costs";
+import {
+  useResilientJob,
+  readJobResponse,
+  JobDebugPanel,
+  TerminalJobError,
+} from "@/lib/resilient-job";
 
 // ─── Constants ───────────────────────────────────────────────────
 
@@ -118,6 +124,7 @@ function EmailStudio() {
   const [config, setConfig] = useState<EmailConfig>(DEFAULT_CONFIG);
   const [generated, setGenerated] = useState<GeneratedTemplate | null>(null);
   const [generating, setGenerating] = useState(false);
+  const emailJob = useResilientJob<{ liquid: string; subject: string; source: string; creditsRemaining?: number }>("email-generate");
   const [genError, setGenError] = useState<string | null>(null);
   const [view, setView] = useState<"preview" | "source">("preview");
   const [copied, setCopied] = useState(false);
@@ -146,25 +153,22 @@ function EmailStudio() {
     setGenerating(true);
     credits.optimisticDeduct(CREDIT_LIMITS.EMAIL_GENERATE);
     try {
-      const res = await fetch("/api/email-templates/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          templateId: selectedId,
-          ...config,
-          brandTone: config.tonalität,
-        }),
+      const data = await emailJob.run({
+        hint: `Template: ${selectedId}`,
+        onAttemptStart: (n) => { if (n > 1) credits.refresh(); },
+        attempt: async () => {
+          const res = await fetch("/api/email-templates/generate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              templateId: selectedId,
+              ...config,
+              brandTone: config.tonalität,
+            }),
+          });
+          return await readJobResponse<{ liquid: string; subject: string; source: string; creditsRemaining?: number }>(res);
+        },
       });
-      const data = await res.json();
-      if (!res.ok) {
-        if (typeof data.creditsRemaining === "number") {
-          credits.setRemaining(data.creditsRemaining);
-        } else {
-          credits.refresh();
-        }
-        setGenError(data.error ?? "Generierung fehlgeschlagen.");
-        return;
-      }
       setGenerated({
         liquid: data.liquid,
         subject: data.subject,
@@ -178,11 +182,16 @@ function EmailStudio() {
       setView("preview");
     } catch (err) {
       credits.refresh();
-      setGenError(err instanceof Error ? err.message : "Netzwerkfehler.");
+      const msg = err instanceof TerminalJobError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "Netzwerkfehler.";
+      setGenError(msg);
     } finally {
       setGenerating(false);
     }
-  }, [selectedId, config, credits]);
+  }, [selectedId, config, credits, emailJob]);
 
   // ── Inline text edit handler — splice into Liquid source ──
   const handleTextEdit = useCallback(
@@ -481,12 +490,15 @@ function EmailStudio() {
                 </div>
               </>
             ) : (
-              <EmptyState
-                generating={generating}
-                onGenerate={handleGenerate}
-                tpl={tpl}
-                disabled={insufficient}
-              />
+              <div className="space-y-3">
+                <EmptyState
+                  generating={generating}
+                  onGenerate={handleGenerate}
+                  tpl={tpl}
+                  disabled={insufficient}
+                />
+                {generating && <JobDebugPanel state={emailJob.state} />}
+              </div>
             )}
           </section>
 

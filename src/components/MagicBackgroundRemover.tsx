@@ -25,6 +25,13 @@ import {
   BG_PRECISION_OPTIONS,
   type BgPrecision,
 } from "@/lib/ai-studio-scenes";
+import {
+  useResilientJob,
+  readJobResponse,
+  JobDebugPanel,
+  OrphanResumeBanner,
+  TerminalJobError,
+} from "@/lib/resilient-job";
 
 const ACCENT = "#95BF47";
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -59,10 +66,18 @@ const GRADIENT_PRESETS: GradientPreset[] = [
   { id: "brand-glow", label: "Brand", css: `linear-gradient(180deg,#cce6a6 0%,${ACCENT} 100%)`, canvas: ["#cce6a6", ACCENT] },
 ];
 
+interface BgRemoveResponse {
+  url: string;
+  creditsRemaining?: number;
+}
+
 export default function MagicBackgroundRemover() {
   const credits = useCredits();
+  const job = useResilientJob<BgRemoveResponse>("bg-remove");
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [lastPrecision, setLastPrecision] = useState<BgPrecision | null>(null);
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
@@ -213,6 +228,8 @@ export default function MagicBackgroundRemover() {
       setStage("processing");
       startTimer();
       credits.optimisticDeduct(CREDIT_COSTS.BG_REMOVE);
+      setLastFile(payload);
+      setLastPrecision(precision);
       await runRemoveBg(payload, precision);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -221,37 +238,34 @@ export default function MagicBackgroundRemover() {
 
   async function runRemoveBg(file: File, precisionId: BgPrecision) {
     try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("precision", precisionId);
-      const res = await fetch("/api/bg-remove", {
-        method: "POST",
-        body: fd,
+      const data = await job.run({
+        hint: `Modus: ${precisionId}`,
+        onAttemptStart: (n) => { if (n > 1) credits.refresh(); },
+        attempt: async () => {
+          const fd = new FormData();
+          fd.append("file", file);
+          fd.append("precision", precisionId);
+          const res = await fetch("/api/bg-remove", { method: "POST", body: fd });
+          return await readJobResponse<BgRemoveResponse>(res);
+        },
       });
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data?.url) {
-        if (typeof data?.creditsRemaining === "number") {
-          credits.setBalance(data.creditsRemaining);
-        } else {
-          credits.refresh();
-        }
-        throw new Error(
-          (data && data.error) || `Verarbeitung fehlgeschlagen (Status ${res.status}).`,
-        );
-      }
       if (typeof data.creditsRemaining === "number") {
         credits.setBalance(data.creditsRemaining);
       } else {
         credits.refresh();
       }
       stopTimer();
-      setCutoutUrl(data.url as string);
+      setCutoutUrl(data.url);
       setStage("done");
     } catch (err) {
       stopTimer();
-      setErrorMsg(
-        err instanceof Error ? err.message : "Unbekannter Fehler bei der Verarbeitung.",
-      );
+      credits.refresh();
+      const msg = err instanceof TerminalJobError
+        ? err.message
+        : err instanceof Error
+          ? err.message
+          : "Unbekannter Fehler bei der Verarbeitung.";
+      setErrorMsg(msg);
       setStage("error");
     }
   }
@@ -525,6 +539,28 @@ export default function MagicBackgroundRemover() {
               </p>
             )}
           </div>
+        </div>
+      )}
+      {stage === "processing" && (
+        <div className="mt-3">
+          <JobDebugPanel state={job.state} />
+        </div>
+      )}
+      {job.hasOrphan && stage !== "processing" && (
+        <div className="mb-3">
+          <OrphanResumeBanner
+            toolLabel="Background-Remover"
+            onRetry={() => {
+              if (lastFile && lastPrecision) {
+                setStage("processing");
+                startTimer();
+                runRemoveBg(lastFile, lastPrecision);
+              } else {
+                job.clearOrphan();
+              }
+            }}
+            onDismiss={job.clearOrphan}
+          />
         </div>
       )}
 
