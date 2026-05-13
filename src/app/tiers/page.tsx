@@ -41,21 +41,35 @@ interface UserContextInfo {
   isAdmin: boolean;
 }
 
-const TIER_VISUALS: Record<TierKey, { gradient: string; accent: string; chip: string }> = {
+// Bronze / Silber / Gold visual identity — matched to the tier names
+// the admin uses ("Bronze", "Silber", "Gold").
+const TIER_VISUALS: Record<TierKey, { gradient: string; accent: string; chip: string; ring: string; metal: string }> = {
+  // Bronze
   starter: {
-    gradient: "linear-gradient(180deg, rgba(6,182,212,0.10) 0%, rgba(6,182,212,0.02) 100%)",
-    accent: "#06B6D4",
-    chip: "bg-cyan-500/15 border-cyan-500/30 text-cyan-200",
+    gradient:
+      "linear-gradient(165deg, rgba(180,83,9,0.18) 0%, rgba(120,53,15,0.05) 60%, rgba(0,0,0,0) 100%)",
+    accent: "#D97706",
+    chip: "bg-amber-700/20 border-amber-700/40 text-amber-200",
+    ring: "rgba(217,119,6,0.55)",
+    metal: "linear-gradient(135deg, #c2410c 0%, #b45309 40%, #92400e 100%)",
   },
+  // Silber
   pro: {
-    gradient: "linear-gradient(180deg, rgba(168,85,247,0.14) 0%, rgba(168,85,247,0.03) 100%)",
-    accent: "#A855F7",
-    chip: "bg-purple-500/15 border-purple-500/30 text-purple-200",
+    gradient:
+      "linear-gradient(165deg, rgba(226,232,240,0.16) 0%, rgba(148,163,184,0.08) 60%, rgba(0,0,0,0) 100%)",
+    accent: "#CBD5E1",
+    chip: "bg-slate-300/20 border-slate-300/40 text-slate-100",
+    ring: "rgba(203,213,225,0.65)",
+    metal: "linear-gradient(135deg, #e2e8f0 0%, #94a3b8 50%, #64748b 100%)",
   },
+  // Gold
   business: {
-    gradient: "linear-gradient(180deg, rgba(245,158,11,0.14) 0%, rgba(245,158,11,0.03) 100%)",
-    accent: "#F59E0B",
-    chip: "bg-amber-500/15 border-amber-500/30 text-amber-200",
+    gradient:
+      "linear-gradient(165deg, rgba(250,204,21,0.20) 0%, rgba(202,138,4,0.08) 60%, rgba(0,0,0,0) 100%)",
+    accent: "#FACC15",
+    chip: "bg-yellow-400/20 border-yellow-400/40 text-yellow-100",
+    ring: "rgba(250,204,21,0.75)",
+    metal: "linear-gradient(135deg, #fde047 0%, #facc15 35%, #ca8a04 100%)",
   },
 };
 
@@ -113,17 +127,22 @@ export default function TiersPage() {
     };
   }, [router]);
 
-  async function handleSwitch(target: TierKey) {
-    // Real plan switching goes through Shopify checkout — for now we
-    // just redirect to /credits where the user can pick a payment
-    // package, since plans are billed via the storefront. Admins can
-    // override via the admin panel.
+  function handleSwitch(target: TierKey, ctaUrl?: string) {
+    // If the admin set a custom CTA URL (e.g. Shopify checkout permalink),
+    // route there. External URLs open in a new tab; internal stay in-app.
     setSwitching(target);
     setMessage(null);
     try {
-      // Future: replace with a real upgrade API. We surface the
-      // tier name to the credits page for tracking purposes.
-      router.push(`/credits?plan=${target}`);
+      const trimmed = (ctaUrl || "").trim();
+      if (trimmed) {
+        if (/^https?:\/\//i.test(trimmed)) {
+          window.open(trimmed, "_blank", "noopener,noreferrer");
+        } else {
+          router.push(trimmed);
+        }
+      } else {
+        router.push(`/credits?plan=${target}`);
+      }
     } catch {
       setMessage({ type: "error", text: "Wechsel fehlgeschlagen. Bitte erneut versuchen." });
     } finally {
@@ -140,71 +159,114 @@ export default function TiersPage() {
   }
 
   const currentTier = tiers.find((t) => t.key === context.tierKey) || null;
+  const currentTierVisuals = currentTier ? TIER_VISUALS[currentTier.key as TierKey] : null;
   const canceledOn = context.tierCanceledAt ? new Date(context.tierCanceledAt).toLocaleDateString("de-DE") : "";
 
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
 
-      <div className="fixed top-32 right-8 w-64 h-64 bg-purple-500/[0.06] rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed top-64 left-8 w-48 h-48 bg-cyan-500/[0.05] rounded-full blur-[100px] pointer-events-none" />
+      {/* Atmospheric glows */}
+      <div className="fixed top-32 right-8 w-80 h-80 bg-yellow-500/[0.07] rounded-full blur-[140px] pointer-events-none" />
+      <div className="fixed top-72 left-8 w-72 h-72 bg-amber-700/[0.06] rounded-full blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-32 right-20 w-56 h-56 bg-slate-300/[0.04] rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="max-w-6xl mx-auto px-3 sm:px-5 py-4 sm:py-6 space-y-4">
-        {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
-            <Crown className="w-5 h-5 text-amber-400" />
-            Abo-Modelle
+      <div className="max-w-6xl mx-auto px-3 sm:px-5 py-4 sm:py-6 space-y-5">
+        {/* Hero header */}
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center pt-2 pb-1"
+        >
+          <div className="inline-flex items-center gap-1.5 text-[10px] uppercase tracking-[0.2em] font-bold text-amber-300/90 mb-2">
+            <Crown className="w-3 h-3" />
+            Brospify Hub · Abo-Modelle
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+            Wähle deinen Plan
           </h1>
-          <p className="text-[12px] text-zinc-500 mt-1 leading-snug max-w-2xl">
-            Wähle den Plan, der zu deinem Shop passt. Du kannst jederzeit upgraden, downgraden oder kündigen.
-            Aktuelle Pläne werden monatlich abgerechnet.
+          <p className="text-[12px] sm:text-sm text-zinc-400 mt-2 leading-snug max-w-xl mx-auto">
+            Drei Stufen — <span className="text-amber-700/90 font-semibold">Bronze</span>,{" "}
+            <span className="text-slate-300 font-semibold">Silber</span>,{" "}
+            <span className="text-yellow-400 font-semibold">Gold</span>. Jederzeit upgraden, downgraden oder kündigen.
           </p>
         </motion.div>
 
-        {/* Current-status banner */}
+        {/* Current-status banner — much more prominent when actively subscribed */}
         <motion.div
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
-          className={`rounded-2xl border p-4 ${
-            context.isAdmin
-              ? "border-amber-500/30 bg-amber-500/[0.06]"
+          className="relative rounded-2xl overflow-hidden border border-white/[0.08]"
+          style={{
+            background: context.isAdmin
+              ? "linear-gradient(135deg, rgba(245,158,11,0.15) 0%, rgba(0,0,0,0) 100%)"
               : currentTier
-                ? "border-[#95BF47]/30 bg-[#95BF47]/[0.05]"
-                : "border-zinc-500/30 bg-zinc-500/[0.04]"
-          }`}
+                ? `linear-gradient(135deg, ${currentTierVisuals?.accent ?? "#95BF47"}25 0%, rgba(0,0,0,0) 100%)`
+                : "linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(0,0,0,0) 100%)",
+            boxShadow: currentTier && !context.tierCanceledAt
+              ? `inset 0 0 0 1px ${currentTierVisuals?.ring ?? "rgba(149,191,71,0.3)"}`
+              : undefined,
+          }}
         >
-          <div className="flex items-start gap-3 flex-wrap">
-            <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+          <div className="p-4 flex items-start gap-3 flex-wrap">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 border border-white/[0.10]"
+              style={{
+                background: currentTier && !context.tierCanceledAt
+                  ? currentTierVisuals?.metal
+                  : "rgba(255,255,255,0.04)",
+                boxShadow: currentTier && !context.tierCanceledAt
+                  ? `0 4px 16px -4px ${currentTierVisuals?.accent}80`
+                  : undefined,
+              }}
+            >
               {context.isAdmin ? (
-                <Crown className="w-5 h-5 text-amber-400" />
+                <Crown className="w-6 h-6 text-amber-300" />
               ) : currentTier ? (
-                <Sparkles className="w-5 h-5 text-[#95BF47]" />
+                <Crown className="w-6 h-6 text-white" />
               ) : (
                 <Lock className="w-5 h-5 text-zinc-400" />
               )}
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">
-                  Dein aktueller Plan
+                <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-400">
+                  {context.isAdmin
+                    ? "Admin-Konto"
+                    : currentTier && !context.tierCanceledAt
+                      ? "Aktives Abo"
+                      : currentTier && context.tierCanceledAt
+                        ? "Abo gekündigt"
+                        : "Kein aktives Abo"}
                 </span>
                 {context.tierCanceledAt && (
                   <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/25">
-                    gekündigt {canceledOn}
+                    seit {canceledOn}
+                  </span>
+                )}
+                {currentTier && !context.tierCanceledAt && !context.isAdmin && (
+                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 inline-flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    aktiv
                   </span>
                 )}
               </div>
-              <h2 className="text-base font-bold mt-0.5">
+              <h2 className="text-base sm:text-lg font-bold mt-0.5">
                 {context.isAdmin
-                  ? "Admin-Konto · alle Tiers freigeschaltet"
+                  ? "alle Tiers freigeschaltet"
                   : currentTier
                     ? `${currentTier.label}${currentTier.priceMonthlyEur > 0 ? ` · ${currentTier.priceMonthlyEur} €/Monat` : ""}`
-                    : "Kein aktives Abo"}
+                    : "Du hast aktuell keinen Plan"}
               </h2>
               {!context.isAdmin && currentTier && context.tierSince && !context.tierCanceledAt && (
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Aktiv seit {new Date(context.tierSince).toLocaleDateString("de-DE")}
+                  Aktiv seit {new Date(context.tierSince).toLocaleDateString("de-DE")} ·
+                  Du nutzt alle Funktionen ohne Einschränkung.
+                </p>
+              )}
+              {!context.isAdmin && currentTier && context.tierCanceledAt && (
+                <p className="text-[11px] text-zinc-500 mt-0.5">
+                  Zugang bleibt bis zum Ende der Laufzeit aktiv — danach werden alle Premium-Features gesperrt.
                 </p>
               )}
               {!context.isAdmin && !currentTier && (
@@ -278,9 +340,7 @@ export default function TiersPage() {
                 <div
                   className="relative aspect-video w-full overflow-hidden border-b border-white/[0.06]"
                   style={{
-                    background: tier.imageUrl
-                      ? "#0a0a0a"
-                      : `linear-gradient(135deg, ${visuals.accent}30 0%, ${visuals.accent}05 100%)`,
+                    background: tier.imageUrl ? "#0a0a0a" : visuals.metal,
                   }}
                 >
                   {tier.imageUrl ? (
@@ -291,36 +351,43 @@ export default function TiersPage() {
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      {tk === "business" ? (
-                        <Crown className="w-12 h-12 opacity-30" style={{ color: visuals.accent }} />
-                      ) : (
-                        <Sparkles className="w-12 h-12 opacity-30" style={{ color: visuals.accent }} />
-                      )}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5">
+                      <Crown className="w-12 h-12 text-white/70 drop-shadow-lg" />
+                      <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-white/80">
+                        {tier.label}
+                      </span>
                     </div>
                   )}
+                  {/* Metallic sheen overlay */}
+                  <div
+                    className="absolute inset-0 pointer-events-none mix-blend-overlay"
+                    style={{
+                      background:
+                        "linear-gradient(115deg, transparent 30%, rgba(255,255,255,0.25) 50%, transparent 70%)",
+                    }}
+                  />
                   <div
                     className="absolute inset-0 pointer-events-none"
                     style={{
-                      background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.55) 100%)",
+                      background: "linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.65) 100%)",
                     }}
                   />
                   <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2">
                     <span
-                      className={`text-[9px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 rounded border backdrop-blur ${visuals.chip}`}
+                      className={`text-[10px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 rounded border backdrop-blur ${visuals.chip}`}
                     >
-                      {tk === "business" && <Crown className="w-2.5 h-2.5 inline mr-1" />}
+                      <Crown className="w-2.5 h-2.5 inline mr-1" />
                       {tier.label}
                     </span>
                     {tier.highlighted && !isCurrent && (
-                      <span className="text-[8px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/30 backdrop-blur text-amber-200 border border-amber-500/40">
-                        Empfohlen
+                      <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/40 backdrop-blur text-amber-100 border border-amber-400/50">
+                        ★ Empfohlen
                       </span>
                     )}
                     {isCurrent && (
-                      <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47]/30 backdrop-blur text-[#95BF47] border border-[#95BF47]/40 inline-flex items-center gap-1">
+                      <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/40 backdrop-blur text-emerald-100 border border-emerald-400/50 inline-flex items-center gap-1">
                         <Check className="w-2.5 h-2.5" />
-                        Aktuell
+                        Aktiv
                       </span>
                     )}
                   </div>
@@ -410,20 +477,30 @@ export default function TiersPage() {
                     </button>
                   ) : (
                     <button
-                      onClick={() => handleSwitch(tk)}
+                      onClick={() => handleSwitch(tk, tier.ctaUrl)}
                       disabled={switching === tk}
-                      className="w-full px-4 py-2.5 rounded-xl text-xs font-bold inline-flex items-center justify-center gap-1.5 transition"
+                      className="w-full px-4 py-3 rounded-xl text-[13px] font-bold inline-flex items-center justify-center gap-2 transition active:scale-[0.98]"
                       style={{
-                        background: isUpgrade ? visuals.accent : "rgba(255,255,255,0.04)",
-                        color: isUpgrade ? "#0a1604" : "#e4e4e7",
+                        background: isUpgrade ? visuals.metal : "rgba(255,255,255,0.05)",
+                        color: isUpgrade
+                          ? tk === "starter"
+                            ? "#fff7ed"
+                            : tk === "pro"
+                              ? "#0f172a"
+                              : "#422006"
+                          : "#e4e4e7",
                         border: isUpgrade ? "none" : "1px solid rgba(255,255,255,0.10)",
+                        boxShadow: isUpgrade
+                          ? `0 12px 28px -10px ${visuals.accent}A0, inset 0 1px 0 rgba(255,255,255,0.25)`
+                          : undefined,
+                        textShadow: isUpgrade && tk === "starter" ? "0 1px 0 rgba(0,0,0,0.25)" : undefined,
                       }}
                     >
                       {switching === tk ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <>
-                          {tier.ctaLabel || (isUpgrade ? "Upgrade" : isDowngrade ? "Downgrade" : "Wechseln")}
+                          {tier.ctaLabel || (isUpgrade ? "Jetzt buchen" : isDowngrade ? "Downgrade" : "Wechseln")}
                           <ArrowRight className="w-3.5 h-3.5" />
                         </>
                       )}

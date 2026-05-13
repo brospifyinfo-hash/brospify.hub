@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey, getKundeProfile, updateKundeProfile } from "@/lib/sheets";
 import { list } from "@vercel/blob";
-import { isActiveSub, type TierKey } from "@/lib/tiers-shared";
+import { isActiveSubFromKunde, type TierKey } from "@/lib/tiers-shared";
 import { getCurrentTier } from "@/lib/tier-guard";
 
 export const dynamic = "force-dynamic";
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
     // record. The one-time purchase is honoured ONLY while the
     // sub stays active — no purchase grants permanent access.
     if (!session.isAdmin) {
-      if (!isActiveSub(kunde.profile)) {
+      if (!isActiveSubFromKunde(kunde)) {
         return NextResponse.json(
           {
             error: "FEATURE_LOCKED",

@@ -12,7 +12,7 @@ import { getSession } from "@/lib/session";
 import { findKundeByKey } from "@/lib/sheets";
 import { list } from "@vercel/blob";
 import { getCurrentTier } from "@/lib/tier-guard";
-import { isActiveSub, type TierKey } from "@/lib/tiers-shared";
+import { isActiveSubFromKunde, type TierKey } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -87,7 +87,7 @@ export async function GET() {
       purchased = Array.isArray(kunde.profile.themesPurchased)
         ? kunde.profile.themesPurchased
         : [];
-      active = isActiveSub(kunde.profile);
+      active = isActiveSubFromKunde(kunde);
     }
   }
 

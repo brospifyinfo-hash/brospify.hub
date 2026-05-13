@@ -13,7 +13,7 @@ import {
   type TierKey,
 } from "@/lib/sheets";
 import { CREDIT_PRICE_EUR, costForReason } from "@/lib/ai-costs";
-import { getTierConfig, isActiveSub, resolveTier } from "@/lib/tiers";
+import { getTierConfig, isActiveSubFromKunde, resolveTier, tierFromSku } from "@/lib/tiers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -197,9 +197,11 @@ export async function GET() {
       if (k.profile.role === "admin") admins++;
 
       // ── Subscription / tier roll-up ──
-      const tier = resolveTier(k.profile.tier);
+      // Sheets SKU column ("Bronze"/"Silber"/"Gold") is authoritative;
+      // profile.tier is only a fallback override.
+      const tier = tierFromSku(k.sku) || resolveTier(k.profile.tier);
       if (tier) subsByTier[tier]++;
-      if (isActiveSub(k.profile) && tier) {
+      if (isActiveSubFromKunde(k) && tier) {
         mrrEur += tierPriceMap.get(tier) || 0;
         const since = Date.parse(k.profile.tierSince || "");
         if (Number.isFinite(since) && since >= t30d) newPaid30d++;
@@ -224,7 +226,7 @@ export async function GET() {
       const skuKey = k.sku || "—";
       const sku = skuMap.get(skuKey) || { count: 0, activeSubs: 0 };
       sku.count++;
-      if (isActiveSub(k.profile)) sku.activeSubs++;
+      if (isActiveSubFromKunde(k)) sku.activeSubs++;
       skuMap.set(skuKey, sku);
 
       // Activity rollups

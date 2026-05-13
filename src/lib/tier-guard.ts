@@ -15,6 +15,7 @@ import {
   type LimitKey,
   type TierDefinition,
   hasFeature,
+  tierFromSku,
 } from "./tiers-shared";
 
 interface SessionLike {
@@ -62,6 +63,10 @@ export async function getCurrentTier(session: SessionLike): Promise<TierDefiniti
   try {
     const kunde = await findKundeByKey(lk);
     if (!kunde) return null;
+    // SKU column is the source of truth (Bronze / Silber / Gold).
+    // Fall back to the profile.tier override only if SKU doesn't map.
+    const fromSku = tierFromSku(kunde.sku);
+    if (fromSku) return findByKey(fromSku) || null;
     const raw = kunde.profile?.tier;
     if (!raw) return null;
     return findByKey(raw as TierKey) || null;

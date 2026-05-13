@@ -17,7 +17,7 @@ import {
   getKundeProfile,
   updateKundeProfile,
 } from "@/lib/sheets";
-import { isActiveSub } from "@/lib/tiers-shared";
+import { isActiveSubFromKunde } from "@/lib/tiers-shared";
 import { list } from "@vercel/blob";
 
 export const runtime = "nodejs";
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Konto nicht gefunden." }, { status: 404 });
   }
 
-  if (!isActiveSub(kunde.profile)) {
+  if (!isActiveSubFromKunde(kunde)) {
     return NextResponse.json(
       {
         error: "NO_ACTIVE_SUB",

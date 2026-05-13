@@ -41,6 +41,9 @@ import {
   Link2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useTier } from "@/lib/use-tier";
+import Link from "next/link";
+import { Crown, Lock } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -128,6 +131,7 @@ const QUICK_TILES = [
 
 export default function HomePage() {
   const router = useRouter();
+  const tierState = useTier();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
   const [loading, setLoading] = useState(true);
@@ -248,6 +252,9 @@ export default function HomePage() {
             )}
           </div>
         </motion.div>
+
+        {/* ─── Abo-Status Banner ─────────────────────── */}
+        <AboStatusBanner tierState={tierState} isAdmin={!!session.isAdmin} />
 
         {/* ─── Reconnect banner (visible above everything when scopes missing) ── */}
         {shopConnected && insights?.needsReconnect && (
@@ -1448,5 +1455,105 @@ function FileUploadField({ label, url, setUrl, inputRef, uploading, onPick }: {
         </div>
       )}
     </div>
+  );
+}
+
+// ─── Abo-Status Banner ─────────────────────────────────────────
+// One-line status pill above the dashboard. When the user has an
+// active abo (Bronze/Silber/Gold), it shows the plan with a metallic
+// chip and a "Verwalten" CTA → /tiers. When there's no abo, it nudges
+// them to pick a plan with a prominent buy CTA. Admins see a faint
+// info chip — they have everything anyway.
+
+function AboStatusBanner({ tierState, isAdmin }: { tierState: ReturnType<typeof useTier>; isAdmin: boolean }) {
+  const tier = tierState.tier;
+  if (tierState.loading) {
+    return (
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[10px] text-zinc-500">
+        Lade Abo-Status…
+      </div>
+    );
+  }
+  if (isAdmin) {
+    return (
+      <Link
+        href="/tiers"
+        className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-gradient-to-r from-amber-500/[0.08] to-transparent px-3 py-2 hover:from-amber-500/[0.12] transition"
+      >
+        <Crown className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+        <span className="text-[11px] font-bold text-amber-200">Admin · alle Tiers freigeschaltet</span>
+        <ArrowRight className="w-3 h-3 text-amber-300 ml-auto shrink-0" />
+      </Link>
+    );
+  }
+  if (!tier) {
+    return (
+      <Link
+        href="/tiers"
+        className="relative overflow-hidden flex items-center gap-3 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/[0.10] via-amber-500/[0.04] to-transparent px-3 py-2.5 hover:from-amber-500/[0.16] transition group"
+      >
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border border-amber-400/40" style={{ background: "linear-gradient(135deg, rgba(245,158,11,0.30), rgba(245,158,11,0.08))" }}>
+          <Lock className="w-4 h-4 text-amber-300" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[11px] font-bold text-amber-100">Kein aktives Abo</div>
+          <div className="text-[10px] text-amber-200/80 leading-snug">
+            Wähle Bronze, Silber oder Gold — schalte alle Tools frei.
+          </div>
+        </div>
+        <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-amber-200 group-hover:text-amber-100 shrink-0">
+          Plan wählen
+          <ArrowRight className="w-3.5 h-3.5" />
+        </span>
+        <ArrowRight className="sm:hidden w-4 h-4 text-amber-200 shrink-0" />
+      </Link>
+    );
+  }
+  const key = tier.key;
+  const metal =
+    key === "starter"
+      ? "linear-gradient(135deg, #c2410c 0%, #92400e 100%)"
+      : key === "pro"
+        ? "linear-gradient(135deg, #cbd5e1 0%, #64748b 100%)"
+        : "linear-gradient(135deg, #fde047 0%, #ca8a04 100%)";
+  const ringColor =
+    key === "starter" ? "rgba(217,119,6,0.55)" : key === "pro" ? "rgba(203,213,225,0.65)" : "rgba(250,204,21,0.75)";
+  const iconColor =
+    key === "starter" ? "#fff7ed" : key === "pro" ? "#0f172a" : "#422006";
+  return (
+    <Link
+      href="/tiers"
+      className="relative overflow-hidden flex items-center gap-3 rounded-xl border border-white/[0.08] px-3 py-2.5 hover:bg-white/[0.02] transition group"
+      style={{ boxShadow: `inset 0 0 0 1px ${ringColor}` }}
+    >
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/[0.10]"
+        style={{ background: metal, boxShadow: `0 4px 14px -4px ${ringColor}` }}
+      >
+        <Crown className="w-4.5 h-4.5" style={{ color: iconColor }} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-400">
+            Aktives Abo
+          </span>
+          <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 inline-flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            aktiv
+          </span>
+        </div>
+        <div className="text-[12px] font-bold leading-tight truncate">
+          {tier.label}
+          {tier.priceMonthlyEur > 0 && (
+            <span className="text-zinc-500 font-normal"> · {tier.priceMonthlyEur} €/Mo</span>
+          )}
+        </div>
+      </div>
+      <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-400 group-hover:text-zinc-200 shrink-0">
+        Verwalten
+        <ArrowRight className="w-3 h-3" />
+      </span>
+      <ArrowRight className="sm:hidden w-4 h-4 text-zinc-500 shrink-0" />
+    </Link>
   );
 }

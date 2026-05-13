@@ -93,7 +93,35 @@ export interface TierDefinition {
   /** Plan image URL shown on the public /tiers page. Optional —
    *  pages fall back to a gradient placeholder when missing. */
   imageUrl?: string;
+  /** Destination of the CTA button on the public /tiers page (e.g. a
+   *  Shopify product checkout). Empty falls back to /credits. */
+  ctaUrl?: string;
 }
+
+// ─── SKU → tier mapping ─────────────────────────────────────────
+// The customer's SKU column in the Kunden sheet is the source of
+// truth for their plan. Admin enters "Bronze", "Silber" or "Gold"
+// (case-insensitive) and we resolve it to one of the internal tier
+// keys. Older "SPORT"/"TREND"-style categories don't map and resolve
+// to null (= no plan).
+export const SKU_TO_TIER: Record<string, TierKey> = {
+  bronze: "starter",
+  silber: "pro",
+  silver: "pro",
+  gold: "business",
+};
+
+export function tierFromSku(sku: string | null | undefined): TierKey | null {
+  if (!sku) return null;
+  return SKU_TO_TIER[sku.trim().toLowerCase()] ?? null;
+}
+
+/** Public German tier names used for display + admin defaults. */
+export const TIER_DISPLAY_LABEL: Record<TierKey, string> = {
+  starter: "Bronze",
+  pro: "Silber",
+  business: "Gold",
+};
 
 function emptyFeatures(): TierFeatures {
   const out = {} as TierFeatures;
@@ -110,12 +138,12 @@ function allFeatures(): TierFeatures {
 export const DEFAULT_TIERS: TierDefinition[] = [
   {
     key: "starter",
-    label: "Starter",
+    label: "Bronze",
     hidden: false,
     highlighted: false,
     tagline: "Für Solo-Founder",
     description: "Alle wichtigen Tools für deinen ersten Shop.",
-    ctaLabel: "Starter werden",
+    ctaLabel: "Bronze buchen",
     priceMonthlyEur: 19,
     priceYearlyEur: 190,
     trialDays: 7,
@@ -151,12 +179,12 @@ export const DEFAULT_TIERS: TierDefinition[] = [
   },
   {
     key: "pro",
-    label: "Pro",
+    label: "Silber",
     hidden: false,
     highlighted: true,
     tagline: "Für ambitionierte Stores",
     description: "Skalier deinen Store mit höheren Limits & Priority-Support.",
-    ctaLabel: "Pro werden",
+    ctaLabel: "Silber buchen",
     priceMonthlyEur: 49,
     priceYearlyEur: 490,
     trialDays: 7,
@@ -183,12 +211,12 @@ export const DEFAULT_TIERS: TierDefinition[] = [
   },
   {
     key: "business",
-    label: "Business",
+    label: "Gold",
     hidden: false,
     highlighted: false,
     tagline: "Für Profis und Agenturen",
     description: "Unbegrenzte Limits, API-Zugang und White-Label.",
-    ctaLabel: "Business werden",
+    ctaLabel: "Gold buchen",
     priceMonthlyEur: 99,
     priceYearlyEur: 990,
     trialDays: 14,
@@ -228,6 +256,20 @@ export function isActiveSub(profile: { tier?: TierKey | string; tierSince?: stri
   if (!profile.tierSince) return false;
   if (profile.tierCanceledAt) return false;
   return true;
+}
+
+/** SKU-aware variant: a customer counts as actively subscribed when the
+ *  Kunden-sheet SKU column maps to a tier (Bronze/Silber/Gold), even if
+ *  the profile JSON has nothing — the admin entering "Gold" into SKU
+ *  is the authoritative grant. Profile-level cancellation still applies. */
+export function isActiveSubFromKunde(k: {
+  sku?: string | null;
+  profile?: { tier?: TierKey | string; tierSince?: string; tierCanceledAt?: string };
+}): boolean {
+  if (k.profile?.tierCanceledAt) return false;
+  if (tierFromSku(k.sku)) return true;
+  if (k.profile) return isActiveSub(k.profile);
+  return false;
 }
 
 export function hasFeature(tier: TierDefinition, flag: FeatureFlag): boolean {
@@ -315,5 +357,6 @@ export function mergeTierWithDefault(raw: unknown, def: TierDefinition): TierDef
     features: asFeatures(r.features, def.features),
     bullets: asStringArray(r.bullets, def.bullets),
     imageUrl: typeof r.imageUrl === "string" && r.imageUrl ? asString(r.imageUrl, "", 600) : def.imageUrl,
+    ctaUrl: typeof r.ctaUrl === "string" ? asString(r.ctaUrl, "", 600) : def.ctaUrl,
   };
 }

@@ -4736,7 +4736,7 @@ function TiersFullEditor({
                     type="text"
                     value={t.label}
                     onChange={(e) => patch(idx, { label: e.target.value })}
-                    placeholder="Pro"
+                    placeholder="Bronze / Silber / Gold"
                     maxLength={40}
                     className="input-glass w-full text-sm"
                   />
@@ -4747,11 +4747,29 @@ function TiersFullEditor({
                     type="text"
                     value={t.ctaLabel}
                     onChange={(e) => patch(idx, { ctaLabel: e.target.value })}
-                    placeholder="Pro werden"
+                    placeholder="Jetzt buchen"
                     maxLength={40}
                     className="input-glass w-full text-sm"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-zinc-500 mb-1 uppercase tracking-wider font-semibold">
+                  Button-Link (CTA-URL)
+                </label>
+                <input
+                  type="text"
+                  value={t.ctaUrl || ""}
+                  onChange={(e) => patch(idx, { ctaUrl: e.target.value })}
+                  placeholder="https://shop.beispiel.de/checkout/abo-silber  ODER  /credits?plan=pro"
+                  maxLength={600}
+                  className="input-glass w-full text-xs font-mono"
+                />
+                <p className="text-[9px] text-zinc-600 mt-1">
+                  Wohin der Button auf der Abo-Seite führt. Externe Links (https://…) öffnen in neuem Tab.
+                  Leer = Fallback auf <span className="font-mono">/credits</span>.
+                </p>
               </div>
 
               <div>
