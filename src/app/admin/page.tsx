@@ -4563,6 +4563,8 @@ function TiersFullEditor({
 }) {
   const [draft, setDraft] = useState<AdminTier[]>(tiers);
   const [openKey, setOpenKey] = useState<AdminTierKey | null>(null);
+  const [imageBusyKey, setImageBusyKey] = useState<AdminTierKey | null>(null);
+  const [imageError, setImageError] = useState<string>("");
 
   useEffect(() => {
     setDraft(tiers);
@@ -4575,6 +4577,31 @@ function TiersFullEditor({
     const next = [...draft];
     next[idx] = { ...next[idx], ...patch };
     setDraft(next);
+  }
+
+  async function uploadTierImage(idx: number, file: File) {
+    setImageError("");
+    setImageBusyKey(draft[idx].key);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setImageError(d.error || "Bild-Upload fehlgeschlagen.");
+        return;
+      }
+      const data = await res.json();
+      if (typeof data.url !== "string" || !data.url.startsWith("http")) {
+        setImageError("Upload-Antwort ohne URL.");
+        return;
+      }
+      patch(idx, { imageUrl: data.url });
+    } catch {
+      setImageError("Bild-Upload fehlgeschlagen.");
+    } finally {
+      setImageBusyKey(null);
+    }
   }
 
   function patchFeature(idx: number, flag: FeatureFlag, value: boolean) {
@@ -4770,6 +4797,77 @@ function TiersFullEditor({
                   />
                   Auf Pricing-Seite verstecken (intern)
                 </label>
+              </div>
+            </div>
+
+            {/* Plan-Bild */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-5 space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-[0.16em] text-zinc-400 flex items-center gap-2">
+                <ImageIcon className="w-3.5 h-3.5" />
+                Plan-Bild
+              </h3>
+              <p className="text-[10px] text-zinc-500 leading-snug">
+                Wird auf der öffentlichen Abo-Seite als Karten-Hero angezeigt. Quer-Format empfohlen (16:9).
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-[200px_1fr] gap-3 items-start">
+                <div
+                  className="relative aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10"
+                  style={{
+                    background: t.imageUrl
+                      ? "transparent"
+                      : `linear-gradient(135deg, ${TIER_COLORS[t.key]}30 0%, ${TIER_COLORS[t.key]}08 100%)`,
+                  }}
+                >
+                  {t.imageUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={t.imageUrl} alt={t.label} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-500 gap-1">
+                      <ImageIcon className="w-6 h-6" />
+                      <span className="text-[9px] uppercase tracking-wider">Kein Bild</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block cursor-pointer">
+                    <span className="flex items-center justify-center gap-2 px-3 py-2 glass hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium transition">
+                      {imageBusyKey === t.key
+                        ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        : <Upload className="w-3.5 h-3.5" />}
+                      {t.imageUrl ? "Bild ersetzen" : "Bild hochladen"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadTierImage(idx, f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  <input
+                    type="text"
+                    value={t.imageUrl || ""}
+                    onChange={(e) => patch(idx, { imageUrl: e.target.value })}
+                    placeholder="Oder direkte Bild-URL"
+                    className="input-glass w-full text-[10px] font-mono"
+                  />
+                  {t.imageUrl && (
+                    <button
+                      onClick={() => patch(idx, { imageUrl: "" })}
+                      className="text-[10px] text-red-400 hover:text-red-300 transition"
+                    >
+                      Bild entfernen
+                    </button>
+                  )}
+                  {imageError && imageBusyKey === null && (
+                    <p className="text-[10px] text-red-400">{imageError}</p>
+                  )}
+                </div>
               </div>
             </div>
 

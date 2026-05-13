@@ -258,7 +258,7 @@ export default function TiersPage() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.04 * idx }}
-                className={`relative rounded-2xl border p-4 flex flex-col gap-3 ${
+                className={`relative rounded-2xl border overflow-hidden flex flex-col ${
                   isCurrent
                     ? "border-white/25 ring-1 ring-white/15"
                     : tier.highlighted
@@ -274,26 +274,59 @@ export default function TiersPage() {
                       : undefined,
                 }}
               >
-                {/* Top badges */}
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`text-[9px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 rounded border ${visuals.chip}`}
-                  >
-                    {tk === "business" && <Crown className="w-2.5 h-2.5 inline mr-1" />}
-                    {tier.label}
-                  </span>
-                  {tier.highlighted && !isCurrent && (
-                    <span className="text-[8px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
-                      Empfohlen
-                    </span>
+                {/* Plan-Bild (Hero) */}
+                <div
+                  className="relative aspect-video w-full overflow-hidden border-b border-white/[0.06]"
+                  style={{
+                    background: tier.imageUrl
+                      ? "#0a0a0a"
+                      : `linear-gradient(135deg, ${visuals.accent}30 0%, ${visuals.accent}05 100%)`,
+                  }}
+                >
+                  {tier.imageUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={tier.imageUrl}
+                      alt={tier.label}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      {tk === "business" ? (
+                        <Crown className="w-12 h-12 opacity-30" style={{ color: visuals.accent }} />
+                      ) : (
+                        <Sparkles className="w-12 h-12 opacity-30" style={{ color: visuals.accent }} />
+                      )}
+                    </div>
                   )}
-                  {isCurrent && (
-                    <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47]/20 text-[#95BF47] border border-[#95BF47]/30 inline-flex items-center gap-1">
-                      <Check className="w-2.5 h-2.5" />
-                      Aktuell
+                  <div
+                    className="absolute inset-0 pointer-events-none"
+                    style={{
+                      background: "linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.55) 100%)",
+                    }}
+                  />
+                  <div className="absolute top-2 left-2 right-2 flex items-center justify-between gap-2">
+                    <span
+                      className={`text-[9px] uppercase tracking-[0.16em] font-bold px-2 py-0.5 rounded border backdrop-blur ${visuals.chip}`}
+                    >
+                      {tk === "business" && <Crown className="w-2.5 h-2.5 inline mr-1" />}
+                      {tier.label}
                     </span>
-                  )}
+                    {tier.highlighted && !isCurrent && (
+                      <span className="text-[8px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-amber-500/30 backdrop-blur text-amber-200 border border-amber-500/40">
+                        Empfohlen
+                      </span>
+                    )}
+                    {isCurrent && (
+                      <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47]/30 backdrop-blur text-[#95BF47] border border-[#95BF47]/40 inline-flex items-center gap-1">
+                        <Check className="w-2.5 h-2.5" />
+                        Aktuell
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                <div className="p-4 flex flex-col gap-3 flex-1">
 
                 {/* Price */}
                 <div>
@@ -396,6 +429,7 @@ export default function TiersPage() {
                       )}
                     </button>
                   )}
+                </div>
                 </div>
               </motion.div>
             );

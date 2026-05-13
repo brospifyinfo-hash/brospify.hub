@@ -90,6 +90,9 @@ export interface TierDefinition {
   limits: TierLimits;
   features: TierFeatures;
   bullets: string[];
+  /** Plan image URL shown on the public /tiers page. Optional —
+   *  pages fall back to a gradient placeholder when missing. */
+  imageUrl?: string;
 }
 
 function emptyFeatures(): TierFeatures {
@@ -311,5 +314,6 @@ export function mergeTierWithDefault(raw: unknown, def: TierDefinition): TierDef
     limits: asLimits(r.limits, def.limits),
     features: asFeatures(r.features, def.features),
     bullets: asStringArray(r.bullets, def.bullets),
+    imageUrl: typeof r.imageUrl === "string" && r.imageUrl ? asString(r.imageUrl, "", 600) : def.imageUrl,
   };
 }
