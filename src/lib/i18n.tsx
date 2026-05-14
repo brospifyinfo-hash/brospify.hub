@@ -12,6 +12,8 @@ const de = {
     blog: "Blog-Wizard",
     legal: "Rechtstexte",
     themes: "Themes",
+    codeBlocks: "Code-Blöcke",
+    coaching: "Coaching",
     emails: "Emails",
     profile: "Profil",
     admin: "Admin",

@@ -16,6 +16,8 @@ export const FEATURE_FLAGS = [
   "shopifyInsights",
   "productImports",
   "themesGallery",
+  "codeBlocks",
+  "coaching",
   "chartsAnalytics",
   "library",
   "prioritySupport",
@@ -36,6 +38,8 @@ export const FEATURE_LABELS: Record<FeatureFlag, string> = {
   shopifyInsights: "Shopify Insights",
   productImports: "Produkt-Imports",
   themesGallery: "Theme-Galerie",
+  codeBlocks: "Code-Blöcke",
+  coaching: "Privates Coaching",
   chartsAnalytics: "Trend-Charts",
   library: "Bibliothek",
   prioritySupport: "Priority-Support",
@@ -162,21 +166,24 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       maxThemesInstall: 5,
       maxTeamMembers: 1,
     },
+    // Bronze: AI-Tools auf Upscaler + Background-Remover beschränkt.
+    // Keine generativen Tools (AI Chat/Studio, Blog, E-Mail).
     features: {
       ...emptyFeatures(),
-      aiChat: true,
-      aiStudio: true,
       bgRemove: true,
       upscale: true,
-      blogGenerator: true,
-      emailTemplates: true,
       seoAudit: true,
       shopifyInsights: true,
       themesGallery: true,
       chartsAnalytics: true,
       library: true,
     },
-    bullets: ["2.000 Credits / Monat", "1 Shop, 50 Produkte", "Alle AI-Tools", "E-Mail Templates"],
+    bullets: [
+      "2.000 Credits / Monat",
+      "1 Shop, 50 Produkte",
+      "AI-Tools: Upscaler + Background-Remover",
+      "Theme-Galerie & Trend-Charts",
+    ],
   },
   {
     key: "pro",
@@ -204,12 +211,20 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       maxThemesInstall: -1,
       maxTeamMembers: 3,
     },
+    // Silber: alle aktuell verfügbaren Tools + Code-Blöcke.
+    // Coaching bleibt Gold vorbehalten.
     features: {
       ...allFeatures(),
+      coaching: false,
       apiAccess: false,
       customBranding: false,
     },
-    bullets: ["7.500 Credits / Monat", "3 Shops, 250 Produkte", "Alle Tools mit hohen Limits", "Priority-Support"],
+    bullets: [
+      "7.500 Credits / Monat",
+      "3 Shops, 250 Produkte",
+      "Alle AI-Tools + Code-Blöcke",
+      "Priority-Support",
+    ],
   },
   {
     key: "business",
@@ -237,8 +252,14 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       maxThemesInstall: -1,
       maxTeamMembers: 10,
     },
+    // Gold: alles inkl. Code-Blöcke + privates Coaching + WhatsApp-Support.
     features: allFeatures(),
-    bullets: ["20.000 Credits / Monat", "Unbegrenzte Limits", "API-Zugang & White-Label", "Dedizierter Support"],
+    bullets: [
+      "20.000 Credits / Monat",
+      "Alle Tools + Code-Blöcke",
+      "Privates Coaching + WhatsApp-Support",
+      "API-Zugang & White-Label",
+    ],
   },
 ];
 

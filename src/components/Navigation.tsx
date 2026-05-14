@@ -37,6 +37,8 @@ import {
   Lock,
   Crown,
   Check,
+  Code2,
+  GraduationCap,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -58,6 +60,8 @@ const NAV_ITEMS = [
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3, feature: "chartsAnalytics" as const },
   { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
   { href: "/themes", labelKey: "themes" as const, icon: Palette, feature: "themesGallery" as const },
+  { href: "/code-blocks", labelKey: "codeBlocks" as const, icon: Code2, feature: "codeBlocks" as const },
+  { href: "/coaching", labelKey: "coaching" as const, icon: GraduationCap, feature: "coaching" as const },
 ];
 
 const AI_TOOLS = [

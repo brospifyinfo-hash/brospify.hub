@@ -1111,6 +1111,258 @@ export async function deleteNewsPost(rowIndex: number): Promise<void> {
   });
 }
 
+// ─── CODE BLOCKS (Tab "CodeBlocks") ──────────────────────────────
+// Admin-managed Shopify custom-liquid snippets the customer can copy
+// and customise. Each block ships with a preview image plus a list of
+// "options" — texts/colors the AI detected in the code that the user
+// is allowed to tweak. The user-side customiser does literal string
+// replacement of `original` → their value.
+//
+// Columns: A=ID, B=Title, C=Description, D=Code, E=PreviewImageUrl,
+//          F=Options_JSON, G=Active, H=CreatedAt
+
+export interface CodeBlockOption {
+  /** Stable key for React + replacement bookkeeping. */
+  id: string;
+  /** Human label shown in the customiser, e.g. "Button-Farbe". */
+  label: string;
+  type: "text" | "color";
+  /** The exact substring in `code` this option replaces. */
+  original: string;
+}
+
+export interface CodeBlock {
+  rowIndex: number;
+  id: string;
+  title: string;
+  description: string;
+  code: string;
+  previewImageUrl: string;
+  options: CodeBlockOption[];
+  active: boolean;
+  createdAt: string;
+}
+
+const CODE_BLOCKS_HEADERS = [
+  "ID", "Title", "Description", "Code", "PreviewImageUrl",
+  "Options_JSON", "Active", "CreatedAt",
+];
+
+function parseCodeBlockOptions(raw: string): CodeBlockOption[] {
+  if (!raw) return [];
+  try {
+    const j = JSON.parse(raw);
+    if (!Array.isArray(j)) return [];
+    return j
+      .filter((o) => o && typeof o === "object")
+      .map((o, i): CodeBlockOption => ({
+        id: typeof o.id === "string" && o.id ? o.id : `opt_${i}`,
+        label: typeof o.label === "string" ? o.label : `Option ${i + 1}`,
+        type: o.type === "color" ? "color" : "text",
+        original: typeof o.original === "string" ? o.original : "",
+      }))
+      .filter((o) => o.original);
+  } catch {
+    return [];
+  }
+}
+
+function rowToCodeBlock(row: string[], index: number): CodeBlock {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    title: row[1] || "",
+    description: row[2] || "",
+    code: row[3] || "",
+    previewImageUrl: row[4] || "",
+    options: parseCodeBlockOptions(row[5] || ""),
+    active: row[6] !== "false",
+    createdAt: row[7] || "",
+  };
+}
+
+function codeBlockToRow(b: Omit<CodeBlock, "rowIndex">): string[] {
+  return [
+    b.id, b.title, b.description, b.code, b.previewImageUrl,
+    JSON.stringify(b.options || []), String(b.active), b.createdAt,
+  ];
+}
+
+export async function getAllCodeBlocks(): Promise<CodeBlock[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("CodeBlocks", CODE_BLOCKS_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "CodeBlocks!A2:H",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToCodeBlock(row, i)).filter((b) => b.id);
+  } catch (err) {
+    console.error("[Sheets] getAllCodeBlocks error:", err);
+    return [];
+  }
+}
+
+export async function addCodeBlock(block: Omit<CodeBlock, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await ensureSheet("CodeBlocks", CODE_BLOCKS_HEADERS);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "CodeBlocks!A:H",
+    valueInputOption: "RAW",
+    requestBody: { values: [codeBlockToRow(block)] },
+  });
+}
+
+export async function updateCodeBlock(
+  rowIndex: number,
+  patch: Partial<Omit<CodeBlock, "rowIndex" | "id" | "createdAt">>,
+): Promise<void> {
+  const sheets = getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `CodeBlocks!A${rowIndex}:H${rowIndex}`,
+  });
+  const row = res.data.values?.[0] || [];
+  const existing = rowToCodeBlock(row, rowIndex - 2);
+  const merged: Omit<CodeBlock, "rowIndex"> = {
+    id: existing.id,
+    title: patch.title ?? existing.title,
+    description: patch.description ?? existing.description,
+    code: patch.code ?? existing.code,
+    previewImageUrl: patch.previewImageUrl ?? existing.previewImageUrl,
+    options: patch.options ?? existing.options,
+    active: patch.active ?? existing.active,
+    createdAt: existing.createdAt,
+  };
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `CodeBlocks!A${rowIndex}:H${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [codeBlockToRow(merged)] },
+  });
+}
+
+export async function deleteCodeBlock(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `CodeBlocks!A${rowIndex}:H${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", "", ""]] },
+  });
+}
+
+// ─── COACHING TIPS (Tab "CoachingTips") ──────────────────────────
+// Gold-only knowledge feed. Admin (or AI) drops in tips the customer
+// reads on /coaching. The WhatsApp contact number lives in the
+// Settings sheet under key `coaching_whatsapp`.
+//
+// Columns: A=ID, B=Title, C=Body, D=MediaUrl, E=Author, F=Active,
+//          G=CreatedAt
+
+export interface CoachingTip {
+  rowIndex: number;
+  id: string;
+  title: string;
+  body: string;
+  mediaUrl: string;
+  /** "admin" or "ai" — shows a small badge on the card. */
+  author: string;
+  active: boolean;
+  createdAt: string;
+}
+
+const COACHING_TIPS_HEADERS = [
+  "ID", "Title", "Body", "MediaUrl", "Author", "Active", "CreatedAt",
+];
+
+function rowToCoachingTip(row: string[], index: number): CoachingTip {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    title: row[1] || "",
+    body: row[2] || "",
+    mediaUrl: row[3] || "",
+    author: row[4] || "admin",
+    active: row[5] !== "false",
+    createdAt: row[6] || "",
+  };
+}
+
+function coachingTipToRow(t: Omit<CoachingTip, "rowIndex">): string[] {
+  return [
+    t.id, t.title, t.body, t.mediaUrl, t.author,
+    String(t.active), t.createdAt,
+  ];
+}
+
+export async function getAllCoachingTips(): Promise<CoachingTip[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("CoachingTips", COACHING_TIPS_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "CoachingTips!A2:G",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToCoachingTip(row, i)).filter((t) => t.id);
+  } catch (err) {
+    console.error("[Sheets] getAllCoachingTips error:", err);
+    return [];
+  }
+}
+
+export async function addCoachingTip(tip: Omit<CoachingTip, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await ensureSheet("CoachingTips", COACHING_TIPS_HEADERS);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "CoachingTips!A:G",
+    valueInputOption: "RAW",
+    requestBody: { values: [coachingTipToRow(tip)] },
+  });
+}
+
+export async function updateCoachingTip(
+  rowIndex: number,
+  patch: Partial<Omit<CoachingTip, "rowIndex" | "id" | "createdAt">>,
+): Promise<void> {
+  const sheets = getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `CoachingTips!A${rowIndex}:G${rowIndex}`,
+  });
+  const row = res.data.values?.[0] || [];
+  const existing = rowToCoachingTip(row, rowIndex - 2);
+  const merged: Omit<CoachingTip, "rowIndex"> = {
+    id: existing.id,
+    title: patch.title ?? existing.title,
+    body: patch.body ?? existing.body,
+    mediaUrl: patch.mediaUrl ?? existing.mediaUrl,
+    author: patch.author ?? existing.author,
+    active: patch.active ?? existing.active,
+    createdAt: existing.createdAt,
+  };
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `CoachingTips!A${rowIndex}:G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [coachingTipToRow(merged)] },
+  });
+}
+
+export async function deleteCoachingTip(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `CoachingTips!A${rowIndex}:G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", ""]] },
+  });
+}
+
 // ─── TICKETS (Tab 6) ─────────────────────────────────────────────
 // Columns: A=ID, B=CustomerKey, C=CustomerName, D=Subject, E=Status,
 //          F=CreatedAt, G=UpdatedAt, H=Messages_JSON

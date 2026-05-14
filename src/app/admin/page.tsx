@@ -10,6 +10,7 @@ import {
   Users, Search, ChevronRight, ChevronLeft, Store, Mail, FileText,
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
+  Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -160,6 +161,38 @@ interface ApiBalance {
   raw?: string;
   error?: string;
   endpoint?: string;
+}
+
+// ─── Code-Blöcke + Coaching admin types ─────────────────────────
+
+interface AdminCodeBlockOption {
+  id: string;
+  label: string;
+  type: "text" | "color";
+  original: string;
+}
+
+interface AdminCodeBlock {
+  rowIndex: number;
+  id: string;
+  title: string;
+  description: string;
+  code: string;
+  previewImageUrl: string;
+  options: AdminCodeBlockOption[];
+  active: boolean;
+  createdAt: string;
+}
+
+interface AdminCoachingTip {
+  rowIndex: number;
+  id: string;
+  title: string;
+  body: string;
+  mediaUrl: string;
+  author: string;
+  active: boolean;
+  createdAt: string;
 }
 
 // ─── Drop Zone ───────────────────────────────────────────────────
@@ -335,7 +368,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "news" | "knowledge" | "settings" | "system" | "logs";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -730,6 +763,46 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeTab === "news") loadNews();
   }, [activeTab, loadNews]);
+
+  // ─── Code blocks (admin curate via /api/admin/code-blocks) ──────
+  const [codeBlocks, setCodeBlocks] = useState<AdminCodeBlock[]>([]);
+  const [codeBlocksLoading, setCodeBlocksLoading] = useState(false);
+  const loadCodeBlocks = useCallback(async () => {
+    setCodeBlocksLoading(true);
+    try {
+      const res = await fetch("/api/admin/code-blocks");
+      if (res.ok) {
+        const data = await res.json();
+        setCodeBlocks(data.blocks || []);
+      }
+    } catch { /* ignore */ }
+    finally { setCodeBlocksLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "codeBlocks") loadCodeBlocks();
+  }, [activeTab, loadCodeBlocks]);
+
+  // ─── Coaching tips (admin curate via /api/admin/coaching) ───────
+  const [coachingTips, setCoachingTips] = useState<AdminCoachingTip[]>([]);
+  const [coachingWhatsapp, setCoachingWhatsapp] = useState("");
+  const [coachingLoading, setCoachingLoading] = useState(false);
+  const loadCoaching = useCallback(async () => {
+    setCoachingLoading(true);
+    try {
+      const res = await fetch("/api/admin/coaching");
+      if (res.ok) {
+        const data = await res.json();
+        setCoachingTips(data.tips || []);
+        setCoachingWhatsapp(data.whatsapp || "");
+      }
+    } catch { /* ignore */ }
+    finally { setCoachingLoading(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "coaching") loadCoaching();
+  }, [activeTab, loadCoaching]);
 
   // ─── New: System status load + Dashboard auto-refresh ──────────
   useEffect(() => {
@@ -2395,6 +2468,31 @@ export default function AdminPage() {
           </AdminErrorBoundary>
         )}
 
+        {/* Code-Blöcke Tab */}
+        {activeTab === "codeBlocks" && (
+          <AdminErrorBoundary label="Code-Blöcke">
+            <CodeBlocksAdminView
+              blocks={codeBlocks}
+              loading={codeBlocksLoading}
+              onRefresh={loadCodeBlocks}
+              onNotify={(t, m) => { if (t === "success") { setSuccess(m); setTimeout(() => setSuccess(""), 3000); } else { setError(m); } }}
+            />
+          </AdminErrorBoundary>
+        )}
+
+        {/* Coaching Tab */}
+        {activeTab === "coaching" && (
+          <AdminErrorBoundary label="Coaching">
+            <CoachingAdminView
+              tips={coachingTips}
+              whatsapp={coachingWhatsapp}
+              loading={coachingLoading}
+              onRefresh={loadCoaching}
+              onNotify={(t, m) => { if (t === "success") { setSuccess(m); setTimeout(() => setSuccess(""), 3000); } else { setError(m); } }}
+            />
+          </AdminErrorBoundary>
+        )}
+
         {/* Credit Codes Tab */}
         {activeTab === "codes" && (
           <AdminErrorBoundary label="Voucher-Codes">
@@ -3055,7 +3153,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "news" | "knowledge" | "settings" | "system" | "logs";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -3084,6 +3182,8 @@ const SIDEBAR_GROUPS: {
     items: [
       { key: "products", label: "Produkte", icon: Gem, color: "#95BF47" },
       { key: "themes", label: "Themes", icon: Palette, color: "#A855F7" },
+      { key: "codeBlocks", label: "Code-Blöcke", icon: Code2, color: "#06B6D4" },
+      { key: "coaching", label: "Coaching", icon: GraduationCap, color: "#FACC15" },
       { key: "news", label: "News", icon: ImageIcon, color: "#EC4899" },
     ],
   },
@@ -5219,5 +5319,704 @@ function BackfillStarterCard() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Code-Blöcke admin view ─────────────────────────────────────
+
+type CodeBlockEditorOption = AdminCodeBlockOption & { _included: boolean };
+
+interface CodeBlockEditorState {
+  rowIndex?: number;
+  id?: string;
+  title: string;
+  description: string;
+  code: string;
+  previewImageUrl: string;
+  options: CodeBlockEditorOption[];
+  active: boolean;
+}
+
+const EMPTY_CODE_BLOCK: CodeBlockEditorState = {
+  title: "", description: "", code: "", previewImageUrl: "", options: [], active: true,
+};
+
+function CodeBlocksAdminView({ blocks, loading, onRefresh, onNotify }: {
+  blocks: AdminCodeBlock[];
+  loading: boolean;
+  onRefresh: () => void;
+  onNotify: (type: "success" | "error", msg: string) => void;
+}) {
+  const [editor, setEditor] = useState<CodeBlockEditorState | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [busyRow, setBusyRow] = useState<number | null>(null);
+  const [imgUploading, setImgUploading] = useState(false);
+
+  function openNew() { setEditor({ ...EMPTY_CODE_BLOCK, options: [] }); }
+  function openEdit(b: AdminCodeBlock) {
+    setEditor({
+      rowIndex: b.rowIndex,
+      id: b.id,
+      title: b.title,
+      description: b.description,
+      code: b.code,
+      previewImageUrl: b.previewImageUrl,
+      options: b.options.map((o) => ({ ...o, _included: true })),
+      active: b.active,
+    });
+  }
+
+  async function analyze() {
+    if (!editor || !editor.code.trim()) {
+      onNotify("error", "Bitte zuerst Code einfügen.");
+      return;
+    }
+    setAnalyzing(true);
+    try {
+      const res = await fetch("/api/admin/code-blocks/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: editor.code }),
+      });
+      const data = await res.json();
+      if (!res.ok) { onNotify("error", data.error || "Analyse fehlgeschlagen."); return; }
+      const detected: CodeBlockEditorOption[] = (data.options || []).map((o: AdminCodeBlockOption) => ({
+        ...o,
+        _included: true,
+      }));
+      // Keep any manually-added options the admin already had.
+      setEditor((e) => e ? { ...e, options: detected } : e);
+      onNotify("success", `${detected.length} Einstellmöglichkeit(en) gefunden${data.source === "heuristic" ? " (Heuristik)" : ""}. Bitte prüfen.`);
+    } catch {
+      onNotify("error", "Analyse fehlgeschlagen.");
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function uploadPreview(file: File) {
+    setImgUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        setEditor((e) => e ? { ...e, previewImageUrl: data.url } : e);
+      } else {
+        onNotify("error", "Bild-Upload fehlgeschlagen.");
+      }
+    } catch { onNotify("error", "Bild-Upload fehlgeschlagen."); }
+    finally { setImgUploading(false); }
+  }
+
+  function patchOption(idx: number, patch: Partial<CodeBlockEditorOption>) {
+    setEditor((e) => {
+      if (!e) return e;
+      const opts = [...e.options];
+      opts[idx] = { ...opts[idx], ...patch };
+      return { ...e, options: opts };
+    });
+  }
+  function addManualOption() {
+    setEditor((e) => e ? {
+      ...e,
+      options: [...e.options, { id: `opt_m_${Date.now()}`, label: "", type: "text", original: "", _included: true }],
+    } : e);
+  }
+  function removeOption(idx: number) {
+    setEditor((e) => e ? { ...e, options: e.options.filter((_, i) => i !== idx) } : e);
+  }
+
+  async function save() {
+    if (!editor) return;
+    if (!editor.title.trim()) { onNotify("error", "Titel fehlt."); return; }
+    if (!editor.code.trim()) { onNotify("error", "Code fehlt."); return; }
+    // Only confirmed options with a non-empty `original` get persisted.
+    const options = editor.options
+      .filter((o) => o._included && o.original.trim())
+      .map(({ _included, ...o }) => ({ ...o, label: o.label.trim() || "Option" }));
+    // Validate: every option's `original` must exist in the code.
+    const missing = options.find((o) => !editor.code.includes(o.original));
+    if (missing) {
+      onNotify("error", `Option "${missing.label}": der Original-Text kommt im Code nicht vor.`);
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        rowIndex: editor.rowIndex,
+        title: editor.title,
+        description: editor.description,
+        code: editor.code,
+        previewImageUrl: editor.previewImageUrl,
+        options,
+        active: editor.active,
+      };
+      const res = await fetch("/api/admin/code-blocks", {
+        method: editor.rowIndex ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) { onNotify("error", data.error || "Speichern fehlgeschlagen."); return; }
+      onNotify("success", editor.rowIndex ? "Code-Block aktualisiert." : "Code-Block erstellt.");
+      setEditor(null);
+      onRefresh();
+    } catch { onNotify("error", "Speichern fehlgeschlagen."); }
+    finally { setSaving(false); }
+  }
+
+  async function toggleActive(b: AdminCodeBlock) {
+    setBusyRow(b.rowIndex);
+    try {
+      await fetch("/api/admin/code-blocks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: b.rowIndex, active: !b.active }),
+      });
+      onRefresh();
+    } catch { onNotify("error", "Status-Update fehlgeschlagen."); }
+    finally { setBusyRow(null); }
+  }
+
+  async function remove(b: AdminCodeBlock) {
+    if (!confirm(`Code-Block "${b.title}" wirklich löschen?`)) return;
+    setBusyRow(b.rowIndex);
+    try {
+      await fetch("/api/admin/code-blocks", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: b.rowIndex }),
+      });
+      onNotify("success", "Code-Block gelöscht.");
+      onRefresh();
+    } catch { onNotify("error", "Löschen fehlgeschlagen."); }
+    finally { setBusyRow(null); }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 max-w-5xl">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="text-sm font-bold flex items-center gap-2">
+            <Code2 className="w-4 h-4 text-cyan-400" />
+            Code-Blöcke
+          </h2>
+          <p className="text-zinc-400 text-xs mt-1 max-w-2xl leading-relaxed">
+            Shopify-Custom-Liquid-Snippets für Silber- &amp; Gold-Kunden. Code einfügen →
+            KI findet anpassbare Texte &amp; Farben → du bestätigst sie → Kunden passen an &amp; kopieren mit einem Klick.
+          </p>
+        </div>
+        <button onClick={openNew} className="btn-accent px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2">
+          <Plus className="w-3.5 h-3.5" /> Neuer Block
+        </button>
+      </div>
+
+      {/* List */}
+      {loading && blocks.length === 0 ? (
+        <div className="p-6 text-center text-xs text-zinc-500"><Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />Lade Code-Blöcke…</div>
+      ) : blocks.length === 0 ? (
+        <div className="text-center py-10 text-zinc-500 text-sm border border-dashed border-white/10 rounded-xl">
+          Noch keine Code-Blöcke. Klick auf <span className="text-cyan-300 font-semibold">Neuer Block</span>.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {blocks.map((b) => (
+            <div key={b.id} className={`rounded-xl border p-3 space-y-2 ${b.active ? "border-white/10 bg-white/[0.02]" : "border-red-500/20 bg-white/[0.01] opacity-70"}`}>
+              <div className="aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10">
+                {b.previewImageUrl ? (
+                  <img src={b.previewImageUrl} alt={b.title} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-zinc-600"><Code2 className="w-7 h-7" /></div>
+                )}
+              </div>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-xs font-bold truncate">{b.title || "—"}</h3>
+                  <p className="text-[10px] text-zinc-500 truncate">{b.description || "Keine Beschreibung"}</p>
+                </div>
+                <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 shrink-0">
+                  {b.options.length} Opt.
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => openEdit(b)} className="flex-1 px-2 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] font-semibold hover:bg-white/10 transition flex items-center justify-center gap-1">
+                  <Pencil className="w-3 h-3" /> Bearbeiten
+                </button>
+                <button onClick={() => toggleActive(b)} disabled={busyRow === b.rowIndex} title={b.active ? "Deaktivieren" : "Aktivieren"} className="p-1.5 rounded-lg bg-white/[0.04] border border-white/10 hover:bg-white/10 transition">
+                  {busyRow === b.rowIndex ? <Loader2 className="w-3 h-3 animate-spin" /> : <Power className={`w-3 h-3 ${b.active ? "text-emerald-400" : "text-zinc-500"}`} />}
+                </button>
+                <button onClick={() => remove(b)} disabled={busyRow === b.rowIndex} className="p-1.5 rounded-lg bg-white/[0.04] border border-white/10 hover:bg-red-500/10 hover:border-red-500/20 transition">
+                  <Trash2 className="w-3 h-3 text-red-400" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Editor modal */}
+      <AnimatePresence>
+        {editor && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 overflow-y-auto"
+            onClick={() => setEditor(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-strong rounded-2xl border border-white/10 w-full max-w-3xl my-2"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h3 className="text-sm font-bold">{editor.rowIndex ? "Code-Block bearbeiten" : "Neuer Code-Block"}</h3>
+                <button onClick={() => setEditor(null)} className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center hover:bg-white/10 transition">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              <div className="p-4 space-y-3 max-h-[78vh] overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Titel</label>
+                    <input type="text" value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} placeholder="z.B. Trust-Badges Banner" className="input-glass w-full text-sm" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Beschreibung</label>
+                    <input type="text" value={editor.description} onChange={(e) => setEditor({ ...editor, description: e.target.value })} placeholder="Kurzbeschreibung für Kunden" className="input-glass w-full text-sm" />
+                  </div>
+                </div>
+
+                {/* Preview image */}
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Vorschaubild</label>
+                  <div className="flex items-center gap-2">
+                    <div className="w-28 h-16 rounded-lg overflow-hidden bg-zinc-900 border border-white/10 shrink-0">
+                      {editor.previewImageUrl ? (
+                        <img src={editor.previewImageUrl} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-zinc-600"><ImageIcon className="w-5 h-5" /></div>
+                      )}
+                    </div>
+                    <label className="cursor-pointer px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] font-semibold hover:bg-white/10 transition flex items-center gap-1.5">
+                      {imgUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+                      Bild hochladen
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadPreview(e.target.files[0])} />
+                    </label>
+                    {editor.previewImageUrl && (
+                      <button onClick={() => setEditor({ ...editor, previewImageUrl: "" })} className="text-[10px] text-zinc-500 hover:text-red-400 transition">entfernen</button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Code */}
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Liquid / HTML / CSS Code</label>
+                  <textarea
+                    value={editor.code}
+                    onChange={(e) => setEditor({ ...editor, code: e.target.value })}
+                    rows={8}
+                    placeholder="<div class=&quot;promo&quot;> … </div>"
+                    className="input-glass w-full text-[11px] font-mono resize-y"
+                  />
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={analyze}
+                      disabled={analyzing || !editor.code.trim()}
+                      className="px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-200 text-[11px] font-bold hover:bg-purple-500/25 transition disabled:opacity-50 flex items-center gap-1.5"
+                    >
+                      {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                      KI-Analyse: Einstellmöglichkeiten finden
+                    </button>
+                    <span className="text-[10px] text-zinc-500">Findet anpassbare Texte &amp; Farben.</span>
+                  </div>
+                </div>
+
+                {/* Options review */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+                      Einstellmöglichkeiten ({editor.options.filter((o) => o._included).length} aktiv)
+                    </label>
+                    <button onClick={addManualOption} className="text-[10px] text-cyan-300 hover:text-cyan-200 transition flex items-center gap-1">
+                      <Plus className="w-3 h-3" /> Manuell hinzufügen
+                    </button>
+                  </div>
+                  {editor.options.length === 0 ? (
+                    <p className="text-[11px] text-zinc-600 border border-dashed border-white/10 rounded-lg p-3 text-center">
+                      Noch keine Optionen. Klick oben auf <span className="text-purple-300">KI-Analyse</span> oder füge manuell welche hinzu.
+                    </p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {editor.options.map((opt, idx) => (
+                        <div key={opt.id} className={`rounded-lg border p-2 flex items-start gap-2 ${opt._included ? "border-white/10 bg-white/[0.02]" : "border-white/5 bg-white/[0.01] opacity-50"}`}>
+                          <button
+                            onClick={() => patchOption(idx, { _included: !opt._included })}
+                            title={opt._included ? "Diese Option NICHT verwenden" : "Option verwenden"}
+                            className={`mt-0.5 w-4 h-4 rounded shrink-0 border flex items-center justify-center ${opt._included ? "bg-cyan-500 border-cyan-400" : "bg-transparent border-white/20"}`}
+                          >
+                            {opt._included && <Check className="w-3 h-3 text-white" />}
+                          </button>
+                          <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-[1.2fr_0.7fr_1.4fr] gap-1.5">
+                            <input
+                              type="text" value={opt.label}
+                              onChange={(e) => patchOption(idx, { label: e.target.value })}
+                              placeholder="Label (z.B. Button-Text)"
+                              className="input-glass w-full text-[11px]"
+                            />
+                            <select
+                              value={opt.type}
+                              onChange={(e) => patchOption(idx, { type: e.target.value === "color" ? "color" : "text" })}
+                              className="input-glass w-full text-[11px]"
+                            >
+                              <option value="text">Text</option>
+                              <option value="color">Farbe</option>
+                            </select>
+                            <input
+                              type="text" value={opt.original}
+                              onChange={(e) => patchOption(idx, { original: e.target.value })}
+                              placeholder="Original-Wert im Code"
+                              className={`input-glass w-full text-[11px] font-mono ${opt.original && !editor.code.includes(opt.original) ? "border-red-500/40" : ""}`}
+                            />
+                          </div>
+                          <button onClick={() => removeOption(idx)} className="mt-0.5 p-1 rounded hover:bg-red-500/10 transition shrink-0">
+                            <Trash2 className="w-3 h-3 text-red-400" />
+                          </button>
+                        </div>
+                      ))}
+                      <p className="text-[9px] text-zinc-600">
+                        Der „Original-Wert" muss exakt so im Code vorkommen — Kunden ersetzen ihn dann mit ihrem eigenen Wert.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <label className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" checked={editor.active} onChange={(e) => setEditor({ ...editor, active: e.target.checked })} className="accent-cyan-500" />
+                  Für Kunden sichtbar (aktiv)
+                </label>
+              </div>
+
+              <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-white/10">
+                <button onClick={() => setEditor(null)} className="px-3 py-2 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 border border-white/10 hover:bg-white/5 transition">
+                  Abbrechen
+                </button>
+                <button onClick={save} disabled={saving} className="btn-accent px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {editor.rowIndex ? "Speichern" : "Erstellen"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ─── Coaching admin view ────────────────────────────────────────
+
+interface CoachingEditorState {
+  rowIndex?: number;
+  title: string;
+  body: string;
+  mediaUrl: string;
+  author: string;
+  active: boolean;
+}
+
+const EMPTY_COACHING_TIP: CoachingEditorState = {
+  title: "", body: "", mediaUrl: "", author: "admin", active: true,
+};
+
+function CoachingAdminView({ tips, whatsapp, loading, onRefresh, onNotify }: {
+  tips: AdminCoachingTip[];
+  whatsapp: string;
+  loading: boolean;
+  onRefresh: () => void;
+  onNotify: (type: "success" | "error", msg: string) => void;
+}) {
+  const [waInput, setWaInput] = useState(whatsapp);
+  const [waSaving, setWaSaving] = useState(false);
+  const [editor, setEditor] = useState<CoachingEditorState | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [busyRow, setBusyRow] = useState<number | null>(null);
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [imgUploading, setImgUploading] = useState(false);
+
+  useEffect(() => { setWaInput(whatsapp); }, [whatsapp]);
+
+  async function saveWhatsapp() {
+    setWaSaving(true);
+    try {
+      const res = await fetch("/api/admin/coaching", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ whatsapp: waInput }),
+      });
+      if (res.ok) { onNotify("success", "WhatsApp-Nummer gespeichert."); onRefresh(); }
+      else { onNotify("error", "Speichern fehlgeschlagen."); }
+    } catch { onNotify("error", "Speichern fehlgeschlagen."); }
+    finally { setWaSaving(false); }
+  }
+
+  async function generateWithAi() {
+    if (!aiTopic.trim()) { onNotify("error", "Bitte ein Thema eingeben."); return; }
+    setAiBusy(true);
+    try {
+      const res = await fetch("/api/admin/coaching/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic: aiTopic }),
+      });
+      const data = await res.json();
+      if (!res.ok) { onNotify("error", data.error || "KI-Generierung fehlgeschlagen."); return; }
+      setEditor({ title: data.title || aiTopic, body: data.body || "", mediaUrl: "", author: "ai", active: true });
+      setAiTopic("");
+    } catch { onNotify("error", "KI-Generierung fehlgeschlagen."); }
+    finally { setAiBusy(false); }
+  }
+
+  async function uploadMedia(file: File) {
+    setImgUploading(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      if (res.ok) {
+        const data = await res.json();
+        setEditor((e) => e ? { ...e, mediaUrl: data.url } : e);
+      } else { onNotify("error", "Bild-Upload fehlgeschlagen."); }
+    } catch { onNotify("error", "Bild-Upload fehlgeschlagen."); }
+    finally { setImgUploading(false); }
+  }
+
+  async function save() {
+    if (!editor) return;
+    if (!editor.title.trim()) { onNotify("error", "Titel fehlt."); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/coaching", {
+        method: editor.rowIndex ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rowIndex: editor.rowIndex,
+          title: editor.title, body: editor.body, mediaUrl: editor.mediaUrl,
+          author: editor.author, active: editor.active,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { onNotify("error", data.error || "Speichern fehlgeschlagen."); return; }
+      onNotify("success", editor.rowIndex ? "Tipp aktualisiert." : "Tipp erstellt.");
+      setEditor(null);
+      onRefresh();
+    } catch { onNotify("error", "Speichern fehlgeschlagen."); }
+    finally { setSaving(false); }
+  }
+
+  async function toggleActive(t: AdminCoachingTip) {
+    setBusyRow(t.rowIndex);
+    try {
+      await fetch("/api/admin/coaching", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: t.rowIndex, active: !t.active }),
+      });
+      onRefresh();
+    } catch { onNotify("error", "Status-Update fehlgeschlagen."); }
+    finally { setBusyRow(null); }
+  }
+
+  async function remove(t: AdminCoachingTip) {
+    if (!confirm(`Tipp "${t.title}" wirklich löschen?`)) return;
+    setBusyRow(t.rowIndex);
+    try {
+      await fetch("/api/admin/coaching", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: t.rowIndex }),
+      });
+      onNotify("success", "Tipp gelöscht.");
+      onRefresh();
+    } catch { onNotify("error", "Löschen fehlgeschlagen."); }
+    finally { setBusyRow(null); }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="space-y-4 max-w-4xl">
+      {/* Header */}
+      <div>
+        <h2 className="text-sm font-bold flex items-center gap-2">
+          <GraduationCap className="w-4 h-4 text-yellow-400" />
+          Privates Coaching <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-yellow-400/15 border border-yellow-400/35 text-yellow-300">Gold</span>
+        </h2>
+        <p className="text-zinc-400 text-xs mt-1 max-w-2xl leading-relaxed">
+          Tipps für Gold-Kunden — selbst schreiben oder von der KI entwerfen lassen. Plus die WhatsApp-Nummer,
+          über die Gold-Kunden dich direkt erreichen.
+        </p>
+      </div>
+
+      {/* WhatsApp setting */}
+      <div className="glass-strong rounded-2xl border border-emerald-500/20 p-4 space-y-2">
+        <h3 className="text-xs font-bold flex items-center gap-1.5"><MessageCircle className="w-4 h-4 text-emerald-400" />WhatsApp-Kontaktnummer</h3>
+        <p className="text-[10px] text-zinc-500">Gold-Kunden sehen einen „WhatsApp schreiben"-Button, der hierher führt. Mit Ländervorwahl, z.B. +49170…</p>
+        <div className="flex items-center gap-2">
+          <input
+            type="text" value={waInput}
+            onChange={(e) => setWaInput(e.target.value)}
+            placeholder="+49 170 1234567"
+            className="input-glass flex-1 text-sm"
+          />
+          <button onClick={saveWhatsapp} disabled={waSaving} className="btn-accent px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+            {waSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Speichern
+          </button>
+        </div>
+      </div>
+
+      {/* Add tip + AI generator */}
+      <div className="glass-strong rounded-2xl border border-white/10 p-4 space-y-3">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <h3 className="text-xs font-bold flex items-center gap-1.5"><Lightbulb className="w-4 h-4 text-amber-400" />Coaching-Tipps</h3>
+          <button onClick={() => setEditor({ ...EMPTY_COACHING_TIP })} className="btn-accent px-3 py-1.5 rounded-lg text-[11px] font-semibold flex items-center gap-1.5">
+            <Plus className="w-3 h-3" /> Tipp manuell schreiben
+          </button>
+        </div>
+        <div className="rounded-xl border border-purple-500/20 bg-purple-500/[0.04] p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <Wand2 className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">KI-Tipp entwerfen</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text" value={aiTopic}
+              onChange={(e) => setAiTopic(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") generateWithAi(); }}
+              placeholder="Thema, z.B. „Conversion-Optimierung der Produktseite“"
+              className="input-glass flex-1 text-sm"
+            />
+            <button onClick={generateWithAi} disabled={aiBusy} className="px-3 py-2 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-200 text-[11px] font-bold hover:bg-purple-500/25 transition disabled:opacity-50 flex items-center gap-1.5">
+              {aiBusy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+              Entwerfen
+            </button>
+          </div>
+          <p className="text-[9px] text-zinc-600 mt-1.5">Die KI erstellt einen Entwurf — du prüfst &amp; speicherst ihn anschließend.</p>
+        </div>
+      </div>
+
+      {/* Tips list */}
+      {loading && tips.length === 0 ? (
+        <div className="p-6 text-center text-xs text-zinc-500"><Loader2 className="w-4 h-4 animate-spin mx-auto mb-2" />Lade Tipps…</div>
+      ) : tips.length === 0 ? (
+        <div className="text-center py-8 text-zinc-500 text-sm border border-dashed border-white/10 rounded-xl">Noch keine Coaching-Tipps.</div>
+      ) : (
+        <div className="space-y-2">
+          {tips.map((t) => (
+            <div key={t.id} className={`rounded-xl border p-3 ${t.active ? "border-white/10 bg-white/[0.02]" : "border-red-500/20 bg-white/[0.01] opacity-70"}`}>
+              <div className="flex items-start gap-3">
+                {t.mediaUrl && (
+                  <div className="w-20 h-14 rounded-lg overflow-hidden bg-zinc-900 border border-white/10 shrink-0">
+                    <img src={t.mediaUrl} alt="" className="w-full h-full object-cover" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-xs font-bold truncate">{t.title}</h3>
+                    <span className={`text-[8px] uppercase font-bold tracking-wider px-1 py-0.5 rounded shrink-0 ${t.author === "ai" ? "bg-purple-500/15 text-purple-300" : "bg-amber-500/15 text-amber-300"}`}>
+                      {t.author === "ai" ? "KI" : "Team"}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 line-clamp-2 mt-0.5 whitespace-pre-wrap">{t.body}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => setEditor({ rowIndex: t.rowIndex, title: t.title, body: t.body, mediaUrl: t.mediaUrl, author: t.author, active: t.active })} className="p-1.5 rounded-lg bg-white/[0.04] border border-white/10 hover:bg-white/10 transition">
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => toggleActive(t)} disabled={busyRow === t.rowIndex} className="p-1.5 rounded-lg bg-white/[0.04] border border-white/10 hover:bg-white/10 transition">
+                    {busyRow === t.rowIndex ? <Loader2 className="w-3 h-3 animate-spin" /> : <Power className={`w-3 h-3 ${t.active ? "text-emerald-400" : "text-zinc-500"}`} />}
+                  </button>
+                  <button onClick={() => remove(t)} disabled={busyRow === t.rowIndex} className="p-1.5 rounded-lg bg-white/[0.04] border border-white/10 hover:bg-red-500/10 hover:border-red-500/20 transition">
+                    <Trash2 className="w-3 h-3 text-red-400" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Editor modal */}
+      <AnimatePresence>
+        {editor && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-2 sm:p-4 overflow-y-auto"
+            onClick={() => setEditor(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="glass-strong rounded-2xl border border-white/10 w-full max-w-xl my-2"
+            >
+              <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+                <h3 className="text-sm font-bold flex items-center gap-1.5">
+                  {editor.rowIndex ? "Tipp bearbeiten" : "Neuer Tipp"}
+                  {editor.author === "ai" && <span className="text-[8px] uppercase font-bold tracking-wider px-1 py-0.5 rounded bg-purple-500/15 text-purple-300">KI-Entwurf</span>}
+                </h3>
+                <button onClick={() => setEditor(null)} className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/10 flex items-center justify-center hover:bg-white/10 transition">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="p-4 space-y-3 max-h-[78vh] overflow-y-auto">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Titel</label>
+                  <input type="text" value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} className="input-glass w-full text-sm" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Inhalt</label>
+                  <textarea value={editor.body} onChange={(e) => setEditor({ ...editor, body: e.target.value })} rows={8} className="input-glass w-full text-xs resize-y" placeholder="Der Coaching-Tipp…" />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Bild (optional)</label>
+                  <div className="flex items-center gap-2">
+                    <div className="w-28 h-16 rounded-lg overflow-hidden bg-zinc-900 border border-white/10 shrink-0">
+                      {editor.mediaUrl ? <img src={editor.mediaUrl} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ImageIcon className="w-5 h-5" /></div>}
+                    </div>
+                    <label className="cursor-pointer px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] font-semibold hover:bg-white/10 transition flex items-center gap-1.5">
+                      {imgUploading ? <Loader2 className="w-3 h-3 animate-spin" /> : <ImagePlus className="w-3 h-3" />}
+                      Bild hochladen
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => e.target.files?.[0] && uploadMedia(e.target.files[0])} />
+                    </label>
+                    {editor.mediaUrl && <button onClick={() => setEditor({ ...editor, mediaUrl: "" })} className="text-[10px] text-zinc-500 hover:text-red-400 transition">entfernen</button>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Autor</label>
+                    <select value={editor.author} onChange={(e) => setEditor({ ...editor, author: e.target.value })} className="input-glass text-xs">
+                      <option value="admin">Team</option>
+                      <option value="ai">KI</option>
+                    </select>
+                  </div>
+                  <label className="flex items-center gap-2 text-xs mt-4">
+                    <input type="checkbox" checked={editor.active} onChange={(e) => setEditor({ ...editor, active: e.target.checked })} className="accent-yellow-500" />
+                    Für Gold-Kunden sichtbar
+                  </label>
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 px-4 py-3 border-t border-white/10">
+                <button onClick={() => setEditor(null)} className="px-3 py-2 rounded-lg text-xs text-zinc-400 hover:text-zinc-200 border border-white/10 hover:bg-white/5 transition">Abbrechen</button>
+                <button onClick={save} disabled={saving} className="btn-accent px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 disabled:opacity-50">
+                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  {editor.rowIndex ? "Speichern" : "Erstellen"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
   );
 }
