@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
+import { CodeBlockPreview } from "@/components/CodeBlockPreview";
 import { safeFetch } from "@/lib/safe-fetch";
 import { refreshBranding } from "@/lib/branding";
 import {
@@ -5385,8 +5386,15 @@ function CodeBlocksAdminView({ blocks, loading, onRefresh, onNotify }: {
         ...o,
         _included: true,
       }));
-      // Keep any manually-added options the admin already had.
-      setEditor((e) => e ? { ...e, options: detected } : e);
+      // Merge with any options the admin already had — keep theirs,
+      // append only newly-detected ones (dedup by `original`).
+      setEditor((e) => {
+        if (!e) return e;
+        const existing = e.options;
+        const known = new Set(existing.map((o) => o.original));
+        const fresh = detected.filter((o) => !known.has(o.original));
+        return { ...e, options: [...existing, ...fresh] };
+      });
       onNotify("success", `${detected.length} Einstellmöglichkeit(en) gefunden${data.source === "heuristic" ? " (Heuristik)" : ""}. Bitte prüfen.`);
     } catch {
       onNotify("error", "Analyse fehlgeschlagen.");
@@ -5525,11 +5533,13 @@ function CodeBlocksAdminView({ blocks, loading, onRefresh, onNotify }: {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {blocks.map((b) => (
             <div key={b.id} className={`rounded-xl border p-3 space-y-2 ${b.active ? "border-white/10 bg-white/[0.02]" : "border-red-500/20 bg-white/[0.01] opacity-70"}`}>
-              <div className="aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10">
+              <div className="aspect-video rounded-lg overflow-hidden bg-white border border-white/10">
                 {b.previewImageUrl ? (
                   <img src={b.previewImageUrl} alt={b.title} className="w-full h-full object-cover" />
+                ) : b.code ? (
+                  <CodeBlockPreview code={b.code} className="w-full h-full" />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-zinc-600"><Code2 className="w-7 h-7" /></div>
+                  <div className="w-full h-full flex items-center justify-center text-zinc-600 bg-zinc-900"><Code2 className="w-7 h-7" /></div>
                 )}
               </div>
               <div className="flex items-start justify-between gap-2">
@@ -5589,10 +5599,57 @@ function CodeBlocksAdminView({ blocks, loading, onRefresh, onNotify }: {
                   </div>
                 </div>
 
-                {/* Preview image */}
-                <div>
-                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Vorschaubild</label>
-                  <div className="flex items-center gap-2">
+                {/* Code + live preview side by side */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Liquid / HTML / CSS Code</label>
+                    <textarea
+                      value={editor.code}
+                      onChange={(e) => setEditor({ ...editor, code: e.target.value })}
+                      rows={12}
+                      placeholder="<div class=&quot;promo&quot;> … </div>"
+                      className="input-glass w-full text-[11px] font-mono resize-y h-full min-h-[220px]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1 flex items-center gap-1">
+                      <Eye className="w-3 h-3" /> Live-Vorschau
+                    </label>
+                    <div className="rounded-lg overflow-hidden bg-white border border-white/10 h-[220px]">
+                      {editor.code.trim() ? (
+                        <CodeBlockPreview code={editor.code} interactive className="w-full h-full" />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-400 text-[11px] gap-1 bg-zinc-900">
+                          <Code2 className="w-7 h-7" />
+                          <span>Code einfügen für Vorschau</span>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-[9px] text-zinc-600 mt-1">
+                      Wird automatisch aus dem Code gerendert — genau das sehen die Kunden.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={analyze}
+                    disabled={analyzing || !editor.code.trim()}
+                    className="px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-200 text-[11px] font-bold hover:bg-purple-500/25 transition disabled:opacity-50 flex items-center gap-1.5"
+                  >
+                    {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                    KI-Analyse: Einstellmöglichkeiten finden
+                  </button>
+                  <span className="text-[10px] text-zinc-500">Findet anpassbare Texte &amp; Farben.</span>
+                </div>
+
+                {/* Optional cover image — overrides the live preview as a
+                    polished thumbnail in the customer grid. */}
+                <details className="group">
+                  <summary className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold cursor-pointer hover:text-zinc-300 select-none">
+                    Cover-Bild (optional) — ersetzt die Live-Vorschau in der Galerie
+                  </summary>
+                  <div className="flex items-center gap-2 mt-2">
                     <div className="w-28 h-16 rounded-lg overflow-hidden bg-zinc-900 border border-white/10 shrink-0">
                       {editor.previewImageUrl ? (
                         <img src={editor.previewImageUrl} alt="" className="w-full h-full object-cover" />
@@ -5609,30 +5666,7 @@ function CodeBlocksAdminView({ blocks, loading, onRefresh, onNotify }: {
                       <button onClick={() => setEditor({ ...editor, previewImageUrl: "" })} className="text-[10px] text-zinc-500 hover:text-red-400 transition">entfernen</button>
                     )}
                   </div>
-                </div>
-
-                {/* Code */}
-                <div>
-                  <label className="block text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-1">Liquid / HTML / CSS Code</label>
-                  <textarea
-                    value={editor.code}
-                    onChange={(e) => setEditor({ ...editor, code: e.target.value })}
-                    rows={8}
-                    placeholder="<div class=&quot;promo&quot;> … </div>"
-                    className="input-glass w-full text-[11px] font-mono resize-y"
-                  />
-                  <div className="flex items-center gap-2 mt-2">
-                    <button
-                      onClick={analyze}
-                      disabled={analyzing || !editor.code.trim()}
-                      className="px-3 py-1.5 rounded-lg bg-purple-500/15 border border-purple-500/30 text-purple-200 text-[11px] font-bold hover:bg-purple-500/25 transition disabled:opacity-50 flex items-center gap-1.5"
-                    >
-                      {analyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                      KI-Analyse: Einstellmöglichkeiten finden
-                    </button>
-                    <span className="text-[10px] text-zinc-500">Findet anpassbare Texte &amp; Farben.</span>
-                  </div>
-                </div>
+                </details>
 
                 {/* Options review */}
                 <div>

@@ -18,6 +18,10 @@ import {
 
 export const dynamic = "force-dynamic";
 
+// Google Sheets caps a single cell at 50.000 characters — keep code
+// comfortably under that so a save never fails silently.
+const MAX_CODE_LEN = 45000;
+
 function sanitizeOptions(input: unknown): CodeBlockOption[] {
   if (!Array.isArray(input)) return [];
   const out: CodeBlockOption[] = [];
@@ -63,6 +67,12 @@ export async function POST(req: NextRequest) {
     const code = String(body.code || "");
     if (!title) return NextResponse.json({ error: "Titel fehlt" }, { status: 400 });
     if (!code) return NextResponse.json({ error: "Code fehlt" }, { status: 400 });
+    if (code.length > MAX_CODE_LEN) {
+      return NextResponse.json(
+        { error: `Code zu lang (max. ${MAX_CODE_LEN.toLocaleString("de-DE")} Zeichen).` },
+        { status: 400 },
+      );
+    }
 
     const block: Omit<CodeBlock, "rowIndex"> = {
       id: `cb_${Date.now()}`,
@@ -95,7 +105,16 @@ export async function PATCH(req: NextRequest) {
     const patch: Partial<Omit<CodeBlock, "rowIndex" | "id" | "createdAt">> = {};
     if (body.title !== undefined) patch.title = String(body.title);
     if (body.description !== undefined) patch.description = String(body.description);
-    if (body.code !== undefined) patch.code = String(body.code);
+    if (body.code !== undefined) {
+      const code = String(body.code);
+      if (code.length > MAX_CODE_LEN) {
+        return NextResponse.json(
+          { error: `Code zu lang (max. ${MAX_CODE_LEN.toLocaleString("de-DE")} Zeichen).` },
+          { status: 400 },
+        );
+      }
+      patch.code = code;
+    }
     if (body.previewImageUrl !== undefined) patch.previewImageUrl = String(body.previewImageUrl);
     if (body.options !== undefined) patch.options = sanitizeOptions(body.options);
     if (body.active !== undefined) patch.active = !!body.active;

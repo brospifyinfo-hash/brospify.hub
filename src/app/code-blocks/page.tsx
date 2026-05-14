@@ -25,6 +25,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { CodeBlockPreview } from "@/components/CodeBlockPreview";
 
 interface CodeBlockOption {
   id: string;
@@ -240,21 +241,26 @@ export default function CodeBlocksPage() {
                 onClick={() => openCustomizer(block)}
                 className="glass-strong rounded-xl border border-white/10 overflow-hidden flex flex-col text-left hover:border-cyan-500/30 transition group"
               >
-                <div className="relative aspect-video bg-zinc-900 border-b border-white/5">
+                <div className="relative aspect-video bg-white border-b border-white/5 overflow-hidden">
                   {block.previewImageUrl ? (
                     <img
                       src={block.previewImageUrl}
                       alt={block.title}
                       className="w-full h-full object-cover"
                     />
+                  ) : block.code ? (
+                    <CodeBlockPreview code={block.code} className="w-full h-full" />
                   ) : (
-                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-[11px] gap-1">
+                    <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-[11px] gap-1 bg-zinc-900">
                       <Code2 className="w-8 h-8" />
                       <span>Keine Vorschau</span>
                     </div>
                   )}
+                  {/* Click-catcher: keeps the whole card clickable even
+                      over the (non-interactive) preview iframe. */}
+                  <div className="absolute inset-0" />
                   {block.options.length > 0 && (
-                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur border border-white/10 text-[10px] font-bold text-cyan-300 inline-flex items-center gap-1">
+                    <span className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur border border-white/10 text-[10px] font-bold text-cyan-300 inline-flex items-center gap-1 z-10">
                       <Sliders className="w-2.5 h-2.5" />
                       {block.options.length} anpassbar
                     </span>
@@ -311,17 +317,19 @@ export default function CodeBlocksPage() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 max-h-[78vh] overflow-y-auto">
-                {/* Left: preview + options */}
+                {/* Left: live preview + options */}
                 <div className="p-4 space-y-3 border-b lg:border-b-0 lg:border-r border-white/[0.06]">
-                  {activeBlock.previewImageUrl && (
-                    <div className="aspect-video rounded-lg overflow-hidden bg-zinc-900 border border-white/10">
-                      <img
-                        src={activeBlock.previewImageUrl}
-                        alt={activeBlock.title}
-                        className="w-full h-full object-cover"
-                      />
+                  {/* Live preview — reflects the user's customisations in
+                      real time. This IS the "Vorschaubild". */}
+                  <div>
+                    <h3 className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400 mb-2 flex items-center gap-1.5">
+                      <ImageIcon className="w-3 h-3" />
+                      Live-Vorschau
+                    </h3>
+                    <div className="rounded-lg overflow-hidden bg-white border border-white/10 h-[220px]">
+                      <CodeBlockPreview code={finalCode} interactive className="w-full h-full" />
                     </div>
-                  )}
+                  </div>
 
                   <div>
                     <h3 className="text-[10px] uppercase tracking-[0.16em] font-bold text-zinc-400 mb-2 flex items-center gap-1.5">
