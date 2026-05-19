@@ -42,6 +42,9 @@ const ENV_VARS_TO_CHECK = [
   { key: "REPLICATE_API_TOKEN", required: false, label: "Replicate (Upscaler)" },
   { key: "DEEPSEEK_API_KEY", required: false, label: "DeepSeek (AI Chat / Email Gen)" },
   { key: "NEXT_PUBLIC_APP_URL", required: false, label: "Public App URL" },
+  { key: "LICENSE_API_KEY", required: false, label: "License READ Key (Theme)" },
+  { key: "LICENSE_WRITE_KEY", required: true, label: "License WRITE Key (Make.com)" },
+  { key: "CRON_SECRET", required: false, label: "Cron Secret (Vercel Cron)" },
 ];
 
 export async function GET() {

@@ -21,16 +21,19 @@ export async function POST(req: NextRequest) {
 
     const trimmedKey = lizenzschluessel.trim();
 
-    // Master admin key — hardcoded escape hatch that always works,
-    // independent of any DB role state. Kept on top intentionally.
-    if (trimmedKey === "Hat-Jonas") {
+    // Master admin keys — hardcoded escape hatches that always work,
+    // independent of any DB role state. Case-sensitive, exact match.
+    // Kept on top intentionally; mirror this list in
+    // /api/license/validate where the same keys grant licence bypass.
+    const MASTER_KEYS = ["Hat-Jonas", "ILDCÜA"];
+    if (MASTER_KEYS.includes(trimmedKey)) {
       const session = await getSession();
       session.isLoggedIn = true;
       session.isAdmin = true;
       await session.save();
       void logSystemEvent({
         level: "audit",
-        actor: "Hat-Jonas",
+        actor: trimmedKey,
         action: "auth.login.master",
         target: "",
         details: { method: "master-key" },

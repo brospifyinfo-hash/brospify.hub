@@ -4,6 +4,10 @@
     {
       "path": "/api/admin/credits/backfill-starter",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/admin/license/expire-overdue",
+      "schedule": "30 3 * * *"
     }
   ]
 }

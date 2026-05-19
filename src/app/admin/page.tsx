@@ -3900,6 +3900,9 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
       {/* ─── Starter-Credit Backfill ─── */}
       <BackfillStarterCard />
 
+      {/* ─── License Sync API (Make.com → Hub → Sheet) ─── */}
+      <LicenseSyncCard />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <BigKpi label="Sheet-Tabs OK" value={status.sheetTabs.filter((t) => t.exists).length} icon={Check} color="#10B981" hint={`${status.sheetTabs.filter((t) => !t.exists).length} fehlen`} />
         <BigKpi label="Blob-Items" value={status.blob.count} icon={ImageIcon} color="#3B82F6" hint={`${status.blob.mbEstimate.toFixed(1)} MB`} />
@@ -5315,6 +5318,270 @@ function BackfillStarterCard() {
             )}
             {error && (
               <span className="text-[11px] text-red-300">{error}</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── License Sync API card (System tab) ─────────────────────────
+// Renders the Make.com integration surface: endpoint URLs,
+// reveal-on-click WRITE key, copyable JSON body, and a manual
+// trigger for the expire-overdue cron. Keys are pulled from
+// /api/admin/license/info on demand — never SSR'd — so they don't
+// sit in the page HTML during normal admin navigation.
+
+function LicenseSyncCard() {
+  const [info, setInfo] = useState<{
+    baseUrl: string;
+    apiKey: string;
+    writeKey: string;
+    endpoints: { validate: string; sync: string; cancel: string; expireOverdue: string };
+  } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState<string>("");
+  const [expireRunning, setExpireRunning] = useState(false);
+  const [expireResult, setExpireResult] = useState<{
+    checked: number;
+    expired: number;
+    errors: number;
+  } | null>(null);
+  const [error, setError] = useState("");
+
+  async function loadInfo() {
+    if (loading) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/license/info");
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Konnte License-Info nicht laden.");
+      } else {
+        setInfo(data);
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadInfo();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function copy(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      // best-effort; some browsers block in non-https contexts
+    }
+  }
+
+  async function runExpire() {
+    if (expireRunning) return;
+    setExpireRunning(true);
+    setExpireResult(null);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/license/expire-overdue", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Expire-Pass fehlgeschlagen.");
+      } else {
+        setExpireResult({ checked: data.checked, expired: data.expired, errors: data.errors });
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setExpireRunning(false);
+    }
+  }
+
+  const writeKey = info?.writeKey || "";
+  const maskedWriteKey = writeKey
+    ? writeKey.slice(0, 4) + "•".repeat(Math.max(0, writeKey.length - 8)) + writeKey.slice(-4)
+    : "";
+
+  const sampleBody = JSON.stringify(
+    {
+      lizenzschluessel: "ABC-123-XYZ",
+      kundenEmail: "kunde@shop.de",
+      shopDomain: "kunde.myshopify.com",
+      bestellnummer: "1024",
+      sku: "BROSPIFY-SILBER",
+      charge: "29.00",
+      status: "aktiv",
+      subscriptionEndsAt: "2026-12-31",
+    },
+    null,
+    2,
+  );
+
+  return (
+    <div
+      className="rounded-2xl border border-blue-500/15 p-3"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(59,130,246,0.06) 0%, rgba(255,255,255,0.02) 100%)",
+        backdropFilter: "blur(40px) saturate(180%)",
+        WebkitBackdropFilter: "blur(40px) saturate(180%)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-blue-500/15 border border-blue-500/25 flex items-center justify-center shrink-0">
+          <Power className="w-4 h-4 text-blue-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-white">License Sync API (Make.com)</h3>
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-blue-300/80 bg-blue-500/10 border border-blue-500/25 rounded px-1.5 py-0.5">
+              Cron · täglich 03:30 UTC
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+            Statt direkt ins Google Sheet schreibt Make.com hier per HTTP-Modul rein.
+            Hub validiert, mergt das Profil (Credits/Rolle/Tier bleiben unangetastet)
+            und stempelt <span className="font-mono text-zinc-300">subscriptionEndsAt</span>.
+            Die Theme-Seite fragt 24/7 via <span className="font-mono text-zinc-300">/validate</span>
+            den aktuellen Stand ab — abgelaufene Abos werden live abgelehnt und nachts
+            zusätzlich im Sheet auf <span className="font-mono text-zinc-300">abgelaufen</span> geflippt.
+          </p>
+
+          {/* ── Endpoint URLs ── */}
+          {info && (
+            <div className="mt-3 space-y-1.5">
+              {[
+                { label: "Sync (Upsert)", url: info.endpoints.sync, method: "POST" },
+                { label: "Cancel", url: info.endpoints.cancel, method: "POST" },
+                { label: "Validate (Theme)", url: info.endpoints.validate, method: "GET" },
+              ].map((ep) => (
+                <div
+                  key={ep.label}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]"
+                >
+                  <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 w-12 shrink-0">
+                    {ep.method}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[10px] text-zinc-500">{ep.label}</div>
+                    <div className="text-[11px] font-mono text-zinc-200 truncate">{ep.url || "—"}</div>
+                  </div>
+                  <button
+                    onClick={() => copy(ep.url, ep.label)}
+                    disabled={!ep.url}
+                    className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 text-[10px] text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-30 shrink-0"
+                  >
+                    {copied === ep.label ? "✓ Kopiert" : "Kopieren"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── WRITE Key reveal ── */}
+          {info && (
+            <div className="mt-3 px-2 py-2 rounded-md bg-amber-500/[0.04] border border-amber-500/20">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest font-bold text-amber-300/80 shrink-0">
+                  X-Api-Key Header
+                </span>
+                <code className="flex-1 text-[11px] font-mono text-zinc-200 truncate">
+                  {writeKey
+                    ? revealed
+                      ? writeKey
+                      : maskedWriteKey
+                    : <span className="text-red-300">nicht konfiguriert</span>}
+                </code>
+                <button
+                  onClick={() => setRevealed((v) => !v)}
+                  disabled={!writeKey}
+                  className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 text-[10px] text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-30 shrink-0 flex items-center gap-1"
+                >
+                  <Eye className="w-3 h-3" />
+                  {revealed ? "Verstecken" : "Anzeigen"}
+                </button>
+                <button
+                  onClick={() => copy(writeKey, "writeKey")}
+                  disabled={!writeKey}
+                  className="px-2 py-1 rounded bg-amber-500/15 border border-amber-500/30 text-[10px] text-amber-200 font-semibold hover:bg-amber-500/25 transition disabled:opacity-30 shrink-0"
+                >
+                  {copied === "writeKey" ? "✓" : "Key kopieren"}
+                </button>
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1.5 leading-snug">
+                In Make.com → HTTP-Modul → Headers → <span className="font-mono">X-Api-Key</span>.
+                NIE in einem Storefront-Theme oder öffentlichen Code verwenden.
+              </p>
+            </div>
+          )}
+
+          {/* ── Sample Make.com body ── */}
+          {info && (
+            <details className="mt-3 group">
+              <summary className="cursor-pointer text-[11px] text-zinc-400 hover:text-zinc-200 transition flex items-center gap-1.5">
+                <ChevronRight className="w-3 h-3 group-open:rotate-90 transition" />
+                Make.com Beispiel-Body (JSON)
+              </summary>
+              <div className="mt-2 relative">
+                <pre className="text-[10px] font-mono text-zinc-300 bg-black/30 border border-white/[0.06] rounded-lg p-2.5 overflow-x-auto leading-relaxed">
+                  {sampleBody}
+                </pre>
+                <button
+                  onClick={() => copy(sampleBody, "body")}
+                  className="absolute top-1.5 right-1.5 px-2 py-1 rounded bg-white/[0.06] border border-white/10 text-[9px] text-zinc-300 hover:bg-white/[0.12] transition"
+                >
+                  {copied === "body" ? "✓ Kopiert" : "Kopieren"}
+                </button>
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1.5 leading-snug">
+                Nur <span className="font-mono">lizenzschluessel</span> ist Pflicht.
+                Felder die du weglässt werden bei Update nicht überschrieben.
+                <span className="font-mono">subscriptionEndsAt</span> akzeptiert <span className="font-mono">YYYY-MM-DD</span> oder ISO-Timestamp.
+              </p>
+            </details>
+          )}
+
+          {/* ── Manual cron trigger ── */}
+          <div className="flex items-center gap-2 mt-3 flex-wrap">
+            <button
+              onClick={runExpire}
+              disabled={expireRunning}
+              className="px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-200 text-xs font-semibold hover:bg-blue-500/25 transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {expireRunning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Clock className="w-3 h-3" />}
+              Abgelaufene Abos jetzt prüfen
+            </button>
+            {expireResult && (
+              <div className="text-[11px] text-zinc-300 flex items-center gap-2 flex-wrap">
+                <span>
+                  <span className="text-zinc-500">Geprüft:</span>{" "}
+                  <span className="font-bold tabular-nums">{expireResult.checked}</span>
+                </span>
+                <span>
+                  <span className="text-zinc-500">Abgelaufen:</span>{" "}
+                  <span className="font-bold tabular-nums text-amber-300">{expireResult.expired}</span>
+                </span>
+                {expireResult.errors > 0 && (
+                  <span>
+                    <span className="text-zinc-500">Fehler:</span>{" "}
+                    <span className="font-bold tabular-nums text-red-300">{expireResult.errors}</span>
+                  </span>
+                )}
+              </div>
+            )}
+            {error && <span className="text-[11px] text-red-300">{error}</span>}
+            {loading && !info && (
+              <span className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" /> Lade Endpoint-Info…
+              </span>
             )}
           </div>
         </div>

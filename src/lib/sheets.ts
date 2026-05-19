@@ -180,6 +180,12 @@ export interface KundeProfile {
    *  an active subscription — if `tierCanceledAt` is set or no tier, these
    *  are read but the push gate still rejects. */
   themesPurchased?: string[];
+  /** ISO date/datetime. When set, /api/license/validate rejects after this
+   *  point and the daily expire-cron flips `status` to "abgelaufen". Written
+   *  by Make.com via /api/license/sync — Make is the source of truth for
+   *  subscription expiry. Absent = no time-based expiry (still gated by
+   *  `status` column and `blocked`). */
+  subscriptionEndsAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
@@ -621,6 +627,137 @@ export async function updateKundeFields(
       data,
     },
   });
+}
+
+// ─── Make.com → Hub upsert ────────────────────────────────────
+// Idempotent insert-or-update keyed by `lizenzschluessel`. Used by
+// /api/license/sync to mirror what Make.com previously wrote
+// directly into the sheet. Profile is *merged*, not replaced —
+// credits, role, tier and other Hub-managed fields are never
+// clobbered by an upstream Make payload that doesn't know about them.
+//
+// `subscriptionEndsAt` and other profile-level inputs flow through
+// the merged profile, not their own columns, so Make doesn't need
+// to reason about Sheet column letters.
+export interface KundeUpsertInput {
+  lizenzschluessel: string;
+  status?: string;
+  shopDomain?: string;
+  kundenEmail?: string;
+  bestellnummer?: string;
+  charge?: string;
+  suplied?: string;
+  sku?: string;
+  shopifyToken?: string;
+  /** ISO timestamp or YYYY-MM-DD. Stored in profile.subscriptionEndsAt. */
+  subscriptionEndsAt?: string;
+  /** Optional profile patch — shallow-merged on top of existing profile. */
+  profilePatch?: Partial<KundeProfile>;
+}
+
+export async function upsertKundeByKey(
+  input: KundeUpsertInput,
+): Promise<{ action: "created" | "updated"; rowIndex: number }> {
+  const key = (input.lizenzschluessel || "").trim();
+  if (!key) throw new Error("upsertKundeByKey: lizenzschluessel is required");
+
+  const sheets = getSheets();
+  const existing = await findKundeByKey(key);
+
+  // Merge profile patch on top of existing (or empty) profile.
+  // `subscriptionEndsAt` is a first-class top-level input, so it
+  // gets folded into the profile here rather than asking Make to
+  // know about the `profilePatch` shape.
+  const mergedProfile: KundeProfile = {
+    ...(existing?.profile || {}),
+    ...(input.profilePatch || {}),
+  };
+  if (input.subscriptionEndsAt !== undefined) {
+    mergedProfile.subscriptionEndsAt = input.subscriptionEndsAt;
+  }
+
+  if (existing) {
+    // UPDATE — only overwrite columns Make actually sent. `undefined`
+    // means "don't touch", so a renewal call that only carries
+    // status + subscriptionEndsAt won't blank out email/SKU.
+    const updates: { column: string; value: string }[] = [];
+    const colMap: Array<[keyof KundeUpsertInput, string]> = [
+      ["shopifyToken", "A"],
+      ["status", "C"],
+      ["shopDomain", "D"],
+      ["kundenEmail", "E"],
+      ["bestellnummer", "F"],
+      ["charge", "G"],
+      ["suplied", "H"],
+      ["sku", "I"],
+    ];
+    for (const [field, col] of colMap) {
+      const v = input[field];
+      if (typeof v === "string") updates.push({ column: col, value: v });
+    }
+    if (updates.length > 0) {
+      await updateKundeFields(existing.rowIndex, updates);
+    }
+    await updateKundeProfile(existing.rowIndex, mergedProfile);
+    return { action: "updated", rowIndex: existing.rowIndex };
+  }
+
+  // CREATE — append a fresh row with the full column layout.
+  const row = [
+    input.shopifyToken ?? "",
+    key,
+    input.status ?? "aktiv",
+    input.shopDomain ?? "",
+    input.kundenEmail ?? "",
+    input.bestellnummer ?? "",
+    input.charge ?? "",
+    input.suplied ?? "",
+    input.sku ?? "",
+    JSON.stringify(mergedProfile),
+  ];
+  const res = await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Kunden!A:J",
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [row] },
+  });
+  // `updatedRange` looks like "Kunden!A42:J42" — pull the trailing row number.
+  const rangeStr = res.data.updates?.updatedRange || "";
+  const m = rangeStr.match(/!A(\d+):/);
+  const rowIndex = m ? Number(m[1]) : -1;
+  return { action: "created", rowIndex };
+}
+
+// Daily-cron helper. Walks all Kunden, finds rows whose
+// `profile.subscriptionEndsAt` is in the past AND whose `status`
+// column hasn't already been flipped, and sets status to "abgelaufen".
+// Returns the count of rows updated. Resilient: a single failing row
+// does not abort the rest.
+export async function expireOverdueSubscriptions(
+  now: Date = new Date(),
+): Promise<{ checked: number; expired: number; errors: number }> {
+  const kunden = await getAllKunden();
+  const cutoff = now.getTime();
+  let expired = 0;
+  let errors = 0;
+
+  for (const k of kunden) {
+    const endsAt = k.profile?.subscriptionEndsAt;
+    if (!endsAt) continue;
+    const t = Date.parse(endsAt);
+    if (!Number.isFinite(t) || t > cutoff) continue;
+    const currentStatus = (k.status || "").trim().toLowerCase();
+    if (currentStatus === "abgelaufen" || currentStatus === "expired") continue;
+    try {
+      await updateKundeField(k.rowIndex, "C", "abgelaufen");
+      expired += 1;
+    } catch (err) {
+      console.error("[expireOverdueSubscriptions] row", k.rowIndex, err);
+      errors += 1;
+    }
+  }
+  return { checked: kunden.length, expired, errors };
 }
 
 // ─── PRODUKTE (Tab 2) ──────────────────────────────────────────

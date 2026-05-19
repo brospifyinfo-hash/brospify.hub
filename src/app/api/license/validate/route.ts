@@ -24,8 +24,10 @@ const CORS: Record<string, string> = {
   "Cache-Control": "no-store",
 };
 
-// Master key — Hat-Jonas always unlocks, mirroring the Hub admin fallback.
-const MASTER_KEYS = ["Hat-Jonas"];
+// Master keys — always unlock, mirroring the Hub admin fallback in
+// /api/auth/login. Case-sensitive; exact match required. Keep this
+// list in sync with the same constant in the login route.
+const MASTER_KEYS = ["Hat-Jonas", "ILDCÜA"];
 
 // Explicit kill words. Anything else (incl. "aktiv", "active", empty)
 // counts as valid — never lock on a typo or blank cell.
@@ -89,6 +91,18 @@ export async function GET(req: NextRequest) {
 
     if (kunde.profile?.blocked === true) {
       return json({ valid: false, message: "Lizenz wurde gesperrt." });
+    }
+
+    // Time-based subscription gate. Make stamps profile.subscriptionEndsAt
+    // on every renewal via /api/license/sync. If the date has passed,
+    // reject immediately — the daily expire-cron will eventually flip
+    // the status column too, but the live check is the authoritative gate.
+    const endsAt = kunde.profile?.subscriptionEndsAt;
+    if (endsAt) {
+      const t = Date.parse(endsAt);
+      if (Number.isFinite(t) && t < Date.now()) {
+        return json({ valid: false, message: "Abo ist abgelaufen." });
+      }
     }
 
     return json({
