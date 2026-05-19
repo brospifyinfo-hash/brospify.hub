@@ -369,7 +369,7 @@ export default function AdminPage() {
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
   const [filterSku, setFilterSku] = useState("ALL");
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -930,6 +930,8 @@ export default function AdminPage() {
     hasGoogleLinked: boolean;
     hasLegalData: boolean;
     hasBrandKit: boolean;
+    subscriptionEndsAt: string;
+    blocked: boolean;
     credits: {
       balance: number;
       totalPurchased: number;
@@ -991,7 +993,7 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "customers") loadCustomers();
+    if (activeTab === "customers" || activeTab === "licenses") loadCustomers();
   }, [activeTab, loadCustomers]);
 
   useEffect(() => {
@@ -1641,6 +1643,18 @@ export default function AdminPage() {
               )}
             </div>
           </motion.div>
+          </AdminErrorBoundary>
+        )}
+
+        {/* ─── Lizenzen Tab ─────────────────────────────────── */}
+        {activeTab === "licenses" && (
+          <AdminErrorBoundary label="Lizenzen">
+            <LicensesView
+              customers={customers}
+              loading={customersLoading}
+              onRefresh={loadCustomers}
+              onOpenCustomer={(key) => setActiveCustomerKey(key)}
+            />
           </AdminErrorBoundary>
         )}
 
@@ -3154,7 +3168,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -3173,6 +3187,7 @@ const SIDEBAR_GROUPS: {
     items: [
       { key: "users", label: "User & Rollen", icon: UserCog, color: "#F472B6" },
       { key: "customers", label: "Kunden", icon: Users, color: "#3B82F6" },
+      { key: "licenses", label: "Lizenzen", icon: Shield, color: "#06B6D4" },
       { key: "tiers", label: "Abo-Modelle", icon: Crown, color: "#F59E0B" },
       { key: "tickets", label: "Tickets", icon: Shield, color: "#F59E0B" },
       { key: "codes", label: "Voucher-Codes", icon: Ticket, color: "#A855F7" },
@@ -5587,6 +5602,475 @@ function LicenseSyncCard() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Lizenzen Tab ────────────────────────────────────────────────
+// Flat, sortable view of every customer row focused on licence
+// state (status column + profile.subscriptionEndsAt). Inline-edit
+// per row, KPI bar at top, status-filter chips. Optimistic refresh
+// after each save.
+
+interface LicensesCustomer {
+  rowIndex: number;
+  lizenzschluessel: string;
+  status: string;
+  shopDomain: string;
+  kundenEmail: string;
+  bestellnummer: string;
+  sku: string;
+  subscriptionEndsAt: string;
+  blocked: boolean;
+}
+
+type LicenseStatusFilter = "all" | "active" | "expiring" | "expired" | "blocked";
+type LicenseSortKey = "expiry" | "status" | "email" | "sku";
+
+const STATUS_OPTIONS = ["aktiv", "abgelaufen", "gekündigt", "gesperrt", "pausiert"];
+
+// Bucket a customer into a coarse health state so the KPI tiles
+// and the filter chips can share the same logic.
+function licenseHealth(
+  c: LicensesCustomer,
+  now = Date.now(),
+): "blocked" | "expired" | "expiring" | "active" {
+  if (c.blocked) return "blocked";
+  const statusLow = (c.status || "").trim().toLowerCase();
+  if (["gesperrt", "blocked", "deaktiviert", "disabled"].includes(statusLow)) return "blocked";
+  if (["abgelaufen", "expired", "gekündigt", "gekuendigt", "cancelled", "canceled"].includes(statusLow)) {
+    return "expired";
+  }
+  const endsAt = c.subscriptionEndsAt;
+  if (endsAt) {
+    const t = Date.parse(endsAt);
+    if (Number.isFinite(t)) {
+      if (t < now) return "expired";
+      if (t - now < 7 * 24 * 60 * 60 * 1000) return "expiring";
+    }
+  }
+  return "active";
+}
+
+function LicensesView({
+  customers,
+  loading,
+  onRefresh,
+  onOpenCustomer,
+}: {
+  customers: LicensesCustomer[];
+  loading: boolean;
+  onRefresh: () => void;
+  onOpenCustomer: (key: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<LicenseStatusFilter>("all");
+  const [sortKey, setSortKey] = useState<LicenseSortKey>("expiry");
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editStatus, setEditStatus] = useState("");
+  const [editEndsAt, setEditEndsAt] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+  const now = Date.now();
+
+  // Pre-compute health per row once so filter + sort + KPIs agree.
+  const enriched = customers.map((c) => ({ ...c, health: licenseHealth(c, now) }));
+
+  const kpis = {
+    total: enriched.length,
+    active: enriched.filter((c) => c.health === "active").length,
+    expiring: enriched.filter((c) => c.health === "expiring").length,
+    expired: enriched.filter((c) => c.health === "expired").length,
+    blocked: enriched.filter((c) => c.health === "blocked").length,
+  };
+
+  const filtered = enriched.filter((c) => {
+    if (filter === "active" && c.health !== "active") return false;
+    if (filter === "expiring" && c.health !== "expiring") return false;
+    if (filter === "expired" && c.health !== "expired") return false;
+    if (filter === "blocked" && c.health !== "blocked") return false;
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      c.lizenzschluessel.toLowerCase().includes(q) ||
+      c.kundenEmail.toLowerCase().includes(q) ||
+      c.shopDomain.toLowerCase().includes(q) ||
+      c.bestellnummer.toLowerCase().includes(q) ||
+      c.sku.toLowerCase().includes(q)
+    );
+  });
+
+  // Sort. For expiry, empty dates go to the bottom so the rows
+  // that actually expire (and need attention) stay on top.
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === "expiry") {
+      const ta = a.subscriptionEndsAt ? Date.parse(a.subscriptionEndsAt) : Infinity;
+      const tb = b.subscriptionEndsAt ? Date.parse(b.subscriptionEndsAt) : Infinity;
+      return ta - tb;
+    }
+    if (sortKey === "status") return (a.status || "").localeCompare(b.status || "");
+    if (sortKey === "email") return (a.kundenEmail || "").localeCompare(b.kundenEmail || "");
+    if (sortKey === "sku") return (a.sku || "").localeCompare(b.sku || "");
+    return 0;
+  });
+
+  function startEdit(c: LicensesCustomer) {
+    setEditingKey(c.lizenzschluessel);
+    setEditStatus(c.status || "aktiv");
+    // <input type="date"> expects YYYY-MM-DD; slice the ISO timestamp.
+    setEditEndsAt(c.subscriptionEndsAt ? c.subscriptionEndsAt.slice(0, 10) : "");
+    setError("");
+    setSuccess("");
+  }
+
+  function cancelEdit() {
+    setEditingKey(null);
+    setEditStatus("");
+    setEditEndsAt("");
+  }
+
+  async function saveEdit(key: string) {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/license/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key,
+          status: editStatus,
+          subscriptionEndsAt: editEndsAt,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Speichern fehlgeschlagen.");
+      } else {
+        setSuccess(`${key} gespeichert.`);
+        setTimeout(() => setSuccess(""), 2000);
+        cancelEdit();
+        onRefresh();
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function quickCancel(key: string) {
+    if (saving) return;
+    if (!confirm(`Lizenz "${key}" wirklich kündigen?\n\nStatus → "gekündigt", blocked → true.`)) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/license/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key,
+          status: "gekündigt",
+          blocked: true,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Kündigen fehlgeschlagen.");
+      } else {
+        setSuccess(`${key} gekündigt.`);
+        setTimeout(() => setSuccess(""), 2000);
+        onRefresh();
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function quickReactivate(key: string) {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/license/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, status: "aktiv", blocked: false }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.error || "Reaktivieren fehlgeschlagen.");
+      } else {
+        setSuccess(`${key} reaktiviert.`);
+        setTimeout(() => setSuccess(""), 2000);
+        onRefresh();
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Suche: License, E-Mail, Shop, Bestellnr, SKU…"
+            className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-8 pr-3 py-2 text-xs outline-none focus:border-white/25 transition placeholder:text-zinc-600"
+          />
+        </div>
+        <select
+          value={sortKey}
+          onChange={(e) => setSortKey(e.target.value as LicenseSortKey)}
+          className="bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-2 text-xs text-zinc-300 outline-none focus:border-white/25 transition"
+        >
+          <option value="expiry">Sortieren: Ablaufdatum ↑</option>
+          <option value="status">Sortieren: Status</option>
+          <option value="email">Sortieren: E-Mail</option>
+          <option value="sku">Sortieren: SKU</option>
+        </select>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          <span className="hidden sm:inline">Aktualisieren</span>
+        </button>
+      </div>
+
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+        <button
+          onClick={() => setFilter("all")}
+          className={`px-3 py-2 rounded-lg border text-left transition ${
+            filter === "all" ? "bg-white/[0.06] border-white/25" : "bg-white/[0.02] border-white/[0.06] hover:bg-white/[0.04]"
+          }`}
+        >
+          <div className="text-[9px] uppercase tracking-widest font-bold text-zinc-500">Alle</div>
+          <div className="text-lg font-bold tabular-nums">{kpis.total}</div>
+        </button>
+        <button
+          onClick={() => setFilter("active")}
+          className={`px-3 py-2 rounded-lg border text-left transition ${
+            filter === "active" ? "bg-emerald-500/15 border-emerald-500/40" : "bg-emerald-500/[0.04] border-emerald-500/15 hover:bg-emerald-500/10"
+          }`}
+        >
+          <div className="text-[9px] uppercase tracking-widest font-bold text-emerald-300/80">Aktiv</div>
+          <div className="text-lg font-bold tabular-nums text-emerald-300">{kpis.active}</div>
+        </button>
+        <button
+          onClick={() => setFilter("expiring")}
+          className={`px-3 py-2 rounded-lg border text-left transition ${
+            filter === "expiring" ? "bg-amber-500/15 border-amber-500/40" : "bg-amber-500/[0.04] border-amber-500/15 hover:bg-amber-500/10"
+          }`}
+        >
+          <div className="text-[9px] uppercase tracking-widest font-bold text-amber-300/80">≤ 7 Tage</div>
+          <div className="text-lg font-bold tabular-nums text-amber-300">{kpis.expiring}</div>
+        </button>
+        <button
+          onClick={() => setFilter("expired")}
+          className={`px-3 py-2 rounded-lg border text-left transition ${
+            filter === "expired" ? "bg-red-500/15 border-red-500/40" : "bg-red-500/[0.04] border-red-500/15 hover:bg-red-500/10"
+          }`}
+        >
+          <div className="text-[9px] uppercase tracking-widest font-bold text-red-300/80">Abgelaufen</div>
+          <div className="text-lg font-bold tabular-nums text-red-300">{kpis.expired}</div>
+        </button>
+        <button
+          onClick={() => setFilter("blocked")}
+          className={`px-3 py-2 rounded-lg border text-left transition ${
+            filter === "blocked" ? "bg-zinc-500/20 border-zinc-500/50" : "bg-zinc-500/[0.04] border-zinc-500/15 hover:bg-zinc-500/10"
+          }`}
+        >
+          <div className="text-[9px] uppercase tracking-widest font-bold text-zinc-400">Gesperrt</div>
+          <div className="text-lg font-bold tabular-nums text-zinc-300">{kpis.blocked}</div>
+        </button>
+      </div>
+
+      {/* Status messages */}
+      {(error || success) && (
+        <div
+          className={`text-[11px] px-3 py-2 rounded-lg border ${
+            error
+              ? "bg-red-500/10 border-red-500/25 text-red-300"
+              : "bg-emerald-500/10 border-emerald-500/25 text-emerald-300"
+          }`}
+        >
+          {error || success}
+        </div>
+      )}
+
+      {/* Table */}
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+        {/* Header — desktop only */}
+        <div className="hidden md:grid grid-cols-[1.6fr_1.6fr_1fr_1fr_1.2fr_1.4fr_auto] gap-2 px-3 py-2 bg-white/[0.03] border-b border-white/[0.06] text-[9px] uppercase tracking-widest font-bold text-zinc-500">
+          <div>License / E-Mail</div>
+          <div>Shop / Bestellnr</div>
+          <div>SKU</div>
+          <div>Status</div>
+          <div>Läuft bis</div>
+          <div>Health</div>
+          <div className="text-right">Aktionen</div>
+        </div>
+
+        {/* Rows */}
+        <div className="divide-y divide-white/[0.04]">
+          {sorted.length === 0 && (
+            <div className="px-3 py-10 text-center text-sm text-zinc-500">
+              {loading ? "Lade…" : "Keine Treffer."}
+            </div>
+          )}
+          {sorted.map((c) => {
+            const isEditing = editingKey === c.lizenzschluessel;
+            const healthMeta = {
+              active: { color: "#10B981", label: "Aktiv" },
+              expiring: { color: "#F59E0B", label: "Läuft bald ab" },
+              expired: { color: "#EF4444", label: "Abgelaufen" },
+              blocked: { color: "#71717A", label: "Gesperrt" },
+            }[c.health];
+            const endsAtPretty = c.subscriptionEndsAt
+              ? new Date(c.subscriptionEndsAt).toLocaleDateString("de-DE")
+              : "—";
+            return (
+              <div
+                key={c.lizenzschluessel}
+                className="md:grid md:grid-cols-[1.6fr_1.6fr_1fr_1fr_1.2fr_1.4fr_auto] md:gap-2 md:items-center px-3 py-2.5 hover:bg-white/[0.02] transition"
+              >
+                <div className="min-w-0">
+                  <div className="text-[12px] font-semibold truncate">
+                    {c.kundenEmail || "—"}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono truncate">
+                    {c.lizenzschluessel}
+                  </div>
+                </div>
+                <div className="min-w-0 md:block hidden">
+                  <div className="text-[11px] text-zinc-300 truncate">
+                    {c.shopDomain || "—"}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 font-mono truncate">
+                    {c.bestellnummer || "—"}
+                  </div>
+                </div>
+                <div className="md:block hidden text-[11px] text-zinc-300 truncate">
+                  {c.sku || "—"}
+                </div>
+                <div>
+                  {isEditing ? (
+                    <select
+                      value={editStatus}
+                      onChange={(e) => setEditStatus(e.target.value)}
+                      className="w-full bg-white/[0.06] border border-white/15 rounded px-1.5 py-1 text-[11px] outline-none focus:border-white/30"
+                    >
+                      {STATUS_OPTIONS.includes((c.status || "").trim().toLowerCase())
+                        ? null
+                        : c.status && (
+                            <option value={c.status}>{c.status} (current)</option>
+                          )}
+                      {STATUS_OPTIONS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <span className="text-[11px] text-zinc-300 truncate inline-block max-w-full">
+                      {c.status || "—"}
+                    </span>
+                  )}
+                </div>
+                <div>
+                  {isEditing ? (
+                    <input
+                      type="date"
+                      value={editEndsAt}
+                      onChange={(e) => setEditEndsAt(e.target.value)}
+                      className="w-full bg-white/[0.06] border border-white/15 rounded px-1.5 py-1 text-[11px] outline-none focus:border-white/30"
+                    />
+                  ) : (
+                    <span className="text-[11px] text-zinc-300 tabular-nums">{endsAtPretty}</span>
+                  )}
+                </div>
+                <div className="md:flex hidden items-center gap-1.5">
+                  <div
+                    className="w-1.5 h-1.5 rounded-full"
+                    style={{ background: healthMeta.color }}
+                  />
+                  <span className="text-[10px]" style={{ color: healthMeta.color }}>
+                    {healthMeta.label}
+                  </span>
+                </div>
+                <div className="flex items-center justify-end gap-1.5 mt-2 md:mt-0">
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={() => saveEdit(c.lizenzschluessel)}
+                        disabled={saving}
+                        className="px-2 py-1 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-[10px] font-semibold hover:bg-emerald-500/25 transition disabled:opacity-50"
+                      >
+                        {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : "Speichern"}
+                      </button>
+                      <button
+                        onClick={cancelEdit}
+                        disabled={saving}
+                        className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 text-zinc-300 text-[10px] hover:bg-white/[0.08] transition disabled:opacity-50"
+                      >
+                        Abbrechen
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEdit(c)}
+                        className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 text-zinc-300 text-[10px] hover:bg-white/[0.08] transition flex items-center gap-1"
+                      >
+                        <Pencil className="w-2.5 h-2.5" />
+                        Edit
+                      </button>
+                      {c.health === "blocked" || c.health === "expired" ? (
+                        <button
+                          onClick={() => quickReactivate(c.lizenzschluessel)}
+                          disabled={saving}
+                          className="px-2 py-1 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-200 text-[10px] hover:bg-emerald-500/20 transition disabled:opacity-50"
+                        >
+                          Reaktivieren
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => quickCancel(c.lizenzschluessel)}
+                          disabled={saving}
+                          className="px-2 py-1 rounded bg-red-500/10 border border-red-500/25 text-red-300 text-[10px] hover:bg-red-500/20 transition disabled:opacity-50"
+                        >
+                          Kündigen
+                        </button>
+                      )}
+                      <button
+                        onClick={() => onOpenCustomer(c.lizenzschluessel)}
+                        className="p-1 rounded bg-white/[0.04] border border-white/10 text-zinc-400 hover:bg-white/[0.08] transition"
+                        title="Kundendetails öffnen"
+                      >
+                        <ChevronRight className="w-3 h-3" />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </motion.div>
   );
 }
 

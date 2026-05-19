@@ -35,6 +35,12 @@ interface CustomerSummary {
   hasGoogleLinked: boolean;
   hasLegalData: boolean;
   hasBrandKit: boolean;
+  /** ISO date/datetime — when the current subscription period ends.
+   *  Mirrors profile.subscriptionEndsAt. Empty string = no expiry stamp. */
+  subscriptionEndsAt: string;
+  /** True when admin has set profile.blocked — surfaced so the Lizenzen
+   *  tab can render a distinct "gesperrt" badge without a second fetch. */
+  blocked: boolean;
   credits: {
     balance: number;
     totalPurchased: number;
@@ -98,6 +104,8 @@ async function getList(): Promise<NextResponse> {
           hasGoogleLinked: !!k.profile.linkedGoogleEmail,
           hasLegalData: !!(k.profile.legal_data?.firmenname || k.profile.legal_data?.email),
           hasBrandKit: !!(k.profile.brand_kit?.logoUrl || k.profile.brand_kit?.primaryColor),
+          subscriptionEndsAt: k.profile.subscriptionEndsAt || "",
+          blocked: k.profile.blocked === true,
           credits: {
             balance: state.balance,
             totalPurchased: state.totalPurchased,
@@ -144,6 +152,8 @@ async function getDetail(key: string): Promise<NextResponse> {
       hasGoogleLinked: !!k.profile.linkedGoogleEmail,
       hasLegalData: !!(k.profile.legal_data?.firmenname || k.profile.legal_data?.email),
       hasBrandKit: !!(k.profile.brand_kit?.logoUrl || k.profile.brand_kit?.primaryColor),
+      subscriptionEndsAt: k.profile.subscriptionEndsAt || "",
+      blocked: k.profile.blocked === true,
       credits: {
         balance: state.balance,
         totalPurchased: state.totalPurchased,
