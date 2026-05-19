@@ -21,10 +21,15 @@ export async function POST(req: NextRequest) {
 
     const trimmedKey = lizenzschluessel.trim();
 
-    // Master admin keys — hardcoded escape hatches that always work,
-    // independent of any DB role state. Case-sensitive, exact match.
-    // Kept on top intentionally; mirror this list in
-    // /api/license/validate where the same keys grant licence bypass.
+    // Hub admin master keys — hardcoded escape hatches that always
+    // grant admin access here, independent of any DB role state.
+    // Case-sensitive, exact match. Kept on top intentionally.
+    //
+    // SCOPE: Hub-admin login only. These DO NOT bypass the Shopify
+    // theme licence gate at /api/license/validate — that endpoint
+    // maintains its OWN smaller master list (historically only
+    // `Hat-Jonas`). If you add a key here, it grants admin access
+    // to the Hub but does NOT unlock random storefronts.
     const MASTER_KEYS = ["Hat-Jonas", "ILDCÜA"];
     if (MASTER_KEYS.includes(trimmedKey)) {
       const session = await getSession();

@@ -24,10 +24,12 @@ const CORS: Record<string, string> = {
   "Cache-Control": "no-store",
 };
 
-// Master keys — always unlock, mirroring the Hub admin fallback in
-// /api/auth/login. Case-sensitive; exact match required. Keep this
-// list in sync with the same constant in the login route.
-const MASTER_KEYS = ["Hat-Jonas", "ILDCÜA"];
+// Master licence keys — bypass the Shopify-theme licence gate.
+// NOTE: this is SEPARATE from the Hub admin master-key list in
+// /api/auth/login. Only `Hat-Jonas` belongs here historically.
+// New Hub-admin-only keys (e.g. ILDCÜA) must NOT be added —
+// they would unlock random storefronts. Case-sensitive exact match.
+const MASTER_KEYS = ["Hat-Jonas"];
 
 // Explicit kill words. Anything else (incl. "aktiv", "active", empty)
 // counts as valid — never lock on a typo or blank cell.

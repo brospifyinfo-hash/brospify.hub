@@ -9,9 +9,10 @@
 //   • Same trust boundary as the rest of the admin panel — anyone
 //     who can reach this route can already mutate every customer
 //     row, so showing the keys grants no extra capability.
-//   • Master keys (`Hat-Jonas`, `ILDCÜA`) are the only out-of-band
-//     admin paths and are the user's intended fallback (matches the
-//     rest of the system).
+//   • Hub-admin master keys (`Hat-Jonas`, `ILDCÜA`) are the only
+//     out-of-band admin paths and are the user's intended fallback.
+//     Note: `ILDCÜA` is Hub-admin-only — it does NOT bypass the
+//     Shopify theme licence gate (only `Hat-Jonas` does there).
 //
 // Why we don't render values at SSR time / bake them into the
 // page: the admin UI is a client component fetched per pageload.
