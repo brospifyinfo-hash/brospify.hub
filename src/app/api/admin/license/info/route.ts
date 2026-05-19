@@ -40,6 +40,7 @@ export async function GET() {
     endpoints: {
       validate: `${baseUrl}/api/license/validate`,
       sync: `${baseUrl}/api/license/sync`,
+      issue: `${baseUrl}/api/license/issue`,
       cancel: `${baseUrl}/api/license/cancel`,
       expireOverdue: `${baseUrl}/api/admin/license/expire-overdue`,
     },

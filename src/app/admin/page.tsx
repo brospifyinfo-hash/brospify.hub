@@ -3918,6 +3918,9 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
       {/* ─── License Sync API (Make.com → Hub → Sheet) ─── */}
       <LicenseSyncCard />
 
+      {/* ─── Shopify Flow Setup (replaces Make.com end-to-end) ─── */}
+      <ShopifyFlowSetupCard />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <BigKpi label="Sheet-Tabs OK" value={status.sheetTabs.filter((t) => t.exists).length} icon={Check} color="#10B981" hint={`${status.sheetTabs.filter((t) => !t.exists).length} fehlen`} />
         <BigKpi label="Blob-Items" value={status.blob.count} icon={ImageIcon} color="#3B82F6" hint={`${status.blob.mbEstimate.toFixed(1)} MB`} />
@@ -5353,10 +5356,11 @@ function LicenseSyncCard() {
     baseUrl: string;
     apiKey: string;
     writeKey: string;
-    endpoints: { validate: string; sync: string; cancel: string; expireOverdue: string };
+    endpoints: { validate: string; sync: string; issue: string; cancel: string; expireOverdue: string };
   } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [revealed, setRevealed] = useState(false);
+  const [revealedWrite, setRevealedWrite] = useState(false);
+  const [revealedRead, setRevealedRead] = useState(false);
   const [copied, setCopied] = useState<string>("");
   const [expireRunning, setExpireRunning] = useState(false);
   const [expireResult, setExpireResult] = useState<{
@@ -5421,8 +5425,12 @@ function LicenseSyncCard() {
   }
 
   const writeKey = info?.writeKey || "";
+  const readKey = info?.apiKey || "";
   const maskedWriteKey = writeKey
     ? writeKey.slice(0, 4) + "•".repeat(Math.max(0, writeKey.length - 8)) + writeKey.slice(-4)
+    : "";
+  const maskedReadKey = readKey
+    ? readKey.slice(0, 4) + "•".repeat(Math.max(0, readKey.length - 8)) + readKey.slice(-4)
     : "";
 
   const sampleBody = JSON.stringify(
@@ -5474,6 +5482,7 @@ function LicenseSyncCard() {
           {info && (
             <div className="mt-3 space-y-1.5">
               {[
+                { label: "Issue (Flow → Hub)", url: info.endpoints.issue, method: "POST" },
                 { label: "Sync (Upsert)", url: info.endpoints.sync, method: "POST" },
                 { label: "Cancel", url: info.endpoints.cancel, method: "POST" },
                 { label: "Validate (Theme)", url: info.endpoints.validate, method: "GET" },
@@ -5501,27 +5510,27 @@ function LicenseSyncCard() {
             </div>
           )}
 
-          {/* ── WRITE Key reveal ── */}
+          {/* ── WRITE Key (Make.com / Shopify Flow) ── */}
           {info && (
             <div className="mt-3 px-2 py-2 rounded-md bg-amber-500/[0.04] border border-amber-500/20">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase tracking-widest font-bold text-amber-300/80 shrink-0">
-                  X-Api-Key Header
+                  WRITE · X-Api-Key
                 </span>
                 <code className="flex-1 text-[11px] font-mono text-zinc-200 truncate">
                   {writeKey
-                    ? revealed
+                    ? revealedWrite
                       ? writeKey
                       : maskedWriteKey
                     : <span className="text-red-300">nicht konfiguriert</span>}
                 </code>
                 <button
-                  onClick={() => setRevealed((v) => !v)}
+                  onClick={() => setRevealedWrite((v) => !v)}
                   disabled={!writeKey}
                   className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 text-[10px] text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-30 shrink-0 flex items-center gap-1"
                 >
                   <Eye className="w-3 h-3" />
-                  {revealed ? "Verstecken" : "Anzeigen"}
+                  {revealedWrite ? "Verstecken" : "Anzeigen"}
                 </button>
                 <button
                   onClick={() => copy(writeKey, "writeKey")}
@@ -5532,8 +5541,48 @@ function LicenseSyncCard() {
                 </button>
               </div>
               <p className="text-[9px] text-zinc-500 mt-1.5 leading-snug">
-                In Make.com → HTTP-Modul → Headers → <span className="font-mono">X-Api-Key</span>.
+                Für Make.com (HTTP-Modul) und Shopify Flow (HTTP-Request) als
+                <span className="font-mono"> X-Api-Key</span> Header.
                 NIE in einem Storefront-Theme oder öffentlichen Code verwenden.
+              </p>
+            </div>
+          )}
+
+          {/* ── READ Key (Shopify Theme license-check.liquid) ── */}
+          {info && (
+            <div className="mt-2 px-2 py-2 rounded-md bg-cyan-500/[0.04] border border-cyan-500/20">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] uppercase tracking-widest font-bold text-cyan-300/80 shrink-0">
+                  READ · ?apikey=
+                </span>
+                <code className="flex-1 text-[11px] font-mono text-zinc-200 truncate">
+                  {readKey
+                    ? revealedRead
+                      ? readKey
+                      : maskedReadKey
+                    : <span className="text-red-300">nicht konfiguriert</span>}
+                </code>
+                <button
+                  onClick={() => setRevealedRead((v) => !v)}
+                  disabled={!readKey}
+                  className="px-2 py-1 rounded bg-white/[0.04] border border-white/10 text-[10px] text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-30 shrink-0 flex items-center gap-1"
+                >
+                  <Eye className="w-3 h-3" />
+                  {revealedRead ? "Verstecken" : "Anzeigen"}
+                </button>
+                <button
+                  onClick={() => copy(readKey, "readKey")}
+                  disabled={!readKey}
+                  className="px-2 py-1 rounded bg-cyan-500/15 border border-cyan-500/30 text-[10px] text-cyan-200 font-semibold hover:bg-cyan-500/25 transition disabled:opacity-30 shrink-0"
+                >
+                  {copied === "readKey" ? "✓" : "Key kopieren"}
+                </button>
+              </div>
+              <p className="text-[9px] text-zinc-500 mt-1.5 leading-snug">
+                Wird in <span className="font-mono">snippets/license-check.liquid</span> des Shopify-Themes
+                als Query-Param <span className="font-mono">?apikey=…</span> an
+                <span className="font-mono"> /validate</span> gehängt. Steht im Storefront-HTML —
+                schützt nur gegen zufälliges Scraping, nicht gegen gezielte Angriffe.
               </p>
             </div>
           )}
@@ -5601,6 +5650,307 @@ function LicenseSyncCard() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Shopify Flow Setup card (System tab) ───────────────────────
+// Step-by-step setup for replacing Make.com with native Shopify
+// Flow. The card renders copy-paste payloads (HTTP body + Liquid
+// email body) so the user can paste them straight into Flow's
+// HTTP-request and Send-email actions without typing.
+//
+// Why this lives next to LicenseSyncCard: both surface the same
+// LICENSE_WRITE_KEY and the same /api/license/* endpoint family,
+// but Make and Flow are different automation tools so users
+// benefit from having both setups separately documented rather
+// than crammed into one card.
+
+function ShopifyFlowSetupCard() {
+  const [info, setInfo] = useState<{
+    baseUrl: string;
+    writeKey: string;
+    endpoints: { issue: string };
+  } | null>(null);
+  const [revealed, setRevealed] = useState(false);
+  const [copied, setCopied] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/admin/license/info");
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled) setInfo(data);
+      } catch {
+        // best-effort; card stays in skeleton state on failure
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function copy(text: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      setTimeout(() => setCopied(""), 1500);
+    } catch {
+      /* clipboard blocked in non-https; ignore */
+    }
+  }
+
+  const writeKey = info?.writeKey || "";
+  const maskedKey = writeKey
+    ? writeKey.slice(0, 4) + "•".repeat(Math.max(0, writeKey.length - 8)) + writeKey.slice(-4)
+    : "";
+
+  // Shopify Flow uses Liquid for variable substitution in HTTP body.
+  // `{{order.customer.email}}` etc. are evaluated by Flow at fire-time.
+  const flowBody = JSON.stringify(
+    {
+      kundenEmail: "{{order.customer.email}}",
+      shopDomain: "{{shop.permanentDomain}}",
+      bestellnummer: "{{order.name}}",
+      sku: "{{order.lineItems[0].variant.sku}}",
+      charge: "{{order.totalPrice}}",
+      status: "aktiv",
+    },
+    null,
+    2,
+  );
+
+  // Liquid template for Flow's "Send email" action. The HTTP
+  // response from the previous step is exposed as
+  // {{step1.body.key}} (Flow's standard pattern).
+  const emailBody = `Hallo {{order.customer.firstName}},
+
+vielen Dank für deinen Kauf! Dein Brospify Lizenzschlüssel:
+
+  {{step1.body.key}}
+
+So aktivierst du:
+1. Öffne deinen Shopify Admin → Themes → Brospify Theme
+2. Theme-Einstellungen → "Lizenzschlüssel" → trage den Schlüssel ein
+3. Speichern. Fertig.
+
+Bei Problemen: support@brospify.com
+
+Brospify`;
+
+  const emailSubject = "Dein Brospify Lizenzschlüssel ({{order.name}})";
+
+  return (
+    <div
+      className="rounded-2xl border border-purple-500/15 p-3"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(168,85,247,0.06) 0%, rgba(255,255,255,0.02) 100%)",
+        backdropFilter: "blur(40px) saturate(180%)",
+        WebkitBackdropFilter: "blur(40px) saturate(180%)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-purple-500/15 border border-purple-500/25 flex items-center justify-center shrink-0">
+          <Wand2 className="w-4 h-4 text-purple-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-white">Shopify Flow Setup</h3>
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-purple-300/80 bg-purple-500/10 border border-purple-500/25 rounded px-1.5 py-0.5">
+              Ersetzt Make.com
+            </span>
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+            Shopify Flow ist Shopifys eigene Automatisierung — gratis in jedem Plan.
+            Order Paid → HTTP-Request zum Hub (gibt Key zurück) → Send Email mit dem Key.
+            Make wird damit komplett überflüssig. Setup einmalig ~10 Minuten.
+          </p>
+
+          {/* Step 1 */}
+          <div className="mt-3 px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06]">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-purple-300/80 bg-purple-500/10 border border-purple-500/25 rounded px-1.5 py-0.5">
+                Schritt 1
+              </span>
+              <span className="text-[11px] font-semibold">Shopify Flow installieren</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              Shopify Admin → Apps → Shopify App Store → suche „Shopify Flow“ → Installieren.
+              Bei neueren Shops oft schon vorinstalliert.
+            </p>
+          </div>
+
+          {/* Step 2 */}
+          <div className="mt-2 px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06]">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-purple-300/80 bg-purple-500/10 border border-purple-500/25 rounded px-1.5 py-0.5">
+                Schritt 2
+              </span>
+              <span className="text-[11px] font-semibold">Workflow erstellen — Trigger</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              Flow öffnen → „Create workflow“ → Trigger: <span className="font-mono text-zinc-300">Order paid</span>.
+            </p>
+          </div>
+
+          {/* Step 3 — HTTP Request */}
+          <div className="mt-2 px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06]">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-purple-300/80 bg-purple-500/10 border border-purple-500/25 rounded px-1.5 py-0.5">
+                Schritt 3
+              </span>
+              <span className="text-[11px] font-semibold">Action: Send HTTP request</span>
+            </div>
+            <div className="space-y-1.5">
+              <FlowField
+                label="URL"
+                value={info?.endpoints.issue || ""}
+                onCopy={() => copy(info?.endpoints.issue || "", "issueUrl")}
+                copied={copied === "issueUrl"}
+              />
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 w-16 shrink-0">Method</span>
+                <code className="text-[11px] font-mono text-zinc-200">POST</code>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 w-16 shrink-0">Headers</span>
+                <code className="text-[10px] font-mono text-zinc-200">
+                  Content-Type: application/json
+                </code>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[9px] uppercase tracking-widest font-bold text-amber-300/80 w-16 shrink-0">X-Api-Key</span>
+                <code className="text-[10px] font-mono text-zinc-200 truncate flex-1 min-w-0">
+                  {writeKey ? (revealed ? writeKey : maskedKey) : <span className="text-red-300">nicht konfiguriert</span>}
+                </code>
+                <button
+                  onClick={() => setRevealed((v) => !v)}
+                  disabled={!writeKey}
+                  className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/10 text-[9px] text-zinc-300 hover:bg-white/[0.08] disabled:opacity-30 flex items-center gap-1"
+                >
+                  <Eye className="w-2.5 h-2.5" />
+                  {revealed ? "Hide" : "Show"}
+                </button>
+                <button
+                  onClick={() => copy(writeKey, "writeKeyFlow")}
+                  disabled={!writeKey}
+                  className="px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/30 text-[9px] text-amber-200 font-semibold hover:bg-amber-500/25 disabled:opacity-30"
+                >
+                  {copied === "writeKeyFlow" ? "✓" : "Copy"}
+                </button>
+              </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-500">Body (JSON)</span>
+                  <button
+                    onClick={() => copy(flowBody, "flowBody")}
+                    className="text-[9px] text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/10"
+                  >
+                    {copied === "flowBody" ? "✓ Kopiert" : "Body kopieren"}
+                  </button>
+                </div>
+                <pre className="text-[9px] font-mono text-zinc-300 bg-black/40 border border-white/[0.06] rounded p-2 overflow-x-auto leading-relaxed">
+{flowBody}
+                </pre>
+                <p className="text-[9px] text-zinc-500 mt-1 leading-snug">
+                  Die <span className="font-mono">{`{{...}}`}</span>-Variablen werden von Shopify Flow
+                  automatisch ersetzt. Den Step in Flow „step1“ benennen, damit Schritt 4 darauf zugreifen kann.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Step 4 — Send Email */}
+          <div className="mt-2 px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06]">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-purple-300/80 bg-purple-500/10 border border-purple-500/25 rounded px-1.5 py-0.5">
+                Schritt 4
+              </span>
+              <span className="text-[11px] font-semibold">Action: Send email</span>
+            </div>
+            <div className="space-y-1.5">
+              <FlowField
+                label="An"
+                value="{{order.customer.email}}"
+                onCopy={() => copy("{{order.customer.email}}", "emailTo")}
+                copied={copied === "emailTo"}
+              />
+              <FlowField
+                label="Subject"
+                value={emailSubject}
+                onCopy={() => copy(emailSubject, "emailSubject")}
+                copied={copied === "emailSubject"}
+              />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-500">Body</span>
+                  <button
+                    onClick={() => copy(emailBody, "emailBody")}
+                    className="text-[9px] text-zinc-400 hover:text-zinc-200 px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/10"
+                  >
+                    {copied === "emailBody" ? "✓ Kopiert" : "Body kopieren"}
+                  </button>
+                </div>
+                <pre className="text-[9px] font-mono text-zinc-300 bg-black/40 border border-white/[0.06] rounded p-2 overflow-x-auto leading-relaxed whitespace-pre-wrap">
+{emailBody}
+                </pre>
+                <p className="text-[9px] text-zinc-500 mt-1 leading-snug">
+                  <span className="font-mono">{`{{step1.body.key}}`}</span> ist der Lizenzschlüssel
+                  aus der HTTP-Response von Schritt 3.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Step 5 — Test */}
+          <div className="mt-2 px-2.5 py-2 rounded-lg bg-emerald-500/[0.04] border border-emerald-500/20">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-emerald-300/80 bg-emerald-500/10 border border-emerald-500/25 rounded px-1.5 py-0.5">
+                Schritt 5
+              </span>
+              <span className="text-[11px] font-semibold">Test &amp; Activate</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-snug">
+              Flow → „Save &amp; Turn on workflow“. Erste Test-Bestellung in Shopify auslösen
+              (echte oder Bogus Gateway), dann hier in „Lizenzen“ prüfen ob die Zeile angelegt
+              wurde — und in deinem Mail-Postfach ob die Mail mit Key ankam. Sobald Test passt:
+              Make-Szenario kann deaktiviert werden.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Small helper for the Shopify Flow card's labeled field+copy rows.
+function FlowField({
+  label,
+  value,
+  onCopy,
+  copied,
+}: {
+  label: string;
+  value: string;
+  onCopy: () => void;
+  copied: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-[9px] uppercase tracking-widest font-bold text-zinc-500 w-16 shrink-0">
+        {label}
+      </span>
+      <code className="text-[10px] font-mono text-zinc-200 truncate flex-1 min-w-0">{value || "—"}</code>
+      <button
+        onClick={onCopy}
+        disabled={!value}
+        className="px-1.5 py-0.5 rounded bg-white/[0.04] border border-white/10 text-[9px] text-zinc-300 hover:bg-white/[0.08] disabled:opacity-30"
+      >
+        {copied ? "✓" : "Copy"}
+      </button>
     </div>
   );
 }

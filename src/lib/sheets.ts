@@ -597,6 +597,42 @@ export async function findKundeByEmail(email: string): Promise<Kunde | null> {
   );
 }
 
+// Match by Shopify order number — used by /api/license/issue for
+// idempotency. If Shopify Flow retries (or fires twice), we must
+// not create a second licence for the same order.
+export async function findKundeByOrder(orderNumber: string): Promise<Kunde | null> {
+  if (!orderNumber) return null;
+  const target = orderNumber.trim();
+  if (!target) return null;
+  const kunden = await getAllKunden();
+  return kunden.find((k) => (k.bestellnummer || "").trim() === target) || null;
+}
+
+// Generate a fresh licence key. Format: `BROSPIFY-XXXX-XXXX-XXXX`
+// where X is an uppercase alphanumeric, drawn from an alphabet that
+// excludes the ambiguous characters I, O, 0, 1 so customers don't
+// mis-type when reading from an email.
+//
+// Collision resistance: 32^12 ≈ 1.15e18 combos. Even with a million
+// customers we expect zero collisions in practice; the issue endpoint
+// re-rolls if it does happen.
+const KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 chars
+export function generateLicenseKey(): string {
+  // Node's crypto.randomBytes for unbiased sampling — we accept a
+  // tiny modulo bias here because the alphabet length divides 256
+  // cleanly into 8 buckets of 32, so 256 % 32 === 0. No bias.
+  // (Using Math.random would be biased AND predictable; avoid.)
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require("crypto") as typeof import("crypto");
+  const bytes = crypto.randomBytes(12);
+  let out = "BROSPIFY";
+  for (let i = 0; i < 12; i += 1) {
+    if (i % 4 === 0) out += "-";
+    out += KEY_ALPHABET[bytes[i] % 32];
+  }
+  return out;
+}
+
 export async function updateKundeField(
   rowIndex: number,
   column: string,
