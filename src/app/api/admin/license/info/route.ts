@@ -37,12 +37,16 @@ export async function GET() {
     baseUrl,
     apiKey: process.env.LICENSE_API_KEY || "",
     writeKey: process.env.LICENSE_WRITE_KEY || "",
+    shopifyWebhookSecretConfigured: !!process.env.SHOPIFY_WEBHOOK_SECRET,
+    resendConfigured: !!(process.env.RESEND_API_KEY && process.env.RESEND_FROM_EMAIL),
+    resendFromEmail: process.env.RESEND_FROM_EMAIL || "",
     endpoints: {
       validate: `${baseUrl}/api/license/validate`,
       sync: `${baseUrl}/api/license/sync`,
       issue: `${baseUrl}/api/license/issue`,
       cancel: `${baseUrl}/api/license/cancel`,
       expireOverdue: `${baseUrl}/api/admin/license/expire-overdue`,
+      shopifyWebhook: `${baseUrl}/api/shopify/webhook`,
     },
   });
 }

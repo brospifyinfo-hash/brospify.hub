@@ -44,6 +44,9 @@ const ENV_VARS_TO_CHECK = [
   { key: "NEXT_PUBLIC_APP_URL", required: false, label: "Public App URL" },
   { key: "LICENSE_API_KEY", required: false, label: "License READ Key (Theme)" },
   { key: "LICENSE_WRITE_KEY", required: true, label: "License WRITE Key (Make.com)" },
+  { key: "SHOPIFY_WEBHOOK_SECRET", required: false, label: "Shopify Webhook Secret" },
+  { key: "RESEND_API_KEY", required: false, label: "Resend API Key (Mail)" },
+  { key: "RESEND_FROM_EMAIL", required: false, label: "Resend From-Address" },
   { key: "CRON_SECRET", required: false, label: "Cron Secret (Vercel Cron)" },
 ];
 
