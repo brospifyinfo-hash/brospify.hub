@@ -94,6 +94,16 @@ function customerName(c: ShopifyCustomer | undefined, order?: ShopifyOrder): str
 
 const STATUS_DEAD = new Set(["cancelled", "canceled", "expired", "failed"]);
 
+// A line item belongs to one of the 3 subscription tiers if its SKU
+// contains bronze / silber / gold (case-insensitive substring, so
+// "BRONZE", "abo-gold", "BROSPIFY-SILBER" all match). Everything else
+// the shop sells — credits, one-off products — does NOT mint a licence.
+const SUBSCRIPTION_SKU_KEYS = ["bronze", "silber", "silver", "gold"];
+function isSubscriptionSku(sku: string | undefined): boolean {
+  const s = (sku || "").toLowerCase();
+  return s !== "" && SUBSCRIPTION_SKU_KEYS.some((k) => s.includes(k));
+}
+
 export async function POST(req: NextRequest) {
   const expected = (process.env.SHOPIFY_WEBHOOK_SECRET || "").trim();
   if (!expected) {
@@ -140,10 +150,30 @@ export async function POST(req: NextRequest) {
 async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promise<NextResponse> {
   const orderName = (payload.name || (payload.order_number ? `#${payload.order_number}` : "")).trim();
   const email = (payload.customer?.email || payload.email || payload.contact_email || "").trim();
-  const sku = payload.line_items?.find((li) => li.sku)?.sku || "";
   const charge = payload.total_price ? String(payload.total_price) : "";
   const customerId = payload.customer?.id ? String(payload.customer.id) : "";
   const orderId = payload.id;
+
+  // Gate: only the 3 subscription tiers (bronze/silber/gold SKU) mint
+  // a licence. Orders for any other product — credits, one-off items —
+  // also fire orders/paid but must be ignored here. We pick the first
+  // matching line item; its SKU is what gets stored in the sheet.
+  const subItem = (payload.line_items || []).find((li) => isSubscriptionSku(li.sku));
+  if (!subItem) {
+    void logSystemEvent({
+      level: "info",
+      actor: "shopify.webhook",
+      action: "webhook.skipped_non_subscription",
+      target: orderName,
+      details: {
+        shopDomain,
+        skus: (payload.line_items || []).map((li) => li.sku).filter(Boolean),
+      },
+    });
+    // 200 — a non-subscription order is a valid event, just not ours.
+    return NextResponse.json({ ok: true, skipped: "no subscription SKU" });
+  }
+  const sku = subItem.sku || "";
 
   if (!email) {
     void logSystemEvent({
