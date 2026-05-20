@@ -56,3 +56,52 @@ export interface ShopifyProduct {
   image?: { src: string };
   variants: { price: string }[];
 }
+
+// ─── Order metafield write ──────────────────────────────
+// Attaches a custom metafield to a Shopify order. Used by the
+// webhook handler to surface the license key in Shopify's own
+// order-confirmation email — no external email service needed.
+//
+// Liquid render path in the email template:
+//   {{ order.metafields.custom.license_key }}
+//
+// Requires the merchant's Admin API access token with the
+// `write_order_metafields` scope. Token + shop domain come
+// from the env vars SHOPIFY_ADMIN_TOKEN + SHOPIFY_SHOP_DOMAIN
+// (the latter is the *.myshopify.com handle, e.g.
+// "fxzu0e-6i.myshopify.com" — NOT the custom domain).
+
+export interface WriteOrderMetafieldArgs {
+  orderId: number;
+  namespace?: string;
+  key: string;
+  value: string;
+  type?: string;
+}
+
+export async function writeOrderMetafield(args: WriteOrderMetafieldArgs): Promise<{ ok: boolean; error?: string }> {
+  const domain = (process.env.SHOPIFY_SHOP_DOMAIN || "").trim();
+  const token = (process.env.SHOPIFY_ADMIN_TOKEN || "").trim();
+  if (!domain || !token) {
+    return { ok: false, error: "SHOPIFY_SHOP_DOMAIN or SHOPIFY_ADMIN_TOKEN not configured" };
+  }
+  try {
+    await shopifyFetch({
+      domain,
+      token,
+      path: `/orders/${args.orderId}/metafields.json`,
+      method: "POST",
+      body: {
+        metafield: {
+          namespace: args.namespace || "custom",
+          key: args.key,
+          value: args.value,
+          type: args.type || "single_line_text_field",
+        },
+      },
+    });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "unknown" };
+  }
+}

@@ -27,6 +27,7 @@ import {
   upsertKundeByKey,
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
+import { writeOrderMetafield } from "@/lib/shopify";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -186,16 +187,42 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Send the licence email. If Resend isn't configured this fails
-  // open and only logs — the row is already in the sheet, so the
-  // operator can still recover via the admin Lizenzen tab.
-  const mailResult = await sendLicenseEmail({
-    to: email,
-    customerName: customerName(payload) || undefined,
-    licenseKey,
-    orderNumber: orderName,
-    sku,
-  });
+  // Primary delivery path: write the licence key onto the order as
+  // a metafield so Shopify's own order-confirmation email can render
+  // it via {{ order.metafields.custom.license_key }}. No external
+  // email service involved — Shopify sends the mail it always sends.
+  //
+  // Best-effort: a failure here is logged but does not abort. The
+  // Resend send below is the fallback, and the row is already in the
+  // sheet regardless, so the admin can always recover manually.
+  let metafieldWritten = false;
+  let metafieldError: string | undefined;
+  if (payload.id) {
+    const mf = await writeOrderMetafield({
+      orderId: payload.id,
+      key: "license_key",
+      value: licenseKey,
+    });
+    metafieldWritten = mf.ok;
+    metafieldError = mf.error;
+    if (!mf.ok) {
+      console.warn("[shopify/webhook] metafield write failed:", mf.error);
+    }
+  }
+
+  // Fallback delivery path: Resend. Only fires when the metafield
+  // path is unavailable (Admin token not configured) — so users who
+  // set up SHOPIFY_ADMIN_TOKEN don't need Resend at all, and users
+  // who skip the Custom App still get mails via Resend.
+  const mailResult = metafieldWritten
+    ? { sent: false, error: undefined as string | undefined, skipped: "metafield path active" }
+    : await sendLicenseEmail({
+        to: email,
+        customerName: customerName(payload) || undefined,
+        licenseKey,
+        orderNumber: orderName,
+        sku,
+      });
 
   void logSystemEvent({
     level: "audit",
@@ -208,6 +235,9 @@ export async function POST(req: NextRequest) {
       email,
       sku,
       charge,
+      deliveryPath: metafieldWritten ? "shopify-metafield" : "resend",
+      metafieldWritten,
+      metafieldError,
       emailSent: mailResult.sent,
       emailError: mailResult.error,
     },
@@ -217,6 +247,7 @@ export async function POST(req: NextRequest) {
     ok: true,
     action,
     key: licenseKey,
+    deliveryPath: metafieldWritten ? "shopify-metafield" : "resend",
     emailSent: mailResult.sent,
   });
 }
