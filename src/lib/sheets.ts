@@ -608,29 +608,26 @@ export async function findKundeByOrder(orderNumber: string): Promise<Kunde | nul
   return kunden.find((k) => (k.bestellnummer || "").trim() === target) || null;
 }
 
-// Generate a fresh licence key. Format: `BROSPIFY-XXXX-XXXX-XXXX`
-// where X is an uppercase alphanumeric, drawn from an alphabet that
-// excludes the ambiguous characters I, O, 0, 1 so customers don't
-// mis-type when reading from an email.
+// Generate a fresh licence key. Format: `XXX-XXXXXX` (9 chars + 1
+// separator). The alphabet excludes the ambiguous characters
+// I, O, 0, 1 so customers don't mis-type when reading from an email.
 //
-// Collision resistance: 32^12 ≈ 1.15e18 combos. Even with a million
-// customers we expect zero collisions in practice; the issue endpoint
-// re-rolls if it does happen.
+// Collision resistance: 32^9 ≈ 35 billion combos. With even 100k
+// customers the per-issue collision chance is ~3e-6; the issue
+// endpoint re-rolls up to 3 times if a clash ever happens.
 const KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 32 chars
 export function generateLicenseKey(): string {
-  // Node's crypto.randomBytes for unbiased sampling — we accept a
-  // tiny modulo bias here because the alphabet length divides 256
-  // cleanly into 8 buckets of 32, so 256 % 32 === 0. No bias.
-  // (Using Math.random would be biased AND predictable; avoid.)
+  // Node's crypto.randomBytes for unbiased sampling — the alphabet
+  // length divides 256 cleanly into 8 buckets of 32, so 256 % 32 === 0:
+  // no modulo bias. (Math.random would be biased AND predictable.)
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const crypto = require("crypto") as typeof import("crypto");
-  const bytes = crypto.randomBytes(12);
-  let out = "BROSPIFY";
-  for (let i = 0; i < 12; i += 1) {
-    if (i % 4 === 0) out += "-";
-    out += KEY_ALPHABET[bytes[i] % 32];
-  }
-  return out;
+  const bytes = crypto.randomBytes(9);
+  let prefix = "";
+  for (let i = 0; i < 3; i += 1) prefix += KEY_ALPHABET[bytes[i] % 32];
+  let body = "";
+  for (let i = 3; i < 9; i += 1) body += KEY_ALPHABET[bytes[i] % 32];
+  return `${prefix}-${body}`;
 }
 
 export async function updateKundeField(
