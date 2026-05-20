@@ -181,11 +181,18 @@ export interface KundeProfile {
    *  are read but the push gate still rejects. */
   themesPurchased?: string[];
   /** ISO date/datetime. When set, /api/license/validate rejects after this
-   *  point and the daily expire-cron flips `status` to "abgelaufen". Written
-   *  by Make.com via /api/license/sync — Make is the source of truth for
-   *  subscription expiry. Absent = no time-based expiry (still gated by
-   *  `status` column and `blocked`). */
+   *  point and the daily expire-cron flips `status` to "abgelaufen". For
+   *  Shopify-native subscriptions this is a rolling window: each renewal
+   *  order pushes it forward, so a stopped subscription auto-expires.
+   *  Absent = no time-based expiry (still gated by `status` + `blocked`). */
   subscriptionEndsAt?: string;
+  /** Shopify customer id (numeric, as string). Stored on first order so
+   *  later subscription_contracts/update webhooks can match the licence
+   *  even when their payload only carries customer_id, not the email. */
+  shopifyCustomerId?: string;
+  /** Shopify subscription contract id. Links the licence to the recurring
+   *  contract so cancellations can be matched precisely. */
+  subscriptionContractId?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
