@@ -41,7 +41,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
-import { BrandLogo, useBranding } from "@/lib/branding";
+import { BrandLogo } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
 import { useTier } from "@/lib/use-tier";
 
@@ -158,7 +158,6 @@ export default function Navigation() {
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
-  const { logoUrl, brandName } = useBranding();
   const credits = useCredits();
   const tierState = useTier();
 
@@ -260,24 +259,10 @@ export default function Navigation() {
         <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-6">
           <div className="flex items-center justify-between h-12 gap-2">
             {/* Logo */}
-            <Link href="/home" className="flex items-center gap-1.5 group shrink-0">
+            <Link href="/home" className="flex items-center group shrink-0">
               <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-lg">
-                {logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={logoUrl} alt="Logo" className="h-7 object-contain rounded-lg" />
-                ) : (
-                  <BrandLogo size="md" />
-                )}
+                <BrandLogo size="md" />
               </div>
-              {!logoUrl && (
-                <span className="text-sm font-bold hidden sm:block">
-                  {brandName ? (
-                    brandName
-                  ) : (
-                    <>Brospify<span className="text-[#95BF47]">Hub</span></>
-                  )}
-                </span>
-              )}
             </Link>
 
             {/* Desktop Links */}

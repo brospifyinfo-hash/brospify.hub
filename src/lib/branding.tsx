@@ -106,6 +106,9 @@ export function refreshBranding() {
   });
 }
 
+// The Brospify wordmark logo. Renders the admin-uploaded logo when one
+// is set, otherwise the bundled default (public/brospify-logo.png).
+// Always an image — no text wordmark, no placeholder icon.
 export function BrandLogo({
   size = "md",
   className = "",
@@ -115,44 +118,19 @@ export function BrandLogo({
 }) {
   const { logoUrl } = useBranding();
 
-  const sizeMap = {
-    sm: "w-6 h-6",
-    md: "w-8 h-8 md:w-9 md:h-9",
-    lg: "w-12 h-12",
-    xl: "w-16 h-16",
+  const heightMap = {
+    sm: "h-5",
+    md: "h-7",
+    lg: "h-10",
+    xl: "h-16 sm:h-20",
   };
 
-  const iconSize = sizeMap[size];
-
-  if (logoUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return (
-      <img
-        src={logoUrl}
-        alt="Logo"
-        className={`${iconSize} object-contain rounded-xl ${className}`}
-      />
-    );
-  }
-
-  // Neutral placeholder when no logo is uploaded
+  // eslint-disable-next-line @next/next/no-img-element
   return (
-    <div
-      className={`${iconSize} rounded-xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center ${className}`}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="w-1/2 h-1/2 text-[#95BF47]"
-      >
-        <path d="M12 2L2 7l10 5 10-5-10-5z" />
-        <path d="M2 17l10 5 10-5" />
-        <path d="M2 12l10 5 10-5" />
-      </svg>
-    </div>
+    <img
+      src={logoUrl || "/brospify-logo.png"}
+      alt="Logo"
+      className={`${heightMap[size]} w-auto object-contain ${className}`}
+    />
   );
 }
