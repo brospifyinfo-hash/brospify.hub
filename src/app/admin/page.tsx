@@ -403,6 +403,7 @@ export default function AdminPage() {
   }
   const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", brandName: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
   const [settingsLoading, setSettingsLoading] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
   const [themeBusyId, setThemeBusyId] = useState<string | null>(null);
   const [themePreviewBusyId, setThemePreviewBusyId] = useState<string | null>(null);
 
@@ -1207,6 +1208,107 @@ export default function AdminPage() {
       } else { const d = await res.json(); setError(d.error || "Fehler."); }
     } catch { setError("Speichern fehlgeschlagen."); }
     finally { setSettingsLoading(false); }
+  }
+
+  // ── Logo: upload + persist as one atomic action ────────────────
+  // Picking a file uploads AND saves immediately — no separate
+  // "Speichern" click to forget. Large raster logos are downscaled in
+  // the browser first so the upload can never trip a body-size limit.
+  function prepareLogoFile(file: File): Promise<File> {
+    return new Promise((resolve) => {
+      // SVG is vector + tiny; small files are already fine.
+      if (file.type === "image/svg+xml" || file.size <= 600 * 1024) {
+        resolve(file);
+        return;
+      }
+      const img = new window.Image();
+      const objectUrl = URL.createObjectURL(file);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        const MAX = 600;
+        let w = img.naturalWidth || img.width;
+        let h = img.naturalHeight || img.height;
+        if (w > MAX || h > MAX) {
+          const s = MAX / Math.max(w, h);
+          w = Math.round(w * s);
+          h = Math.round(h * s);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(file); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) { resolve(file); return; }
+            const name = file.name.replace(/\.[^.]+$/, "") + ".png";
+            resolve(new File([blob], name, { type: "image/png" }));
+          },
+          "image/png",
+        );
+      };
+      img.onerror = () => { URL.revokeObjectURL(objectUrl); resolve(file); };
+      img.src = objectUrl;
+    });
+  }
+
+  // POST only logoUrl — the settings route merges it into the stored
+  // JSON, so unsaved edits in other fields are never swept in.
+  async function persistLogo(logoUrl: string): Promise<boolean> {
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ logoUrl }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "Logo speichern fehlgeschlagen.");
+      return false;
+    }
+    setSettingsData((prev) => ({ ...prev, logoUrl }));
+    refreshBranding();
+    return true;
+  }
+
+  async function uploadLogo(file: File) {
+    setLogoBusy(true);
+    setError("");
+    try {
+      const prepared = await prepareLogoFile(file);
+      const fd = new FormData();
+      fd.append("file", prepared);
+      const upRes = await fetch("/api/upload", { method: "POST", body: fd });
+      const upData = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upData?.url) {
+        setError(upData?.error || "Logo-Upload fehlgeschlagen.");
+        return;
+      }
+      if (await persistLogo(upData.url)) {
+        setSuccess("Logo hochgeladen und gespeichert.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch {
+      setError("Logo-Upload fehlgeschlagen.");
+    } finally {
+      setLogoBusy(false);
+    }
+  }
+
+  async function commitLogoUrl(rawUrl: string) {
+    const logoUrl = rawUrl.trim();
+    setLogoBusy(true);
+    setError("");
+    try {
+      if (await persistLogo(logoUrl)) {
+        setSuccess(logoUrl ? "Logo gespeichert." : "Logo entfernt.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch {
+      setError("Logo speichern fehlgeschlagen.");
+    } finally {
+      setLogoBusy(false);
+    }
   }
 
   function addNewTheme() {
@@ -2129,44 +2231,45 @@ export default function AdminPage() {
                 <p className="text-xs text-zinc-400 mb-3 font-semibold">Logo-Upload</p>
               </div>
 
-              {/* File Upload */}
+              {/* File Upload — uploads AND saves in one step */}
               <div className="flex items-center gap-3">
-                <label className="cursor-pointer flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 text-[#95BF47] text-sm font-medium hover:bg-[#95BF47]/15 transition">
+                <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 text-[#95BF47] text-sm font-medium transition ${logoBusy ? "opacity-60 cursor-wait pointer-events-none" : "cursor-pointer hover:bg-[#95BF47]/15"}`}>
                   <Upload className="w-4 h-4" />
-                  Logo hochladen
+                  {logoBusy ? "Wird gespeichert…" : "Logo hochladen"}
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={async (e) => {
+                    disabled={logoBusy}
+                    onChange={(e) => {
                       const file = e.target.files?.[0];
-                      if (!file) return;
-                      const fd = new FormData();
-                      fd.append("file", file);
-                      try {
-                        const res = await fetch("/api/upload", { method: "POST", body: fd });
-                        if (res.ok) {
-                          const data = await res.json();
-                          if (data.url) {
-                            setSettingsData({ ...settingsData, logoUrl: data.url });
-                          }
-                        }
-                      } catch { /* ignore */ }
+                      e.target.value = "";
+                      if (file) uploadLogo(file);
                     }}
                   />
                 </label>
                 {settingsData.logoUrl && (
                   <button
-                    onClick={() => setSettingsData({ ...settingsData, logoUrl: "" })}
-                    className="text-xs text-red-400 hover:text-red-300 transition"
+                    onClick={() => commitLogoUrl("")}
+                    disabled={logoBusy}
+                    className="text-xs text-red-400 hover:text-red-300 transition disabled:opacity-50"
                   >
                     Entfernen
                   </button>
                 )}
               </div>
+              <p className="text-[10px] text-zinc-500 -mt-1">Wird sofort gespeichert &amp; überall übernommen — kein extra Klick auf „Speichern" nötig. Große Bilder werden automatisch verkleinert.</p>
 
-              {/* URL fallback */}
-              <input type="text" value={settingsData.logoUrl} onChange={e => setSettingsData({ ...settingsData, logoUrl: e.target.value })} placeholder="Oder Logo-URL direkt eingeben..." className="input-glass w-full text-xs" />
+              {/* URL fallback — persists when you leave the field */}
+              <input
+                type="text"
+                value={settingsData.logoUrl}
+                onChange={e => setSettingsData({ ...settingsData, logoUrl: e.target.value })}
+                onBlur={e => commitLogoUrl(e.target.value)}
+                disabled={logoBusy}
+                placeholder="Oder Logo-URL direkt eingeben (speichert beim Verlassen des Feldes)…"
+                className="input-glass w-full text-xs disabled:opacity-50"
+              />
 
               {/* Preview */}
               {settingsData.logoUrl && (
