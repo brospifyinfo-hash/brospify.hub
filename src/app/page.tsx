@@ -94,7 +94,7 @@ function LoginContent() {
               {brandName ? (
                 brandName
               ) : (
-                <>Managed <span className="text-[#95BF47]">Hub</span></>
+                <>Brospify<span className="text-[#95BF47]">Hub</span></>
               )}
             </h1>
           )}
@@ -179,7 +179,9 @@ function LoginContent() {
           </form>
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-8">{t.login.footer}</p>
+        <p className="text-center text-white/20 text-xs mt-8">
+          &copy; {new Date().getFullYear()} {brandName || "BrospifyHub"}. {t.login.footer}
+        </p>
       </motion.div>
     </div>
   );

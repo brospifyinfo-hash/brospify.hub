@@ -33,7 +33,7 @@ const de = {
     licenseLabel: "Lizenzschlüssel",
     licensePlaceholder: "Lizenzschlüssel eingeben",
     licenseButton: "Einloggen",
-    footer: "\u00A9 2025 Managed Hub. Alle Rechte vorbehalten.",
+    footer: "Alle Rechte vorbehalten.",
   },
   profile: {
     title: "Einstellungen",
