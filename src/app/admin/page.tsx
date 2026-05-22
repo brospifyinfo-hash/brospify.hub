@@ -368,6 +368,9 @@ export default function AdminPage() {
   const [bulkModal, setBulkModal] = useState(false);
   const [bulkJson, setBulkJson] = useState("");
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [aiDiscovering, setAiDiscovering] = useState(false);
+  const [aiEvidence, setAiEvidence] = useState("");
+  const [aiDepth, setAiDepth] = useState<"schnell" | "gruendlich">("schnell");
   const [filterSku, setFilterSku] = useState("ALL");
   type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
@@ -1388,8 +1391,8 @@ export default function AdminPage() {
     };
   }
 
-  function openNew() { setEditProduct({ ...EMPTY, stats: { ...EMPTY.stats }, finances: { ...EMPTY.finances }, images: [] }); setIsNew(true); setEditModal(true); }
-  function openEdit(p: Produkt) { setEditProduct(produktToEdit(p)); setIsNew(false); setEditModal(true); }
+  function openNew() { setAiEvidence(""); setEditProduct({ ...EMPTY, stats: { ...EMPTY.stats }, finances: { ...EMPTY.finances }, images: [] }); setIsNew(true); setEditModal(true); }
+  function openEdit(p: Produkt) { setAiEvidence(""); setEditProduct(produktToEdit(p)); setIsNew(false); setEditModal(true); }
 
   async function handleSave() {
     if (!editProduct) return;
@@ -1445,6 +1448,37 @@ export default function AdminPage() {
       await loadProducts();
     } catch { setError("Bulk-Import fehlgeschlagen."); }
     finally { setBulkLoading(false); }
+  }
+
+  async function handleAiDiscover() {
+    setAiDiscovering(true); setError(""); setSuccess(""); setAiEvidence("");
+    try {
+      const res = await fetch("/api/admin/products/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ depth: aiDepth }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "KI-Produktsuche fehlgeschlagen."); return; }
+      const p = data.produkt || {};
+      const now = new Date();
+      const monat = `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
+      setEditProduct({
+        id: "",
+        sku: SKU_OPTIONS.includes(p.sku) ? p.sku : "TREND",
+        monat,
+        titel: p.titel || "",
+        beschreibung: p.beschreibung || "",
+        aliExpressLink: p.aliExpressLink || "",
+        images: Array.isArray(p.images) ? p.images : [],
+        stats: { ...EMPTY.stats, ...(p.stats || {}) },
+        finances: { ...EMPTY.finances, ...(p.finances || {}) },
+      });
+      setIsNew(true);
+      setAiEvidence(data.viralEvidence || "");
+      setEditModal(true);
+    } catch { setError("KI-Produktsuche fehlgeschlagen."); }
+    finally { setAiDiscovering(false); }
   }
 
   async function handleLogout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/"); }
@@ -2850,6 +2884,14 @@ export default function AdminPage() {
         <>
         <div className="flex flex-wrap gap-3 mb-6">
           <button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 btn-accent rounded-xl text-sm font-medium"><Plus className="w-4 h-4" />Produkt hinzuf&uuml;gen</button>
+          <select value={aiDepth} onChange={(e) => setAiDepth(e.target.value === "gruendlich" ? "gruendlich" : "schnell")} disabled={aiDiscovering} className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50">
+            <option value="schnell">Schnell &middot; ~1 Min</option>
+            <option value="gruendlich">Gr&uuml;ndlich &middot; ~1&ndash;2 Min</option>
+          </select>
+          <button onClick={handleAiDiscover} disabled={aiDiscovering} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-purple-600/20 border border-purple-500/30 text-purple-200 hover:bg-purple-600/30 transition disabled:opacity-50">
+            {aiDiscovering ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            KI-Produkt finden
+          </button>
           <button onClick={() => setBulkModal(true)} className="flex items-center gap-2 px-4 py-2.5 glass hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition"><Upload className="w-4 h-4" />JSON Bulk Import</button>
           <select value={filterSku} onChange={e => setFilterSku(e.target.value)} className="ml-auto px-4 py-2.5 glass border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#95BF47]">
             <option value="ALL">Alle SKUs</option>
@@ -2933,6 +2975,25 @@ export default function AdminPage() {
       </AnimatePresence>
 
       {/* ─── EDIT/ADD MODAL ─────────────────────────────────────── */}
+      {/* ─── KI-PRODUKT-SUCHE OVERLAY ───────────────────────────── */}
+      <AnimatePresence>
+        {aiDiscovering && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm px-6">
+            <div className="text-center max-w-sm">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-purple-500/10 border border-purple-500/20 mb-4">
+                <Loader2 className="w-8 h-8 text-purple-300 animate-spin" />
+              </div>
+              <h3 className="text-lg font-bold">KI analysiert den US-Markt&hellip;</h3>
+              <p className="text-sm text-zinc-400 mt-2 leading-relaxed">
+                Live-Recherche zu aktuell viralen Dropshipping-Produkten &mdash; Titel, Bilder, Preise &amp; Scores. Das dauert je nach Modus ca. 30 Sekunden bis 2 Minuten. Bitte das Fenster offen lassen.
+              </p>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── EDIT/ADD MODAL ─────────────────────────────────────── */}
       <AnimatePresence>
         {editModal && editProduct && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
@@ -2942,6 +3003,16 @@ export default function AdminPage() {
                 <h3 className="text-lg font-bold">{isNew ? "Produkt hinzufügen" : "Produkt bearbeiten"}</h3>
                 <button onClick={() => setEditModal(false)} className="text-zinc-500 hover:text-white transition"><X className="w-5 h-5" /></button>
               </div>
+
+              {aiEvidence && (
+                <div className="mb-5 flex gap-2.5 bg-purple-500/10 border border-purple-500/25 rounded-xl p-3">
+                  <Sparkles className="w-4 h-4 text-purple-300 shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <div className="text-xs font-semibold text-purple-200 mb-0.5">KI-Viralit&auml;ts-Analyse</div>
+                    <p className="text-xs text-zinc-300 leading-relaxed">{aiEvidence}</p>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-5">
                 {/* Basic fields */}
