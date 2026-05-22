@@ -45,8 +45,6 @@ interface ProduktFinances {
 
 interface Produkt {
   id: string;
-  sku: string;
-  monat: string;
   titel: string;
   bildUrl: string;
   beschreibung: string;
@@ -57,24 +55,6 @@ interface Produkt {
     finances?: ProduktFinances;
     images?: string[];
   };
-}
-
-interface MonthChart {
-  monat: string;
-  produkte: Produkt[];
-}
-
-// ─── Constants ───────────────────────────────────────────────────
-
-const MONTH_NAMES: Record<string, string> = {
-  "01": "Januar", "02": "Februar", "03": "März", "04": "April",
-  "05": "Mai", "06": "Juni", "07": "Juli", "08": "August",
-  "09": "September", "10": "Oktober", "11": "November", "12": "Dezember",
-};
-
-function formatMonth(monat: string): string {
-  const [mm, yyyy] = monat.split("/");
-  return `Charts ${MONTH_NAMES[mm] || mm} ${yyyy}`;
 }
 
 // Uniform styling — no aggressive top-3 highlighting
@@ -176,7 +156,7 @@ function CopyField({ text, label }: { text: string; label: string }) {
 
 export default function ChartsPage() {
   const router = useRouter();
-  const [charts, setCharts] = useState<MonthChart[]>([]);
+  const [produkte, setProdukte] = useState<Produkt[]>([]);
   const [loading, setLoading] = useState(true);
   const [importingId, setImportingId] = useState<string | null>(null);
   const [successModal, setSuccessModal] = useState<{ open: boolean; aliExpressLink: string }>({ open: false, aliExpressLink: "" });
@@ -199,7 +179,7 @@ export default function ChartsPage() {
       const res = await fetch("/api/products");
       if (res.status === 401) { router.push("/"); return; }
       const data = await res.json();
-      setCharts(data.charts || []);
+      setProdukte(data.produkte || []);
     } catch { setError("Fehler beim Laden der Produkte."); }
     finally { setLoading(false); }
   }, [router]);
@@ -229,25 +209,17 @@ export default function ChartsPage() {
     finally { setImportingId(null); }
   }
 
-  // Apply search + filter to charts — must run BEFORE any early return
+  // Apply search + filter — must run BEFORE any early return
   // (Rules of Hooks: useMemo can't be called conditionally)
-  const filteredCharts = useMemo(() => {
+  const filteredProdukte = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return charts
-      .map((chart) => ({
-        ...chart,
-        produkte: chart.produkte.filter((pr) => {
-          if (q && !pr.titel.toLowerCase().includes(q)) return false;
-          if (highMarginOnly && (pr.extra?.finances?.profitMargin ?? 0) < 15) return false;
-          return true;
-        }),
-      }))
-      .filter((c) => c.produkte.length > 0);
-  }, [charts, searchTerm, highMarginOnly]);
-  const totalProducts = useMemo(
-    () => charts.reduce((s, c) => s + c.produkte.length, 0),
-    [charts],
-  );
+    return produkte.filter((pr) => {
+      if (q && !pr.titel.toLowerCase().includes(q)) return false;
+      if (highMarginOnly && (pr.extra?.finances?.profitMargin ?? 0) < 15) return false;
+      return true;
+    });
+  }, [produkte, searchTerm, highMarginOnly]);
+  const totalProducts = produkte.length;
 
   if (loading) {
     return (
@@ -285,7 +257,7 @@ export default function ChartsPage() {
         </div>
 
         {/* Search + filter */}
-        {charts.length > 0 && (
+        {produkte.length > 0 && (
           <div className="flex items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <BarChart3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
@@ -333,38 +305,27 @@ export default function ChartsPage() {
           </div>
         )}
 
-        {filteredCharts.length === 0 ? (
+        {filteredProdukte.length === 0 ? (
           <div className="text-center py-12">
             <TrendingUp className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
             <h2 className="text-base font-semibold text-zinc-400">
-              {charts.length === 0 ? "Noch keine Produkte" : "Nichts gefunden"}
+              {produkte.length === 0 ? "Noch keine Produkte" : "Nichts gefunden"}
             </h2>
             <p className="text-xs text-zinc-500 mt-1">
-              {charts.length === 0
+              {produkte.length === 0
                 ? "Deine Winning Product Charts erscheinen hier."
                 : "Probier einen anderen Suchbegriff oder deaktiviere den Filter."}
             </p>
           </div>
         ) : (
-          <div className="space-y-5">
-            {filteredCharts.map((chart) => (
-              <section key={chart.monat}>
-                <h2 className="text-sm font-bold mb-2.5 flex items-center gap-2">
-                  <div className="p-1 bg-[#95BF47]/10 rounded-md border border-[#95BF47]/20">
-                    <TrendingUp className="w-3.5 h-3.5 text-[#95BF47]" />
-                  </div>
-                  <span className="truncate">{formatMonth(chart.monat)}</span>
-                  <span className="text-[10px] font-normal text-zinc-500 ml-auto shrink-0">{chart.produkte.length}</span>
-                </h2>
-
-                <div className="space-y-1.5">
-                  {chart.produkte.map((produkt, idx) => {
-                    const rank = idx + 1;
-                    return (
-                      <div
-                        key={produkt.id}
-                        className="flex items-center gap-2 border border-white/10 bg-white/[0.03] rounded-lg px-2 py-2 backdrop-blur-md hover:bg-white/[0.06] transition"
-                      >
+          <div className="space-y-1.5">
+            {filteredProdukte.map((produkt, idx) => {
+              const rank = idx + 1;
+              return (
+                <div
+                  key={produkt.id}
+                  className="flex items-center gap-2 border border-white/10 bg-white/[0.03] rounded-lg px-2 py-2 backdrop-blur-md hover:bg-white/[0.06] transition"
+                >
                         {/* Rank */}
                         <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-white/5">
                           <span className="text-[11px] font-bold text-zinc-400 tabular-nums">{rank}</span>
@@ -426,12 +387,9 @@ export default function ChartsPage() {
                             </div>
                           )}
                         </div>
-                      </div>
-                    );
-                  })}
                 </div>
-              </section>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
@@ -454,7 +412,7 @@ export default function ChartsPage() {
               <div className="p-6 space-y-6">
                 <div>
                   <h3 className="text-xl font-bold leading-tight">{p.titel}</h3>
-                  {p.beschreibung && <div className="text-sm text-zinc-400 mt-2 leading-relaxed" dangerouslySetInnerHTML={{ __html: p.beschreibung }} />}
+                  {p.beschreibung && <div className="text-sm text-zinc-400 mt-2 leading-relaxed [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-zinc-200 [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-semibold [&_h3]:text-zinc-200 [&_h3]:mt-2 [&_strong]:font-semibold [&_strong]:text-zinc-200" dangerouslySetInnerHTML={{ __html: p.beschreibung }} />}
                 </div>
 
                 {p.extra?.stats && (

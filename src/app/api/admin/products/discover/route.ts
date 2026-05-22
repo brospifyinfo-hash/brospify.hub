@@ -8,7 +8,6 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 180;
 
 // ─── Constants ───────────────────────────────────────────────────
-const SKU_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
 const MODEL = "claude-sonnet-4-6";
 const TAVILY_URL = "https://api.tavily.com/search";
 
@@ -132,6 +131,14 @@ async function tavilySearch(
   };
 }
 
+/** First real AliExpress product-page URL among search results, if any. */
+function findAliExpressUrl(results: TavilyResult[]): string {
+  for (const r of results) {
+    if (/aliexpress\.[a-z.]+\/item\/\d/i.test(r.url)) return r.url;
+  }
+  return "";
+}
+
 // ─── Output schemas ──────────────────────────────────────────────
 // Structured outputs constrain the model to valid JSON matching the
 // schema — a stray quote in a description can no longer break parsing.
@@ -151,7 +158,6 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
   properties: {
     titel: { type: "string" },
     beschreibung: { type: "string" },
-    sku: { type: "string", enum: SKU_OPTIONS },
     finances: {
       type: "object",
       properties: {
@@ -175,7 +181,7 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
     },
     viralEvidence: { type: "string" },
   },
-  required: ["titel", "beschreibung", "sku", "finances", "stats", "viralEvidence"],
+  required: ["titel", "beschreibung", "finances", "stats", "viralEvidence"],
   additionalProperties: false,
 };
 
@@ -296,28 +302,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ─── Phase B — product detail + real images ──────────────────
+    // ─── Phase B — product detail, real images, AliExpress link ──
     let detail: TavilyResponse = { answer: "", results: [], images: [] };
-    try {
-      detail = await tavilySearch(
-        tavilyKey,
-        `${imageQuery} buy price`,
-        cfg.tavilyDepth,
-        cfg.maxResults + 2,
-        true,
-      );
-    } catch (e) {
-      console.error("[Discover] detail search failed:", e);
-    }
+    let aliResults: TavilyResult[] = [];
+    const [detailRes, aliRes] = await Promise.allSettled([
+      tavilySearch(tavilyKey, `${imageQuery} buy price`, cfg.tavilyDepth, cfg.maxResults + 2, true),
+      tavilySearch(tavilyKey, `${imageQuery} aliexpress`, "basic", 10, false),
+    ]);
+    if (detailRes.status === "fulfilled") detail = detailRes.value;
+    else console.error("[Discover] detail search failed:", detailRes.reason);
+    if (aliRes.status === "fulfilled") aliResults = aliRes.value.results;
     const images = cleanImages(detail.images);
+    const aliExpressLink =
+      findAliExpressUrl([...aliResults, ...detail.results]) || aliSearchUrl(imageQuery || produktName);
 
     // ─── Claude 2 — synthesize the finished product ──────────────
     const parsed = await claudeJson(
       client,
       `Du bist ein E-Commerce-Experte für den deutschen Markt. Erstelle aus den gegebenen Web-Rechercheergebnissen einen fertigen, verkaufsstarken Charts-Eintrag.
 
-SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als verkaufsstarkes HTML (<p>, <ul><li>, <strong>).
-KATEGORIE (sku): genau eine von ${SKU_OPTIONS.join(", ")}. Passt nichts klar, nimm TREND.
+SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als sauberes, verkaufsstarkes HTML — nutze <p> für Absätze, <ul><li> für Aufzählungen und <strong> für Hervorhebungen. Kein übertriebener Emoji-Einsatz.
 PREISE: realistischer AliExpress-Einkaufspreis und marktüblicher Dropshipping-Verkaufspreis, beide in EUR.
 SCORES (0-100): trendScore = aktuelle Trendstärke, viralScore = Social-Media-Viralität, impulseBuyFactor = Impulskauf-Eignung, problemSolverIndex = wie stark es ein Problem löst, marketSaturation = Marktsättigung (höher = gesättigter).
 VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen.
@@ -326,7 +330,6 @@ Antworte NUR mit JSON, ohne weiteren Text:
 {
   "titel": "verkaufsstarker deutscher Titel, max 70 Zeichen",
   "beschreibung": "<p>HTML-Beschreibung mit <ul><li>Vorteilen</li></ul></p>",
-  "sku": "TREND",
   "finances": { "buyPrice": 0.0, "recommendedSellPrice": 0.0 },
   "stats": { "trendScore": 0, "viralScore": 0, "impulseBuyFactor": 0, "problemSolverIndex": 0, "marketSaturation": 0 },
   "viralEvidence": "2-4 Sätze: warum dieses Produkt gerade viral ist, mit konkreten Signalen aus den Quellen."
@@ -346,8 +349,6 @@ Antworte NUR mit JSON, ohne weiteren Text:
 
     // ─── Normalize ───────────────────────────────────────────────
     const titel = str(parsed.titel);
-    const skuRaw = str(parsed.sku).toUpperCase();
-    const sku = SKU_OPTIONS.includes(skuRaw) ? skuRaw : "TREND";
 
     const fin = (parsed.finances ?? {}) as Record<string, unknown>;
     const buyPrice = Math.round(num(fin.buyPrice) * 100) / 100;
@@ -363,7 +364,6 @@ Antworte NUR mit JSON, ohne weiteren Text:
       marketSaturation: score(st.marketSaturation),
     };
 
-    const aliExpressLink = aliSearchUrl(imageQuery || titel);
     let aliExpressOk = false;
     try {
       const r = await fetch(aliExpressLink, {
@@ -384,7 +384,6 @@ Antworte NUR mit JSON, ohne weiteren Text:
       produkt: {
         titel,
         beschreibung: str(parsed.beschreibung),
-        sku,
         aliExpressLink,
         images,
         stats,

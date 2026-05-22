@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getProdukteBysku } from "@/lib/sheets";
+import { getAllProdukte } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -11,39 +11,18 @@ export async function GET() {
       return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
     }
 
-    if (!session.sku) {
-      return NextResponse.json({ error: "Keine SKU zugewiesen" }, { status: 400 });
-    }
+    // Every logged-in customer sees the full product list — no SKU,
+    // niche or month segmentation.
+    const produkte = await getAllProdukte();
 
-    const produkte = await getProdukteBysku(session.sku);
+    const list = produkte
+      .filter((p) => p.titel || p.bildUrl)
+      .sort(
+        (a, b) =>
+          (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),
+      );
 
-    // Group by month
-    const grouped: Record<string, typeof produkte> = {};
-    for (const p of produkte) {
-      if (!p.monat) continue;
-      if (!grouped[p.monat]) grouped[p.monat] = [];
-      grouped[p.monat].push(p);
-    }
-
-    // Sort months descending (MM/YYYY format)
-    const sortedMonths = Object.keys(grouped).sort((a, b) => {
-      const [ma, ya] = a.split("/").map(Number);
-      const [mb, yb] = b.split("/").map(Number);
-      if (yb !== ya) return yb - ya;
-      return mb - ma;
-    });
-
-    // Sort products within each month by trendScore descending
-    const result = sortedMonths.map((monat) => ({
-      monat,
-      produkte: grouped[monat].sort((a, b) => {
-        const scoreA = a.extra?.stats?.trendScore ?? 0;
-        const scoreB = b.extra?.stats?.trendScore ?? 0;
-        return scoreB - scoreA;
-      }),
-    }));
-
-    return NextResponse.json({ charts: result });
+    return NextResponse.json({ produkte: list });
   } catch (error) {
     console.error("Products fetch error:", error);
     return NextResponse.json(

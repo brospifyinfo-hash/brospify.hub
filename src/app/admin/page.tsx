@@ -62,13 +62,11 @@ interface EditProduct {
 }
 
 const EMPTY: EditProduct = {
-  id: "", sku: "SPORT", monat: "", titel: "", beschreibung: "", aliExpressLink: "",
+  id: "", sku: "", monat: "", titel: "", beschreibung: "", aliExpressLink: "",
   images: [],
   stats: { trendScore: 0, viralScore: 0, impulseBuyFactor: 0, problemSolverIndex: 0, marketSaturation: 0 },
   finances: { buyPrice: 0, recommendedSellPrice: 0, profitMargin: 0 },
 };
-
-const SKU_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
 
 // ─── Admin module-level types ───────────────────────────────────
 
@@ -371,7 +369,6 @@ export default function AdminPage() {
   const [aiDiscovering, setAiDiscovering] = useState(false);
   const [aiEvidence, setAiEvidence] = useState("");
   const [aiDepth, setAiDepth] = useState<"schnell" | "gruendlich">("schnell");
-  const [filterSku, setFilterSku] = useState("ALL");
   type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
@@ -1461,12 +1458,10 @@ export default function AdminPage() {
       const data = await res.json();
       if (!res.ok) { setError(data.error || "KI-Produktsuche fehlgeschlagen."); return; }
       const p = data.produkt || {};
-      const now = new Date();
-      const monat = `${String(now.getMonth() + 1).padStart(2, "0")}/${now.getFullYear()}`;
       setEditProduct({
         id: "",
-        sku: SKU_OPTIONS.includes(p.sku) ? p.sku : "TREND",
-        monat,
+        sku: "",
+        monat: "",
         titel: p.titel || "",
         beschreibung: p.beschreibung || "",
         aliExpressLink: p.aliExpressLink || "",
@@ -1483,7 +1478,7 @@ export default function AdminPage() {
 
   async function handleLogout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/"); }
 
-  const filtered = filterSku === "ALL" ? produkte : produkte.filter(p => p.sku === filterSku);
+  const filtered = produkte;
 
   if (loading) return <div className="min-h-screen bg-mesh flex items-center justify-center"><div className="w-8 h-8 border-2 border-[#95BF47] border-t-transparent rounded-full animate-spin" /></div>;
 
@@ -2893,10 +2888,6 @@ export default function AdminPage() {
             KI-Produkt finden
           </button>
           <button onClick={() => setBulkModal(true)} className="flex items-center gap-2 px-4 py-2.5 glass hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition"><Upload className="w-4 h-4" />JSON Bulk Import</button>
-          <select value={filterSku} onChange={e => setFilterSku(e.target.value)} className="ml-auto px-4 py-2.5 glass border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-[#95BF47]">
-            <option value="ALL">Alle SKUs</option>
-            {SKU_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
         </div>
 
         {/* Product Grid */}
@@ -2909,8 +2900,6 @@ export default function AdminPage() {
               </div>
               <div className="p-3 space-y-2">
                 <div className="flex items-center gap-2">
-                  <span className="px-1.5 py-0.5 bg-[#95BF47]/10 text-[#95BF47] rounded text-[10px] font-medium">{p.sku}</span>
-                  <span className="text-[10px] text-zinc-500">{p.monat}</span>
                   <span className="text-[10px] text-zinc-500 ml-auto font-mono">{p.id}</span>
                 </div>
                 <h3 className="text-sm font-semibold truncate">{p.titel}</h3>
@@ -3016,11 +3005,7 @@ export default function AdminPage() {
 
               <div className="space-y-5">
                 {/* Basic fields */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div><label className="block text-xs text-zinc-400 mb-1">ID</label><input type="text" value={editProduct.id} onChange={e => setEditProduct({ ...editProduct, id: e.target.value })} placeholder="Auto" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                  <div><label className="block text-xs text-zinc-400 mb-1">SKU</label><select value={editProduct.sku} onChange={e => setEditProduct({ ...editProduct, sku: e.target.value })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">{SKU_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                  <div><label className="block text-xs text-zinc-400 mb-1">Monat (MM/YYYY)</label><input type="text" value={editProduct.monat} onChange={e => setEditProduct({ ...editProduct, monat: e.target.value })} placeholder="04/2026" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                </div>
+                <div><label className="block text-xs text-zinc-400 mb-1">ID</label><input type="text" value={editProduct.id} onChange={e => setEditProduct({ ...editProduct, id: e.target.value })} placeholder="Auto" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
 
                 <div><label className="block text-xs text-zinc-400 mb-1">Titel</label><input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                 <div><label className="block text-xs text-zinc-400 mb-1">Beschreibung (HTML)</label><textarea value={editProduct.beschreibung} onChange={e => setEditProduct({ ...editProduct, beschreibung: e.target.value })} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" /></div>
