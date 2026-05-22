@@ -23,8 +23,8 @@ interface DepthConfig {
 }
 
 const DEPTH: Record<Depth, DepthConfig> = {
-  schnell: { tavilyDepth: "basic", trendQueries: 2, maxResults: 6 },
-  gruendlich: { tavilyDepth: "advanced", trendQueries: 3, maxResults: 8 },
+  schnell: { tavilyDepth: "basic", trendQueries: 3, maxResults: 6 },
+  gruendlich: { tavilyDepth: "advanced", trendQueries: 4, maxResults: 8 },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -100,6 +100,7 @@ async function tavilySearch(
   depth: "basic" | "advanced",
   maxResults: number,
   includeImages: boolean,
+  includeDomains: string[] = [],
 ): Promise<TavilyResponse> {
   const res = await fetch(TAVILY_URL, {
     method: "POST",
@@ -110,6 +111,7 @@ async function tavilySearch(
       max_results: maxResults,
       include_answer: true,
       include_images: includeImages,
+      ...(includeDomains.length ? { include_domains: includeDomains } : {}),
     }),
     signal: AbortSignal.timeout(30000),
   });
@@ -158,6 +160,7 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
   properties: {
     titel: { type: "string" },
     beschreibung: { type: "string" },
+    kategorie: { type: "string" },
     finances: {
       type: "object",
       properties: {
@@ -181,7 +184,7 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
     },
     viralEvidence: { type: "string" },
   },
-  required: ["titel", "beschreibung", "finances", "stats", "viralEvidence"],
+  required: ["titel", "beschreibung", "kategorie", "finances", "stats", "viralEvidence"],
   additionalProperties: false,
 };
 
@@ -235,11 +238,13 @@ export async function POST(req: NextRequest) {
   }
 
   let depth: Depth = "schnell";
+  let kategorie = "";
   try {
     const body = await req.json();
     if (body?.depth === "gruendlich") depth = "gruendlich";
+    if (typeof body?.kategorie === "string") kategorie = body.kategorie.trim().slice(0, 60);
   } catch {
-    // no body — keep the default
+    // no body — keep the defaults
   }
   const cfg = DEPTH[depth];
 
@@ -257,10 +262,14 @@ export async function POST(req: NextRequest) {
     const monthYear = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
     // ─── Phase A — trend discovery (parallel Tavily searches) ────
+    // The Meta Ad Library query is first so it is included even in
+    // "schnell" mode. ${kat} narrows everything to the chosen category.
+    const kat = kategorie ? ` ${kategorie}` : "";
     const trendQueries = [
-      `viral trending dropshipping products ${monthYear} TikTok`,
-      `TikTok made me buy it best selling product ${monthYear}`,
-      `winning dropshipping products to sell ${monthYear}`,
+      `Facebook Meta Ad Library winning${kat} dropshipping products ${monthYear}`,
+      `viral trending${kat} dropshipping products ${monthYear} TikTok`,
+      `TikTok made me buy it best selling${kat} product ${monthYear}`,
+      `winning${kat} dropshipping products to sell ${monthYear}`,
     ].slice(0, cfg.trendQueries);
 
     const settled = await Promise.allSettled(
@@ -283,12 +292,15 @@ export async function POST(req: NextRequest) {
     const exclude = existingTitles.length
       ? `\n\nDiese Produkte sind bereits im Katalog — wähle ein ANDERES:\n${existingTitles.map((t) => `- ${t}`).join("\n")}`
       : "";
+    const katNote = kategorie
+      ? `\n\nWICHTIG: Das gewählte Produkt MUSS klar in die Kategorie "${kategorie}" passen.`
+      : "";
 
     const pick = await claudeJson(
       client,
-      `Du bist ein Dropshipping-Experte. Du erhältst aktuelle Web-Suchergebnisse zu viralen US-Dropshipping-Trends. Wähle daraus EIN konkretes, gerade besonders virales Produkt (kein generischer Evergreen). Antworte NUR mit JSON, ohne weiteren Text:
+      `Du bist ein Dropshipping-Experte. Du erhältst aktuelle Web-Suchergebnisse (u.a. aus der Meta/Facebook Ad Library und von TikTok) zu viralen US-Dropshipping-Trends. Wähle daraus EIN konkretes, gerade besonders virales Produkt (kein generischer Evergreen). Antworte NUR mit JSON, ohne weiteren Text:
 {"produktName": "kurzer Produktname auf Deutsch", "imageQuery": "english product name for a shopping/image search, 3-6 words"}`,
-      `Heutiger Monat: ${monthYear}.\n\n${trendContext}${exclude}`,
+      `Heutiger Monat: ${monthYear}.${katNote}\n\n${trendContext}${exclude}`,
       600,
       PICK_SCHEMA,
     );
@@ -307,7 +319,7 @@ export async function POST(req: NextRequest) {
     let aliResults: TavilyResult[] = [];
     const [detailRes, aliRes] = await Promise.allSettled([
       tavilySearch(tavilyKey, `${imageQuery} buy price`, cfg.tavilyDepth, cfg.maxResults + 2, true),
-      tavilySearch(tavilyKey, `${imageQuery} aliexpress`, "basic", 10, false),
+      tavilySearch(tavilyKey, imageQuery, "basic", 10, false, ["aliexpress.com"]),
     ]);
     if (detailRes.status === "fulfilled") detail = detailRes.value;
     else console.error("[Discover] detail search failed:", detailRes.reason);
@@ -322,14 +334,16 @@ export async function POST(req: NextRequest) {
       `Du bist ein E-Commerce-Experte für den deutschen Markt. Erstelle aus den gegebenen Web-Rechercheergebnissen einen fertigen, verkaufsstarken Charts-Eintrag.
 
 SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als sauberes, verkaufsstarkes HTML — nutze <p> für Absätze, <ul><li> für Aufzählungen und <strong> für Hervorhebungen. Kein übertriebener Emoji-Einsatz.
+KATEGORIE: ${kategorie ? `Verwende exakt "${kategorie}".` : "Wähle eine kurze, treffende Produktkategorie (z. B. Beauty, Haushalt, Sport, Haustier, Küche, Gadgets)."}
 PREISE: realistischer AliExpress-Einkaufspreis und marktüblicher Dropshipping-Verkaufspreis, beide in EUR.
 SCORES (0-100): trendScore = aktuelle Trendstärke, viralScore = Social-Media-Viralität, impulseBuyFactor = Impulskauf-Eignung, problemSolverIndex = wie stark es ein Problem löst, marketSaturation = Marktsättigung (höher = gesättigter).
-VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen.
+VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen (TikTok, Meta/Facebook Ad Library, Trend-Plattformen).
 
 Antworte NUR mit JSON, ohne weiteren Text:
 {
   "titel": "verkaufsstarker deutscher Titel, max 70 Zeichen",
   "beschreibung": "<p>HTML-Beschreibung mit <ul><li>Vorteilen</li></ul></p>",
+  "kategorie": "kurze Produktkategorie",
   "finances": { "buyPrice": 0.0, "recommendedSellPrice": 0.0 },
   "stats": { "trendScore": 0, "viralScore": 0, "impulseBuyFactor": 0, "problemSolverIndex": 0, "marketSaturation": 0 },
   "viralEvidence": "2-4 Sätze: warum dieses Produkt gerade viral ist, mit konkreten Signalen aus den Quellen."
@@ -349,6 +363,8 @@ Antworte NUR mit JSON, ohne weiteren Text:
 
     // ─── Normalize ───────────────────────────────────────────────
     const titel = str(parsed.titel);
+    // Admin-chosen category wins; otherwise the AI's suggestion.
+    const sku = kategorie || str(parsed.kategorie);
 
     const fin = (parsed.finances ?? {}) as Record<string, unknown>;
     const buyPrice = Math.round(num(fin.buyPrice) * 100) / 100;
@@ -384,6 +400,7 @@ Antworte NUR mit JSON, ohne weiteren Text:
       produkt: {
         titel,
         beschreibung: str(parsed.beschreibung),
+        sku,
         aliExpressLink,
         images,
         stats,

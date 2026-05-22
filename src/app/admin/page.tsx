@@ -68,6 +68,8 @@ const EMPTY: EditProduct = {
   finances: { buyPrice: 0, recommendedSellPrice: 0, profitMargin: 0 },
 };
 
+const KATEGORIE_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
+
 // ─── Admin module-level types ───────────────────────────────────
 
 type AdminTierKey = "starter" | "pro" | "business";
@@ -369,6 +371,7 @@ export default function AdminPage() {
   const [aiDiscovering, setAiDiscovering] = useState(false);
   const [aiEvidence, setAiEvidence] = useState("");
   const [aiDepth, setAiDepth] = useState<"schnell" | "gruendlich">("schnell");
+  const [aiKategorie, setAiKategorie] = useState("");
   type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
@@ -1453,14 +1456,14 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/products/discover", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ depth: aiDepth }),
+        body: JSON.stringify({ depth: aiDepth, kategorie: aiKategorie.trim() }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "KI-Produktsuche fehlgeschlagen."); return; }
       const p = data.produkt || {};
       setEditProduct({
         id: "",
-        sku: "",
+        sku: p.sku || "",
         monat: "",
         titel: p.titel || "",
         beschreibung: p.beschreibung || "",
@@ -2879,6 +2882,8 @@ export default function AdminPage() {
         <>
         <div className="flex flex-wrap gap-3 mb-6">
           <button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 btn-accent rounded-xl text-sm font-medium"><Plus className="w-4 h-4" />Produkt hinzuf&uuml;gen</button>
+          <input list="kategorie-liste" value={aiKategorie} onChange={(e) => setAiKategorie(e.target.value)} disabled={aiDiscovering} placeholder="Kategorie (optional)" className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50" />
+          <datalist id="kategorie-liste">{KATEGORIE_OPTIONS.map((k) => <option key={k} value={k} />)}</datalist>
           <select value={aiDepth} onChange={(e) => setAiDepth(e.target.value === "gruendlich" ? "gruendlich" : "schnell")} disabled={aiDiscovering} className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50">
             <option value="schnell">Schnell &middot; ~1 Min</option>
             <option value="gruendlich">Gr&uuml;ndlich &middot; ~1&ndash;2 Min</option>
@@ -2900,6 +2905,7 @@ export default function AdminPage() {
               </div>
               <div className="p-3 space-y-2">
                 <div className="flex items-center gap-2">
+                  {p.sku && <span className="px-1.5 py-0.5 bg-[#95BF47]/10 text-[#95BF47] rounded text-[10px] font-medium">{p.sku}</span>}
                   <span className="text-[10px] text-zinc-500 ml-auto font-mono">{p.id}</span>
                 </div>
                 <h3 className="text-sm font-semibold truncate">{p.titel}</h3>
@@ -3006,6 +3012,7 @@ export default function AdminPage() {
               <div className="space-y-5">
                 {/* Basic fields */}
                 <div><label className="block text-xs text-zinc-400 mb-1">ID</label><input type="text" value={editProduct.id} onChange={e => setEditProduct({ ...editProduct, id: e.target.value })} placeholder="Auto" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                <div><label className="block text-xs text-zinc-400 mb-1">Kategorie</label><input type="text" list="kategorie-liste" value={editProduct.sku} onChange={e => setEditProduct({ ...editProduct, sku: e.target.value })} placeholder="z. B. Beauty — oder eigene eingeben" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
 
                 <div><label className="block text-xs text-zinc-400 mb-1">Titel</label><input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                 <div><label className="block text-xs text-zinc-400 mb-1">Beschreibung (HTML)</label><textarea value={editProduct.beschreibung} onChange={e => setEditProduct({ ...editProduct, beschreibung: e.target.value })} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" /></div>
