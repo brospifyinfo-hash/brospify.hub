@@ -28,7 +28,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
-const AUTO_ID_PATTERN = /^prod_\d+(_[a-z0-9]+)?$/i;
+// Permissiver als vorher: matched alles was mit `prod_` + Ziffern
+// startet — auch wenn Trailing-Whitespace, Trailing-Underscore oder
+// andere Edge-Cases. Kein "$" Anker mehr.
+const AUTO_ID_PATTERN = /^prod[_-]\d/i;
 
 /** Sieht der String wie eine reine Zahl (mit optionalem Komma/Punkt) aus? */
 function isNumericString(s: string): boolean {
@@ -40,10 +43,13 @@ function isNumericString(s: string): boolean {
 function looksLikeTitle(s: string): boolean {
   if (!s) return false;
   const trimmed = s.trim();
-  if (trimmed.length < 6) return false;
+  // Niedriger Threshold: schon 4 Zeichen koennen ein Titel sein
+  // (z.B. "Vase").
+  if (trimmed.length < 4) return false;
   if (isNumericString(trimmed)) return false;
-  // Mindestens ein Leerzeichen oder ein Sonderzeichen — keine reine ID/Hash.
-  return /[\s–\-_:.&]/.test(trimmed);
+  // Sieht das selbst aus wie eine Auto-ID? Dann ist es kein Titel.
+  if (AUTO_ID_PATTERN.test(trimmed)) return false;
+  return true;
 }
 
 interface RepairChange {
@@ -73,10 +79,15 @@ async function run(req: NextRequest) {
   const auth = await isAuthorised(req);
   if (!auth.ok) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-  let dryRun = false;
+  // Default: SAFER dry-run wenn nichts explizit gesagt wurde.
+  // POST mit body { dryRun: false } → echter commit.
+  // GET ?commit=1 → echter commit (Browser-Direkt-URL).
+  let dryRun = true;
+  const url = new URL(req.url);
+  if (url.searchParams.get("commit") === "1") dryRun = false;
   try {
     const body = await req.json();
-    if (body?.dryRun === true) dryRun = true;
+    if (typeof body?.dryRun === "boolean") dryRun = body.dryRun;
   } catch {
     // kein body — defaults verwenden
   }

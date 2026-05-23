@@ -1660,21 +1660,24 @@ export default function AdminPage() {
 
   async function handleRepairProducts() {
     setRepairRunning(true); setError(""); setSuccess("");
+    // Wenn schon Vorschau mit Aenderungen existiert: commit. Sonst dry-run.
+    const dryRun = !(repairPreview && repairPreview.changed > 0);
+    console.log("[Repair] click — dryRun:", dryRun, "existing preview:", repairPreview);
     try {
-      // Wenn schon Vorschau mit Aenderungen existiert: commit. Sonst dry-run.
-      const dryRun = !(repairPreview && repairPreview.changed > 0);
       const res = await fetch("/api/admin/products/repair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun }),
       });
+      console.log("[Repair] HTTP", res.status, res.statusText);
       // Status + Body immer einsehbar machen — falls etwas schiefgeht
       // muss der Admin den HTTP-Code sehen (404 = Deploy noch nicht da,
       // 401 = Session abgelaufen, 500 = Sheets-Fehler, etc.).
       let data: Record<string, unknown> = {};
       try { data = await res.json(); } catch { data = {}; }
+      console.log("[Repair] response data:", data);
       if (!res.ok) {
-        setError(`Repair fehlgeschlagen (HTTP ${res.status}): ${String(data.error || res.statusText || "Unbekannter Fehler")}`);
+        setError(`Repair fehlgeschlagen (HTTP ${res.status}): ${String(data.error || res.statusText || "Unbekannter Fehler")} — Wenn HTTP 404: Vercel-Deploy noch nicht durch, warte 1–2 Min und drück Strg+F5.`);
         return;
       }
       if (dryRun) {
@@ -1693,6 +1696,7 @@ export default function AdminPage() {
         await loadProducts();
       }
     } catch (e) {
+      console.error("[Repair] exception:", e);
       setError(`Repair fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
     }
     finally { setRepairRunning(false); }
