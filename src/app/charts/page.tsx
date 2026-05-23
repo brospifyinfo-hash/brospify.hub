@@ -72,6 +72,7 @@ interface ProduktLinkStatus {
 
 interface Produkt {
   id: string;
+  sku: string;
   titel: string;
   bildUrl: string;
   beschreibung: string;
@@ -85,6 +86,30 @@ interface Produkt {
     ads?: ProduktAds;
     linkStatus?: ProduktLinkStatus;
   };
+}
+
+// ─── Defensive helpers ──────────────────────────────────────────
+// Daten in der Sheet sind nicht immer komplett (alte Importe, aborted
+// AI-Discovery, manuelle Bulk-JSONs). Diese Helper sorgen dafür, dass
+// die User-Ansicht NIE leer/kaputt aussieht.
+
+/** True wenn der Titel verdächtig nach einem Auto-ID aussieht. */
+function looksLikeAutoId(s: string): boolean {
+  return /^prod_\d+(_[a-z0-9]+)?$/i.test((s || "").trim());
+}
+
+/** Liefert einen anzeigbaren Titel — niemals leer, niemals nur die ID. */
+function displayTitle(p: Produkt): string {
+  const t = (p.titel || "").trim();
+  if (!t || looksLikeAutoId(t)) return "Produkt-Details werden ergänzt…";
+  return t;
+}
+
+/** Baut eine AliExpress-Kategorie-Such-URL aus dem besten verfügbaren Begriff. */
+function synthesizeAliCategoryLink(p: Produkt): string {
+  const q = (p.sku || p.titel || "").trim();
+  if (!q || looksLikeAutoId(q)) return "";
+  return `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(q)}`;
 }
 
 // ─── Social-media meta (icons, labels, brand colors) ─────────────
@@ -615,27 +640,46 @@ export default function ChartsPage() {
 
                         {/* Title & Stats */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-[12px] truncate text-zinc-200 leading-tight">{produkt.titel}</h3>
+                          <h3 className="font-semibold text-[12px] truncate text-zinc-200 leading-tight">
+                            {displayTitle(produkt)}
+                          </h3>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span
-                              className="text-sm font-bold text-[#95BF47] tabular-nums"
-                              title="Preis kann schwanken"
-                            >
-                              {produkt.extra?.finances?.recommendedSellPrice || produkt.preis}€
-                              <span className="text-[8px] text-zinc-500 ml-0.5">~</span>
-                            </span>
-                            {produkt.extra?.stats?.trendScore && (
+                            {(() => {
+                              const price =
+                                produkt.extra?.finances?.recommendedSellPrice ||
+                                (produkt.preis &&
+                                !Number.isNaN(Number(produkt.preis))
+                                  ? Number(produkt.preis)
+                                  : 0);
+                              if (!price) {
+                                return (
+                                  <span className="text-[10px] text-zinc-500 italic">
+                                    Preis folgt
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span
+                                  className="text-sm font-bold text-[#95BF47] tabular-nums"
+                                  title="Preis kann schwanken"
+                                >
+                                  {price}€
+                                  <span className="text-[8px] text-zinc-500 ml-0.5">~</span>
+                                </span>
+                              );
+                            })()}
+                            {produkt.extra?.stats?.trendScore ? (
                               <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
                                 <Zap className="w-2.5 h-2.5" />
                                 {produkt.extra.stats.trendScore}%
                               </span>
-                            )}
-                            {produkt.extra?.finances?.profitMargin && (
+                            ) : null}
+                            {produkt.extra?.finances?.profitMargin ? (
                               <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
                                 <DollarSign className="w-3 h-3" />
                                 +{produkt.extra.finances.profitMargin.toFixed(2)}€
                               </span>
-                            )}
+                            ) : null}
                           </div>
                         </div>
 
@@ -689,8 +733,14 @@ export default function ChartsPage() {
 
               <div className="p-6 space-y-6">
                 <div>
-                  <h3 className="text-xl font-bold leading-tight">{p.titel}</h3>
+                  <h3 className="text-xl font-bold leading-tight">{displayTitle(p)}</h3>
                   {p.beschreibung && <div className="text-sm text-zinc-400 mt-2 leading-relaxed [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-zinc-200 [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-semibold [&_h3]:text-zinc-200 [&_h3]:mt-2 [&_strong]:font-semibold [&_strong]:text-zinc-200" dangerouslySetInnerHTML={{ __html: p.beschreibung }} />}
+                  {(!p.beschreibung || looksLikeAutoId(p.titel)) && (
+                    <p className="text-xs text-amber-300/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
+                      <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+                      <span>Dieses Produkt hat noch unvollständige Daten. Wir aktualisieren das in Kürze.</span>
+                    </p>
+                  )}
                 </div>
 
                 {p.extra?.stats && (
@@ -739,11 +789,16 @@ export default function ChartsPage() {
                 />
 
                 {/* ─── AliExpress Links (Kategorie + Produkt) ───── */}
+                {/* Kategorie wird synthetisiert wenn nicht gespeichert —
+                    so funktioniert auch für alte Produkte ohne `links`. */}
                 <AliLinksBlock
                   produktLink={
                     p.extra?.links?.aliExpressProduct || p.aliExpressLink
                   }
-                  kategorieLink={p.extra?.links?.aliExpressCategory}
+                  kategorieLink={
+                    p.extra?.links?.aliExpressCategory ||
+                    synthesizeAliCategoryLink(p)
+                  }
                   productOk={p.extra?.linkStatus?.aliExpressProductOk}
                   categoryOk={p.extra?.linkStatus?.aliExpressCategoryOk}
                 />
@@ -777,9 +832,9 @@ export default function ChartsPage() {
                     <Thumb src={aiModal.produkt.bildUrl} />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold truncate">{aiResult?.title || aiModal.produkt.titel}</h3>
+                    <h3 className="font-bold truncate">{aiResult?.title || displayTitle(aiModal.produkt)}</h3>
                     <p className="text-sm text-[#95BF47] font-semibold" title="Preis kann schwanken">
-                      {aiModal.produkt.extra?.finances?.recommendedSellPrice || aiModal.produkt.preis}&euro;
+                      {aiModal.produkt.extra?.finances?.recommendedSellPrice || aiModal.produkt.preis || "—"}&euro;
                       <span className="text-[10px] text-zinc-500 ml-1">~ kann schwanken</span>
                     </p>
                   </div>

@@ -1528,6 +1528,62 @@ export default function AdminPage() {
     finally { setAiDiscovering(false); }
   }
 
+  // KI-Re-Discovery: generiert die KI-Daten für ein BESTEHENDES
+  // Produkt neu (Bilder, Ads, Dropshipping, Links). Behält rowIndex
+  // + id, damit der Save als PUT auf dieselbe Zeile geht — keine
+  // Duplikate. Wird über das Sparkles-Icon im Grid getriggert.
+  async function handleReDiscover(p: Produkt) {
+    setAiDiscovering(true); setError(""); setSuccess(""); setAiEvidence("");
+    try {
+      const res = await fetch("/api/admin/products/discover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ depth: aiDepth, kategorie: p.sku || "" }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "KI-Produktsuche fehlgeschlagen."); return; }
+      const dp = data.produkt || {};
+      const existingImages = [p.bildUrl, ...(p.extra?.images || [])].filter(Boolean);
+      const newImages = Array.isArray(dp.images) ? dp.images : [];
+      setEditProduct({
+        rowIndex: p.rowIndex,
+        id: p.id,
+        sku: dp.sku || p.sku || "",
+        monat: p.monat || "",
+        titel: dp.titel || p.titel || "",
+        beschreibung: dp.beschreibung || p.beschreibung || "",
+        aliExpressLink:
+          dp.aliExpressLink || dp.links?.aliExpressProduct || p.aliExpressLink || "",
+        images: newImages.length > 0 ? newImages : existingImages,
+        stats: { ...EMPTY.stats, ...(p.extra?.stats || {}), ...(dp.stats || {}) },
+        finances: { ...EMPTY.finances, ...(p.extra?.finances || {}), ...(dp.finances || {}) },
+        links: dp.links || p.extra?.links,
+        ads: dp.ads || p.extra?.ads,
+        linkStatus: dp.linkStatus || p.extra?.linkStatus,
+      });
+      setIsNew(false);
+      setAiEvidence(data.viralEvidence || "");
+      setEditModal(true);
+    } catch { setError("KI-Re-Discovery fehlgeschlagen."); }
+    finally { setAiDiscovering(false); }
+  }
+
+  // Manueller Trigger des Linkcheck-Cron — admin-only. Gibt sofort
+  // Feedback ob alle Links noch erreichbar sind.
+  const [linkCheckRunning, setLinkCheckRunning] = useState(false);
+  async function handleManualLinkCheck() {
+    setLinkCheckRunning(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/cron/check-product-links", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Linkcheck fehlgeschlagen."); return; }
+      setSuccess(`Linkcheck abgeschlossen: ${data.scanned} geprüft, ${data.updated} aktualisiert, ${data.brokenProduct + data.brokenCategory + data.brokenDropshipping} broken.`);
+      setTimeout(() => setSuccess(""), 6000);
+      await loadProducts();
+    } catch { setError("Linkcheck fehlgeschlagen."); }
+    finally { setLinkCheckRunning(false); }
+  }
+
   async function handleLogout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/"); }
 
   const filtered = produkte;
@@ -2942,6 +2998,10 @@ export default function AdminPage() {
             KI-Produkt finden
           </button>
           <button onClick={() => setBulkModal(true)} className="flex items-center gap-2 px-4 py-2.5 glass hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition"><Upload className="w-4 h-4" />JSON Bulk Import</button>
+          <button onClick={handleManualLinkCheck} disabled={linkCheckRunning} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-amber-500/10 border border-amber-500/25 text-amber-200 hover:bg-amber-500/15 transition disabled:opacity-50" title="Pingt alle Produktlinks an und schreibt extra.linkStatus">
+            {linkCheckRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
+            Linkcheck jetzt
+          </button>
         </div>
 
         {/* Product Grid */}
@@ -2949,21 +3009,37 @@ export default function AdminPage() {
           {filtered.map((p, idx) => (
             <motion.div key={`${p.rowIndex}-${p.id}`} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.03 }}
               className="glass border border-white/10 rounded-xl overflow-hidden hover:border-[#95BF47]/20 transition group">
-              <div className="aspect-video bg-white/5 overflow-hidden">
+              <div className="aspect-video bg-white/5 overflow-hidden relative">
                 {p.bildUrl ? <img src={p.bildUrl} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-700"><ImagePlus className="w-8 h-8" /></div>}
+                {(!p.titel || !p.bildUrl || !p.extra?.finances?.recommendedSellPrice) && (
+                  <div className="absolute top-1.5 left-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-200 text-[9px] font-bold uppercase tracking-widest">
+                    <AlertCircle className="w-2.5 h-2.5" />
+                    Daten unvollst.
+                  </div>
+                )}
               </div>
               <div className="p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   {p.sku && <span className="px-1.5 py-0.5 bg-[#95BF47]/10 text-[#95BF47] rounded text-[10px] font-medium">{p.sku}</span>}
                   <span className="text-[10px] text-zinc-500 ml-auto font-mono">{p.id}</span>
                 </div>
-                <h3 className="text-sm font-semibold truncate">{p.titel}</h3>
+                <h3 className="text-sm font-semibold truncate">
+                  {p.titel || <span className="text-zinc-600 italic">(ohne Titel)</span>}
+                </h3>
                 <div className="flex items-center justify-between">
                   <span className="text-[#95BF47] font-bold text-sm">{p.extra?.finances?.recommendedSellPrice || p.preis}&euro;</span>
                   {p.extra?.stats?.trendScore ? <span className="text-[10px] text-emerald-400 flex items-center gap-0.5"><Zap className="w-3 h-3" />{p.extra.stats.trendScore}%</span> : null}
                 </div>
                 <div className="flex gap-1 pt-1 border-t border-white/10">
                   <button onClick={() => openEdit(p)} className="flex-1 py-1.5 text-xs text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition flex items-center justify-center gap-1"><Pencil className="w-3 h-3" />Bearbeiten</button>
+                  <button
+                    onClick={() => handleReDiscover(p)}
+                    disabled={aiDiscovering}
+                    title="KI-Daten neu generieren (Bilder, Ads, Links)"
+                    className="py-1.5 px-2 text-xs text-purple-300 hover:bg-purple-500/10 rounded-lg transition disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3 h-3" />
+                  </button>
                   <button onClick={() => handleDelete(p.rowIndex)} className="py-1.5 px-2 text-xs text-red-400 hover:bg-red-500/10 rounded-lg transition"><Trash2 className="w-3 h-3" /></button>
                 </div>
               </div>

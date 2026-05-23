@@ -51,31 +51,37 @@ function aliSearchUrl(query: string): string {
 /**
  * Filter to clean, deduplicated product image URLs.
  *
- * The Charts-View darf laut Anforderung auch nicht-100%-passende
- * Bilder zeigen — Hauptsache "richtig viele und sie laden". Wir
- * filtern daher nur noch echten Müll raus (Logos, Tracking-Pixel,
- * Mini-Thumbs) und akzeptieren CDN-URLs ohne Datei-Endung.
+ * Sehr permissiv: wir wollen LIEBER ein nicht-exakt-passendes Bild
+ * zeigen als gar keins. Wir filtern nur eindeutigen Müll raus
+ * (Logos, Tracking-Pixel, Mini-Thumbs, bekannte Nicht-Bild-Endungen).
  */
 function cleanImages(urls: unknown[]): string[] {
+  const NON_IMAGE_EXT = /\.(html?|php|aspx?|jsp|js|mjs|css|json|xml|pdf|svg)(?:\?|$|#)/i;
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of urls) {
     const u = typeof raw === "string" ? raw.trim() : "";
     if (!/^https?:\/\/\S{8,}/i.test(u)) continue;
-    // Klassische Junk-Muster: Logos/Sprites/Favicons/Avatare/Tracking-Pixel.
-    if (/(logo|sprite|favicon|avatar|pixel|tracker|tracking|placeholder)/i.test(u)) continue;
-    // Sehr kleine Thumbnails (Amazon-Style _SX40_, _SS50_).
+    if (/(logo|sprite|favicon|avatar|pixel|tracker|tracking|placeholder|advert)/i.test(u))
+      continue;
     if (/_(us|ss|sx|sy)\d{1,2}_/i.test(u)) continue;
-    // Datei-Endungs-Hint: wenn vorhanden, muss es ein Bildformat sein.
-    // Falls keine Endung erkennbar ist (typische CDN-URL), akzeptieren wir.
-    const hasExtension = /\.[a-z0-9]{2,5}(?:\?|$|#)/i.test(u);
-    if (hasExtension && !/\.(jpe?g|png|webp|gif|avif|jfif|heic)(?:_|\?|$|#)/i.test(u)) continue;
+    if (NON_IMAGE_EXT.test(u)) continue;
     if (seen.has(u)) continue;
     seen.add(u);
     out.push(u);
     if (out.length >= 12) break;
   }
   return out;
+}
+
+/**
+ * Last-resort image fallback: a stable Unsplash-keyword URL.
+ * Wenn alle Tavily-Quellen versagen, liefert das wenigstens EIN
+ * thematisch passendes Bild statt einer leeren Slideshow.
+ */
+function placeholderImageFor(query: string): string {
+  const q = encodeURIComponent((query || "product").trim().slice(0, 60));
+  return `https://source.unsplash.com/800x600/?${q}`;
 }
 
 /** Extract a JSON object from a model text response. */
@@ -568,11 +574,18 @@ export async function POST(req: NextRequest) {
     // Reihenfolge: erst die produkt-spezifischen AliExpress-Bilder
     // (passen am genauesten), dann generische Shop/Image-Suche, dann
     // Trefferbilder aus der Detail-Suche. cleanImages dedupliziert.
-    const images = cleanImages([
+    let images = cleanImages([
       ...aliExtractedImages,
       ...imageSearchImages,
       ...detail.images,
     ]);
+    // GARANTIE: nie eine leere Bilderliste — sonst sieht der User
+    // "Kein Bild verfügbar". Ein thematisches Unsplash-Bild ist
+    // besser als nichts.
+    if (images.length === 0) {
+      console.warn("[Discover] no images from Tavily — using Unsplash fallback");
+      images = [placeholderImageFor(imageQuery || produktName)];
+    }
 
     // ─── Claude 2 — synthesize the finished product ──────────────
     const parsed = await claudeJson(

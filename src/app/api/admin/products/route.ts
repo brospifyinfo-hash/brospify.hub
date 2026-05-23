@@ -103,8 +103,20 @@ export async function POST(req: NextRequest) {
     const extra = buildExtra(body);
     const bildUrl = extractBildUrl(body);
     const preis = extractPreis(body);
+    const titel = String(body.title || body.titel || "").trim();
+
+    // Harte Validierung: wir wollen NIE eine Zeile speichern, die nur
+    // aus einer Auto-ID besteht. Lieber dem Admin sagen "Titel fehlt"
+    // als später eine "verbugte" Anzeige bei Kunden.
+    if (!titel) {
+      return NextResponse.json(
+        { error: "Titel ist erforderlich. Speichern abgebrochen." },
+        { status: 400 },
+      );
+    }
 
     console.log("=== [Admin POST] BACKEND EMPFANGEN ===");
+    console.log("[Admin POST] titel:", titel);
     console.log("[Admin POST] body.extra:", JSON.stringify(body.extra));
     console.log("[Admin POST] built extra:", JSON.stringify(extra));
     console.log("[Admin POST] extra.images:", JSON.stringify(extra.images));
@@ -114,7 +126,7 @@ export async function POST(req: NextRequest) {
       id: body.id || `prod_${Date.now()}`,
       sku: body.sku || "",
       monat: body.monat || "",
-      titel: body.title || body.titel || "",
+      titel,
       bildUrl,
       beschreibung: body.description || body.beschreibung || "",
       preis,
@@ -142,9 +154,17 @@ export async function PUT(req: NextRequest) {
     const extra = buildExtra(body);
     const bildUrl = extractBildUrl(body);
     const preis = extractPreis(body);
+    const titel = String(body.title || body.titel || "").trim();
+
+    if (!titel) {
+      return NextResponse.json(
+        { error: "Titel ist erforderlich. Speichern abgebrochen." },
+        { status: 400 },
+      );
+    }
 
     console.log("=== [Admin PUT] BACKEND EMPFANGEN ===");
-    console.log("[Admin PUT] row:", body.rowIndex);
+    console.log("[Admin PUT] row:", body.rowIndex, "titel:", titel);
     console.log("[Admin PUT] body.extra:", JSON.stringify(body.extra));
     console.log("[Admin PUT] built extra:", JSON.stringify(extra));
     console.log("[Admin PUT] extra.images:", JSON.stringify(extra.images));
@@ -154,7 +174,7 @@ export async function PUT(req: NextRequest) {
       id: body.id,
       sku: body.sku || "",
       monat: body.monat || "",
-      titel: body.title || body.titel || "",
+      titel,
       bildUrl,
       beschreibung: body.description || body.beschreibung || "",
       preis,
