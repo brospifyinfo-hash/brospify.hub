@@ -1630,39 +1630,71 @@ export default function AdminPage() {
   // Repariert Produktzeilen, in denen Titel und Preis vertauscht
   // gespeichert wurden (titel = "prod_xxx", preis = echter Titel).
   // Erst Dry-Run zum Vorschauen, dann ein zweiter Klick committet.
+  // Im Dry-Run wird IMMER ein Sample der Rohdaten zurueckgegeben,
+  // damit der Admin sieht WAS gespeichert ist falls 0 matchen.
   const [repairRunning, setRepairRunning] = useState(false);
+  interface RepairSampleRow {
+    rowIndex: number;
+    id: string;
+    sku: string;
+    titel: string;
+    bildUrl: string;
+    preis: string;
+    titelLooksLikeId: boolean;
+    preisLooksLikeTitle: boolean;
+  }
+  interface RepairChangeRow {
+    rowIndex: number;
+    id: string;
+    oldTitel: string;
+    oldPreis: string;
+    newTitel: string;
+    action: string;
+  }
   const [repairPreview, setRepairPreview] = useState<{
     scanned: number;
     changed: number;
-    changes: Array<{ rowIndex: number; id: string; oldTitel: string; oldPreis: string; newTitel: string; action: string }>;
+    changes: RepairChangeRow[];
+    sample?: RepairSampleRow[];
   } | null>(null);
 
   async function handleRepairProducts() {
     setRepairRunning(true); setError(""); setSuccess("");
     try {
-      // Wenn schon Vorschau existiert: commit. Sonst dry-run.
-      const dryRun = !repairPreview;
+      // Wenn schon Vorschau mit Aenderungen existiert: commit. Sonst dry-run.
+      const dryRun = !(repairPreview && repairPreview.changed > 0);
       const res = await fetch("/api/admin/products/repair", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dryRun }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || "Repair fehlgeschlagen."); return; }
+      // Status + Body immer einsehbar machen — falls etwas schiefgeht
+      // muss der Admin den HTTP-Code sehen (404 = Deploy noch nicht da,
+      // 401 = Session abgelaufen, 500 = Sheets-Fehler, etc.).
+      let data: Record<string, unknown> = {};
+      try { data = await res.json(); } catch { data = {}; }
+      if (!res.ok) {
+        setError(`Repair fehlgeschlagen (HTTP ${res.status}): ${String(data.error || res.statusText || "Unbekannter Fehler")}`);
+        return;
+      }
       if (dryRun) {
-        if (data.changed === 0) {
-          setSuccess("Alles sauber — kein Produkt muss repariert werden.");
-          setTimeout(() => setSuccess(""), 5000);
-        } else {
-          setRepairPreview({ scanned: data.scanned, changed: data.changed, changes: data.changes });
-        }
+        // Auch wenn 0 changes — wir oeffnen das Preview-Modal, damit
+        // der Admin die Sample-Daten zur Diagnose sieht.
+        setRepairPreview({
+          scanned: Number(data.scanned) || 0,
+          changed: Number(data.changed) || 0,
+          changes: Array.isArray(data.changes) ? (data.changes as RepairChangeRow[]) : [],
+          sample: Array.isArray(data.sample) ? (data.sample as RepairSampleRow[]) : undefined,
+        });
       } else {
         setSuccess(`Repariert: ${data.changed} von ${data.scanned} Zeilen.`);
         setRepairPreview(null);
         setTimeout(() => setSuccess(""), 6000);
         await loadProducts();
       }
-    } catch { setError("Repair fehlgeschlagen."); }
+    } catch (e) {
+      setError(`Repair fehlgeschlagen: ${e instanceof Error ? e.message : String(e)}`);
+    }
     finally { setRepairRunning(false); }
   }
 
@@ -3348,11 +3380,54 @@ export default function AdminPage() {
                     Datenreparatur — Vorschau
                   </h3>
                   <p className="text-xs text-zinc-500 mt-1">
-                    {repairPreview.changed} von {repairPreview.scanned} Produkten werden verändert. Prüf die Liste, dann committe.
+                    {repairPreview.changed > 0
+                      ? `${repairPreview.changed} von ${repairPreview.scanned} Produkten werden verändert. Prüf die Liste, dann committe.`
+                      : `Kein Auto-Repair-Match unter ${repairPreview.scanned} Produkten. Roh-Sample unten zur Diagnose.`}
                   </p>
                 </div>
                 <button onClick={() => !repairRunning && setRepairPreview(null)} className="text-zinc-500 hover:text-white transition"><X className="w-5 h-5" /></button>
               </div>
+
+              {/* Wenn KEINE Changes: zeig Rohdaten-Sample zur Diagnose */}
+              {repairPreview.changed === 0 && repairPreview.sample && repairPreview.sample.length > 0 && (
+                <div className="mb-4 space-y-2">
+                  <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+                    Roh-Sample (erste {repairPreview.sample.length} Zeilen wie sie im Sheet stehen)
+                  </div>
+                  {repairPreview.sample.map((s) => (
+                    <div key={s.rowIndex} className="rounded-lg bg-white/[0.03] border border-white/10 p-2.5 text-[11px] space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Row {s.rowIndex}</span>
+                        {s.sku && <span className="px-1.5 py-0.5 bg-[#95BF47]/10 text-[#95BF47] rounded text-[9px] font-medium">{s.sku}</span>}
+                        <span className="font-mono text-[10px] text-zinc-600 truncate">{s.id}</span>
+                        {s.titelLooksLikeId && (
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/30 font-bold uppercase tracking-wider">titel=ID</span>
+                        )}
+                        {s.preisLooksLikeTitle && (
+                          <span className="text-[8px] px-1 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30 font-bold uppercase tracking-wider">preis=titel?</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5">
+                        <div className="text-zinc-400 truncate">
+                          <span className="text-zinc-600">titel:</span>{" "}
+                          <span className="text-zinc-200">{s.titel || "(leer)"}</span>
+                        </div>
+                        <div className="text-zinc-400 truncate">
+                          <span className="text-zinc-600">preis:</span>{" "}
+                          <span className="text-zinc-200">{s.preis || "(leer)"}</span>
+                        </div>
+                        <div className="text-zinc-400 truncate col-span-2">
+                          <span className="text-zinc-600">bildUrl:</span>{" "}
+                          <span className="text-zinc-200 font-mono text-[10px]">{s.bildUrl || "(leer)"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-zinc-600 mt-2">
+                    Wenn du hier <span className="text-red-300 font-semibold">titel=ID</span> Zeilen siehst aber kein Match — gib mir den Screenshot, ich passe das Pattern an.
+                  </p>
+                </div>
+              )}
 
               <div className="space-y-2 mb-4">
                 {repairPreview.changes.map((c) => (
@@ -3381,10 +3456,12 @@ export default function AdminPage() {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => setRepairPreview(null)} disabled={repairRunning} className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm font-medium transition disabled:opacity-50">Abbrechen</button>
-                <button onClick={handleRepairProducts} disabled={repairRunning} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2">
-                  {repairRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" />Reparieren bestätigen</>}
-                </button>
+                <button onClick={() => setRepairPreview(null)} disabled={repairRunning} className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm font-medium transition disabled:opacity-50">Schließen</button>
+                {repairPreview.changed > 0 && (
+                  <button onClick={handleRepairProducts} disabled={repairRunning} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2">
+                    {repairRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" />Reparieren bestätigen</>}
+                  </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

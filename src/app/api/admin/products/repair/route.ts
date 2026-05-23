@@ -84,6 +84,20 @@ async function run(req: NextRequest) {
   const changes: RepairChange[] = [];
   let scanned = 0;
   let errors = 0;
+  // Sample der gespeicherten Rohdaten — wird IMMER zurueckgegeben
+  // (auch wenn 0 Reparaturen noetig), damit der Admin im Dry-Run
+  // sieht WAS gespeichert ist und nicht raetseln muss warum nichts
+  // gematched wurde.
+  const sample: Array<{
+    rowIndex: number;
+    id: string;
+    sku: string;
+    titel: string;
+    bildUrl: string;
+    preis: string;
+    titelLooksLikeId: boolean;
+    preisLooksLikeTitle: boolean;
+  }> = [];
 
   try {
     const produkte = await getAllProdukte();
@@ -93,6 +107,20 @@ async function run(req: NextRequest) {
       scanned++;
 
       const titelLooksLikeId = AUTO_ID_PATTERN.test((p.titel || "").trim());
+      const preisLooksLikeTitle = looksLikeTitle(p.preis || "");
+      // Erste 10 Produkte sammeln fuer Diagnose-Anzeige.
+      if (sample.length < 10) {
+        sample.push({
+          rowIndex: p.rowIndex,
+          id: p.id,
+          sku: p.sku,
+          titel: p.titel,
+          bildUrl: p.bildUrl,
+          preis: p.preis,
+          titelLooksLikeId,
+          preisLooksLikeTitle,
+        });
+      }
       if (!titelLooksLikeId) continue;
 
       // titel sieht aus wie eine ID. Pruefen ob preis der echte Titel ist.
@@ -161,6 +189,9 @@ async function run(req: NextRequest) {
       changed: changes.length,
       errors,
       changes,
+      // Sample ausschliesslich im Dry-Run mitschicken — bei einem
+      // echten Commit ist es uninteressant und bloss Payload.
+      sample: dryRun ? sample : undefined,
     });
   } catch (err) {
     console.error("[repair] error:", err);
