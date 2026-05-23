@@ -141,6 +141,34 @@ function findAliExpressUrl(results: TavilyResult[]): string {
   return "";
 }
 
+/**
+ * Fetch a specific URL via Tavily's /extract endpoint — returns the
+ * cleaned page text and the images found on the page. Used to pull
+ * the real product images + price off the linked AliExpress page.
+ */
+async function tavilyExtract(
+  apiKey: string,
+  url: string,
+): Promise<{ content: string; images: string[] }> {
+  const res = await fetch("https://api.tavily.com/extract", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({ urls: [url], include_images: true, extract_depth: "advanced" }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!res.ok) throw new Error(`Tavily extract ${res.status}`);
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const d: any = await res.json();
+  const r = Array.isArray(d.results) ? d.results[0] : null;
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+  return {
+    content: typeof r?.raw_content === "string" ? r.raw_content : "",
+    images: Array.isArray(r?.images)
+      ? r.images.filter((u: unknown): u is string => typeof u === "string")
+      : [],
+  };
+}
+
 // ─── Output schemas ──────────────────────────────────────────────
 // Structured outputs constrain the model to valid JSON matching the
 // schema — a stray quote in a description can no longer break parsing.
@@ -324,9 +352,30 @@ export async function POST(req: NextRequest) {
     if (detailRes.status === "fulfilled") detail = detailRes.value;
     else console.error("[Discover] detail search failed:", detailRes.reason);
     if (aliRes.status === "fulfilled") aliResults = aliRes.value.results;
-    const images = cleanImages(detail.images);
     const aliExpressLink =
       findAliExpressUrl([...aliResults, ...detail.results]) || aliSearchUrl(imageQuery || produktName);
+
+    // If we have a real AliExpress product page, extract its actual
+    // images + content so the images match the linked product and the
+    // price can be taken 1:1 from AliExpress.
+    let aliExtractedContent = "";
+    let aliExtractedImages: string[] = [];
+    if (/aliexpress\.[a-z.]+\/item\/\d/i.test(aliExpressLink)) {
+      try {
+        const ext = await tavilyExtract(tavilyKey, aliExpressLink);
+        aliExtractedContent = ext.content;
+        aliExtractedImages = ext.images;
+      } catch (e) {
+        console.error("[Discover] aliexpress extract failed:", e);
+      }
+    }
+    // Prefer images straight from the linked AliExpress product so they
+    // actually match the product. Only fall back to the broader image
+    // pool when the AliExpress page yielded too few.
+    const images =
+      aliExtractedImages.length >= 2
+        ? cleanImages(aliExtractedImages)
+        : cleanImages([...aliExtractedImages, ...detail.images]);
 
     // ─── Claude 2 — synthesize the finished product ──────────────
     const parsed = await claudeJson(
@@ -335,7 +384,7 @@ export async function POST(req: NextRequest) {
 
 SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als sauberes, verkaufsstarkes HTML — nutze <p> für Absätze, <ul><li> für Aufzählungen und <strong> für Hervorhebungen. Kein übertriebener Emoji-Einsatz.
 KATEGORIE: ${kategorie ? `Verwende exakt "${kategorie}".` : "Wähle eine kurze, treffende Produktkategorie (z. B. Beauty, Haushalt, Sport, Haustier, Küche, Gadgets)."}
-PREISE: realistischer AliExpress-Einkaufspreis und marktüblicher Dropshipping-Verkaufspreis, beide in EUR.
+PREISE: Falls eine ALIEXPRESS-PRODUKTSEITE im Kontext gegeben ist, übernimm den dort gelisteten Preis EXAKT als buyPrice (rechne USD bei Bedarf grob mit Faktor 0.93 in EUR um). Sonst schätze realistisch. Verkaufspreis = marktüblicher Dropshipping-Preis in EUR.
 SCORES (0-100): trendScore = aktuelle Trendstärke, viralScore = Social-Media-Viralität, impulseBuyFactor = Impulskauf-Eignung, problemSolverIndex = wie stark es ein Problem löst, marketSaturation = Marktsättigung (höher = gesättigter).
 VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen (TikTok, Meta/Facebook Ad Library, Trend-Plattformen).
 
@@ -348,7 +397,7 @@ Antworte NUR mit JSON, ohne weiteren Text:
   "stats": { "trendScore": 0, "viralScore": 0, "impulseBuyFactor": 0, "problemSolverIndex": 0, "marketSaturation": 0 },
   "viralEvidence": "2-4 Sätze: warum dieses Produkt gerade viral ist, mit konkreten Signalen aus den Quellen."
 }`,
-      `Produkt: ${produktName}\nMonat: ${monthYear}\n\n${trendContext}\n\n──────\n\n${resultsToContext("PRODUKT-DETAILSUCHE:", detail)}`,
+      `Produkt: ${produktName}\nMonat: ${monthYear}\n\n${trendContext}\n\n──────\n\n${resultsToContext("PRODUKT-DETAILSUCHE:", detail)}${aliExtractedContent ? `\n\n──────\n\nALIEXPRESS-PRODUKTSEITE (für exakten Preis):\n${aliExtractedContent.slice(0, 3500)}` : ""}`,
       4000,
       PRODUCT_SCHEMA,
     );

@@ -1407,7 +1407,14 @@ export default function AdminPage() {
         aliExpressLink: editProduct.aliExpressLink,
         bildUrl: images[0] || "",
         preis: String(editProduct.finances.recommendedSellPrice || ""),
-        extra: { stats: editProduct.stats, finances: editProduct.finances, images },
+        extra: {
+          stats: editProduct.stats,
+          finances: {
+            ...editProduct.finances,
+            profitMargin: Math.round((Number(editProduct.finances.recommendedSellPrice || 0) - Number(editProduct.finances.buyPrice || 0)) * 100) / 100,
+          },
+          images,
+        },
       };
       console.log("=== PAYLOAD VOR DEM SENDEN ===");
       console.log("images:", JSON.stringify(images));
@@ -3044,7 +3051,7 @@ export default function AdminPage() {
                   <div className="grid grid-cols-3 gap-3">
                     <div><label className="block text-[10px] text-zinc-500 mb-1">Einkaufspreis</label><input type="number" step="0.01" value={editProduct.finances.buyPrice || ""} onChange={e => setEditProduct({ ...editProduct, finances: { ...editProduct.finances, buyPrice: Number(e.target.value) } })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                     <div><label className="block text-[10px] text-zinc-500 mb-1">Verkaufspreis</label><input type="number" step="0.01" value={editProduct.finances.recommendedSellPrice || ""} onChange={e => setEditProduct({ ...editProduct, finances: { ...editProduct.finances, recommendedSellPrice: Number(e.target.value) } })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                    <div><label className="block text-[10px] text-zinc-500 mb-1">Marge</label><input type="number" step="0.01" value={editProduct.finances.profitMargin || ""} onChange={e => setEditProduct({ ...editProduct, finances: { ...editProduct.finances, profitMargin: Number(e.target.value) } })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                    <div><label className="block text-[10px] text-zinc-500 mb-1">Marge (auto)</label><div className="w-full px-3 py-2 bg-zinc-800/60 border border-zinc-700 rounded-lg text-sm text-emerald-400 tabular-nums">{(Number(editProduct.finances.recommendedSellPrice || 0) - Number(editProduct.finances.buyPrice || 0)).toFixed(2)}&euro;</div></div>
                   </div>
                 </div>
 
