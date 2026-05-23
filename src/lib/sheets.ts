@@ -854,6 +854,52 @@ export interface ProduktLinkStatus {
   lastCheckedAt?: string;
 }
 
+// ─── Deep Analytics (Premium Charts) ────────────────────────────
+// Zusatz-Felder die die KI-Discovery liefert und die in der erweiterten
+// Charts-Detailansicht angezeigt werden. Alle optional — alte Produkte
+// ohne diese Felder fallen sauber zurück.
+
+export interface ProduktDeepStats {
+  /** 0-100, höher = mehr Konkurrenz im Markt. */
+  competition?: number;
+  /** 0-100, 0 = evergreen, 100 = stark saisonal. */
+  seasonality?: number;
+  /** Monatsnummern (1-12) in denen die Nachfrage Peaks hat. */
+  peakMonths?: number[];
+  /** Wachstumstrend der letzten 90 Tage in Prozent (-100..+500). */
+  growth90d?: number;
+  /** Wiederkaufrate-Schätzung in % (für Cross-Sell-Potenzial). */
+  repeatPurchaseRate?: number;
+}
+
+export interface ProduktAudience {
+  /** Kurz-Label, z.B. "Gen-Z fitness enthusiasts". */
+  primary?: string;
+  /** Altersrange wie "18-34". */
+  ageRange?: string;
+  /** "male" | "female" | "balanced". */
+  genderSkew?: "male" | "female" | "balanced";
+  /** Bis zu 5 Top-Interessen für Ad-Targeting. */
+  interests?: string[];
+  /** Pain-Point den das Produkt adressiert. */
+  painPoint?: string;
+}
+
+export interface ProduktAdStrategy {
+  /** Geschätzter Mindest-Tagesbudget in EUR. */
+  dailyMinEur?: number;
+  /** Empfohlenes Tagesbudget für ordentliches Volumen in EUR. */
+  dailyRecommendedEur?: number;
+  /** Geschätzter CPM in EUR. */
+  estimatedCpmEur?: number;
+  /** Beste Ad-Format-Empfehlung, z.B. "Hook-Heavy TikTok Video, 15-30s". */
+  bestFormat?: string;
+  /** Top-3 Ad-Copy-Hooks (Hookline für ersten Frame/Sekunde). */
+  adHooks?: string[];
+  /** Empfohlene Test-Phase in Tagen vor Skalierung. */
+  testDurationDays?: number;
+}
+
 export interface ProduktExtra {
   stats?: ProduktStats;
   finances?: ProduktFinances;
@@ -864,6 +910,12 @@ export interface ProduktExtra {
   ads?: ProduktAds;
   /** Vom Cron gepflegt: welche Links sind aktuell noch erreichbar? */
   linkStatus?: ProduktLinkStatus;
+  /** Deep Analytics — Wettbewerb, Saisonalität, Wachstum. */
+  deepStats?: ProduktDeepStats;
+  /** Zielgruppe & Targeting-Hinweise. */
+  audience?: ProduktAudience;
+  /** Ad-Strategie-Empfehlung (Budget, Format, Hooks). */
+  adStrategy?: ProduktAdStrategy;
 }
 
 export interface Produkt {

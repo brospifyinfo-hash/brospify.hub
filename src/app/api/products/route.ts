@@ -15,8 +15,13 @@ export async function GET() {
     // niche or month segmentation.
     const produkte = await getAllProdukte();
 
+    // Filter: jede Zeile mit einer ID gilt als sichtbar. Frueher haben
+    // wir `p.titel || p.bildUrl` verlangt — das hat aber Produkte mit
+    // halb-gespeicherten Daten komplett verschwinden lassen. Die UI
+    // hat eigene defensive Fallbacks (displayTitle/Placeholder), wir
+    // brauchen den Filter hier also nicht mehr.
     const list = produkte
-      .filter((p) => p.titel || p.bildUrl)
+      .filter((p) => p.id)
       .sort(
         (a, b) =>
           (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),

@@ -49,6 +49,31 @@ interface ProduktLinkStatus {
   lastCheckedAt?: string;
 }
 
+interface ProduktDeepStats {
+  competition?: number;
+  seasonality?: number;
+  peakMonths?: number[];
+  growth90d?: number;
+  repeatPurchaseRate?: number;
+}
+
+interface ProduktAudience {
+  primary?: string;
+  ageRange?: string;
+  genderSkew?: "male" | "female" | "balanced";
+  interests?: string[];
+  painPoint?: string;
+}
+
+interface ProduktAdStrategy {
+  dailyMinEur?: number;
+  dailyRecommendedEur?: number;
+  estimatedCpmEur?: number;
+  bestFormat?: string;
+  adHooks?: string[];
+  testDurationDays?: number;
+}
+
 interface ProduktExtra {
   stats?: { trendScore: number; viralScore: number; impulseBuyFactor: number; problemSolverIndex: number; marketSaturation: number };
   finances?: { buyPrice: number; recommendedSellPrice: number; profitMargin: number };
@@ -56,6 +81,9 @@ interface ProduktExtra {
   links?: ProduktLinks;
   ads?: ProduktAds;
   linkStatus?: ProduktLinkStatus;
+  deepStats?: ProduktDeepStats;
+  audience?: ProduktAudience;
+  adStrategy?: ProduktAdStrategy;
 }
 
 interface Produkt {
@@ -89,6 +117,9 @@ interface EditProduct {
   links?: ProduktLinks;
   ads?: ProduktAds;
   linkStatus?: ProduktLinkStatus;
+  deepStats?: ProduktDeepStats;
+  audience?: ProduktAudience;
+  adStrategy?: ProduktAdStrategy;
 }
 
 const EMPTY: EditProduct = {
@@ -1421,6 +1452,9 @@ export default function AdminPage() {
       links: p.extra?.links,
       ads: p.extra?.ads,
       linkStatus: p.extra?.linkStatus,
+      deepStats: p.extra?.deepStats,
+      audience: p.extra?.audience,
+      adStrategy: p.extra?.adStrategy,
     };
   }
 
@@ -1453,6 +1487,9 @@ export default function AdminPage() {
           ...(editProduct.links ? { links: editProduct.links } : {}),
           ...(editProduct.ads ? { ads: editProduct.ads } : {}),
           ...(editProduct.linkStatus ? { linkStatus: editProduct.linkStatus } : {}),
+          ...(editProduct.deepStats ? { deepStats: editProduct.deepStats } : {}),
+          ...(editProduct.audience ? { audience: editProduct.audience } : {}),
+          ...(editProduct.adStrategy ? { adStrategy: editProduct.adStrategy } : {}),
         },
       };
       console.log("=== PAYLOAD VOR DEM SENDEN ===");
@@ -1520,6 +1557,9 @@ export default function AdminPage() {
         links: p.links,
         ads: p.ads,
         linkStatus: p.linkStatus,
+        deepStats: p.deepStats,
+        audience: p.audience,
+        adStrategy: p.adStrategy,
       });
       setIsNew(true);
       setAiEvidence(data.viralEvidence || "");
@@ -1560,6 +1600,9 @@ export default function AdminPage() {
         links: dp.links || p.extra?.links,
         ads: dp.ads || p.extra?.ads,
         linkStatus: dp.linkStatus || p.extra?.linkStatus,
+        deepStats: dp.deepStats || p.extra?.deepStats,
+        audience: dp.audience || p.extra?.audience,
+        adStrategy: dp.adStrategy || p.extra?.adStrategy,
       });
       setIsNew(false);
       setAiEvidence(data.viralEvidence || "");

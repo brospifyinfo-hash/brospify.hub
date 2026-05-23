@@ -41,6 +41,9 @@ function buildExtra(body: Record<string, unknown>): {
   links?: Record<string, unknown>;
   ads?: Record<string, unknown>;
   linkStatus?: Record<string, unknown>;
+  deepStats?: Record<string, unknown>;
+  audience?: Record<string, unknown>;
+  adStrategy?: Record<string, unknown>;
 } {
   const nested = body.extra as Record<string, unknown> | undefined;
 
@@ -67,13 +70,19 @@ function buildExtra(body: Record<string, unknown>): {
   const links = pickObj(nested?.links) || pickObj(body.links);
   const ads = pickObj(nested?.ads) || pickObj(body.ads);
   const linkStatus = pickObj(nested?.linkStatus) || pickObj(body.linkStatus);
+  const deepStats = pickObj(nested?.deepStats) || pickObj(body.deepStats);
+  const audience = pickObj(nested?.audience) || pickObj(body.audience);
+  const adStrategy = pickObj(nested?.adStrategy) || pickObj(body.adStrategy);
 
   console.log("[buildExtra] nested?.images:", JSON.stringify(nested?.images));
   console.log("[buildExtra] body.images:", JSON.stringify(body.images));
   console.log("[buildExtra] final images:", JSON.stringify(images));
-  console.log("[buildExtra] links/ads/status present?", !!links, !!ads, !!linkStatus);
+  console.log(
+    "[buildExtra] structured present?",
+    !!links, !!ads, !!linkStatus, !!deepStats, !!audience, !!adStrategy,
+  );
 
-  return { stats, finances, images, links, ads, linkStatus };
+  return { stats, finances, images, links, ads, linkStatus, deepStats, audience, adStrategy };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

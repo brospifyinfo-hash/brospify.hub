@@ -1,7 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, type ProduktAds, type ProduktDropshippingExample } from "@/lib/sheets";
+import {
+  getAllProdukte,
+  type ProduktAds,
+  type ProduktDropshippingExample,
+  type ProduktDeepStats,
+  type ProduktAudience,
+  type ProduktAdStrategy,
+} from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 // Pipeline runs ~40-100s (gruendlich kann mehr werden); Vercel clamped
@@ -353,9 +360,48 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
       required: ["trendScore", "viralScore", "impulseBuyFactor", "problemSolverIndex", "marketSaturation"],
       additionalProperties: false,
     },
+    // Neue Deep-Analytics-Blöcke. Optional in der Schema, damit Claude
+    // bei sehr neuen/unklaren Produkten leere Defaults liefern darf.
+    deepStats: {
+      type: "object",
+      properties: {
+        competition: { type: "integer" },
+        seasonality: { type: "integer" },
+        peakMonths: { type: "array", items: { type: "integer" } },
+        growth90d: { type: "integer" },
+        repeatPurchaseRate: { type: "integer" },
+      },
+      required: ["competition", "seasonality", "peakMonths", "growth90d", "repeatPurchaseRate"],
+      additionalProperties: false,
+    },
+    audience: {
+      type: "object",
+      properties: {
+        primary: { type: "string" },
+        ageRange: { type: "string" },
+        genderSkew: { type: "string", enum: ["male", "female", "balanced"] },
+        interests: { type: "array", items: { type: "string" } },
+        painPoint: { type: "string" },
+      },
+      required: ["primary", "ageRange", "genderSkew", "interests", "painPoint"],
+      additionalProperties: false,
+    },
+    adStrategy: {
+      type: "object",
+      properties: {
+        dailyMinEur: { type: "number" },
+        dailyRecommendedEur: { type: "number" },
+        estimatedCpmEur: { type: "number" },
+        bestFormat: { type: "string" },
+        adHooks: { type: "array", items: { type: "string" } },
+        testDurationDays: { type: "integer" },
+      },
+      required: ["dailyMinEur", "dailyRecommendedEur", "estimatedCpmEur", "bestFormat", "adHooks", "testDurationDays"],
+      additionalProperties: false,
+    },
     viralEvidence: { type: "string" },
   },
-  required: ["titel", "beschreibung", "kategorie", "finances", "stats", "viralEvidence"],
+  required: ["titel", "beschreibung", "kategorie", "finances", "stats", "deepStats", "audience", "adStrategy", "viralEvidence"],
   additionalProperties: false,
 };
 
@@ -590,12 +636,35 @@ export async function POST(req: NextRequest) {
     // ─── Claude 2 — synthesize the finished product ──────────────
     const parsed = await claudeJson(
       client,
-      `Du bist ein E-Commerce-Experte für den deutschen Markt. Erstelle aus den gegebenen Web-Rechercheergebnissen einen fertigen, verkaufsstarken Charts-Eintrag.
+      `Du bist ein E-Commerce-Experte für den deutschen Markt. Erstelle aus den gegebenen Web-Rechercheergebnissen einen fertigen, verkaufsstarken Charts-Eintrag MIT VOLLEN ANALYTICS.
 
 SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als sauberes, verkaufsstarkes HTML — nutze <p> für Absätze, <ul><li> für Aufzählungen und <strong> für Hervorhebungen. Kein übertriebener Emoji-Einsatz.
 KATEGORIE: ${kategorie ? `Verwende exakt "${kategorie}".` : "Wähle eine kurze, treffende Produktkategorie (z. B. Beauty, Haushalt, Sport, Haustier, Küche, Gadgets)."}
 PREISE: Falls eine ALIEXPRESS-PRODUKTSEITE im Kontext gegeben ist, übernimm den dort gelisteten Preis EXAKT als buyPrice (rechne USD bei Bedarf grob mit Faktor 0.93 in EUR um). Sonst schätze realistisch. Verkaufspreis = marktüblicher Dropshipping-Preis in EUR. WICHTIG: Beide Preise sind nur Richtwerte — der Hub zeigt dem Nutzer einen "Preis kann schwanken"-Hinweis.
 SCORES (0-100): trendScore = aktuelle Trendstärke, viralScore = Social-Media-Viralität, impulseBuyFactor = Impulskauf-Eignung, problemSolverIndex = wie stark es ein Problem löst, marketSaturation = Marktsättigung (höher = gesättigter).
+
+DEEP STATS:
+- competition (0-100): wie stark ist die Konkurrenz im deutschen Markt (100 = stark umkämpft)
+- seasonality (0-100): 0 = Evergreen ganzjährig, 100 = stark saisonal
+- peakMonths: Array von Monatsnummern 1-12 in denen Nachfrage Peak hat (z.B. [11,12] für X-Mas Produkte, [] wenn ganzjährig)
+- growth90d (-100..500): geschätzte Nachfrage-Veränderung in den letzten 90 Tagen in Prozent
+- repeatPurchaseRate (0-100): wie wahrscheinlich kommt ein Käufer für mehr zurück
+
+AUDIENCE:
+- primary: knapp die Hauptzielgruppe, z.B. "Gen-Z Fitness-Fans" oder "Familien mit Kleinkindern"
+- ageRange: z.B. "18-34" oder "25-54"
+- genderSkew: "male", "female" oder "balanced"
+- interests: 3-5 konkrete Targeting-Interessen für Meta/TikTok Ads
+- painPoint: in einem Satz das Problem das das Produkt löst
+
+AD STRATEGY:
+- dailyMinEur: realistisches Mindest-Tagesbudget zum Validieren (10-50€)
+- dailyRecommendedEur: empfohlenes Budget für sinnvolles Volumen (50-300€)
+- estimatedCpmEur: typischer CPM in EUR (5-25€ je nach Plattform/Audience)
+- bestFormat: konkrete Format-Empfehlung, z.B. "TikTok UGC-Video, 9:16, 15-30s, Hook in <2s"
+- adHooks: 3 konkrete deutsche Hookline-Beispiele für den ersten Frame (8-12 Worte je)
+- testDurationDays: empfohlene Testdauer vor Skalierung (3-14)
+
 VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen (TikTok, Meta/Facebook Ad Library, Trend-Plattformen).
 
 Antworte NUR mit JSON, ohne weiteren Text:
@@ -605,6 +674,9 @@ Antworte NUR mit JSON, ohne weiteren Text:
   "kategorie": "kurze Produktkategorie",
   "finances": { "buyPrice": 0.0, "recommendedSellPrice": 0.0 },
   "stats": { "trendScore": 0, "viralScore": 0, "impulseBuyFactor": 0, "problemSolverIndex": 0, "marketSaturation": 0 },
+  "deepStats": { "competition": 0, "seasonality": 0, "peakMonths": [], "growth90d": 0, "repeatPurchaseRate": 0 },
+  "audience": { "primary": "", "ageRange": "", "genderSkew": "balanced", "interests": [], "painPoint": "" },
+  "adStrategy": { "dailyMinEur": 0, "dailyRecommendedEur": 0, "estimatedCpmEur": 0, "bestFormat": "", "adHooks": [], "testDurationDays": 0 },
   "viralEvidence": "2-4 Sätze: warum dieses Produkt gerade viral ist, mit konkreten Signalen aus den Quellen."
 }`,
       `Produkt: ${produktName}\nMonat: ${monthYear}\n\n${trendContext}\n\n──────\n\n${resultsToContext("PRODUKT-DETAILSUCHE:", detail)}${aliExtractedContent ? `\n\n──────\n\nALIEXPRESS-PRODUKTSEITE (für exakten Preis):\n${aliExtractedContent.slice(0, 3500)}` : ""}`,
@@ -636,6 +708,47 @@ Antworte NUR mit JSON, ohne weiteren Text:
       impulseBuyFactor: score(st.impulseBuyFactor),
       problemSolverIndex: score(st.problemSolverIndex),
       marketSaturation: score(st.marketSaturation),
+    };
+
+    // ─── Deep Analytics normalisieren ────────────────────────────
+    const ds = (parsed.deepStats ?? {}) as Record<string, unknown>;
+    const peakRaw = Array.isArray(ds.peakMonths) ? ds.peakMonths : [];
+    const deepStats: ProduktDeepStats = {
+      competition: score(ds.competition),
+      seasonality: score(ds.seasonality),
+      peakMonths: peakRaw
+        .map((m) => Math.round(num(m)))
+        .filter((m) => m >= 1 && m <= 12),
+      growth90d: Math.max(-100, Math.min(500, Math.round(num(ds.growth90d)))),
+      repeatPurchaseRate: score(ds.repeatPurchaseRate),
+    };
+
+    const au = (parsed.audience ?? {}) as Record<string, unknown>;
+    const genderRaw = str(au.genderSkew).toLowerCase();
+    const audience: ProduktAudience = {
+      primary: str(au.primary),
+      ageRange: str(au.ageRange),
+      genderSkew:
+        genderRaw === "male" || genderRaw === "female" ? genderRaw : "balanced",
+      interests: Array.isArray(au.interests)
+        ? au.interests.map((x) => str(x)).filter(Boolean).slice(0, 5)
+        : [],
+      painPoint: str(au.painPoint),
+    };
+
+    const ad = (parsed.adStrategy ?? {}) as Record<string, unknown>;
+    const adStrategy: ProduktAdStrategy = {
+      dailyMinEur: Math.max(0, Math.round(num(ad.dailyMinEur))),
+      dailyRecommendedEur: Math.max(0, Math.round(num(ad.dailyRecommendedEur))),
+      estimatedCpmEur: Math.round(num(ad.estimatedCpmEur) * 100) / 100,
+      bestFormat: str(ad.bestFormat),
+      adHooks: Array.isArray(ad.adHooks)
+        ? ad.adHooks.map((x) => str(x)).filter(Boolean).slice(0, 3)
+        : [],
+      testDurationDays: Math.max(
+        1,
+        Math.min(60, Math.round(num(ad.testDurationDays))),
+      ),
     };
 
     // Initial-Linkcheck — beide Ali-Links + Dropshipping-Beispiel.
@@ -674,6 +787,10 @@ Antworte NUR mit JSON, ohne weiteren Text:
         },
         ads,
         linkStatus,
+        // Deep Analytics — Wettbewerb, Saison, Zielgruppe, Ad-Strategie.
+        deepStats,
+        audience,
+        adStrategy,
       },
       viralEvidence: str(parsed.viralEvidence),
       // Backwards-Kompat: alte Felder unverändert mitgeben.

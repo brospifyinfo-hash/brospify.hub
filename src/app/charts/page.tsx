@@ -31,6 +31,19 @@ import {
   Users,
   PlayCircle,
   Megaphone,
+  Calendar,
+  TrendingDown,
+  Flame,
+  Layers,
+  Crosshair,
+  Eye,
+  Wallet,
+  Hash,
+  ArrowUpRight,
+  ArrowDownRight,
+  Activity,
+  Award,
+  Filter,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -70,6 +83,31 @@ interface ProduktLinkStatus {
   lastCheckedAt?: string;
 }
 
+interface ProduktDeepStats {
+  competition?: number;
+  seasonality?: number;
+  peakMonths?: number[];
+  growth90d?: number;
+  repeatPurchaseRate?: number;
+}
+
+interface ProduktAudience {
+  primary?: string;
+  ageRange?: string;
+  genderSkew?: "male" | "female" | "balanced";
+  interests?: string[];
+  painPoint?: string;
+}
+
+interface ProduktAdStrategy {
+  dailyMinEur?: number;
+  dailyRecommendedEur?: number;
+  estimatedCpmEur?: number;
+  bestFormat?: string;
+  adHooks?: string[];
+  testDurationDays?: number;
+}
+
 interface Produkt {
   id: string;
   sku: string;
@@ -85,8 +123,19 @@ interface Produkt {
     links?: ProduktLinks;
     ads?: ProduktAds;
     linkStatus?: ProduktLinkStatus;
+    deepStats?: ProduktDeepStats;
+    audience?: ProduktAudience;
+    adStrategy?: ProduktAdStrategy;
   };
 }
+
+// Sortier-Keys für die UI-Toolbar.
+type SortKey = "trend" | "viral" | "margin" | "growth" | "lowCompetition";
+
+const MONTH_LABEL_DE = [
+  "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
+  "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
+];
 
 // ─── Defensive helpers ──────────────────────────────────────────
 // Daten in der Sheet sind nicht immer komplett (alte Importe, aborted
@@ -440,6 +489,444 @@ function AliLinksBlock({
   );
 }
 
+// ─── Deep-Stats-Panel (Wettbewerb / Saison / Wachstum) ──────────
+function DeepStatsBlock({ ds }: { ds?: ProduktDeepStats }) {
+  if (!ds) return null;
+  const has =
+    typeof ds.competition === "number" ||
+    typeof ds.seasonality === "number" ||
+    typeof ds.growth90d === "number" ||
+    typeof ds.repeatPurchaseRate === "number" ||
+    (Array.isArray(ds.peakMonths) && ds.peakMonths.length > 0);
+  if (!has) return null;
+
+  const peakSet = new Set(ds.peakMonths || []);
+  return (
+    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-4">
+      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+        <Activity className="w-4 h-4 text-purple-300" />
+        Markt & Saison
+      </h4>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {typeof ds.competition === "number" && (
+          <MiniMeter
+            label="Konkurrenz"
+            value={ds.competition}
+            // invert: niedrig = grün, hoch = rot
+            invert
+            icon={Crosshair}
+          />
+        )}
+        {typeof ds.seasonality === "number" && (
+          <MiniMeter label="Saison" value={ds.seasonality} icon={Calendar} />
+        )}
+        {typeof ds.repeatPurchaseRate === "number" && (
+          <MiniMeter
+            label="Rückkauf"
+            value={ds.repeatPurchaseRate}
+            icon={Award}
+          />
+        )}
+        {typeof ds.growth90d === "number" && (
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">
+                Wachstum 90T
+              </span>
+              {ds.growth90d >= 0 ? (
+                <ArrowUpRight className="w-3 h-3 text-emerald-400" />
+              ) : (
+                <ArrowDownRight className="w-3 h-3 text-red-400" />
+              )}
+            </div>
+            <div
+              className={`text-base font-bold tabular-nums ${
+                ds.growth90d >= 0 ? "text-emerald-400" : "text-red-400"
+              }`}
+            >
+              {ds.growth90d > 0 ? "+" : ""}
+              {ds.growth90d}%
+            </div>
+          </div>
+        )}
+      </div>
+      {Array.isArray(ds.peakMonths) && ds.peakMonths.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
+            Peak-Monate
+          </div>
+          <div className="grid grid-cols-12 gap-0.5">
+            {MONTH_LABEL_DE.map((m, i) => {
+              const isPeak = peakSet.has(i + 1);
+              return (
+                <div
+                  key={m}
+                  className={`text-center text-[9px] py-1 rounded ${
+                    isPeak
+                      ? "bg-purple-500/25 text-purple-100 font-semibold"
+                      : "bg-white/[0.02] text-zinc-600"
+                  }`}
+                  title={isPeak ? `${m} — Peak` : m}
+                >
+                  {m}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MiniMeter({
+  label,
+  value,
+  icon: Icon,
+  invert,
+}: {
+  label: string;
+  value: number;
+  icon: typeof Crosshair;
+  invert?: boolean;
+}) {
+  // tint je nach Wert (0-100). bei `invert` ist niedrig = grün.
+  const v = Math.max(0, Math.min(100, value));
+  const score = invert ? 100 - v : v;
+  const color =
+    score >= 70 ? "#10B981" : score >= 40 ? "#F59E0B" : "#EF4444";
+  return (
+    <div
+      className="rounded-lg border p-2"
+      style={{ borderColor: `${color}25`, background: `${color}08` }}
+    >
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">
+          {label}
+        </span>
+        <Icon className="w-3 h-3" style={{ color }} />
+      </div>
+      <div className="text-base font-bold tabular-nums" style={{ color }}>
+        {v}%
+      </div>
+      <div className="h-1 bg-white/5 rounded-full overflow-hidden mt-1">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${v}%`, background: color }}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ─── Audience-Panel ─────────────────────────────────────────────
+function AudienceBlock({ a }: { a?: ProduktAudience }) {
+  if (!a) return null;
+  const has =
+    a.primary || a.ageRange || a.painPoint || (a.interests && a.interests.length > 0);
+  if (!has) return null;
+
+  const genderLabel =
+    a.genderSkew === "male" ? "Männlich" : a.genderSkew === "female" ? "Weiblich" : "Ausgeglichen";
+
+  return (
+    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
+      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+        <Users className="w-4 h-4 text-blue-300" />
+        Zielgruppe & Targeting
+      </h4>
+      {a.primary && (
+        <div className="text-sm text-zinc-200 font-medium">{a.primary}</div>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {a.ageRange && (
+          <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-1.5">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">
+              Alter
+            </div>
+            <div className="text-sm font-bold text-zinc-100">{a.ageRange}</div>
+          </div>
+        )}
+        {a.genderSkew && (
+          <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-1.5">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">
+              Geschlecht
+            </div>
+            <div className="text-sm font-bold text-zinc-100">{genderLabel}</div>
+          </div>
+        )}
+      </div>
+      {a.painPoint && (
+        <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2 text-xs text-zinc-300 leading-relaxed">
+          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">
+            Pain-Point
+          </div>
+          {a.painPoint}
+        </div>
+      )}
+      {Array.isArray(a.interests) && a.interests.length > 0 && (
+        <div>
+          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">
+            Targeting-Interessen
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {a.interests.map((i) => (
+              <span
+                key={i}
+                className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-200"
+              >
+                <Hash className="w-2.5 h-2.5" />
+                {i}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Ad-Strategy-Panel ──────────────────────────────────────────
+function AdStrategyBlock({ s }: { s?: ProduktAdStrategy }) {
+  if (!s) return null;
+  const has =
+    s.dailyMinEur ||
+    s.dailyRecommendedEur ||
+    s.estimatedCpmEur ||
+    s.bestFormat ||
+    (s.adHooks && s.adHooks.length > 0);
+  if (!has) return null;
+
+  return (
+    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
+      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+        <Megaphone className="w-4 h-4 text-amber-300" />
+        Ad-Strategie
+      </h4>
+      <div className="grid grid-cols-3 gap-2">
+        <BudgetTile
+          label="Min/Tag"
+          value={`${s.dailyMinEur || 0}€`}
+          sub="Validierung"
+          color="#94A3B8"
+        />
+        <BudgetTile
+          label="Empfohlen/Tag"
+          value={`${s.dailyRecommendedEur || 0}€`}
+          sub="Skalierung"
+          color="#F59E0B"
+        />
+        <BudgetTile
+          label="CPM"
+          value={`${(s.estimatedCpmEur ?? 0).toFixed(2)}€`}
+          sub="geschätzt"
+          color="#A855F7"
+        />
+      </div>
+      {s.bestFormat && (
+        <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2 text-xs text-amber-100">
+          <div className="text-[9px] uppercase tracking-widest text-amber-300/70 font-semibold mb-0.5">
+            Bestes Format
+          </div>
+          {s.bestFormat}
+        </div>
+      )}
+      {Array.isArray(s.adHooks) && s.adHooks.length > 0 && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+            Hook-Beispiele
+          </div>
+          {s.adHooks.map((h, i) => (
+            <div
+              key={i}
+              className="flex items-start gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2"
+            >
+              <span className="shrink-0 text-[9px] font-bold text-amber-300 mt-0.5">
+                #{i + 1}
+              </span>
+              <span className="text-xs text-zinc-200 leading-snug">{h}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {typeof s.testDurationDays === "number" && s.testDurationDays > 0 && (
+        <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
+          <Eye className="w-3 h-3" />
+          Empfohlene Testdauer: <strong className="text-zinc-300">{s.testDurationDays} Tage</strong>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BudgetTile({
+  label,
+  value,
+  sub,
+  color,
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  color: string;
+}) {
+  return (
+    <div
+      className="rounded-lg border p-2 text-center"
+      style={{ borderColor: `${color}25`, background: `${color}08` }}
+    >
+      <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">
+        {label}
+      </div>
+      <div className="text-base font-bold tabular-nums mt-0.5" style={{ color }}>
+        {value}
+      </div>
+      <div className="text-[9px] text-zinc-600">{sub}</div>
+    </div>
+  );
+}
+
+// ─── Stat-Tile (Overview-Strip oben auf der Seite) ──────────────
+function StatTile({
+  label,
+  value,
+  sub,
+  icon: Icon,
+  tint,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  icon: typeof Flame;
+  tint: string;
+}) {
+  return (
+    <div className="rounded-xl border p-2.5" style={{ borderColor: `${tint}25`, background: `${tint}08` }}>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
+        <Icon className="w-3 h-3" style={{ color: tint }} />
+      </div>
+      <div className="text-base font-bold tabular-nums truncate" style={{ color: tint }}>{value}</div>
+      {sub && <div className="text-[9px] text-zinc-600 mt-0.5">{sub}</div>}
+    </div>
+  );
+}
+
+// ─── Ein wiederverwendbarer Produktrow ───────────────────────────
+// Wird sowohl in der gruppierten Sections-View als auch in der
+// flachen List-View benutzt.
+function ProduktRow({
+  produkt,
+  rank,
+  hasShopifyToken,
+  onInfo,
+  onImport,
+}: {
+  produkt: Produkt;
+  rank: number;
+  hasShopifyToken: boolean;
+  onInfo: (p: Produkt) => void;
+  onImport: (p: Produkt) => void;
+}) {
+  const price =
+    produkt.extra?.finances?.recommendedSellPrice ||
+    (produkt.preis && !Number.isNaN(Number(produkt.preis))
+      ? Number(produkt.preis)
+      : 0);
+  const growth = produkt.extra?.deepStats?.growth90d;
+  const competition = produkt.extra?.deepStats?.competition;
+  return (
+    <div className="flex items-center gap-2 border border-white/10 bg-white/[0.03] rounded-lg px-2 py-2 backdrop-blur-md hover:bg-white/[0.06] transition">
+      <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-white/5">
+        <span className="text-[11px] font-bold text-zinc-400 tabular-nums">{rank}</span>
+      </div>
+      <div className="w-10 h-10 rounded-md bg-white/5 overflow-hidden shrink-0">
+        <Thumb src={produkt.bildUrl} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-semibold text-[12px] truncate text-zinc-200 leading-tight">
+          {displayTitle(produkt)}
+        </h3>
+        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+          {price ? (
+            <span className="text-sm font-bold text-[#95BF47] tabular-nums" title="Preis kann schwanken">
+              {price}€<span className="text-[8px] text-zinc-500 ml-0.5">~</span>
+            </span>
+          ) : (
+            <span className="text-[10px] text-zinc-500 italic">Preis folgt</span>
+          )}
+          {produkt.extra?.stats?.trendScore ? (
+            <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
+              <Zap className="w-2.5 h-2.5" />
+              {produkt.extra.stats.trendScore}%
+            </span>
+          ) : null}
+          {typeof growth === "number" && growth !== 0 ? (
+            <span
+              className={`flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full ${
+                growth > 0
+                  ? "text-emerald-300 bg-emerald-500/10"
+                  : "text-red-300 bg-red-500/10"
+              }`}
+              title="Wachstum (90 Tage)"
+            >
+              {growth > 0 ? (
+                <ArrowUpRight className="w-2.5 h-2.5" />
+              ) : (
+                <ArrowDownRight className="w-2.5 h-2.5" />
+              )}
+              {growth > 0 ? "+" : ""}
+              {growth}%
+            </span>
+          ) : null}
+          {typeof competition === "number" ? (
+            <span
+              className={`hidden sm:flex items-center gap-0.5 text-[9px] px-1.5 py-0.5 rounded-full ${
+                competition < 40
+                  ? "text-emerald-300 bg-emerald-500/10"
+                  : competition < 70
+                    ? "text-amber-300 bg-amber-500/10"
+                    : "text-red-300 bg-red-500/10"
+              }`}
+              title="Marktkonkurrenz"
+            >
+              <Crosshair className="w-2.5 h-2.5" />
+              {competition}
+            </span>
+          ) : null}
+          {produkt.extra?.finances?.profitMargin ? (
+            <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+              <DollarSign className="w-3 h-3" />
+              +{produkt.extra.finances.profitMargin.toFixed(2)}€
+            </span>
+          ) : null}
+        </div>
+      </div>
+      <div className="flex items-center gap-1 shrink-0">
+        <button
+          onClick={() => onInfo(produkt)}
+          className="p-1.5 text-zinc-400 bg-white/5 border border-white/10 rounded-md"
+        >
+          <Info className="w-3.5 h-3.5" />
+        </button>
+        {hasShopifyToken ? (
+          <button
+            onClick={() => onImport(produkt)}
+            className="btn-accent px-2 py-1.5 text-xs font-medium rounded-md flex items-center gap-1"
+          >
+            <Rocket className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Import</span>
+          </button>
+        ) : (
+          <div className="p-1.5 text-zinc-500 bg-white/5 border border-white/10 rounded-md">
+            <AlertCircle className="w-3.5 h-3.5" />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── "Link evtl. nicht mehr verfügbar" Hinweis ───────────────────
 // Wird NUR gerendert, wenn der Cron den jeweiligen Link als nicht
 // erreichbar markiert hat — sonst bleibt der Bereich sauber.
@@ -468,6 +955,10 @@ export default function ChartsPage() {
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [highMarginOnly, setHighMarginOnly] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("trend");
+  /** "" = alle Kategorien zeigen, sonst Filter auf eine. */
+  const [activeCategory, setActiveCategory] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"sections" | "list">("sections");
 
   // AI Import Modal
   const [aiModal, setAiModal] = useState<{ open: boolean; produkt: Produkt | null }>({ open: false, produkt: null });
@@ -511,17 +1002,102 @@ export default function ChartsPage() {
     finally { setImportingId(null); }
   }
 
-  // Apply search + filter — must run BEFORE any early return
+  // Apply search + filter + sort — must run BEFORE any early return
   // (Rules of Hooks: useMemo can't be called conditionally)
   const filteredProdukte = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
-    return produkte.filter((pr) => {
-      if (q && !pr.titel.toLowerCase().includes(q)) return false;
+    const base = produkte.filter((pr) => {
+      const t = (pr.titel || "").toLowerCase();
+      if (q && !t.includes(q)) return false;
       if (highMarginOnly && (pr.extra?.finances?.profitMargin ?? 0) < 15) return false;
+      if (activeCategory && (pr.sku || "—") !== activeCategory) return false;
       return true;
     });
-  }, [produkte, searchTerm, highMarginOnly]);
+    const sorters: Record<SortKey, (a: Produkt, b: Produkt) => number> = {
+      trend: (a, b) =>
+        (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),
+      viral: (a, b) =>
+        (b.extra?.stats?.viralScore ?? 0) - (a.extra?.stats?.viralScore ?? 0),
+      margin: (a, b) =>
+        (b.extra?.finances?.profitMargin ?? 0) -
+        (a.extra?.finances?.profitMargin ?? 0),
+      growth: (a, b) =>
+        (b.extra?.deepStats?.growth90d ?? -200) -
+        (a.extra?.deepStats?.growth90d ?? -200),
+      // Niedrige Konkurrenz bevorzugen, dann Trend als Tiebreaker.
+      lowCompetition: (a, b) => {
+        const ca = a.extra?.deepStats?.competition ?? 100;
+        const cb = b.extra?.deepStats?.competition ?? 100;
+        if (ca !== cb) return ca - cb;
+        return (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0);
+      },
+    };
+    return [...base].sort(sorters[sortKey]);
+  }, [produkte, searchTerm, highMarginOnly, sortKey, activeCategory]);
   const totalProducts = produkte.length;
+
+  // Kategorien (SKU-basiert) für Filter-Chips + Sektions-Gruppierung.
+  // Leere SKU wird als "—" gerendert.
+  const categories = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const pr of produkte) {
+      const key = (pr.sku || "—").toUpperCase();
+      map.set(key, (map.get(key) || 0) + 1);
+    }
+    return Array.from(map.entries())
+      .map(([key, count]) => ({ key, count }))
+      .sort((a, b) => b.count - a.count);
+  }, [produkte]);
+
+  // Stats-Overview-Strip oben auf der Seite. Aggregiert über die
+  // CURRENTLY VISIBLE (gefilterte) Liste, damit die Zahlen mit dem
+  // mitwachsen was der User selektiert.
+  const overview = useMemo(() => {
+    const list = filteredProdukte;
+    if (list.length === 0) {
+      return {
+        count: 0,
+        avgTrend: 0,
+        avgMargin: 0,
+        topCategory: "",
+        hotCount: 0,
+        avgGrowth: 0,
+      };
+    }
+    const sum = (fn: (p: Produkt) => number) => list.reduce((s, p) => s + fn(p), 0);
+    const catCount = new Map<string, number>();
+    for (const pr of list) {
+      const k = (pr.sku || "—").toUpperCase();
+      catCount.set(k, (catCount.get(k) || 0) + 1);
+    }
+    const topCat = Array.from(catCount.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+    return {
+      count: list.length,
+      avgTrend: Math.round(sum((p) => p.extra?.stats?.trendScore ?? 0) / list.length),
+      avgMargin:
+        Math.round(
+          (sum((p) => p.extra?.finances?.profitMargin ?? 0) / list.length) * 100,
+        ) / 100,
+      topCategory: topCat,
+      hotCount: list.filter((p) => (p.extra?.stats?.trendScore ?? 0) >= 80).length,
+      avgGrowth: Math.round(
+        sum((p) => p.extra?.deepStats?.growth90d ?? 0) / list.length,
+      ),
+    };
+  }, [filteredProdukte]);
+
+  // Gruppierte Sektionen für die Sections-View (gruppiert nach SKU).
+  const sections = useMemo(() => {
+    const map = new Map<string, Produkt[]>();
+    for (const pr of filteredProdukte) {
+      const k = (pr.sku || "—").toUpperCase();
+      if (!map.has(k)) map.set(k, []);
+      map.get(k)!.push(pr);
+    }
+    return Array.from(map.entries())
+      .map(([key, list]) => ({ key, list }))
+      .sort((a, b) => b.list.length - a.list.length);
+  }, [filteredProdukte]);
 
   if (loading) {
     return (
@@ -547,7 +1123,7 @@ export default function ChartsPage() {
               <span className="truncate">Winning Charts</span>
             </h1>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              Top-Dropshipping-Produkte · Rankings · 1-Klick-Import
+              Top-Dropshipping-Produkte · Rankings · Audience · Ad-Strategie · 1-Klick-Import
             </p>
           </div>
           {totalProducts > 0 && (
@@ -558,10 +1134,58 @@ export default function ChartsPage() {
           )}
         </div>
 
-        {/* Search + filter */}
+        {/* ─── Stats Overview Strip ───────────────────────────── */}
         {produkte.length > 0 && (
-          <div className="flex items-center gap-2">
-            <div className="relative flex-1 min-w-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <StatTile
+              label="Produkte"
+              value={String(overview.count)}
+              sub={`von ${totalProducts} gesamt`}
+              icon={Layers}
+              tint="#95BF47"
+            />
+            <StatTile
+              label="Ø Trend"
+              value={`${overview.avgTrend}%`}
+              sub={overview.avgTrend >= 70 ? "stark" : overview.avgTrend >= 40 ? "ok" : "schwach"}
+              icon={Activity}
+              tint="#A855F7"
+            />
+            <StatTile
+              label="Heiße Picks"
+              value={String(overview.hotCount)}
+              sub="Trend ≥ 80%"
+              icon={Flame}
+              tint="#F97316"
+            />
+            <StatTile
+              label="Ø Marge"
+              value={`${overview.avgMargin.toFixed(2)}€`}
+              sub="Verkauf - Einkauf"
+              icon={Wallet}
+              tint="#10B981"
+            />
+            <StatTile
+              label="Ø Wachstum"
+              value={`${overview.avgGrowth > 0 ? "+" : ""}${overview.avgGrowth}%`}
+              sub="90 Tage"
+              icon={overview.avgGrowth >= 0 ? ArrowUpRight : TrendingDown}
+              tint={overview.avgGrowth >= 0 ? "#22C55E" : "#EF4444"}
+            />
+            <StatTile
+              label="Top-Kategorie"
+              value={overview.topCategory || "—"}
+              sub="häufigste"
+              icon={Award}
+              tint="#3B82F6"
+            />
+          </div>
+        )}
+
+        {/* ─── Search + Sort + Filter ───────────────────────── */}
+        {produkte.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative flex-1 min-w-[180px]">
               <BarChart3 className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500" />
               <input
                 type="text"
@@ -570,6 +1194,20 @@ export default function ChartsPage() {
                 placeholder="Produkt suchen…"
                 className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-3 py-1.5 text-[12px] outline-none focus:border-white/25 transition placeholder:text-zinc-600"
               />
+            </div>
+            <div className="relative shrink-0">
+              <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-500 pointer-events-none" />
+              <select
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+                className="appearance-none bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-7 py-1.5 text-[11px] outline-none focus:border-white/25 transition text-zinc-300"
+              >
+                <option value="trend">Sort: Trend</option>
+                <option value="viral">Sort: Viral</option>
+                <option value="margin">Sort: Marge</option>
+                <option value="growth">Sort: Wachstum</option>
+                <option value="lowCompetition">Sort: Wenig Konkurrenz</option>
+              </select>
             </div>
             <button
               onClick={() => setHighMarginOnly((v) => !v)}
@@ -582,6 +1220,57 @@ export default function ChartsPage() {
               <DollarSign className="w-3 h-3" />
               Top-Marge
             </button>
+            <div className="flex shrink-0 bg-white/[0.03] border border-white/10 rounded-lg overflow-hidden">
+              <button
+                onClick={() => setViewMode("sections")}
+                className={`px-2.5 py-1.5 text-[10px] font-semibold transition ${
+                  viewMode === "sections" ? "bg-white/10 text-zinc-100" : "text-zinc-500"
+                }`}
+                title="Nach Kategorien gruppiert"
+              >
+                <Layers className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => setViewMode("list")}
+                className={`px-2.5 py-1.5 text-[10px] font-semibold transition ${
+                  viewMode === "list" ? "bg-white/10 text-zinc-100" : "text-zinc-500"
+                }`}
+                title="Flache Rangliste"
+              >
+                <Hash className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ─── Kategorie-Chips ────────────────────────────────── */}
+        {categories.length > 1 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+            <button
+              onClick={() => setActiveCategory("")}
+              className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition ${
+                activeCategory === ""
+                  ? "bg-[#95BF47]/15 border-[#95BF47]/35 text-[#95BF47]"
+                  : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-zinc-200"
+              }`}
+            >
+              Alle <span className="opacity-60">·</span> {totalProducts}
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.key}
+                onClick={() =>
+                  setActiveCategory((prev) => (prev === c.key ? "" : c.key))
+                }
+                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition ${
+                  activeCategory === c.key
+                    ? "bg-purple-500/15 border-purple-500/35 text-purple-200"
+                    : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-zinc-200"
+                }`}
+              >
+                {c.key} <span className="opacity-60">·</span> {c.count}
+              </button>
+            ))}
           </div>
         )}
 
@@ -619,95 +1308,67 @@ export default function ChartsPage() {
                 : "Probier einen anderen Suchbegriff oder deaktiviere den Filter."}
             </p>
           </div>
-        ) : (
-          <div className="space-y-1.5">
-            {filteredProdukte.map((produkt, idx) => {
-              const rank = idx + 1;
+        ) : viewMode === "sections" ? (
+          // Gruppierte Sektion-Ansicht: pro Kategorie ein eigener Block.
+          <div className="space-y-5">
+            {sections.map((sec) => {
+              // Mini-Aggregate pro Sektion für die Header-Pille.
+              const avgTrend = Math.round(
+                sec.list.reduce((s, p) => s + (p.extra?.stats?.trendScore ?? 0), 0) /
+                  sec.list.length,
+              );
               return (
-                <div
-                  key={produkt.id}
-                  className="flex items-center gap-2 border border-white/10 bg-white/[0.03] rounded-lg px-2 py-2 backdrop-blur-md hover:bg-white/[0.06] transition"
-                >
-                        {/* Rank */}
-                        <div className="w-7 h-7 rounded-md flex items-center justify-center shrink-0 bg-white/5">
-                          <span className="text-[11px] font-bold text-zinc-400 tabular-nums">{rank}</span>
-                        </div>
-
-                        {/* Thumbnail */}
-                        <div className="w-10 h-10 rounded-md bg-white/5 overflow-hidden shrink-0">
-                          <Thumb src={produkt.bildUrl} />
-                        </div>
-
-                        {/* Title & Stats */}
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-semibold text-[12px] truncate text-zinc-200 leading-tight">
-                            {displayTitle(produkt)}
-                          </h3>
-                          <div className="flex items-center gap-1.5 mt-0.5">
-                            {(() => {
-                              const price =
-                                produkt.extra?.finances?.recommendedSellPrice ||
-                                (produkt.preis &&
-                                !Number.isNaN(Number(produkt.preis))
-                                  ? Number(produkt.preis)
-                                  : 0);
-                              if (!price) {
-                                return (
-                                  <span className="text-[10px] text-zinc-500 italic">
-                                    Preis folgt
-                                  </span>
-                                );
-                              }
-                              return (
-                                <span
-                                  className="text-sm font-bold text-[#95BF47] tabular-nums"
-                                  title="Preis kann schwanken"
-                                >
-                                  {price}€
-                                  <span className="text-[8px] text-zinc-500 ml-0.5">~</span>
-                                </span>
-                              );
-                            })()}
-                            {produkt.extra?.stats?.trendScore ? (
-                              <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
-                                <Zap className="w-2.5 h-2.5" />
-                                {produkt.extra.stats.trendScore}%
-                              </span>
-                            ) : null}
-                            {produkt.extra?.finances?.profitMargin ? (
-                              <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
-                                <DollarSign className="w-3 h-3" />
-                                +{produkt.extra.finances.profitMargin.toFixed(2)}€
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
-
-                        {/* Buttons */}
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button
-                            onClick={() => setInfoModal({ open: true, produkt })}
-                            className="p-1.5 text-zinc-400 bg-white/5 border border-white/10 rounded-md"
-                          >
-                            <Info className="w-3.5 h-3.5" />
-                          </button>
-                          {hasShopifyToken ? (
-                            <button
-                              onClick={() => { setAiModal({ open: true, produkt }); setAiResult(null); setAiError(""); }}
-                              className="btn-accent px-2 py-1.5 text-xs font-medium rounded-md flex items-center gap-1"
-                            >
-                              <Rocket className="w-3.5 h-3.5" />
-                              <span className="hidden sm:inline">Import</span>
-                            </button>
-                          ) : (
-                            <div className="p-1.5 text-zinc-500 bg-white/5 border border-white/10 rounded-md">
-                              <AlertCircle className="w-3.5 h-3.5" />
-                            </div>
-                          )}
-                        </div>
+                <div key={sec.key} className="space-y-1.5">
+                  <div className="flex items-center gap-2 pb-1.5 border-b border-white/10">
+                    <Layers className="w-3.5 h-3.5 text-purple-300" />
+                    <h2 className="text-[12px] font-bold uppercase tracking-widest text-zinc-200">
+                      {sec.key}
+                    </h2>
+                    <span className="text-[10px] text-zinc-500">
+                      {sec.list.length} {sec.list.length === 1 ? "Produkt" : "Produkte"}
+                    </span>
+                    <span className="ml-auto inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-200 border border-purple-500/20">
+                      <Activity className="w-2.5 h-2.5" />
+                      Ø {avgTrend}% Trend
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {sec.list.map((produkt, idx) => (
+                      <ProduktRow
+                        key={produkt.id}
+                        produkt={produkt}
+                        rank={idx + 1}
+                        hasShopifyToken={hasShopifyToken}
+                        onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+                        onImport={(p) => {
+                          setAiModal({ open: true, produkt: p });
+                          setAiResult(null);
+                          setAiError("");
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
               );
             })}
+          </div>
+        ) : (
+          // Flache, sortierte Rangliste über alle gefilterten Produkte.
+          <div className="space-y-1.5">
+            {filteredProdukte.map((produkt, idx) => (
+              <ProduktRow
+                key={produkt.id}
+                produkt={produkt}
+                rank={idx + 1}
+                hasShopifyToken={hasShopifyToken}
+                onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+                onImport={(p) => {
+                  setAiModal({ open: true, produkt: p });
+                  setAiResult(null);
+                  setAiError("");
+                }}
+              />
+            ))}
           </div>
         )}
       </main>
@@ -778,6 +1439,15 @@ export default function ChartsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* ─── Markt / Saison / Wachstum ────────────────── */}
+                <DeepStatsBlock ds={p.extra?.deepStats} />
+
+                {/* ─── Zielgruppe + Targeting ───────────────────── */}
+                <AudienceBlock a={p.extra?.audience} />
+
+                {/* ─── Ad-Strategie (Budget + Format + Hooks) ──── */}
+                <AdStrategyBlock s={p.extra?.adStrategy} />
 
                 {/* ─── Beispiel-Ads (Social Media) ──────────────── */}
                 <AdsBlock ads={p.extra?.ads} />
