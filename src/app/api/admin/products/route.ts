@@ -30,7 +30,7 @@ export async function GET() {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Build the extra JSON object from the request body.
- * Admin UI sends:   { extra: { stats, finances, images }, ... }
+ * Admin UI sends:   { extra: { stats, finances, images, links, ads, linkStatus }, ... }
  * Bulk import sends: { stats, finances, images, ... }
  * We handle BOTH by checking body.extra first, then top-level.
  */
@@ -38,6 +38,9 @@ function buildExtra(body: Record<string, unknown>): {
   stats?: { trendScore: number; viralScore: number; impulseBuyFactor: number; problemSolverIndex: number; marketSaturation: number };
   finances?: { buyPrice: number; recommendedSellPrice: number; profitMargin: number };
   images?: string[];
+  links?: Record<string, unknown>;
+  ads?: Record<string, unknown>;
+  linkStatus?: Record<string, unknown>;
 } {
   const nested = body.extra as Record<string, unknown> | undefined;
 
@@ -48,18 +51,29 @@ function buildExtra(body: Record<string, unknown>): {
   const finances = (nested?.finances || body.finances || undefined) as any;
 
   // Images: prefer nested, fall back to top-level — ensure it's a real array of strings
-  let rawImages = nested?.images || body.images;
+  const rawImages = nested?.images || body.images;
   let images: string[] | undefined;
   if (Array.isArray(rawImages) && rawImages.length > 0) {
     images = rawImages.filter((u: any) => typeof u === "string" && u.length > 0);
     if (images.length === 0) images = undefined;
   }
 
+  // Strukturierte Felder durchreichen — Admin UI editiert sie nicht
+  // direkt, aber sie müssen erhalten bleiben (Linkstatus pflegt der
+  // Cron, Ads kommen aus der KI-Discovery).
+  const pickObj = (v: unknown): Record<string, unknown> | undefined =>
+    v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+
+  const links = pickObj(nested?.links) || pickObj(body.links);
+  const ads = pickObj(nested?.ads) || pickObj(body.ads);
+  const linkStatus = pickObj(nested?.linkStatus) || pickObj(body.linkStatus);
+
   console.log("[buildExtra] nested?.images:", JSON.stringify(nested?.images));
   console.log("[buildExtra] body.images:", JSON.stringify(body.images));
   console.log("[buildExtra] final images:", JSON.stringify(images));
+  console.log("[buildExtra] links/ads/status present?", !!links, !!ads, !!linkStatus);
 
-  return { stats, finances, images };
+  return { stats, finances, images, links, ads, linkStatus };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

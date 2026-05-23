@@ -818,10 +818,52 @@ export interface ProduktFinances {
   profitMargin: number;
 }
 
+// ─── New rich-extras shape ──────────────────────────────────────
+// Lebt komplett in der `Extra_JSON`-Spalte (Spalte I) — keine
+// Sheet-Schema-Änderung. Alte Einträge ohne diese Felder bleiben
+// gültig; die UI fällt dann sauber zurück.
+
+export interface ProduktAds {
+  /** Bis zu ein paar URLs pro Plattform. Leere Array == nichts gefunden. */
+  tiktok?: string[];
+  instagram?: string[];
+  facebook?: string[];
+  youtube?: string[];
+}
+
+export interface ProduktDropshippingExample {
+  url: string;
+  /** Optionaler Shop/Seitentitel, nur für die UI-Beschriftung. */
+  title?: string;
+}
+
+export interface ProduktLinks {
+  /** Exakter AliExpress-Produktlink (oder Such-Fallback). */
+  aliExpressProduct?: string;
+  /** Kategorie-Sucheinstieg auf AliExpress (immer ein /wholesale-Link). */
+  aliExpressCategory?: string;
+  /** Beispielshop, der das Produkt bereits per Dropshipping verkauft. */
+  dropshippingExample?: ProduktDropshippingExample;
+}
+
+export interface ProduktLinkStatus {
+  aliExpressProductOk?: boolean;
+  aliExpressCategoryOk?: boolean;
+  dropshippingExampleOk?: boolean;
+  /** ISO-Timestamp des letzten Cron-Checks. */
+  lastCheckedAt?: string;
+}
+
 export interface ProduktExtra {
   stats?: ProduktStats;
   finances?: ProduktFinances;
   images?: string[];
+  /** Tiefere Linkstruktur — Kategorie + Produkt + Dropshipping-Beispiel. */
+  links?: ProduktLinks;
+  /** Beispiel-Ads gruppiert nach Plattform. */
+  ads?: ProduktAds;
+  /** Vom Cron gepflegt: welche Links sind aktuell noch erreichbar? */
+  linkStatus?: ProduktLinkStatus;
 }
 
 export interface Produkt {
@@ -933,6 +975,22 @@ export async function deleteProdukt(rowIndex: number): Promise<void> {
     range: `Produkte!A${rowIndex}:I${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
+  });
+}
+
+// Aktualisiert ausschließlich die `Extra_JSON`-Spalte einer Produktzeile.
+// Wird vom Linkcheck-Cron genutzt: der will linkStatus pflegen, ohne
+// Titel/Preis/AliExpress-Link aus Versehen zu überschreiben.
+export async function updateProduktExtra(
+  rowIndex: number,
+  extra: ProduktExtra,
+): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Produkte!I${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [[JSON.stringify(extra || {})]] },
   });
 }
 

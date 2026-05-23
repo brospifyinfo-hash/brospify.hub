@@ -29,10 +29,33 @@ import {
 
 // ─── Types ───────────────────────────────────────────────────────
 
+interface ProduktAds {
+  tiktok?: string[];
+  instagram?: string[];
+  facebook?: string[];
+  youtube?: string[];
+}
+
+interface ProduktLinks {
+  aliExpressProduct?: string;
+  aliExpressCategory?: string;
+  dropshippingExample?: { url: string; title?: string };
+}
+
+interface ProduktLinkStatus {
+  aliExpressProductOk?: boolean;
+  aliExpressCategoryOk?: boolean;
+  dropshippingExampleOk?: boolean;
+  lastCheckedAt?: string;
+}
+
 interface ProduktExtra {
   stats?: { trendScore: number; viralScore: number; impulseBuyFactor: number; problemSolverIndex: number; marketSaturation: number };
   finances?: { buyPrice: number; recommendedSellPrice: number; profitMargin: number };
   images?: string[];
+  links?: ProduktLinks;
+  ads?: ProduktAds;
+  linkStatus?: ProduktLinkStatus;
 }
 
 interface Produkt {
@@ -59,6 +82,13 @@ interface EditProduct {
   images: string[];
   stats: { trendScore: number; viralScore: number; impulseBuyFactor: number; problemSolverIndex: number; marketSaturation: number };
   finances: { buyPrice: number; recommendedSellPrice: number; profitMargin: number };
+  // Passthrough-Felder — werden weder direkt im Edit-Modal editiert
+  // noch von der UI angefasst, aber durch den Save-Roundtrip
+  // erhalten (sonst würde ein Bearbeiten alle KI-Discovery-Daten
+  // killen).
+  links?: ProduktLinks;
+  ads?: ProduktAds;
+  linkStatus?: ProduktLinkStatus;
 }
 
 const EMPTY: EditProduct = {
@@ -1388,6 +1418,9 @@ export default function AdminPage() {
       images: uniqueImgs,
       stats: p.extra?.stats || { ...EMPTY.stats },
       finances: p.extra?.finances || { ...EMPTY.finances },
+      links: p.extra?.links,
+      ads: p.extra?.ads,
+      linkStatus: p.extra?.linkStatus,
     };
   }
 
@@ -1414,6 +1447,12 @@ export default function AdminPage() {
             profitMargin: Math.round((Number(editProduct.finances.recommendedSellPrice || 0) - Number(editProduct.finances.buyPrice || 0)) * 100) / 100,
           },
           images,
+          // Strukturierte Felder durchreichen — der Admin editiert sie
+          // (noch) nicht im Formular, aber sie müssen den Roundtrip
+          // überleben damit Linkstatus + Beispiel-Ads erhalten bleiben.
+          ...(editProduct.links ? { links: editProduct.links } : {}),
+          ...(editProduct.ads ? { ads: editProduct.ads } : {}),
+          ...(editProduct.linkStatus ? { linkStatus: editProduct.linkStatus } : {}),
         },
       };
       console.log("=== PAYLOAD VOR DEM SENDEN ===");
@@ -1474,10 +1513,13 @@ export default function AdminPage() {
         monat: "",
         titel: p.titel || "",
         beschreibung: p.beschreibung || "",
-        aliExpressLink: p.aliExpressLink || "",
+        aliExpressLink: p.aliExpressLink || p.links?.aliExpressProduct || "",
         images: Array.isArray(p.images) ? p.images : [],
         stats: { ...EMPTY.stats, ...(p.stats || {}) },
         finances: { ...EMPTY.finances, ...(p.finances || {}) },
+        links: p.links,
+        ads: p.ads,
+        linkStatus: p.linkStatus,
       });
       setIsNew(true);
       setAiEvidence(data.viralEvidence || "");
@@ -3066,6 +3108,15 @@ export default function AdminPage() {
                     <StatInput label="Marktsättigung" value={editProduct.stats.marketSaturation} onChange={v => setEditProduct({ ...editProduct, stats: { ...editProduct.stats, marketSaturation: v } })} icon={Zap} color="text-red-400" />
                   </div>
                 </div>
+
+                {/* KI-Discovery Daten — read-only Panel, zeigt was die
+                    Discovery-Pipeline gefunden hat. Werte überleben den
+                    Save-Roundtrip, werden hier aber nicht editiert. */}
+                <DiscoveryDataPanel
+                  links={editProduct.links}
+                  ads={editProduct.ads}
+                  linkStatus={editProduct.linkStatus}
+                />
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -3116,6 +3167,141 @@ export default function AdminPage() {
           </motion.div>
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── KI-Discovery Daten Panel (read-only) ────────────────────────
+// Zeigt im Edit-Modal an, was die Discovery-Pipeline gefunden hat:
+// AliExpress-Kategorie/Produkt-Link mit Status-Ampel, Dropshipping-
+// Beispiel, Anzahl gefundener Beispiel-Ads pro Plattform. Werte werden
+// hier nicht editiert — sie überleben den Save-Roundtrip via Passthrough.
+
+function DiscoveryDataPanel({
+  links,
+  ads,
+  linkStatus,
+}: {
+  links?: ProduktLinks;
+  ads?: ProduktAds;
+  linkStatus?: ProduktLinkStatus;
+}) {
+  const hasAnything =
+    !!links?.aliExpressProduct ||
+    !!links?.aliExpressCategory ||
+    !!links?.dropshippingExample?.url ||
+    Object.values(ads || {}).some((a) => Array.isArray(a) && a.length > 0);
+  if (!hasAnything) return null;
+
+  const platforms: { key: keyof ProduktAds; label: string }[] = [
+    { key: "tiktok", label: "TikTok" },
+    { key: "instagram", label: "Instagram" },
+    { key: "facebook", label: "Facebook" },
+    { key: "youtube", label: "YouTube" },
+  ];
+
+  return (
+    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
+      <h4 className="text-sm font-semibold flex items-center gap-2">
+        <Sparkles className="w-4 h-4 text-purple-300" />
+        KI-Discovery Daten
+      </h4>
+
+      {(links?.aliExpressCategory || links?.aliExpressProduct) && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+            AliExpress
+          </div>
+          {links?.aliExpressCategory && (
+            <LinkRow
+              label="Kategorie"
+              url={links.aliExpressCategory}
+              ok={linkStatus?.aliExpressCategoryOk}
+            />
+          )}
+          {links?.aliExpressProduct && (
+            <LinkRow
+              label="Produkt"
+              url={links.aliExpressProduct}
+              ok={linkStatus?.aliExpressProductOk}
+            />
+          )}
+        </div>
+      )}
+
+      {links?.dropshippingExample?.url && (
+        <div className="space-y-1.5">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+            Dropshipping-Beispiel
+          </div>
+          <LinkRow
+            label={links.dropshippingExample.title || "Shop"}
+            url={links.dropshippingExample.url}
+            ok={linkStatus?.dropshippingExampleOk}
+          />
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+          Beispiel-Ads gefunden
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+          {platforms.map((p) => {
+            const count = Array.isArray(ads?.[p.key]) ? ads![p.key]!.length : 0;
+            return (
+              <div
+                key={p.key}
+                className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold flex items-center justify-between ${
+                  count > 0
+                    ? "bg-purple-500/10 border border-purple-500/25 text-purple-200"
+                    : "bg-white/[0.02] border border-white/[0.06] text-zinc-600"
+                }`}
+              >
+                <span>{p.label}</span>
+                <span className="tabular-nums">{count}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {linkStatus?.lastCheckedAt && (
+        <div className="text-[10px] text-zinc-500">
+          Linkcheck zuletzt:{" "}
+          {new Date(linkStatus.lastCheckedAt).toLocaleString("de-DE")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LinkRow({ label, url, ok }: { label: string; url: string; ok?: boolean }) {
+  const statusColor =
+    ok === false
+      ? "bg-red-500/15 border-red-500/30 text-red-300"
+      : ok === true
+        ? "bg-emerald-500/10 border-emerald-500/25 text-emerald-300"
+        : "bg-white/[0.04] border-white/10 text-zinc-400";
+  const statusLabel = ok === false ? "down" : ok === true ? "ok" : "?";
+  return (
+    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.06]">
+      <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold shrink-0 w-16">
+        {label}
+      </span>
+      <a
+        href={url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex-1 min-w-0 text-[11px] text-zinc-300 truncate hover:text-white"
+      >
+        {url}
+      </a>
+      <span
+        className={`shrink-0 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${statusColor}`}
+      >
+        {statusLabel}
+      </span>
     </div>
   );
 }

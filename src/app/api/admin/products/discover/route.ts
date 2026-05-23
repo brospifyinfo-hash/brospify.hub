@@ -1,30 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { getSession } from "@/lib/session";
-import { getAllProdukte } from "@/lib/sheets";
+import { getAllProdukte, type ProduktAds, type ProduktDropshippingExample } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
-// Pipeline runs ~30-70s; Vercel clamps this to the plan limit anyway.
-export const maxDuration = 180;
+// Pipeline runs ~40-100s (gruendlich kann mehr werden); Vercel clamped
+// das ohnehin auf das Plan-Limit. Wir setzen großzügig.
+export const maxDuration = 240;
 
 // ─── Constants ───────────────────────────────────────────────────
 const MODEL = "claude-sonnet-4-6";
 const TAVILY_URL = "https://api.tavily.com/search";
 
 // ─── Depth presets ───────────────────────────────────────────────
-// Both modes are a fixed pipeline (no agent loop), so timing is
-// predictable. "schnell" stays under Vercel's 60s Hobby cap.
+// Beide Modi sind eine feste Pipeline (kein Agent-Loop) — daher
+// vorhersagbares Timing. "schnell" bleibt unter dem Vercel-Hobby-
+// Cap, "gruendlich" darf länger laufen und macht mehr Ad-Suchen.
 type Depth = "schnell" | "gruendlich";
 
 interface DepthConfig {
   tavilyDepth: "basic" | "advanced";
   trendQueries: number;
   maxResults: number;
+  /** Wie viele Ad-Plattformen wir parallel anpingen. 4 = TT/IG/FB/YT. */
+  adPlatforms: number;
 }
 
 const DEPTH: Record<Depth, DepthConfig> = {
-  schnell: { tavilyDepth: "basic", trendQueries: 3, maxResults: 6 },
-  gruendlich: { tavilyDepth: "advanced", trendQueries: 4, maxResults: 8 },
+  schnell: { tavilyDepth: "basic", trendQueries: 3, maxResults: 6, adPlatforms: 4 },
+  gruendlich: { tavilyDepth: "advanced", trendQueries: 4, maxResults: 8, adPlatforms: 4 },
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────
@@ -44,21 +48,34 @@ function aliSearchUrl(query: string): string {
   return `https://www.aliexpress.com/wholesale?SearchText=${encodeURIComponent(query)}`;
 }
 
-/** Filter to clean, deduplicated product image URLs (drop logos/icons). */
+/**
+ * Filter to clean, deduplicated product image URLs.
+ *
+ * The Charts-View darf laut Anforderung auch nicht-100%-passende
+ * Bilder zeigen — Hauptsache "richtig viele und sie laden". Wir
+ * filtern daher nur noch echten Müll raus (Logos, Tracking-Pixel,
+ * Mini-Thumbs) und akzeptieren CDN-URLs ohne Datei-Endung.
+ */
 function cleanImages(urls: unknown[]): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const raw of urls) {
     const u = typeof raw === "string" ? raw.trim() : "";
-    if (!/^https?:\/\/\S+$/i.test(u)) continue;
-    if (!/\.(jpe?g|png|webp)(\?|$)/i.test(u)) continue; // real image files only
-    if (/(logo|sprite|favicon|avatar|icon)/i.test(u)) continue;
-    if (/_(us|ss|sx|sy)\d{1,2}_/i.test(u)) continue; // skip tiny thumbnails
+    if (!/^https?:\/\/\S{8,}/i.test(u)) continue;
+    // Klassische Junk-Muster: Logos/Sprites/Favicons/Avatare/Tracking-Pixel.
+    if (/(logo|sprite|favicon|avatar|pixel|tracker|tracking|placeholder)/i.test(u)) continue;
+    // Sehr kleine Thumbnails (Amazon-Style _SX40_, _SS50_).
+    if (/_(us|ss|sx|sy)\d{1,2}_/i.test(u)) continue;
+    // Datei-Endungs-Hint: wenn vorhanden, muss es ein Bildformat sein.
+    // Falls keine Endung erkennbar ist (typische CDN-URL), akzeptieren wir.
+    const hasExtension = /\.[a-z0-9]{2,5}(?:\?|$|#)/i.test(u);
+    if (hasExtension && !/\.(jpe?g|png|webp|gif|avif|jfif|heic)(?:_|\?|$|#)/i.test(u)) continue;
     if (seen.has(u)) continue;
     seen.add(u);
     out.push(u);
+    if (out.length >= 12) break;
   }
-  return out.slice(0, 8);
+  return out;
 }
 
 /** Extract a JSON object from a model text response. */
@@ -143,8 +160,7 @@ function findAliExpressUrl(results: TavilyResult[]): string {
 
 /**
  * Fetch a specific URL via Tavily's /extract endpoint — returns the
- * cleaned page text and the images found on the page. Used to pull
- * the real product images + price off the linked AliExpress page.
+ * cleaned page text and the images found on the page.
  */
 async function tavilyExtract(
   apiKey: string,
@@ -169,9 +185,130 @@ async function tavilyExtract(
   };
 }
 
+// ─── Ad-Plattform-Suche ──────────────────────────────────────────
+//
+// Statt 4 separate Site-Filter zu jagen (die Tavily für TikTok/Instagram
+// gerne mal mit 0 Treffern beantwortet), nutzen wir pro Plattform eine
+// gezielte Query mit `include_domains`. Aus den Treffern picken wir die
+// URLs heraus, die wirklich auf einem Video/Ad-Pfad der Plattform
+// liegen — sonst landet schnell die Hilfe-Seite oder ein About-Link
+// drin.
+
+interface AdPlatform {
+  key: keyof ProduktAds;
+  /** Domain für Tavily include_domains. */
+  domain: string;
+  /** Query-Suffix für Tavily. */
+  query: string;
+  /** Filtert raus, ob ein Ergebnis-URL "echtes" Content auf der Plattform ist. */
+  isContentUrl: (url: string) => boolean;
+}
+
+const AD_PLATFORMS: AdPlatform[] = [
+  {
+    key: "tiktok",
+    domain: "tiktok.com",
+    query: "viral video",
+    isContentUrl: (u) => /tiktok\.com\/.+\/video\/\d|tiktok\.com\/t\//i.test(u),
+  },
+  {
+    key: "instagram",
+    domain: "instagram.com",
+    query: "reel viral",
+    isContentUrl: (u) => /instagram\.com\/(reel|reels|p|tv)\//i.test(u),
+  },
+  {
+    key: "facebook",
+    domain: "facebook.com",
+    query: "ad video",
+    isContentUrl: (u) =>
+      /facebook\.com\/.+\/videos\/|facebook\.com\/watch|facebook\.com\/reel/i.test(u),
+  },
+  {
+    key: "youtube",
+    domain: "youtube.com",
+    query: "review",
+    isContentUrl: (u) => /youtube\.com\/(watch\?v=|shorts\/)|youtu\.be\//i.test(u),
+  },
+];
+
+async function searchAdsForPlatform(
+  apiKey: string,
+  platform: AdPlatform,
+  productQuery: string,
+): Promise<string[]> {
+  try {
+    const resp = await tavilySearch(
+      apiKey,
+      `${productQuery} ${platform.query}`,
+      "basic",
+      8,
+      false,
+      [platform.domain],
+    );
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of resp.results) {
+      const u = r.url;
+      if (!u || seen.has(u)) continue;
+      if (!platform.isContentUrl(u)) continue;
+      seen.add(u);
+      out.push(u);
+      if (out.length >= 3) break;
+    }
+    return out;
+  } catch (e) {
+    console.warn(`[Discover] ad search failed for ${platform.key}:`, e);
+    return [];
+  }
+}
+
+/**
+ * Suche nach einem realen Dropshipping-Shop, der das Produkt verkauft.
+ * Wir scannen die Treffer auf typische Shop-Indizien: myshopify.com,
+ * /products/ Pfad, /collections/, /shop/ Pfad — und sortieren
+ * Marktplätze (Amazon/eBay/AliExpress) explizit raus.
+ */
+async function findDropshippingExample(
+  apiKey: string,
+  productQuery: string,
+): Promise<ProduktDropshippingExample | undefined> {
+  const MARKETPLACE_PATTERN =
+    /(amazon\.|ebay\.|aliexpress\.|temu\.|wish\.|alibaba\.|walmart\.|etsy\.|target\.|costco\.|wayfair\.)/i;
+  const SHOP_HINT =
+    /(myshopify\.com|\/products\/|\/collections\/|\/shop\/|shopify-cdn|shopify-static)/i;
+
+  // Zwei Queries parallel: einmal generisch "shop", einmal mit
+  // typischen Shopify-Markern, damit wir auch Eigendomain-Shops finden
+  // (viele Dropshipper haben eine eigene .com hinter Shopify).
+  let results: TavilyResult[] = [];
+  try {
+    const settled = await Promise.allSettled([
+      tavilySearch(apiKey, `${productQuery} buy shop online`, "basic", 10, false),
+      tavilySearch(apiKey, `${productQuery} "add to cart" shop`, "basic", 8, false),
+    ]);
+    for (const s of settled) {
+      if (s.status === "fulfilled") results.push(...s.value.results);
+    }
+  } catch (e) {
+    console.warn("[Discover] dropshipping example search failed:", e);
+  }
+  results = results.filter((r) => r.url);
+
+  for (const r of results) {
+    if (MARKETPLACE_PATTERN.test(r.url)) continue;
+    if (!SHOP_HINT.test(r.url)) continue;
+    return { url: r.url, title: r.title || "" };
+  }
+  // Fallback: nimm den ersten nicht-marktplatz Treffer, falls da war.
+  for (const r of results) {
+    if (MARKETPLACE_PATTERN.test(r.url)) continue;
+    return { url: r.url, title: r.title || "" };
+  }
+  return undefined;
+}
+
 // ─── Output schemas ──────────────────────────────────────────────
-// Structured outputs constrain the model to valid JSON matching the
-// schema — a stray quote in a description can no longer break parsing.
 
 const PICK_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -248,6 +385,30 @@ function resultsToContext(label: string, r: TavilyResponse): string {
   return `${label}\nZusammenfassung: ${r.answer}\n\n${lines.join("\n\n")}`;
 }
 
+/**
+ * Light-weight HEAD/GET check: gibt der Server überhaupt eine
+ * brauchbare Antwort zurück? Verwenden wir auch für aliExpressOk
+ * unten + (gleicher Code-Pfad) im Linkcheck-Cron, damit beide
+ * dieselbe Definition von "reachable" haben.
+ */
+async function isUrlReachable(url: string): Promise<boolean> {
+  if (!url) return false;
+  try {
+    const r = await fetch(url, {
+      method: "GET",
+      redirect: "follow",
+      signal: AbortSignal.timeout(5000),
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
+    });
+    return r.status < 500;
+  } catch {
+    return false;
+  }
+}
+
 // ─── Route ───────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -289,9 +450,7 @@ export async function POST(req: NextRequest) {
     const client = new Anthropic({ apiKey: anthropicKey });
     const monthYear = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-    // ─── Phase A — trend discovery (parallel Tavily searches) ────
-    // The Meta Ad Library query is first so it is included even in
-    // "schnell" mode. ${kat} narrows everything to the chosen category.
+    // ─── Phase A — trend discovery ───────────────────────────────
     const kat = kategorie ? ` ${kategorie}` : "";
     const trendQueries = [
       `Facebook Meta Ad Library winning${kat} dropshipping products ${monthYear}`,
@@ -342,40 +501,78 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ─── Phase B — product detail, real images, AliExpress link ──
-    let detail: TavilyResponse = { answer: "", results: [], images: [] };
-    let aliResults: TavilyResult[] = [];
-    const [detailRes, aliRes] = await Promise.allSettled([
+    // ─── Phase B — Detail, AliExpress, Ads, Dropshipping (parallel) ──
+    // Sechs Tavily-Calls parallel. Wenn einer scheitert, fallen wir
+    // weich zurück (leere Listen) statt die ganze Pipeline abzubrechen.
+    const adPlatforms = AD_PLATFORMS.slice(0, cfg.adPlatforms);
+
+    const [
+      detailRes,
+      aliRes,
+      imageRes,
+      dropExampleResult,
+      ...adResults
+    ] = await Promise.allSettled([
       tavilySearch(tavilyKey, `${imageQuery} buy price`, cfg.tavilyDepth, cfg.maxResults + 2, true),
       tavilySearch(tavilyKey, imageQuery, "basic", 10, false, ["aliexpress.com"]),
+      // Dedizierte Bild-Suche: viel breiter, damit wir auch dann Bilder
+      // haben, wenn die AliExpress-Extract-Bilder im Browser blocken
+      // (Referer-Header / Hotlink-Sperre).
+      tavilySearch(tavilyKey, `${imageQuery} product photo`, "basic", 10, true),
+      findDropshippingExample(tavilyKey, imageQuery),
+      ...adPlatforms.map((p) => searchAdsForPlatform(tavilyKey, p, imageQuery)),
     ]);
-    if (detailRes.status === "fulfilled") detail = detailRes.value;
-    else console.error("[Discover] detail search failed:", detailRes.reason);
-    if (aliRes.status === "fulfilled") aliResults = aliRes.value.results;
-    const aliExpressLink =
-      findAliExpressUrl([...aliResults, ...detail.results]) || aliSearchUrl(imageQuery || produktName);
 
-    // If we have a real AliExpress product page, extract its actual
-    // images + content so the images match the linked product and the
-    // price can be taken 1:1 from AliExpress.
+    const detail: TavilyResponse =
+      detailRes.status === "fulfilled"
+        ? detailRes.value
+        : { answer: "", results: [], images: [] };
+    if (detailRes.status === "rejected") {
+      console.error("[Discover] detail search failed:", detailRes.reason);
+    }
+    const aliResults: TavilyResult[] =
+      aliRes.status === "fulfilled" ? aliRes.value.results : [];
+    const imageSearchImages: string[] =
+      imageRes.status === "fulfilled" ? imageRes.value.images : [];
+    const dropExample: ProduktDropshippingExample | undefined =
+      dropExampleResult.status === "fulfilled" ? dropExampleResult.value : undefined;
+
+    // Ads zurück zu ihrer Plattform mappen
+    const ads: ProduktAds = {};
+    adPlatforms.forEach((platform, i) => {
+      const r = adResults[i];
+      const urls = r && r.status === "fulfilled" ? r.value : [];
+      if (urls.length > 0) ads[platform.key] = urls;
+    });
+
+    // ─── Links: AliExpress Produkt + Kategorie ───────────────────
+    const aliExpressProduct =
+      findAliExpressUrl([...aliResults, ...detail.results]) ||
+      aliSearchUrl(imageQuery || produktName);
+    // Kategorie-Link nimmt entweder den Admin-Wert oder den
+    // Produktnamen — auf jeden Fall ein /wholesale-Sucheinstieg.
+    const aliExpressCategory = aliSearchUrl(kategorie || imageQuery || produktName);
+
+    // ─── Bilder: extract AliExpress-Produktseite + alles mixen ──
     let aliExtractedContent = "";
     let aliExtractedImages: string[] = [];
-    if (/aliexpress\.[a-z.]+\/item\/\d/i.test(aliExpressLink)) {
+    if (/aliexpress\.[a-z.]+\/item\/\d/i.test(aliExpressProduct)) {
       try {
-        const ext = await tavilyExtract(tavilyKey, aliExpressLink);
+        const ext = await tavilyExtract(tavilyKey, aliExpressProduct);
         aliExtractedContent = ext.content;
         aliExtractedImages = ext.images;
       } catch (e) {
         console.error("[Discover] aliexpress extract failed:", e);
       }
     }
-    // Prefer images straight from the linked AliExpress product so they
-    // actually match the product. Only fall back to the broader image
-    // pool when the AliExpress page yielded too few.
-    const images =
-      aliExtractedImages.length >= 2
-        ? cleanImages(aliExtractedImages)
-        : cleanImages([...aliExtractedImages, ...detail.images]);
+    // Reihenfolge: erst die produkt-spezifischen AliExpress-Bilder
+    // (passen am genauesten), dann generische Shop/Image-Suche, dann
+    // Trefferbilder aus der Detail-Suche. cleanImages dedupliziert.
+    const images = cleanImages([
+      ...aliExtractedImages,
+      ...imageSearchImages,
+      ...detail.images,
+    ]);
 
     // ─── Claude 2 — synthesize the finished product ──────────────
     const parsed = await claudeJson(
@@ -384,7 +581,7 @@ export async function POST(req: NextRequest) {
 
 SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als sauberes, verkaufsstarkes HTML — nutze <p> für Absätze, <ul><li> für Aufzählungen und <strong> für Hervorhebungen. Kein übertriebener Emoji-Einsatz.
 KATEGORIE: ${kategorie ? `Verwende exakt "${kategorie}".` : "Wähle eine kurze, treffende Produktkategorie (z. B. Beauty, Haushalt, Sport, Haustier, Küche, Gadgets)."}
-PREISE: Falls eine ALIEXPRESS-PRODUKTSEITE im Kontext gegeben ist, übernimm den dort gelisteten Preis EXAKT als buyPrice (rechne USD bei Bedarf grob mit Faktor 0.93 in EUR um). Sonst schätze realistisch. Verkaufspreis = marktüblicher Dropshipping-Preis in EUR.
+PREISE: Falls eine ALIEXPRESS-PRODUKTSEITE im Kontext gegeben ist, übernimm den dort gelisteten Preis EXAKT als buyPrice (rechne USD bei Bedarf grob mit Faktor 0.93 in EUR um). Sonst schätze realistisch. Verkaufspreis = marktüblicher Dropshipping-Preis in EUR. WICHTIG: Beide Preise sind nur Richtwerte — der Hub zeigt dem Nutzer einen "Preis kann schwanken"-Hinweis.
 SCORES (0-100): trendScore = aktuelle Trendstärke, viralScore = Social-Media-Viralität, impulseBuyFactor = Impulskauf-Eignung, problemSolverIndex = wie stark es ein Problem löst, marketSaturation = Marktsättigung (höher = gesättigter).
 VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen (TikTok, Meta/Facebook Ad Library, Trend-Plattformen).
 
@@ -412,7 +609,6 @@ Antworte NUR mit JSON, ohne weiteren Text:
 
     // ─── Normalize ───────────────────────────────────────────────
     const titel = str(parsed.titel);
-    // Admin-chosen category wins; otherwise the AI's suggestion.
     const sku = kategorie || str(parsed.kategorie);
 
     const fin = (parsed.finances ?? {}) as Record<string, unknown>;
@@ -429,35 +625,51 @@ Antworte NUR mit JSON, ohne weiteren Text:
       marketSaturation: score(st.marketSaturation),
     };
 
-    let aliExpressOk = false;
-    try {
-      const r = await fetch(aliExpressLink, {
-        method: "GET",
-        redirect: "follow",
-        signal: AbortSignal.timeout(5000),
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
-        },
-      });
-      aliExpressOk = r.status < 500;
-    } catch {
-      aliExpressOk = false;
-    }
+    // Initial-Linkcheck — beide Ali-Links + Dropshipping-Beispiel.
+    // Wir prüfen sofort, damit der Admin im Edit-Modal sieht, was
+    // erreichbar ist und was nicht. Der Cron läuft dann täglich.
+    const [aliProductOk, aliCategoryOk, dropOk] = await Promise.all([
+      isUrlReachable(aliExpressProduct),
+      isUrlReachable(aliExpressCategory),
+      dropExample ? isUrlReachable(dropExample.url) : Promise.resolve(false),
+    ]);
+
+    const linkStatus = {
+      aliExpressProductOk: aliProductOk,
+      aliExpressCategoryOk: aliCategoryOk,
+      dropshippingExampleOk: dropExample ? dropOk : undefined,
+      lastCheckedAt: new Date().toISOString(),
+    };
 
     return NextResponse.json({
       produkt: {
         titel,
         beschreibung: str(parsed.beschreibung),
         sku,
-        aliExpressLink,
+        // Kompatibilität: weiterhin das Produkt-URL als Top-Level-Link
+        // ablegen, damit alte Importer das findet.
+        aliExpressLink: aliExpressProduct,
         images,
         stats,
         finances: { buyPrice, recommendedSellPrice, profitMargin },
+        // Neue, strukturierte Felder. Charts-View + Admin-View lesen
+        // primär aus `links`/`ads`/`linkStatus`.
+        links: {
+          aliExpressProduct,
+          aliExpressCategory,
+          dropshippingExample: dropExample,
+        },
+        ads,
+        linkStatus,
       },
       viralEvidence: str(parsed.viralEvidence),
-      aliExpressOk,
+      // Backwards-Kompat: alte Felder unverändert mitgeben.
+      aliExpressOk: aliProductOk,
       imageCount: images.length,
+      adsCount: Object.values(ads).reduce(
+        (sum, arr) => sum + (Array.isArray(arr) ? arr.length : 0),
+        0,
+      ),
     });
   } catch (error) {
     console.error("[Discover] error:", error);

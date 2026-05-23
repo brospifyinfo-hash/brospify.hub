@@ -11,6 +11,7 @@ import {
   TrendingUp,
   ExternalLink,
   AlertCircle,
+  AlertTriangle,
   ChevronRight,
   ChevronLeft,
   Rocket,
@@ -24,6 +25,12 @@ import {
   Link2,
   Sparkles,
   ArrowRight,
+  Store,
+  Music2,
+  Camera,
+  Users,
+  PlayCircle,
+  Megaphone,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -43,6 +50,26 @@ interface ProduktFinances {
   profitMargin: number;
 }
 
+interface ProduktAds {
+  tiktok?: string[];
+  instagram?: string[];
+  facebook?: string[];
+  youtube?: string[];
+}
+
+interface ProduktLinks {
+  aliExpressProduct?: string;
+  aliExpressCategory?: string;
+  dropshippingExample?: { url: string; title?: string };
+}
+
+interface ProduktLinkStatus {
+  aliExpressProductOk?: boolean;
+  aliExpressCategoryOk?: boolean;
+  dropshippingExampleOk?: boolean;
+  lastCheckedAt?: string;
+}
+
 interface Produkt {
   id: string;
   titel: string;
@@ -54,8 +81,27 @@ interface Produkt {
     stats?: ProduktStats;
     finances?: ProduktFinances;
     images?: string[];
+    links?: ProduktLinks;
+    ads?: ProduktAds;
+    linkStatus?: ProduktLinkStatus;
   };
 }
+
+// ─── Social-media meta (icons, labels, brand colors) ─────────────
+// Reihenfolge bestimmt die Anzeigereihenfolge im Modal. Wir nutzen
+// generische Lucide-Icons (Brand-Icons sind in dieser lucide-Version
+// nicht enthalten); das Label macht die Plattform eindeutig.
+const AD_PLATFORMS: {
+  key: keyof ProduktAds;
+  label: string;
+  icon: typeof Music2;
+  color: string;
+}[] = [
+  { key: "tiktok", label: "TikTok", icon: Music2, color: "text-pink-300" },
+  { key: "instagram", label: "Instagram", icon: Camera, color: "text-rose-300" },
+  { key: "facebook", label: "Facebook", icon: Users, color: "text-blue-300" },
+  { key: "youtube", label: "YouTube", icon: PlayCircle, color: "text-red-300" },
+];
 
 // Uniform styling — no aggressive top-3 highlighting
 
@@ -96,23 +142,67 @@ function StatBar({ label, value, icon: Icon, color, delay }: {
 }
 
 // ─── Image Slideshow ─────────────────────────────────────────────
+// Bilder werden client-seitig gefiltert: schlägt ein <img> beim
+// Laden fehl (CORS, Hotlinking, 404), wird die URL aus der Liste
+// genommen und die Slideshow rückt nach. So sieht der Nutzer nie
+// einen leeren Slot, auch wenn die Discover-Pipeline mal ein paar
+// CDN-URLs erwischt, die der Browser nicht laden darf.
 
-function ImageSlideshow({ images }: { images: string[] }) {
+function ImageSlideshow({ images: initial }: { images: string[] }) {
+  // Achtung: dieses Component muss vom Caller per `key` neu gemountet
+  // werden, wenn sich das Produkt ändert (sonst bleibt der lokale
+  // `broken`-Set/idx erhalten). useEffect-Reset würde den Lint-Hook
+  // "set-state-in-effect" triggern.
+  const [broken, setBroken] = useState<Set<string>>(() => new Set());
   const [idx, setIdx] = useState(0);
-  if (images.length === 0) return <div className="aspect-video bg-white/5 rounded-xl flex items-center justify-center text-zinc-600">Kein Bild</div>;
+
+  const images = useMemo(
+    () => initial.filter((u) => !broken.has(u)),
+    [initial, broken],
+  );
+
+  if (images.length === 0)
+    return (
+      <div className="aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center text-zinc-600 gap-1.5">
+        <ShoppingBag className="w-6 h-6" />
+        <span className="text-xs">Kein Bild verfügbar</span>
+      </div>
+    );
+
+  function onError(failedUrl: string) {
+    setBroken((prev) => {
+      if (prev.has(failedUrl)) return prev;
+      const next = new Set(prev);
+      next.add(failedUrl);
+      return next;
+    });
+    // Index gleich klemmen — wenn das letzte Bild stirbt, soll der
+    // Pointer nicht ins Leere zeigen.
+    setIdx((cur) => {
+      const remaining = initial.filter(
+        (u) => u !== failedUrl && !broken.has(u),
+      ).length;
+      return remaining === 0 ? 0 : Math.min(cur, remaining - 1);
+    });
+  }
+
+  const current = images[idx];
 
   return (
     <div className="relative aspect-video bg-white/5 rounded-xl overflow-hidden">
       <AnimatePresence mode="wait">
         <motion.img
-          key={idx}
-          src={images[idx]}
+          key={`${idx}:${current}`}
+          src={current}
           alt={`Slide ${idx + 1}`}
           className="w-full h-full object-contain"
           initial={{ opacity: 0, x: 30 }}
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: -30 }}
           transition={{ duration: 0.3 }}
+          referrerPolicy="no-referrer"
+          loading="lazy"
+          onError={() => onError(current)}
         />
       </AnimatePresence>
       {images.length > 1 && (
@@ -124,13 +214,38 @@ function ImageSlideshow({ images }: { images: string[] }) {
             <ChevronRight className="w-4 h-4" />
           </button>
           <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
-            {images.map((_, i) => (
-              <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full ${i === idx ? "bg-white" : "bg-white/30"}`} />
+            {images.map((u, i) => (
+              <button key={u} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full ${i === idx ? "bg-white" : "bg-white/30"}`} />
             ))}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+// ─── Try-host an image, skip on error ──────────────────────────
+// Same pattern als die Slideshow, nur für das kleine Thumbnail in
+// der Liste — wenn das Hauptbild blockt, zeigen wir einen Platzhalter.
+function Thumb({ src }: { src: string }) {
+  const [broken, setBroken] = useState(false);
+  if (!src || broken) {
+    return (
+      <div className="w-full h-full flex items-center justify-center text-zinc-600">
+        <ShoppingBag className="w-3.5 h-3.5" />
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+      className="w-full h-full object-cover"
+    />
   );
 }
 
@@ -148,6 +263,168 @@ function CopyField({ text, label }: { text: string; label: string }) {
         className="shrink-0 flex items-center gap-1 px-2 py-1 bg-white/5 rounded-lg text-xs">
         {copied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-zinc-400" />}
       </button>
+    </div>
+  );
+}
+
+// ─── Ads Block (social-media icons + per-platform URLs) ─────────
+// Zeigt NUR Icons der Plattformen, für die wirklich Ads gefunden
+// wurden. Pro Plattform listen wir die Beispiel-URLs direkt drunter
+// als kleine Chips — bewusst keine Video-Embeds, damit Insta/TikTok-
+// Hotlinks-Sperren das Modal nicht aufblähen.
+
+function AdsBlock({ ads }: { ads?: ProduktAds }) {
+  const present = AD_PLATFORMS.filter(
+    (p) => Array.isArray(ads?.[p.key]) && (ads![p.key] as string[]).length > 0,
+  );
+  if (present.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+        <Megaphone className="w-4 h-4 text-purple-300" />
+        Beispiel-Ads
+      </h4>
+      <div className="space-y-2.5">
+        {present.map((p) => {
+          const Icon = p.icon;
+          const urls = (ads?.[p.key] || []) as string[];
+          return (
+            <div
+              key={p.key}
+              className="bg-white/[0.03] border border-white/10 rounded-xl p-3"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <div
+                  className={`w-7 h-7 rounded-lg bg-white/5 flex items-center justify-center ${p.color}`}
+                >
+                  <Icon className="w-4 h-4" />
+                </div>
+                <span className="text-xs font-semibold text-zinc-200">
+                  {p.label}
+                </span>
+                <span className="text-[10px] text-zinc-500 ml-auto tabular-nums">
+                  {urls.length} {urls.length === 1 ? "Beispiel" : "Beispiele"}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {urls.map((u, i) => (
+                  <a
+                    key={u}
+                    href={u}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-white/5 border border-white/10 text-zinc-300 hover:bg-white/10 hover:text-white transition"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    Ad {i + 1}
+                  </a>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Dropshipping shop example ──────────────────────────────────
+function DropshippingBlock({
+  example,
+  status,
+}: {
+  example?: { url: string; title?: string };
+  status?: boolean;
+}) {
+  if (!example?.url) return null;
+  const broken = status === false;
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+        <Store className="w-4 h-4 text-indigo-300" />
+        Beispiel Dropshipping-Shop
+      </h4>
+      <a
+        href={example.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-200 hover:bg-indigo-500/15 transition text-sm"
+      >
+        <Store className="w-4 h-4 shrink-0" />
+        <span className="flex-1 truncate">{example.title || example.url}</span>
+        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+      </a>
+      {broken && <BrokenLinkHint />}
+    </div>
+  );
+}
+
+// ─── AliExpress link block (category + product) ─────────────────
+function AliLinksBlock({
+  produktLink,
+  kategorieLink,
+  productOk,
+  categoryOk,
+}: {
+  produktLink?: string;
+  kategorieLink?: string;
+  productOk?: boolean;
+  categoryOk?: boolean;
+}) {
+  if (!produktLink && !kategorieLink) return null;
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
+        <Link2 className="w-4 h-4 text-orange-300" />
+        AliExpress Supplier
+      </h4>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {kategorieLink && (
+          <div className="space-y-1">
+            <a
+              href={kategorieLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-500/5 border border-orange-500/20 text-orange-200 hover:bg-orange-500/10 transition text-sm"
+            >
+              <BarChart3 className="w-4 h-4 shrink-0" />
+              <span className="flex-1 truncate">Kategorie suchen</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            </a>
+            {categoryOk === false && <BrokenLinkHint />}
+          </div>
+        )}
+        {produktLink && (
+          <div className="space-y-1">
+            <a
+              href={produktLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/25 text-orange-200 hover:bg-orange-500/15 transition text-sm"
+            >
+              <ShoppingBag className="w-4 h-4 shrink-0" />
+              <span className="flex-1 truncate">Genaues Produkt</span>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            </a>
+            {productOk === false && <BrokenLinkHint />}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── "Link evtl. nicht mehr verfügbar" Hinweis ───────────────────
+// Wird NUR gerendert, wenn der Cron den jeweiligen Link als nicht
+// erreichbar markiert hat — sonst bleibt der Bereich sauber.
+function BrokenLinkHint() {
+  return (
+    <div className="flex items-start gap-1.5 text-[10px] text-amber-300/90 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1.5">
+      <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+      <span>
+        Hinweis: Dieser Link ist evtl. nicht mehr verfügbar.
+      </span>
     </div>
   );
 }
@@ -333,22 +610,19 @@ export default function ChartsPage() {
 
                         {/* Thumbnail */}
                         <div className="w-10 h-10 rounded-md bg-white/5 overflow-hidden shrink-0">
-                          {produkt.bildUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={produkt.bildUrl} alt="" loading="lazy" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-zinc-600">
-                              <ShoppingBag className="w-3.5 h-3.5" />
-                            </div>
-                          )}
+                          <Thumb src={produkt.bildUrl} />
                         </div>
 
                         {/* Title & Stats */}
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-[12px] truncate text-zinc-200 leading-tight">{produkt.titel}</h3>
                           <div className="flex items-center gap-1.5 mt-0.5">
-                            <span className="text-sm font-bold text-[#95BF47] tabular-nums">
+                            <span
+                              className="text-sm font-bold text-[#95BF47] tabular-nums"
+                              title="Preis kann schwanken"
+                            >
                               {produkt.extra?.finances?.recommendedSellPrice || produkt.preis}€
+                              <span className="text-[8px] text-zinc-500 ml-0.5">~</span>
                             </span>
                             {produkt.extra?.stats?.trendScore && (
                               <span className="flex items-center gap-0.5 text-[9px] text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded-full">
@@ -407,7 +681,11 @@ export default function ChartsPage() {
             >
               <button onClick={() => setInfoModal({ open: false, produkt: null })} className="absolute top-4 right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
 
-              <div className="p-4 pb-0"><ImageSlideshow images={allImages} /></div>
+              <div className="p-4 pb-0">
+                {/* `key` mountet die Slideshow für jedes Produkt neu —
+                    so wird das "broken"-Set / der idx sauber zurückgesetzt. */}
+                <ImageSlideshow key={p.id} images={allImages} />
+              </div>
 
               <div className="p-6 space-y-6">
                 <div>
@@ -444,14 +722,31 @@ export default function ChartsPage() {
                         <div className="text-lg font-bold text-emerald-400">+{p.extra.finances.profitMargin.toFixed(2)}&euro;</div>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-amber-300/90 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1.5 mt-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>Preise sind Richtwerte &mdash; der reale Preis kann schwanken.</span>
+                    </div>
                   </div>
                 )}
 
-                {p.aliExpressLink && (
-                  <a href={p.aliExpressLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-orange-400">
-                    <Link2 className="w-4 h-4" />AliExpress Supplier öffnen<ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
+                {/* ─── Beispiel-Ads (Social Media) ──────────────── */}
+                <AdsBlock ads={p.extra?.ads} />
+
+                {/* ─── Beispiel-Dropshipping-Shop ───────────────── */}
+                <DropshippingBlock
+                  example={p.extra?.links?.dropshippingExample}
+                  status={p.extra?.linkStatus?.dropshippingExampleOk}
+                />
+
+                {/* ─── AliExpress Links (Kategorie + Produkt) ───── */}
+                <AliLinksBlock
+                  produktLink={
+                    p.extra?.links?.aliExpressProduct || p.aliExpressLink
+                  }
+                  kategorieLink={p.extra?.links?.aliExpressCategory}
+                  productOk={p.extra?.linkStatus?.aliExpressProductOk}
+                  categoryOk={p.extra?.linkStatus?.aliExpressCategoryOk}
+                />
 
                 <p className="text-[11px] text-zinc-600 leading-relaxed border-t border-zinc-800 pt-4">
                   Hinweis: Alle dargestellten Metriken, Margen und Scores basieren auf unseren internen Marktanalysen und aktuellen E-Commerce-Trends. Da der Markt dynamisch ist, können reale Einkaufspreise, Verfügbarkeiten und die Marktsättigung variieren. Diese Daten dienen als strategische Empfehlung und stellen keine Garantie für spezifische Umsätze oder Profite dar.
@@ -479,11 +774,14 @@ export default function ChartsPage() {
                 {/* Product Preview */}
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-xl bg-white/5 overflow-hidden shrink-0">
-                    {aiModal.produkt.bildUrl ? <img src={aiModal.produkt.bildUrl} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full flex items-center justify-center text-zinc-600"><ShoppingBag className="w-6 h-6" /></div>}
+                    <Thumb src={aiModal.produkt.bildUrl} />
                   </div>
                   <div className="min-w-0">
                     <h3 className="font-bold truncate">{aiResult?.title || aiModal.produkt.titel}</h3>
-                    <p className="text-sm text-[#95BF47] font-semibold">{aiModal.produkt.extra?.finances?.recommendedSellPrice || aiModal.produkt.preis}&euro;</p>
+                    <p className="text-sm text-[#95BF47] font-semibold" title="Preis kann schwanken">
+                      {aiModal.produkt.extra?.finances?.recommendedSellPrice || aiModal.produkt.preis}&euro;
+                      <span className="text-[10px] text-zinc-500 ml-1">~ kann schwanken</span>
+                    </p>
                   </div>
                 </div>
 
