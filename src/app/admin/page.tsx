@@ -1627,6 +1627,45 @@ export default function AdminPage() {
     finally { setLinkCheckRunning(false); }
   }
 
+  // Repariert Produktzeilen, in denen Titel und Preis vertauscht
+  // gespeichert wurden (titel = "prod_xxx", preis = echter Titel).
+  // Erst Dry-Run zum Vorschauen, dann ein zweiter Klick committet.
+  const [repairRunning, setRepairRunning] = useState(false);
+  const [repairPreview, setRepairPreview] = useState<{
+    scanned: number;
+    changed: number;
+    changes: Array<{ rowIndex: number; id: string; oldTitel: string; oldPreis: string; newTitel: string; action: string }>;
+  } | null>(null);
+
+  async function handleRepairProducts() {
+    setRepairRunning(true); setError(""); setSuccess("");
+    try {
+      // Wenn schon Vorschau existiert: commit. Sonst dry-run.
+      const dryRun = !repairPreview;
+      const res = await fetch("/api/admin/products/repair", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ dryRun }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Repair fehlgeschlagen."); return; }
+      if (dryRun) {
+        if (data.changed === 0) {
+          setSuccess("Alles sauber — kein Produkt muss repariert werden.");
+          setTimeout(() => setSuccess(""), 5000);
+        } else {
+          setRepairPreview({ scanned: data.scanned, changed: data.changed, changes: data.changes });
+        }
+      } else {
+        setSuccess(`Repariert: ${data.changed} von ${data.scanned} Zeilen.`);
+        setRepairPreview(null);
+        setTimeout(() => setSuccess(""), 6000);
+        await loadProducts();
+      }
+    } catch { setError("Repair fehlgeschlagen."); }
+    finally { setRepairRunning(false); }
+  }
+
   async function handleLogout() { await fetch("/api/auth/logout", { method: "POST" }); router.push("/"); }
 
   const filtered = produkte;
@@ -3045,6 +3084,10 @@ export default function AdminPage() {
             {linkCheckRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
             Linkcheck jetzt
           </button>
+          <button onClick={handleRepairProducts} disabled={repairRunning} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-red-500/10 border border-red-500/25 text-red-200 hover:bg-red-500/15 transition disabled:opacity-50" title="Tauscht vertauschte Titel/Preis-Felder. Erst Dry-Run, dann commit.">
+            {repairRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
+            Daten reparieren
+          </button>
         </div>
 
         {/* Product Grid */}
@@ -3280,6 +3323,67 @@ export default function AdminPage() {
                 <button onClick={() => setBulkModal(false)} className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm font-medium transition">Abbrechen</button>
                 <button onClick={handleBulkImport} disabled={bulkLoading || !bulkJson.trim()} className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2">
                   {bulkLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Upload className="w-4 h-4" />Importieren</>}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── REPAIR PREVIEW MODAL ───────────────────────────────── */}
+      <AnimatePresence>
+        {repairPreview && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={() => !repairRunning && setRepairPreview(null)}>
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="glass-strong border border-white/10 rounded-2xl p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h3 className="text-lg font-bold flex items-center gap-2">
+                    <Wand2 className="w-5 h-5 text-red-300" />
+                    Datenreparatur — Vorschau
+                  </h3>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    {repairPreview.changed} von {repairPreview.scanned} Produkten werden verändert. Prüf die Liste, dann committe.
+                  </p>
+                </div>
+                <button onClick={() => !repairRunning && setRepairPreview(null)} className="text-zinc-500 hover:text-white transition"><X className="w-5 h-5" /></button>
+              </div>
+
+              <div className="space-y-2 mb-4">
+                {repairPreview.changes.map((c) => (
+                  <div key={c.rowIndex} className="rounded-lg bg-white/[0.03] border border-white/10 p-3 text-xs space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Row {c.rowIndex}</span>
+                      <span className="font-mono text-[10px] text-zinc-600 truncate">{c.id}</span>
+                      <span className={`ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest ${c.action === "swap-titel-preis" ? "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30" : "bg-amber-500/15 text-amber-300 border border-amber-500/30"}`}>
+                        {c.action === "swap-titel-preis" ? "swap" : "clear-id"}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div>
+                        <div className="text-[9px] uppercase tracking-widest text-red-400 font-semibold mb-0.5">Alt</div>
+                        <div className="text-zinc-400">Titel: <span className="text-zinc-200 font-mono">{c.oldTitel || "—"}</span></div>
+                        <div className="text-zinc-400">Preis: <span className="text-zinc-200">{c.oldPreis || "—"}</span></div>
+                      </div>
+                      <div>
+                        <div className="text-[9px] uppercase tracking-widest text-emerald-400 font-semibold mb-0.5">Neu</div>
+                        <div className="text-zinc-400">Titel: <span className="text-emerald-200 font-semibold">{c.newTitel || "(leer)"}</span></div>
+                        <div className="text-zinc-400">Preis: <span className="text-zinc-200">{c.action === "swap-titel-preis" ? "(leer)" : c.oldPreis || "—"}</span></div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-3">
+                <button onClick={() => setRepairPreview(null)} disabled={repairRunning} className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-xl text-sm font-medium transition disabled:opacity-50">Abbrechen</button>
+                <button onClick={handleRepairProducts} disabled={repairRunning} className="flex-1 py-2.5 bg-red-600 hover:bg-red-500 disabled:opacity-50 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2">
+                  {repairRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Check className="w-4 h-4" />Reparieren bestätigen</>}
                 </button>
               </div>
             </motion.div>
