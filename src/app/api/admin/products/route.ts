@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, addProdukt, updateProdukt, deleteProdukt, type Produkt } from "@/lib/sheets";
+import {
+  getAllProdukte,
+  addProdukt,
+  updateProdukt,
+  deleteProdukt,
+  getProduktByRowIndex,
+  type Produkt,
+} from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -204,7 +211,7 @@ export async function POST(req: NextRequest) {
     console.log("[Admin POST] bildUrl:", bildUrl);
     console.log("[Admin POST] built extra keys:", Object.keys(extra).join(","));
 
-    await addProdukt({
+    const addResult = await addProdukt({
       id,
       sku: body.sku || "",
       monat: body.monat || "",
@@ -216,21 +223,26 @@ export async function POST(req: NextRequest) {
       extra,
     });
 
-    // POST-SAVE VERIFICATION: lies die gerade geschriebene Zeile zurueck
-    // und vergleiche mit dem was wir intendiert haben. Wenn die Sheets-
-    // API die Spalten anders mapped als unser Code erwartet, sehen wir
-    // es HIER und werfen einen lauten Fehler, statt stillschweigend
-    // verschnittene Daten zu liefern.
+    // POST-SAVE VERIFICATION: lies die EXAKT geschriebene Zeile zurueck
+    // (per rowIndex aus dem Append-Response). Frueher haben wir alle
+    // Produkte gelesen und per ID gesucht — das schlug fehl wenn die
+    // ID im Sheet anders aussah als erwartet. Jetzt lesen wir die
+    // konkrete Zeile direkt.
     let verification: {
       ok: boolean;
       message?: string;
-      actual?: { titel: string; preis: string; bildUrl: string };
+      actual?: { id: string; titel: string; preis: string; bildUrl: string; rowIndex: number };
     } = { ok: true };
     try {
-      const all = await getAllProdukte();
-      const written = all.find((p) => p.id === id);
+      const written = addResult.rowIndex > 0
+        ? await getProduktByRowIndex(addResult.rowIndex)
+        : null;
       if (!written) {
-        verification = { ok: false, message: "Zeile nach dem Schreiben nicht gefunden." };
+        verification = {
+          ok: false,
+          message: `Append-Response gab Zeile ${addResult.rowIndex}, aber Re-Read lieferte nichts. Pruefe ob das Sheet noch verbunden ist.`,
+        };
+        console.error("[Admin POST] verification: no row at rowIndex", addResult.rowIndex);
       } else if (
         written.titel !== titel ||
         written.preis !== preis ||
@@ -238,12 +250,12 @@ export async function POST(req: NextRequest) {
       ) {
         verification = {
           ok: false,
-          message: `Mismatch! Geschrieben: titel="${titel}", preis="${preis}", bildUrl="${bildUrl}". Im Sheet steht: titel="${written.titel}", preis="${written.preis}", bildUrl="${written.bildUrl}". Wahrscheinlich sind die Sheet-Spalten umsortiert worden.`,
-          actual: { titel: written.titel, preis: written.preis, bildUrl: written.bildUrl },
+          message: `Mismatch! Geschrieben in Zeile ${addResult.rowIndex}: titel="${titel}", preis="${preis}", bildUrl="${bildUrl}". Im Sheet steht: id="${written.id}", titel="${written.titel}", preis="${written.preis}", bildUrl="${written.bildUrl}". Spalten umsortiert?`,
+          actual: { id: written.id, titel: written.titel, preis: written.preis, bildUrl: written.bildUrl, rowIndex: addResult.rowIndex },
         };
         console.error("[Admin POST] VERIFICATION FAILED:", verification.message);
       } else {
-        console.log("[Admin POST] verification ok — titel/preis/bildUrl matchen");
+        console.log(`[Admin POST] verification ok — Zeile ${addResult.rowIndex} matched`);
       }
     } catch (e) {
       console.warn("[Admin POST] post-save verification skipped:", e);
@@ -308,12 +320,11 @@ export async function PUT(req: NextRequest) {
       extra,
     });
 
-    // POST-SAVE VERIFICATION (siehe POST). Lies Row zurueck und
-    // vergleiche.
+    // POST-SAVE VERIFICATION: direkt die gerade aktualisierte Zeile
+    // lesen (per rowIndex). Kein find-by-id mehr noetig.
     let verification: { ok: boolean; message?: string; actual?: { titel: string; preis: string; bildUrl: string } } = { ok: true };
     try {
-      const all = await getAllProdukte();
-      const written: Produkt | undefined = all.find((p) => p.rowIndex === body.rowIndex);
+      const written: Produkt | null = await getProduktByRowIndex(Number(body.rowIndex));
       if (!written) {
         verification = { ok: false, message: `Zeile ${body.rowIndex} nach Update nicht gefunden.` };
       } else if (written.titel !== titel || written.preis !== preis || written.bildUrl !== bildUrl) {

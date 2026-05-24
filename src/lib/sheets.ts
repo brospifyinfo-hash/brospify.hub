@@ -1029,14 +1029,42 @@ function produktToRow(produkt: Omit<Produkt, "rowIndex">): string[] {
   ];
 }
 
-export async function addProdukt(produkt: Omit<Produkt, "rowIndex">): Promise<void> {
+export async function addProdukt(
+  produkt: Omit<Produkt, "rowIndex">,
+): Promise<{ rowIndex: number }> {
   const sheets = getSheets();
-  await sheets.spreadsheets.values.append({
+  const res = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
     range: "Produkte!A:H",
     valueInputOption: "RAW",
+    // INSERT_ROWS schiebt bestehende Zeilen NICHT durcheinander, auch
+    // wenn Make.com gleichzeitig schreibt — sauberer als das default
+    // OVERWRITE-Verhalten.
+    insertDataOption: "INSERT_ROWS",
     requestBody: { values: [produktToRow(produkt)] },
   });
+  // updatedRange sieht aus wie "Produkte!A42:H42" — wir parsen die
+  // Zeilennummer raus damit der Caller GENAU diese Zeile fuer die
+  // Verifikation lesen kann.
+  const updatedRange = res.data.updates?.updatedRange || "";
+  const match = updatedRange.match(/!A(\d+):/);
+  const rowIndex = match ? Number(match[1]) : -1;
+  console.log(`[addProdukt] wrote to ${updatedRange} (rowIndex=${rowIndex})`);
+  return { rowIndex };
+}
+
+// Liest eine spezifische Produkt-Zeile aus dem Sheet (per rowIndex).
+// Verwendet die gleiche Smart-Detection wie getAllProdukte.
+export async function getProduktByRowIndex(rowIndex: number): Promise<Produkt | null> {
+  if (!rowIndex || rowIndex < 2) return null;
+  const sheets = getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `Produkte!A${rowIndex}:I${rowIndex}`,
+  });
+  const row = res.data.values?.[0];
+  if (!row) return null;
+  return rowToProdukt(row, rowIndex - 2);
 }
 
 export async function updateProdukt(
