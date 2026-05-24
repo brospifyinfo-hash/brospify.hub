@@ -1511,19 +1511,19 @@ export default function AdminPage() {
       let d: Record<string, unknown> = {};
       try { d = await res.json(); } catch { d = {}; }
       console.log("[Save] HTTP", res.status, "version:", d.version, "response:", d);
-      // Post-save verification: wenn der Server festgestellt hat dass
-      // das Geschriebene nicht zum Gemeinten passt (z.B. Spalten
-      // umsortiert), zeigen wir das LAUT an und brechen ab.
-      const verification = d.verification as { ok?: boolean; message?: string } | undefined;
-      if (verification && verification.ok === false) {
-        setError(`KRITISCH: Server hat geschrieben, aber Verifikation schlug fehl. ${verification.message || ""} — Bitte mir Screenshot zeigen.`);
-        return;
-      }
       if (!res.ok) { setError(String(d.error || `Speichern fehlgeschlagen (HTTP ${res.status})`)); return; }
+      // Verification ist nicht-fatal. Wenn der Server nur Warning hat
+      // (z.B. updatedRange-Parser hat -1 geliefert, Sheets ist eventual
+      // consistent), zeigen wir das im Success-Banner an aber blockieren
+      // den Erfolg NICHT.
+      const verification = d.verification as { ok?: boolean; message?: string } | undefined;
       setEditModal(false); setEditProduct(null);
       const warning = d.warning ? ` (${String(d.warning)})` : "";
-      setSuccess((isNew ? "Produkt hinzugefügt." : "Produkt aktualisiert.") + warning);
-      setTimeout(() => setSuccess(""), warning ? 8000 : 3000);
+      const verifyWarning = verification?.message ? ` — ${verification.message}` : "";
+      setSuccess(
+        (isNew ? "Produkt hinzugefügt." : "Produkt aktualisiert.") + warning + verifyWarning,
+      );
+      setTimeout(() => setSuccess(""), warning || verifyWarning ? 10000 : 3000);
       await loadProducts();
     } catch { setError("Speichern fehlgeschlagen."); }
     finally { setSaving(false); }

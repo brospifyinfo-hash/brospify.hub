@@ -1031,26 +1031,29 @@ function produktToRow(produkt: Omit<Produkt, "rowIndex">): string[] {
 
 export async function addProdukt(
   produkt: Omit<Produkt, "rowIndex">,
-): Promise<{ rowIndex: number }> {
+): Promise<{ rowIndex: number; updatedRange: string }> {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
     range: "Produkte!A:H",
     valueInputOption: "RAW",
-    // INSERT_ROWS schiebt bestehende Zeilen NICHT durcheinander, auch
-    // wenn Make.com gleichzeitig schreibt — sauberer als das default
-    // OVERWRITE-Verhalten.
-    insertDataOption: "INSERT_ROWS",
+    // Default-Verhalten (OVERWRITE) ist hier richtig: sucht die naechste
+    // freie Zeile in der Tabelle und schreibt dort. INSERT_ROWS hatten
+    // wir kurz probiert, hat aber Probleme gemacht.
     requestBody: { values: [produktToRow(produkt)] },
   });
-  // updatedRange sieht aus wie "Produkte!A42:H42" — wir parsen die
-  // Zeilennummer raus damit der Caller GENAU diese Zeile fuer die
-  // Verifikation lesen kann.
+  // updatedRange ist eines von:
+  //   "Produkte!A42:H42"   (Standard nach append)
+  //   "'Produkte'!A42:H42" (escaped wenn Sheet-Name Sonderzeichen hat)
+  //   "Produkte!A42"        (manchmal nur eine Zelle)
+  // Wir extrahieren die ERSTE Zahl-die-direkt-nach-A-kommt aus dem String.
   const updatedRange = res.data.updates?.updatedRange || "";
-  const match = updatedRange.match(/!A(\d+):/);
+  const match = updatedRange.match(/A(\d+)/);
   const rowIndex = match ? Number(match[1]) : -1;
-  console.log(`[addProdukt] wrote to ${updatedRange} (rowIndex=${rowIndex})`);
-  return { rowIndex };
+  console.log(
+    `[addProdukt] updatedRange="${updatedRange}" rowIndex=${rowIndex} updatedRows=${res.data.updates?.updatedRows} updatedCells=${res.data.updates?.updatedCells}`,
+  );
+  return { rowIndex, updatedRange };
 }
 
 // Liest eine spezifische Produkt-Zeile aus dem Sheet (per rowIndex).

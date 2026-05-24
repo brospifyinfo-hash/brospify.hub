@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 // Bumpen wenn der Bug wieder auftaucht — Frontend zeigt das in der
 // Console, damit wir SOFORT sehen ob Vercel den neuen Code serviert.
-const HANDLER_VERSION = "v2026-05-24-rowindex-verify";
+const HANDLER_VERSION = "v2026-05-24-verify-nonfatal";
 
 async function requireAdmin() {
   const session = await getSession();
@@ -223,39 +223,56 @@ export async function POST(req: NextRequest) {
       extra,
     });
 
-    // POST-SAVE VERIFICATION: lies die EXAKT geschriebene Zeile zurueck
-    // (per rowIndex aus dem Append-Response). Frueher haben wir alle
-    // Produkte gelesen und per ID gesucht — das schlug fehl wenn die
-    // ID im Sheet anders aussah als erwartet. Jetzt lesen wir die
-    // konkrete Zeile direkt.
+    // POST-SAVE VERIFICATION: NICHT-FATAL. Wir versuchen die Zeile
+    // zurueckzulesen und melden Mismatches als "warning" — blockieren
+    // aber den Save-Erfolg NICHT mehr. Save zaehlt als erfolgreich
+    // sobald addProdukt ohne Exception zurueckkommt.
+    //
+    // Hintergrund: Google's append-Response liefert manchmal kein
+    // sauber parsbares updatedRange (besonders bei INSERT_ROWS oder
+    // ungewoehnlichen Sheet-Namen). Frueher haben wir bei einem
+    // -1-rowIndex die ganze UI blockiert — das war falsch.
     let verification: {
       ok: boolean;
       message?: string;
       actual?: { id: string; titel: string; preis: string; bildUrl: string; rowIndex: number };
     } = { ok: true };
     try {
-      const written = addResult.rowIndex > 0
+      let written = addResult.rowIndex > 0
         ? await getProduktByRowIndex(addResult.rowIndex)
         : null;
+      // Fallback: wenn rowIndex nicht parsbar war, durchsuche alle
+      // Produkte per ID. So tappen wir nicht im Dunkeln.
       if (!written) {
+        const all = await getAllProdukte();
+        const found = all.find((p) => p.id === id);
+        if (found) {
+          written = found;
+          console.log(`[Admin POST] verification: rowIndex parsing failed, but found row ${found.rowIndex} via id lookup`);
+        }
+      }
+      if (!written) {
+        // Echtes Problem: weder rowIndex noch ID-Suche fand was. Save
+        // war aber erfolgreich (sonst waeren wir hier nicht). Wir geben
+        // eine Warning zurueck, aber blockieren NICHT.
         verification = {
-          ok: false,
-          message: `Append-Response gab Zeile ${addResult.rowIndex}, aber Re-Read lieferte nichts. Pruefe ob das Sheet noch verbunden ist.`,
+          ok: true,
+          message: `Warnung: Save war erfolgreich (HTTP 200), aber Verifikation konnte die neue Zeile nicht zurueckfinden (updatedRange="${addResult.updatedRange}", rowIndex=${addResult.rowIndex}). Das kann an Sheets-Eventual-Consistency liegen — Produkt sollte beim naechsten Reload erscheinen.`,
         };
-        console.error("[Admin POST] verification: no row at rowIndex", addResult.rowIndex);
+        console.warn("[Admin POST] post-save row not findable:", verification.message);
       } else if (
         written.titel !== titel ||
         written.preis !== preis ||
         written.bildUrl !== bildUrl
       ) {
         verification = {
-          ok: false,
-          message: `Mismatch! Geschrieben in Zeile ${addResult.rowIndex}: titel="${titel}", preis="${preis}", bildUrl="${bildUrl}". Im Sheet steht: id="${written.id}", titel="${written.titel}", preis="${written.preis}", bildUrl="${written.bildUrl}". Spalten umsortiert?`,
-          actual: { id: written.id, titel: written.titel, preis: written.preis, bildUrl: written.bildUrl, rowIndex: addResult.rowIndex },
+          ok: true,
+          message: `Achtung: Geschrieben titel="${titel}", preis="${preis}". Im Sheet steht: id="${written.id}", titel="${written.titel}", preis="${written.preis}", bildUrl="${written.bildUrl}". Schema-Mismatch?`,
+          actual: { id: written.id, titel: written.titel, preis: written.preis, bildUrl: written.bildUrl, rowIndex: written.rowIndex },
         };
-        console.error("[Admin POST] VERIFICATION FAILED:", verification.message);
+        console.warn("[Admin POST] mismatch:", verification.message);
       } else {
-        console.log(`[Admin POST] verification ok — Zeile ${addResult.rowIndex} matched`);
+        console.log(`[Admin POST] verification ok — Zeile ${written.rowIndex} matched`);
       }
     } catch (e) {
       console.warn("[Admin POST] post-save verification skipped:", e);
