@@ -953,12 +953,44 @@ function parseExtra(raw: string): ProduktExtra {
   }
 }
 
+// Smart row-to-Produkt: erkennt automatisch ob die Zeile im alten
+// 9-Spalten-Format (mit Monat zwischen SKU und Titel) ODER im neuen
+// 8-Spalten-Make-Format gespeichert wurde. So bleiben alte Produkte
+// weiterhin lesbar nachdem wir auf das schlankere Schema umgestiegen
+// sind. Heuristik: wenn row[8] wie JSON aussieht ({…}), ist das die
+// extra-Spalte des alten 9-Spalten-Schemas. Sonst neues Schema.
 function rowToProdukt(row: string[], index: number): Produkt {
+  const looksLikeJson = (s: string | undefined): boolean => {
+    if (!s) return false;
+    const t = s.trim();
+    return t.startsWith("{") || t.startsWith("[");
+  };
+  const isOldFormat = looksLikeJson(row[8]);
+
+  if (isOldFormat) {
+    // Altes 9-Spalten-Schema: A=id, B=sku, C=monat, D=titel,
+    // E=bildUrl, F=beschreibung, G=preis, H=aliExpressLink, I=extra.
+    return {
+      rowIndex: index + 2,
+      id: row[0] || "",
+      sku: row[1] || "",
+      monat: row[2] || "",
+      titel: row[3] || "",
+      bildUrl: row[4] || "",
+      beschreibung: row[5] || "",
+      preis: row[6] || "",
+      aliExpressLink: row[7] || "",
+      extra: parseExtra(row[8] || ""),
+    };
+  }
+
+  // Neues 8-Spalten-Schema (Make-Style): A=CJ_ID, B=SKU, C=Titel,
+  // D=Bild_URL, E=Beschreibung, F=Preis, G=AliExpress_Link, H=Extra_JSON.
   return {
     rowIndex: index + 2,
     id: row[0] || "",
     sku: row[1] || "",
-    monat: "", // Legacy-Feld, nicht mehr im Sheet
+    monat: "",
     titel: row[2] || "",
     bildUrl: row[3] || "",
     beschreibung: row[4] || "",
@@ -970,9 +1002,10 @@ function rowToProdukt(row: string[], index: number): Produkt {
 
 export async function getAllProdukte(): Promise<Produkt[]> {
   const sheets = getSheets();
+  // Lesen wir bis I, damit die Smart-Detection auf row[8] zugreifen kann.
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A2:H",
+    range: "Produkte!A2:I",
   });
   const rows = res.data.values || [];
   return rows.map((row, i) => rowToProdukt(row, i));

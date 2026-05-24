@@ -1463,14 +1463,23 @@ export default function AdminPage() {
 
   async function handleSave() {
     if (!editProduct) return;
+    // Harte Frontend-Validierung VOR dem Senden — kein leerer Titel
+    // mehr ans Backend (sonst 400 vom Server).
+    if (!editProduct.titel.trim()) {
+      setError("Bitte einen Titel eingeben.");
+      return;
+    }
     setSaving(true); setError("");
     try {
       const images = editProduct.images.filter(u => u && typeof u === "string" && u.startsWith("http"));
       const body = {
         ...(isNew ? {} : { rowIndex: editProduct.rowIndex }),
+        // ID + SKU werden nicht mehr im Formular editiert. Bei neuen
+        // Produkten wird die ID automatisch generiert. SKU bleibt
+        // leer (oder behaelt seinen alten Wert wenn editiert).
         id: editProduct.id || `prod_${Date.now()}`,
-        sku: editProduct.sku, monat: editProduct.monat,
-        titel: editProduct.titel, beschreibung: editProduct.beschreibung,
+        sku: editProduct.sku || "", monat: editProduct.monat || "",
+        titel: editProduct.titel.trim(), beschreibung: editProduct.beschreibung,
         aliExpressLink: editProduct.aliExpressLink,
         bildUrl: images[0] || "",
         preis: String(editProduct.finances.recommendedSellPrice || ""),
@@ -3270,13 +3279,11 @@ export default function AdminPage() {
               )}
 
               <div className="space-y-5">
-                {/* Basic fields */}
-                <div><label className="block text-xs text-zinc-400 mb-1">ID</label><input type="text" value={editProduct.id} onChange={e => setEditProduct({ ...editProduct, id: e.target.value })} placeholder="Auto" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                <div><label className="block text-xs text-zinc-400 mb-1">Kategorie</label><input type="text" list="kategorie-liste" value={editProduct.sku} onChange={e => setEditProduct({ ...editProduct, sku: e.target.value })} placeholder="z. B. Beauty — oder eigene eingeben" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-
-                <div><label className="block text-xs text-zinc-400 mb-1">Titel</label><input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
-                <div><label className="block text-xs text-zinc-400 mb-1">Beschreibung (HTML)</label><textarea value={editProduct.beschreibung} onChange={e => setEditProduct({ ...editProduct, beschreibung: e.target.value })} rows={3} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" /></div>
-                <div><label className="block text-xs text-zinc-400 mb-1">AliExpress Link</label><input type="text" value={editProduct.aliExpressLink} onChange={e => setEditProduct({ ...editProduct, aliExpressLink: e.target.value })} className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                {/* ID + Kategorie wurden entfernt - ID wird automatisch
+                    generiert, SKU bleibt leer. */}
+                <div><label className="block text-xs text-zinc-400 mb-1">Titel <span className="text-red-400">*</span></label><input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} placeholder="z. B. Mini Snack Bag Sealer – Frische-Versiegler für Tüten" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                <div><label className="block text-xs text-zinc-400 mb-1">Beschreibung (HTML)</label><textarea value={editProduct.beschreibung} onChange={e => setEditProduct({ ...editProduct, beschreibung: e.target.value })} rows={4} placeholder="<p>Verkaufsstarker Text mit <ul><li>Vorteilen</li></ul></p>" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" /></div>
+                <div><label className="block text-xs text-zinc-400 mb-1">AliExpress Link</label><input type="text" value={editProduct.aliExpressLink} onChange={e => setEditProduct({ ...editProduct, aliExpressLink: e.target.value })} placeholder="https://www.aliexpress.com/item/..." className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
 
                 {/* Image Drop Zone */}
                 <ImageDropZone
