@@ -520,9 +520,6 @@ function AdsBlock({ ads }: { ads?: ProduktAds }) {
                 <span className="text-xs font-semibold text-zinc-200">
                   {p.label}
                 </span>
-                <span className="text-[10px] text-zinc-500 ml-auto tabular-nums">
-                  {urls.length} {urls.length === 1 ? "Beispiel" : "Beispiele"}
-                </span>
               </div>
               <div className="flex flex-wrap gap-1.5">
                 {urls.map((u, i) => (
@@ -567,9 +564,6 @@ function DropshippingBlock({
       <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
         <Store className="w-4 h-4 text-indigo-300" />
         Beispiel Dropshipping-Shops
-        <span className="text-[10px] text-zinc-500 ml-auto tabular-nums">
-          {list.length} {list.length === 1 ? "Shop" : "Shops"}
-        </span>
       </h4>
       <div className="space-y-1.5">
         {list.map((ex) => {
@@ -1194,9 +1188,6 @@ function CuratedRow({
           <h2 className="text-sm font-bold text-zinc-100 leading-tight">{title}</h2>
           <p className="text-[10px] text-zinc-500 leading-tight">{subtitle}</p>
         </div>
-        <span className="ml-auto text-[10px] text-zinc-600 tabular-nums shrink-0">
-          {list.length}
-        </span>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory">
         {list.map((produkt, idx) => (
@@ -1496,7 +1487,7 @@ export default function ChartsPage() {
       return {
         key: cat.key,
         title: cat.label,
-        subtitle: `${list.length} ${list.length === 1 ? "Produkt" : "Produkte"} in dieser Kategorie`,
+        subtitle: `Aktuelle Trends im US-Markt für ${cat.label}`,
         icon: cat.icon,
         tint: cat.tint,
         list,
@@ -1540,27 +1531,26 @@ export default function ChartsPage() {
               <span className="truncate">Winning Charts</span>
             </h1>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              Top-Dropshipping-Produkte · Rankings · Audience · Ad-Strategie · 1-Klick-Import
+              Aktuelle Trends aus dem US-Markt · Audience · Ad-Strategie · 1-Klick-Import
             </p>
           </div>
-          {totalProducts > 0 && (
-            <div className="text-right shrink-0">
-              <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Produkte</div>
-              <div className="text-sm font-bold text-[#95BF47] tabular-nums">{totalProducts}</div>
-            </div>
-          )}
         </div>
 
-        {/* ─── Stats Overview Strip ───────────────────────────── */}
+        {/* ─── US-Markt + Beispiel-Disclaimer ───────────────── */}
         {produkte.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            <StatTile
-              label="Produkte"
-              value={String(overview.count)}
-              sub={`von ${totalProducts} gesamt`}
-              icon={Layers}
-              tint="#95BF47"
-            />
+          <div className="flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-500/[0.06] border border-blue-500/15 text-blue-100">
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-300" />
+            <p className="text-[11px] leading-snug text-blue-100/85">
+              <strong className="text-blue-200">Alle Produkte stammen aus dem aktuellen US-Markt-Trend</strong> und werden für den deutschen Markt aufbereitet.
+              AliExpress-Links und Bilder sind <strong>Beispiele</strong> — das tatsächliche Produkt deines Lieferanten kann abweichen, auf den Bildern sind teils ähnliche Produkte zu sehen.
+            </p>
+          </div>
+        )}
+
+        {/* ─── Stats Overview Strip ───────────────────────────── */}
+        {/* KEINE Stueckzahlen — wir zeigen nur qualitative Signale. */}
+        {produkte.length > 0 && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
             <StatTile
               label="Ø Trend"
               value={`${overview.avgTrend}%`}
@@ -1570,7 +1560,7 @@ export default function ChartsPage() {
             />
             <StatTile
               label="Heiße Picks"
-              value={String(overview.hotCount)}
+              value={overview.hotCount >= 10 ? "viele" : overview.hotCount >= 3 ? "einige" : overview.hotCount > 0 ? "wenige" : "—"}
               sub="Trend ≥ 80%"
               icon={Flame}
               tint="#F97316"
@@ -1709,9 +1699,6 @@ export default function ChartsPage() {
                   <h2 className="text-[11px] font-bold uppercase tracking-widest text-zinc-300">
                     Nach Themen
                   </h2>
-                  <span className="text-[10px] text-zinc-600">
-                    {categoryRows.length} {categoryRows.length === 1 ? "Kategorie" : "Kategorien"}
-                  </span>
                 </div>
               </div>
             )}
@@ -1737,9 +1724,6 @@ export default function ChartsPage() {
               <h2 className="text-[12px] font-bold uppercase tracking-widest text-zinc-200">
                 Suchergebnisse
               </h2>
-              <span className="text-[10px] text-zinc-500">
-                {filteredProdukte.length} {filteredProdukte.length === 1 ? "Treffer" : "Treffer"}
-              </span>
             </div>
             {filteredProdukte.map((produkt, idx) => (
               <ProduktRow
@@ -1766,10 +1750,16 @@ export default function ChartsPage() {
             >
               <button onClick={() => setInfoModal({ open: false, produkt: null })} className="absolute top-4 right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
 
-              <div className="p-4 pb-0">
+              <div className="p-4 pb-0 space-y-2">
                 {/* `key` mountet die Slideshow für jedes Produkt neu —
                     so wird das "broken"-Set / der idx sauber zurückgesetzt. */}
                 <ImageSlideshow key={p.id} images={allImages} />
+                <p className="text-[10px] text-zinc-500 italic leading-snug flex items-start gap-1 px-1">
+                  <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                  <span>
+                    Bilder dienen als Beispiel / Inspiration. Das tatsächliche Produkt deines Lieferanten kann abweichen — manche Bilder zeigen ähnliche oder verwandte Produkte aus dem US-Markt.
+                  </span>
+                </p>
               </div>
 
               <div className="p-6 space-y-6">
@@ -1842,17 +1832,25 @@ export default function ChartsPage() {
                 {/* ─── AliExpress Links (Kategorie + Produkt) ───── */}
                 {/* Kategorie wird synthetisiert wenn nicht gespeichert —
                     so funktioniert auch für alte Produkte ohne `links`. */}
-                <AliLinksBlock
-                  produktLink={
-                    p.extra?.links?.aliExpressProduct || p.aliExpressLink
-                  }
-                  kategorieLink={
-                    p.extra?.links?.aliExpressCategory ||
-                    synthesizeAliCategoryLink(p)
-                  }
-                  productOk={p.extra?.linkStatus?.aliExpressProductOk}
-                  categoryOk={p.extra?.linkStatus?.aliExpressCategoryOk}
-                />
+                <div className="space-y-2">
+                  <AliLinksBlock
+                    produktLink={
+                      p.extra?.links?.aliExpressProduct || p.aliExpressLink
+                    }
+                    kategorieLink={
+                      p.extra?.links?.aliExpressCategory ||
+                      synthesizeAliCategoryLink(p)
+                    }
+                    productOk={p.extra?.linkStatus?.aliExpressProductOk}
+                    categoryOk={p.extra?.linkStatus?.aliExpressCategoryOk}
+                  />
+                  <p className="text-[10px] text-zinc-500 italic leading-snug flex items-start gap-1 px-1">
+                    <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                    <span>
+                      Die AliExpress-Links sind <strong className="text-zinc-400">Beispiele</strong> für mögliche Lieferanten dieses Trends — das konkrete Produkt deines gewählten Sellers kann in Details abweichen.
+                    </span>
+                  </p>
+                </div>
 
                 {/* ─── Import-CTA (lebt jetzt im Detail-Modal) ─── */}
                 <div className="border-t border-zinc-800 pt-4 space-y-2">
