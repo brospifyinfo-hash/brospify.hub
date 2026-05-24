@@ -642,10 +642,11 @@ export default function Navigation() {
               <SectionLabel>Tools</SectionLabel>
               <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} />
 
-              {/* ─── Support — with Tickets sub-item ─── */}
+              {/* ─── Support — with Tickets + E-Mail sub-items ─── */}
               <SectionLabel>Support</SectionLabel>
               <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} />
               <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
+              <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
 
               {/* ─── Admin (if applicable) ─── */}
               {session.isAdmin && (
@@ -1148,6 +1149,13 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             icon={Inbox}
             label="Meine Tickets"
             active={false}
+            onClick={onClose}
+          />
+          <MenuItem
+            href="/email-support"
+            icon={Mail}
+            label="E-Mail Support"
+            active={pathname === "/email-support"}
             onClick={onClose}
           />
         </MenuGroup>
