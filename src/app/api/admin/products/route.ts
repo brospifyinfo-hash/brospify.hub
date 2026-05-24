@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, addProdukt, updateProdukt, deleteProdukt } from "@/lib/sheets";
+import { getAllProdukte, addProdukt, updateProdukt, deleteProdukt, type Produkt } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
+
+// Bumpen wenn der Bug wieder auftaucht — Frontend zeigt das in der
+// Console, damit wir SOFORT sehen ob Vercel den neuen Code serviert.
+const HANDLER_VERSION = "v2026-05-24-postverify";
 
 async function requireAdmin() {
   const session = await getSession();
@@ -211,12 +215,46 @@ export async function POST(req: NextRequest) {
       aliExpressLink: body.links?.aliexpressLink || body.aliExpressLink || "",
       extra,
     });
-    // Antwort enthaelt was wir TATSAECHLICH geschrieben haben, damit
-    // das Frontend sofort verifizieren kann.
+
+    // POST-SAVE VERIFICATION: lies die gerade geschriebene Zeile zurueck
+    // und vergleiche mit dem was wir intendiert haben. Wenn die Sheets-
+    // API die Spalten anders mapped als unser Code erwartet, sehen wir
+    // es HIER und werfen einen lauten Fehler, statt stillschweigend
+    // verschnittene Daten zu liefern.
+    let verification: {
+      ok: boolean;
+      message?: string;
+      actual?: { titel: string; preis: string; bildUrl: string };
+    } = { ok: true };
+    try {
+      const all = await getAllProdukte();
+      const written = all.find((p) => p.id === id);
+      if (!written) {
+        verification = { ok: false, message: "Zeile nach dem Schreiben nicht gefunden." };
+      } else if (
+        written.titel !== titel ||
+        written.preis !== preis ||
+        written.bildUrl !== bildUrl
+      ) {
+        verification = {
+          ok: false,
+          message: `Mismatch! Geschrieben: titel="${titel}", preis="${preis}", bildUrl="${bildUrl}". Im Sheet steht: titel="${written.titel}", preis="${written.preis}", bildUrl="${written.bildUrl}". Wahrscheinlich sind die Sheet-Spalten umsortiert worden.`,
+          actual: { titel: written.titel, preis: written.preis, bildUrl: written.bildUrl },
+        };
+        console.error("[Admin POST] VERIFICATION FAILED:", verification.message);
+      } else {
+        console.log("[Admin POST] verification ok — titel/preis/bildUrl matchen");
+      }
+    } catch (e) {
+      console.warn("[Admin POST] post-save verification skipped:", e);
+    }
+
     return NextResponse.json({
       success: true,
+      version: HANDLER_VERSION,
       saved: { id, titel, preis, bildUrl },
       warning: repaired.warning,
+      verification,
     });
   } catch (error) {
     console.error("Admin add product error:", error);
@@ -269,10 +307,35 @@ export async function PUT(req: NextRequest) {
       aliExpressLink: body.links?.aliexpressLink || body.aliExpressLink || "",
       extra,
     });
+
+    // POST-SAVE VERIFICATION (siehe POST). Lies Row zurueck und
+    // vergleiche.
+    let verification: { ok: boolean; message?: string; actual?: { titel: string; preis: string; bildUrl: string } } = { ok: true };
+    try {
+      const all = await getAllProdukte();
+      const written: Produkt | undefined = all.find((p) => p.rowIndex === body.rowIndex);
+      if (!written) {
+        verification = { ok: false, message: `Zeile ${body.rowIndex} nach Update nicht gefunden.` };
+      } else if (written.titel !== titel || written.preis !== preis || written.bildUrl !== bildUrl) {
+        verification = {
+          ok: false,
+          message: `Mismatch! Geschrieben: titel="${titel}", preis="${preis}", bildUrl="${bildUrl}". Im Sheet steht: titel="${written.titel}", preis="${written.preis}", bildUrl="${written.bildUrl}". Spalten umsortiert?`,
+          actual: { titel: written.titel, preis: written.preis, bildUrl: written.bildUrl },
+        };
+        console.error("[Admin PUT] VERIFICATION FAILED:", verification.message);
+      } else {
+        console.log("[Admin PUT] verification ok — titel/preis/bildUrl matchen");
+      }
+    } catch (e) {
+      console.warn("[Admin PUT] post-save verification skipped:", e);
+    }
+
     return NextResponse.json({
       success: true,
+      version: HANDLER_VERSION,
       saved: { id: body.id, titel, preis, bildUrl },
       warning: repaired.warning,
+      verification,
     });
   } catch (error) {
     console.error("Admin update product error:", error);
