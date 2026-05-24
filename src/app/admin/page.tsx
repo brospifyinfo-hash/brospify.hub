@@ -3802,6 +3802,10 @@ function VotesEditor({
   const ups = votes?.ups ?? 0;
   const downs = votes?.downs ?? 0;
   const boost = votes?.manualBoost ?? 0;
+  // RAW Score — der User sieht zusaetzlich noch ein deterministisches
+  // Seed (basiert auf trend/viral/growth/id), damit kein Produkt bei
+  // 0 startet. Seed wird hier nicht angezeigt, weil der Admin den
+  // ROHWERT editieren soll.
   const score = ups - downs + boost;
 
   function setField(field: keyof ProduktVotes, value: number) {
@@ -3862,8 +3866,9 @@ function VotesEditor({
           </div>
         </div>
         <p className="text-[10px] text-zinc-500 leading-snug">
-          <strong className="text-zinc-400">Score</strong> = ups - downs + manualBoost.
+          <strong className="text-zinc-400">RAW-Score</strong> = ups - downs + manualBoost.
           Mit <strong className="text-amber-400">Manual Boost</strong> kannst du ein Produkt prominent in die „Beliebteste bei Brospify"-Reihe pushen (+) oder absichtlich runterdrücken (-) ohne die echten User-Votes anzufassen.
+          Im Charts wird zusätzlich ein <strong className="text-purple-400">Seed-Wert</strong> addiert (abgeleitet aus Trend/Viral/Wachstum + ID-Hash), damit kein Produkt jemals bei 0 startet — typisch +30 bis +200.
         </p>
       </div>
     </details>

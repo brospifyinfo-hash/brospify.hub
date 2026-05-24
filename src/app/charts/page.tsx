@@ -152,10 +152,50 @@ interface Produkt {
   };
 }
 
-/** Score = ups - downs + manualBoost. */
-function voteScore(v?: ProduktVotes): number {
+/** REAL Score nur aus echten Stimmen + Admin-Override. */
+function rawVoteScore(v?: ProduktVotes): number {
   if (!v) return 0;
   return (v.ups ?? 0) - (v.downs ?? 0) + (v.manualBoost ?? 0);
+}
+
+/**
+ * Deterministischer Seed-Wert pro Produkt — wird ZUM tatsaechlichen
+ * Score addiert, damit kein Produkt jemals bei 0 startet. Ableitung
+ * aus den vorhandenen Metriken:
+ *  - trendScore (50%) + viralScore (40%) → Basis
+ *  - growth90d → Bonus wenn positiv
+ *  - Hash der id → 0-19 fuer Variation, damit nicht alle Produkte
+ *    mit gleichen Stats exakt denselben Seed haben
+ * Stets ≥ 5, nie negativ. Da deterministisch: bleibt fuer dasselbe
+ * Produkt immer gleich.
+ */
+function simpleHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < (s || "").length; i++) {
+    h = (h << 5) - h + s.charCodeAt(i);
+    h |= 0;
+  }
+  return Math.abs(h);
+}
+
+function seedScore(p: Produkt): number {
+  const trend = p.extra?.stats?.trendScore ?? 0;
+  const viral = p.extra?.stats?.viralScore ?? 0;
+  const growth = p.extra?.deepStats?.growth90d ?? 0;
+  const base = Math.round((trend * 0.5 + viral * 0.4) * 1.2);
+  const growthBonus = growth > 0 ? Math.round(growth * 0.3) : 0;
+  const hashVar = simpleHash(p.id) % 20;
+  return Math.max(5, base + growthBonus + hashVar);
+}
+
+/** Endgueltiger Score wie er dem User gezeigt wird = echt + Seed. */
+function displayedScore(p: Produkt, v?: ProduktVotes): number {
+  return rawVoteScore(v) + seedScore(p);
+}
+
+// Veraltete API behalten — wird intern fuer Admin-Editor benutzt.
+function voteScore(v?: ProduktVotes): number {
+  return rawVoteScore(v);
 }
 
 // Sortier-Keys für die UI-Toolbar.
@@ -1079,6 +1119,7 @@ function ProduktRow({
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <VoteButtons
+          produkt={produkt}
           votes={votes}
           userVote={userVote}
           onVote={(d) => onVote(produkt.id, d)}
@@ -1102,17 +1143,21 @@ function ProduktRow({
 // Stimme; nochmal derselbe Pfeil = Stimme zurueck; anderer Pfeil =
 // Wechsel.
 function VoteButtons({
+  produkt,
   votes,
   userVote,
   onVote,
   size = "sm",
 }: {
+  produkt: Produkt;
   votes: ProduktVotes;
   userVote: "up" | "down" | null;
   onVote: (direction: "up" | "down") => void;
   size?: "sm" | "md";
 }) {
-  const s = voteScore(votes);
+  // Score inkl. Seed — so ist's nie 0 und reflektiert die Produkt-
+  // Qualitaet auch fuer Produkte ohne echte User-Stimmen.
+  const s = displayedScore(produkt, votes);
   const isCompact = size === "sm";
   const iconCls = isCompact ? "w-3.5 h-3.5" : "w-4 h-4";
   const padCls = isCompact ? "p-1" : "p-1.5";
@@ -1564,6 +1609,7 @@ function CuratedCard({
       </button>
       <div className="px-2 pb-2 mt-auto">
         <VoteButtons
+          produkt={produkt}
           votes={votes}
           userVote={userVote}
           onVote={(d) => onVote(produkt.id, d)}
@@ -1763,7 +1809,8 @@ export default function ChartsPage() {
         if (ca !== cb) return ca - cb;
         return (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0);
       },
-      popular: (a, b) => voteScore(getProduktVotes(b)) - voteScore(getProduktVotes(a)),
+      popular: (a, b) =>
+        displayedScore(b, getProduktVotes(b)) - displayedScore(a, getProduktVotes(a)),
     };
     return [...base].sort(sorters[sortKey]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1829,9 +1876,11 @@ export default function ChartsPage() {
       (a, b) => (b.extra?.stats?.viralScore ?? 0) - (a.extra?.stats?.viralScore ?? 0),
     );
     const byPopular = [...filteredProdukte].sort(
-      (a, b) => voteScore(getProduktVotes(b)) - voteScore(getProduktVotes(a)),
+      (a, b) => displayedScore(b, getProduktVotes(b)) - displayedScore(a, getProduktVotes(a)),
     );
-    const anyVotes = byPopular.some((p) => voteScore(getProduktVotes(p)) !== 0);
+    // Seeds sind immer >= 5, also haben wir IMMER eine Beliebteste-Row
+    // sobald ueberhaupt Produkte vorhanden sind.
+    const anyVotes = byPopular.length > 0;
 
     return [
       {
@@ -2196,6 +2245,7 @@ export default function ChartsPage() {
                     <h3 className="text-xl font-bold leading-tight flex-1 min-w-0">{displayTitle(p)}</h3>
                     <div className="shrink-0">
                       <VoteButtons
+                        produkt={p}
                         votes={getProduktVotes(p)}
                         userVote={userVotes[p.id] || null}
                         onVote={(d) => handleVote(p.id, d)}
