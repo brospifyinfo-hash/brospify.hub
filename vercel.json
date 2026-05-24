@@ -8,10 +8,6 @@
     {
       "path": "/api/admin/license/expire-overdue",
       "schedule": "30 3 * * *"
-    },
-    {
-      "path": "/api/cron/check-product-links",
-      "schedule": "0 4 * * *"
     }
   ]
 }
