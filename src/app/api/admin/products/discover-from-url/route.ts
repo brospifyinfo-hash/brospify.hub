@@ -375,7 +375,7 @@ REGELN:
 - Wenn die URL ein Social-Media-Video ist, identifiziere das beworbene Produkt aus Caption/Beschreibung und ergaenze aus der Web-Suche
 - Wenn ein konkreter Preis im Content steht, nimm ihn als buyPrice; sonst schaetze konservativ
 - Verkaufspreis: marktueblich fuer Dropshipping in EUR (typisch 3-5x Einkauf)
-- Kategorie: kurz und treffend (z.B. Beauty, Sport, Haushalt, Gadgets, Haustier)
+- Kategorie: WÄHLE EXAKT EINE aus dieser Liste (1:1 schreibweise, keine eigenen Erfindungen): Sport & Fitness, Beauty & Pflege, Haushalt & Ordnung, Küche & Kochen, Gadgets & Tech, Haustier, Kinder & Baby, Auto & Outdoor, Garten & Pflanzen, Mode & Accessoires, Wellness & Schlaf, Heim-Deko & Licht
 - imageQuery: 3-6 englische Worte zum Nachfinden von Produktbildern in einer Bildersuche
 
 Antworte NUR mit JSON:

@@ -133,7 +133,23 @@ const EMPTY: EditProduct = {
   finances: { buyPrice: 0, recommendedSellPrice: 0, profitMargin: 0 },
 };
 
-const KATEGORIE_OPTIONS = ["SPORT", "TREND", "HAUSTIER", "KÜCHE", "BEAUTY"];
+// Fixe Liste an Kategorien — identisch zu PREDEFINED_CATEGORIES auf
+// der Charts-Seite (siehe src/app/charts/page.tsx). Wenn du eine
+// hinzufuegst hier UND dort updaten.
+const KATEGORIE_OPTIONS = [
+  "Sport & Fitness",
+  "Beauty & Pflege",
+  "Haushalt & Ordnung",
+  "Küche & Kochen",
+  "Gadgets & Tech",
+  "Haustier",
+  "Kinder & Baby",
+  "Auto & Outdoor",
+  "Garten & Pflanzen",
+  "Mode & Accessoires",
+  "Wellness & Schlaf",
+  "Heim-Deko & Licht",
+];
 
 // ─── Admin module-level types ───────────────────────────────────
 
@@ -3178,8 +3194,10 @@ export default function AdminPage() {
         <>
         <div className="flex flex-wrap gap-3 mb-3">
           <button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 btn-accent rounded-xl text-sm font-medium"><Plus className="w-4 h-4" />Produkt hinzuf&uuml;gen</button>
-          <input list="kategorie-liste" value={aiKategorie} onChange={(e) => setAiKategorie(e.target.value)} disabled={aiDiscovering} placeholder="Kategorie (optional)" className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50" />
-          <datalist id="kategorie-liste">{KATEGORIE_OPTIONS.map((k) => <option key={k} value={k} />)}</datalist>
+          <select value={aiKategorie} onChange={(e) => setAiKategorie(e.target.value)} disabled={aiDiscovering} className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50">
+            <option value="">Kategorie (optional)</option>
+            {KATEGORIE_OPTIONS.map((k) => <option key={k} value={k}>{k}</option>)}
+          </select>
           <select value={aiDepth} onChange={(e) => setAiDepth(e.target.value === "gruendlich" ? "gruendlich" : "schnell")} disabled={aiDiscovering} className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50">
             <option value="schnell">Schnell &middot; ~1 Min</option>
             <option value="gruendlich">Gr&uuml;ndlich &middot; ~1&ndash;2 Min</option>
@@ -3354,9 +3372,28 @@ export default function AdminPage() {
               )}
 
               <div className="space-y-5">
-                {/* ID + Kategorie wurden entfernt - ID wird automatisch
-                    generiert, SKU bleibt leer. */}
-                <div><label className="block text-xs text-zinc-400 mb-1">Titel <span className="text-red-400">*</span></label><input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} placeholder="z. B. Mini Snack Bag Sealer – Frische-Versiegler für Tüten" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                {/* ID wird automatisch generiert (kein Eingabefeld).
+                    Kategorie ist ein Dropdown mit fester Liste. */}
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">Titel <span className="text-red-400">*</span></label>
+                  <input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} placeholder="z. B. Mini Snack Bag Sealer – Frische-Versiegler für Tüten" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-zinc-400 mb-1">
+                    Kategorie
+                    <span className="text-zinc-600 font-normal ml-1">(steuert die Themen-Row im User-Charts)</span>
+                  </label>
+                  <select
+                    value={editProduct.sku || ""}
+                    onChange={(e) => setEditProduct({ ...editProduct, sku: e.target.value })}
+                    className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="">— Keine Kategorie / unkategorisiert —</option>
+                    {KATEGORIE_OPTIONS.map((k) => (
+                      <option key={k} value={k}>{k}</option>
+                    ))}
+                  </select>
+                </div>
                 <div><label className="block text-xs text-zinc-400 mb-1">Beschreibung (HTML)</label><textarea value={editProduct.beschreibung} onChange={e => setEditProduct({ ...editProduct, beschreibung: e.target.value })} rows={4} placeholder="<p>Verkaufsstarker Text mit <ul><li>Vorteilen</li></ul></p>" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" /></div>
                 <div><label className="block text-xs text-zinc-400 mb-1">AliExpress Link (Produkt)</label><input type="text" value={editProduct.aliExpressLink} onChange={e => setEditProduct({ ...editProduct, aliExpressLink: e.target.value })} placeholder="https://www.aliexpress.com/item/..." className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
 

@@ -252,17 +252,32 @@ const PREDEFINED_CATEGORIES: {
 ];
 
 /**
- * Prueft ob ein Produkt zu einer Kategorie passt — anhand sku, titel
- * und beschreibung (case-insensitive Substring).
+ * Prueft ob ein Produkt zu einer Kategorie passt — STRICT MODE:
+ * NUR das sku-Feld wird gescannt (nicht titel/beschreibung), und
+ * das Match ist ein Whole-Word-Match. So landet eine "Automatische
+ * Fingernagelschere" mit sku="Beauty" nicht versehentlich unter
+ * Kinder, nur weil das Wort "Kinder" irgendwo im Beipack-Text steht.
  */
 function produktMatchesCategory(
   p: Produkt,
   keywords: string[],
 ): boolean {
-  const haystack = [p.sku, p.titel, p.beschreibung]
-    .map((s) => (s || "").toLowerCase())
-    .join(" ");
-  return keywords.some((k) => haystack.includes(k.toLowerCase()));
+  const sku = (p.sku || "").toLowerCase().trim();
+  if (!sku) return false;
+  // Whole-Word-Match: keyword muss umgeben sein von Wort-Grenzen
+  // (Anfang/Ende, Whitespace, oder Punctuation).
+  return keywords.some((kRaw) => {
+    const k = kRaw.toLowerCase();
+    if (sku === k) return true;
+    // Regex mit Wortgrenzen — \b funktioniert auch fuer
+    // unicode-Strings wenn die Keyword Letters ASCII sind.
+    const re = new RegExp(`(^|[^a-zäöüß])${escapeRegex(k)}([^a-zäöüß]|$)`, "i");
+    return re.test(sku);
+  });
+}
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 // ─── Defensive helpers ──────────────────────────────────────────
