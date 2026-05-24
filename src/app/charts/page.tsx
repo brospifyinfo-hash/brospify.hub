@@ -57,6 +57,8 @@ import {
   Shirt,
   Moon,
   Lightbulb,
+  Scale,
+  ShieldCheck,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -1072,6 +1074,205 @@ function ProduktRow({
   );
 }
 
+// ─── Compliance / Rechts-Disclaimer pro Kategorie ───────────────
+// User-Anforderung: bei jedem Produkt klar machen welche rechtlichen
+// Vorgaben relevant sind (CE, Kosmetikverordnung, Spielzeugrichtlinie,
+// LFGB, etc.). Plus ein generischer Block der IMMER greift.
+
+interface ComplianceHint {
+  severity: "low" | "medium" | "high";
+  items: string[];
+}
+
+const GENERIC_COMPLIANCE: string[] = [
+  "GPSR (EU-Produktsicherheitsverordnung 2023/988, gilt ab 13. Dezember 2024): Hersteller- und Lieferanten­angaben müssen auf Produkt/Verpackung stehen, Sicherheits­information in EU-Sprache, technische Dokumentation ist vorzuhalten.",
+  "Als EU-Importeur (bei Dropshipping aus Nicht-EU-Ländern bist DU faktisch oft Importeur) haftest du für die Produktkonformität — auch wenn die Ware direkt vom Hersteller versendet wird.",
+  "Verpackungsgesetz (VerpackG): Registrierung bei LUCID + Lizenzierung der Verpackung über ein duales System erforderlich, bevor du verkaufst.",
+  "Rechtssichere Pflichtangaben im Shop: Impressum, Datenschutz, Widerrufsbelehrung, AGB, Versandkosten- und Lieferzeit-Angaben, Grundpreis bei messbaren Mengen.",
+];
+
+const COMPLIANCE_HINTS: Record<string, ComplianceHint> = {
+  "Sport & Fitness": {
+    severity: "medium",
+    items: [
+      "Bei elektrisch betriebenen Geräten (Massagepistole, Vibrationstrainer, beheizte Kleidung): CE-Kennzeichnung, EMV-Prüfung (EMVG), ggf. Funkanlagengesetz (FuAG), WEEE/ElektroG-Registrierung mit EAR-Nummer erforderlich.",
+      "Sportgeräte mit Belastungs- oder Stützfunktion (Bandagen, Posture-Trainer): KEINE medizinischen Heilsaussagen ohne Medizinprodukte-Zulassung (MDR) machen.",
+      "Bei Geräten mit Akku/Lithium-Batterien: zusätzlich Batteriegesetz (BattG) und CE-Bewertung der Batterie.",
+      "Produkthaftpflicht-Versicherung empfohlen — Verletzungen am Sportgerät = Verkäuferhaftung.",
+    ],
+  },
+  "Beauty & Pflege": {
+    severity: "high",
+    items: [
+      "EG-Kosmetikverordnung 1223/2009: Vor Verkauf in der EU muss das Produkt im CPNP-Portal notifiziert sein, eine verantwortliche Person (Responsible Person) in der EU benannt sein, INCI-Liste auf Verpackung stehen.",
+      "Mindesthaltbarkeitsdatum + PAO-Symbol (Period After Opening) Pflichtangabe.",
+      "Die 26 deklarationspflichtigen Allergene müssen auf der Verpackung ausgewiesen sein.",
+      "KEINE medizinischen oder krankheitsbezogenen Wirkversprechen (sonst wird das Produkt zum Arzneimittel/Medizinprodukt mit eigener Zulassungspflicht).",
+      "Produkthaftung bei Hautreaktionen liegt beim Inverkehrbringer — Produkthaftpflicht-Versicherung dringend empfohlen.",
+    ],
+  },
+  "Haushalt & Ordnung": {
+    severity: "low",
+    items: [
+      "ProdSG (Produktsicherheitsgesetz): allgemeine Sicherheitsanforderungen gelten auch für Haushaltshelfer.",
+      "Bei elektrischen Geräten (Akku-Sauger, Reinigungsroboter): CE-Kennzeichnung + EMV + EAR/WEEE-Registrierung.",
+      "Bei Reinigungschemie oder Duftstoffen: Detergenzien-Verordnung, ggf. CLP-Kennzeichnung, Sicherheitsdatenblatt.",
+    ],
+  },
+  "Küche & Kochen": {
+    severity: "high",
+    items: [
+      "Lebensmittelkontakt-Materialien (Geschirr, Behälter, Backformen): müssen LFGB §31 / EU-Verordnung 1935/2004 entsprechen, Konformitätserklärung des Herstellers ist Pflicht.",
+      "Bei Kunststoffen zusätzlich Verordnung 10/2011 (Plastik-Migration), Bisphenol-A-Verbot bei Babyflaschen.",
+      "Elektrische Küchengeräte: CE, EMV, Niederspannungsrichtlinie, WEEE/ElektroG-Registrierung.",
+      "Bei scharfen Gegenständen (Messer, Schäler): Kennzeichnung mit Warnhinweisen.",
+    ],
+  },
+  "Gadgets & Tech": {
+    severity: "high",
+    items: [
+      "CE-Kennzeichnung Pflicht — du als Inverkehrbringer brauchst die EU-Konformitätserklärung des Herstellers.",
+      "Niederspannungsrichtlinie (LVD) + EMV-Richtlinie (EMVG) + ggf. Funkanlagengesetz (FuAG) bei Bluetooth/WLAN.",
+      "ElektroG: vor Verkauf EAR-Registrierung mit WEEE-Nummer, sonst Vertriebsverbot + Bußgeld.",
+      "Bei Akku-Geräten: Batteriegesetz (BattG) + Kennzeichnung + Rücknahme­pflicht.",
+      "Verpackungsgesetz + ggf. RoHS-Konformität (Schadstoff-Beschränkung).",
+      "GPSR: technische Dokumentation, Risikobewertung und 10 Jahre Aufbewahrung.",
+    ],
+  },
+  Haustier: {
+    severity: "medium",
+    items: [
+      "Bei Futter/Leckerli: Futtermittelrecht (Verordnung EG 767/2009), Einzelfuttermittel-Kennzeichnung, ggf. Registrierung beim zuständigen Veterinäramt.",
+      "Bei Tierarzneimitteln, Floh-/Zeckenmitteln mit Wirkstoff: Zulassung als Tierarzneimittel oder Biozid erforderlich — KEINE Heilsaussagen ohne Zulassung.",
+      "Spielzeug für Tiere unterliegt allgemeinen Sicherheitsanforderungen (ProdSG), bei Knabber-Artikeln Lebensmittelechtheit.",
+      "Bei elektrischen Pet-Gadgets (Futterautomat, GPS-Halsband): CE + EMVG + WEEE.",
+    ],
+  },
+  "Kinder & Baby": {
+    severity: "high",
+    items: [
+      "Spielzeugrichtlinie 2009/48/EG + DIN EN 71: CE-Kennzeichnung, mechanische/chemische/elektrische Sicherheits­tests, Konformitätserklärung des Herstellers Pflicht.",
+      "Altersfreigabe/Warnhinweise zwingend (z.B. 'Nicht für Kinder unter 3 Jahren').",
+      "Bei Babyartikeln mit Mundkontakt (Beißring, Schnuller): zusätzlich Lebensmittelechtheit nach LFGB.",
+      "Phthalate-Verbot bei Spielzeug für Kinder unter 3 Jahren (REACH Anhang XVII).",
+      "Stiftung-Warentest-/Öko-Test-Kontrolle möglich — Produkthaftpflicht-Versicherung essenziell.",
+    ],
+  },
+  "Auto & Outdoor": {
+    severity: "high",
+    items: [
+      "KFZ-Anbauteile (Beleuchtung, Spiegel, Reifen, Sitze): müssen ECE-Prüfzeichen tragen, sonst Erlöschen der Betriebs­erlaubnis (StVZO §19).",
+      "Bei elektrischen Komponenten zusätzlich EMV-Richtlinie 2014/30/EU + Automotive-EMC-Norm.",
+      "Camping-/Outdoor-Geräte mit Gas (Kocher, Heizer): EN 484/521, Druckgeräterichtlinie (PED), CE-Pflicht.",
+      "Fahrradzubehör (Lampen, Reflektoren): müssen StVZO §67 entsprechen + StVZO-Prüfzeichen tragen.",
+    ],
+  },
+  "Garten & Pflanzen": {
+    severity: "medium",
+    items: [
+      "Pflanzenschutzmittel: Zulassung durch BVL Pflicht — Vertrieb nur mit Zulassungsnummer, sonst Straftat.",
+      "Biozid-Produkte (Insektensprays, Schneckenkorn): Biozid-Verordnung 528/2012, EU-Zulassung erforderlich.",
+      "Bei elektrischen Garten­geräten (Akku-Rasenmäher, Heckenschere): CE + Maschinen­richtlinie 2006/42/EG + EMV + EAR/WEEE.",
+      "Bei Saatgut/Setzlingen: Saatgutverkehrsgesetz, ggf. Pflanzengesund­heits-Zeugnis bei Import aus Nicht-EU.",
+    ],
+  },
+  "Mode & Accessoires": {
+    severity: "medium",
+    items: [
+      "Textilkennzeichnungsverordnung (EU 1007/2011): Faserzusammensetzung in EU-Amtssprache auf dauerhaft angebrachtem Etikett.",
+      "Nickel-Verordnung (REACH Anhang XVII §27): Schmuck mit Hautkontakt darf max. 0,5 µg/cm²/Woche Nickel freisetzen.",
+      "Schmuck/Accessoires mit Blei oder Cadmium: REACH-Grenzwerte einhalten (zwingend bei China-Ware!).",
+      "Lederwaren: ggf. CITES-Bestimmungen bei exotischen Häuten, Chrom-VI-Grenzwert für Lederbekleidung (REACH).",
+    ],
+  },
+  "Wellness & Schlaf": {
+    severity: "high",
+    items: [
+      "ACHTUNG MEDIZINPRODUKTE: Geräte mit Wirkversprechen auf Gesundheit/Heilung (TENS, Massage mit medizinischer Aussage, EMS-Trainer) fallen unter die MDR (Verordnung 2017/745) — Konformitäts­bewertung + Notified Body, sonst Vertriebsverbot.",
+      "Aromatherapie/Diffusoren: bei Heil­versprechen wird's ein Arzneimittel (AMG), sonst nur Wellness-Bewerbung erlaubt.",
+      "Kosmetische Wellness-Produkte: gleiche Anforderungen wie Beauty (Kosmetikverordnung, CPNP).",
+      "Bei elektrischen Geräten (Diffusor, Massage­matte): CE + EMV + WEEE-Registrierung.",
+    ],
+  },
+  "Heim-Deko & Licht": {
+    severity: "medium",
+    items: [
+      "Leuchten: CE-Kennzeichnung + Niederspannungs­richtlinie + EMV-Richtlinie + RoHS (Schadstoff­beschränkung) + Ökodesign-Verordnung für LED.",
+      "Energielabel (EU 2019/2015): Pflicht für Beleuchtungs­mittel, muss vom Hersteller in der EPREL-Datenbank registriert sein.",
+      "Bei Akku-Lampen: zusätzlich Batteriegesetz (BattG) + EAR/WEEE.",
+      "Duftkerzen mit Bewegungs­melder/Elektronik: zusätzlich Brand­sicherheits-Norm (DIN EN 15493 für Kerzen).",
+    ],
+  },
+};
+
+function ComplianceBlock({ category }: { category: string }) {
+  const cat = (category || "").trim();
+  const hint = COMPLIANCE_HINTS[cat];
+  const sevColor = hint?.severity === "high"
+    ? "text-red-300 bg-red-500/10 border-red-500/25"
+    : hint?.severity === "medium"
+      ? "text-amber-300 bg-amber-500/10 border-amber-500/25"
+      : "text-zinc-300 bg-white/5 border-white/10";
+  const sevLabel = hint?.severity === "high"
+    ? "Hohe Compliance-Anforderung"
+    : hint?.severity === "medium"
+      ? "Mittlere Compliance-Anforderung"
+      : "Standard-Pflichten";
+  return (
+    <details className="rounded-xl border border-amber-500/15 bg-amber-500/[0.04] overflow-hidden">
+      <summary className="cursor-pointer select-none px-4 py-3 flex items-center gap-2 hover:bg-amber-500/[0.06] transition">
+        <Scale className="w-4 h-4 text-amber-300 shrink-0" />
+        <span className="text-sm font-semibold text-amber-100">
+          Rechtliche Hinweise &amp; Compliance
+        </span>
+        {hint && (
+          <span className={`ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${sevColor}`}>
+            <ShieldCheck className="w-2.5 h-2.5" />
+            {sevLabel}
+          </span>
+        )}
+      </summary>
+      <div className="px-4 pb-4 pt-1 space-y-4 border-t border-amber-500/10">
+        {hint && (
+          <div className="space-y-2">
+            <div className="text-[10px] uppercase tracking-widest text-amber-300/80 font-semibold">
+              Spezifisch für „{cat}"
+            </div>
+            <ul className="space-y-1.5">
+              {hint.items.map((item, i) => (
+                <li key={i} className="flex items-start gap-2 text-[11px] text-amber-100/90 leading-snug">
+                  <span className="text-amber-400 shrink-0 mt-0.5">•</span>
+                  <span dangerouslySetInnerHTML={{ __html: item }} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        <div className="space-y-2">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">
+            Gilt für alle Produkte
+          </div>
+          <ul className="space-y-1.5">
+            {GENERIC_COMPLIANCE.map((item, i) => (
+              <li key={i} className="flex items-start gap-2 text-[11px] text-zinc-300 leading-snug">
+                <span className="text-zinc-500 shrink-0 mt-0.5">•</span>
+                <span dangerouslySetInnerHTML={{ __html: item }} />
+              </li>
+            ))}
+          </ul>
+        </div>
+        <p className="text-[10px] text-zinc-500 italic leading-relaxed border-t border-amber-500/10 pt-3">
+          Dies sind allgemeine Hinweise und ersetzen KEINE Rechtsberatung. Bei
+          Unklarheiten unbedingt einen Anwalt für IT-/Vertriebsrecht oder die
+          zuständige Marktüberwachungs­behörde kontaktieren. Beim Dropshipping
+          aus Nicht-EU-Ländern bist du als Verkäufer faktisch Importeur und
+          haftest für die Konformität.
+        </p>
+      </div>
+    </details>
+  );
+}
+
 // ─── Hero-Banner: einzelner stärkster Pick prominent oben ───────
 function HeroBanner({
   produkt,
@@ -1851,6 +2052,9 @@ export default function ChartsPage() {
                     </span>
                   </p>
                 </div>
+
+                {/* ─── Rechts-Hinweise / Compliance ───────────── */}
+                <ComplianceBlock category={p.sku} />
 
                 {/* ─── Import-CTA (lebt jetzt im Detail-Modal) ─── */}
                 <div className="border-t border-zinc-800 pt-4 space-y-2">
