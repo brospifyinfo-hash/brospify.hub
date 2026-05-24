@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 // Bumpen wenn der Bug wieder auftaucht — Frontend zeigt das in der
 // Console, damit wir SOFORT sehen ob Vercel den neuen Code serviert.
-const HANDLER_VERSION = "v2026-05-24-verify-nonfatal";
+const HANDLER_VERSION = "v2026-05-24-update-not-append";
 
 async function requireAdmin() {
   const session = await getSession();

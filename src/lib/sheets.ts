@@ -1033,27 +1033,38 @@ export async function addProdukt(
   produkt: Omit<Produkt, "rowIndex">,
 ): Promise<{ rowIndex: number; updatedRange: string }> {
   const sheets = getSheets();
-  const res = await sheets.spreadsheets.values.append({
+
+  // Wir verlassen uns NICHT mehr auf das append+updatedRange-Spiel —
+  // das war zu unzuverlaessig (Sheets liefert manchmal A42, manchmal
+  // A42:H42, manchmal Make.com mischt sich ein). Stattdessen:
+  //
+  //   1. Lies Spalte A komplett. Die Zaehlung gibt uns die naechste
+  //      freie Zeile.
+  //   2. update() auf GENAU diese Zeile mit unseren 8 Werten.
+  //   3. Wir wissen ZWEIFELSFREI welche Zeile wir gerade geschrieben
+  //      haben — kein Regex-Glueck noetig.
+  const colA = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A:H",
+    range: "Produkte!A:A",
+  });
+  // values.length = Anzahl Zeilen mit Inhalt in Spalte A (inkl. Header).
+  // Die naechste leere Zeile ist eine drueber.
+  const usedRows = colA.data.values?.length || 0;
+  const newRowIndex = usedRows + 1; // +1 weil A1 row 1 ist, naechste = letzte+1
+
+  const range = `Produkte!A${newRowIndex}:H${newRowIndex}`;
+  const updateRes = await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range,
     valueInputOption: "RAW",
-    // Default-Verhalten (OVERWRITE) ist hier richtig: sucht die naechste
-    // freie Zeile in der Tabelle und schreibt dort. INSERT_ROWS hatten
-    // wir kurz probiert, hat aber Probleme gemacht.
     requestBody: { values: [produktToRow(produkt)] },
   });
-  // updatedRange ist eines von:
-  //   "Produkte!A42:H42"   (Standard nach append)
-  //   "'Produkte'!A42:H42" (escaped wenn Sheet-Name Sonderzeichen hat)
-  //   "Produkte!A42"        (manchmal nur eine Zelle)
-  // Wir extrahieren die ERSTE Zahl-die-direkt-nach-A-kommt aus dem String.
-  const updatedRange = res.data.updates?.updatedRange || "";
-  const match = updatedRange.match(/A(\d+)/);
-  const rowIndex = match ? Number(match[1]) : -1;
+
+  const updatedRange = updateRes.data.updatedRange || range;
   console.log(
-    `[addProdukt] updatedRange="${updatedRange}" rowIndex=${rowIndex} updatedRows=${res.data.updates?.updatedRows} updatedCells=${res.data.updates?.updatedCells}`,
+    `[addProdukt] usedRows=${usedRows} -> newRow=${newRowIndex} range="${range}" updatedCells=${updateRes.data.updatedCells}`,
   );
-  return { rowIndex, updatedRange };
+  return { rowIndex: newRowIndex, updatedRange };
 }
 
 // Liest eine spezifische Produkt-Zeile aus dem Sheet (per rowIndex).
