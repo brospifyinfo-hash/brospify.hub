@@ -74,6 +74,7 @@ interface ProduktLinks {
   aliExpressProduct?: string;
   aliExpressCategory?: string;
   dropshippingExample?: { url: string; title?: string };
+  dropshippingExamples?: { url: string; title?: string }[];
 }
 
 interface ProduktLinkStatus {
@@ -403,32 +404,53 @@ function AdsBlock({ ads }: { ads?: ProduktAds }) {
   );
 }
 
-// ─── Dropshipping shop example ──────────────────────────────────
+// ─── Dropshipping shop examples (multiple) ──────────────────────
 function DropshippingBlock({
-  example,
+  examples,
+  legacy,
   status,
 }: {
-  example?: { url: string; title?: string };
+  examples?: { url: string; title?: string }[];
+  legacy?: { url: string; title?: string };
   status?: boolean;
 }) {
-  if (!example?.url) return null;
+  // Merge: array bevorzugt, sonst Legacy-Singular einklappen.
+  const list = (examples && examples.length > 0)
+    ? examples
+    : (legacy?.url ? [legacy] : []);
+  if (list.length === 0) return null;
   const broken = status === false;
   return (
     <div className="space-y-2">
       <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
         <Store className="w-4 h-4 text-indigo-300" />
-        Beispiel Dropshipping-Shop
+        Beispiel Dropshipping-Shops
+        <span className="text-[10px] text-zinc-500 ml-auto tabular-nums">
+          {list.length} {list.length === 1 ? "Shop" : "Shops"}
+        </span>
       </h4>
-      <a
-        href={example.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-200 hover:bg-indigo-500/15 transition text-sm"
-      >
-        <Store className="w-4 h-4 shrink-0" />
-        <span className="flex-1 truncate">{example.title || example.url}</span>
-        <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-      </a>
+      <div className="space-y-1.5">
+        {list.map((ex) => {
+          let host = ex.url;
+          try { host = new URL(ex.url).hostname.replace(/^www\./, ""); } catch {}
+          return (
+            <a
+              key={ex.url}
+              href={ex.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-200 hover:bg-indigo-500/15 transition text-sm"
+            >
+              <Store className="w-4 h-4 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="truncate font-medium">{ex.title || host}</div>
+                <div className="truncate text-[10px] text-indigo-300/70 font-mono">{host}</div>
+              </div>
+              <ExternalLink className="w-3.5 h-3.5 shrink-0" />
+            </a>
+          );
+        })}
+      </div>
       {broken && <BrokenLinkHint />}
     </div>
   );
@@ -1493,47 +1515,47 @@ export default function ChartsPage() {
                 : "Probier einen anderen Suchbegriff oder deaktiviere den Filter."}
             </p>
           </div>
-        ) : (
+        ) : searchTerm.trim() === "" && !highMarginOnly ? (
+          // ─── Default: kuratierte Trend-Rows ─────────────────
+          // Keine flache Gesamtliste mehr unten — die kuratierten
+          // Rows sind die Hauptansicht. Jede Row zeigt Top 12 fuer
+          // ihr Signal, horizontal scrollbar.
           <>
-            {/* ─── Kuratierte Trend-Rows ─── */}
-            {/* Nicht nach Kategorien — sondern nach SIGNAL. Jede Row
-                 zeigt die Top 12 Produkte fuer ein bestimmtes Kriterium.
-                 Searchterm/Filter werden weiter respektiert. */}
-            {searchTerm.trim() === "" && !highMarginOnly &&
-              curatedRows.map((row) => (
-                <CuratedRow
-                  key={row.key}
-                  title={row.title}
-                  subtitle={row.subtitle}
-                  icon={row.icon}
-                  tint={row.tint}
-                  produkte={row.list}
-                  onInfo={(p) => setInfoModal({ open: true, produkt: p })}
-                />
-              ))}
-
-            {/* ─── Komplette Liste — bei aktivem Filter ODER zusaetzlich
-                 unten als "Alle Produkte"-Block. ─── */}
-            <div className="space-y-1.5 pt-2">
-              <div className="flex items-center gap-2 pb-1.5 border-b border-white/10">
-                <Hash className="w-3.5 h-3.5 text-zinc-300" />
-                <h2 className="text-[12px] font-bold uppercase tracking-widest text-zinc-200">
-                  Alle Produkte
-                </h2>
-                <span className="text-[10px] text-zinc-500">
-                  {filteredProdukte.length} {filteredProdukte.length === 1 ? "Produkt" : "Produkte"}
-                </span>
-              </div>
-              {filteredProdukte.map((produkt, idx) => (
-                <ProduktRow
-                  key={produkt.id}
-                  produkt={produkt}
-                  rank={idx + 1}
-                  onInfo={(p) => setInfoModal({ open: true, produkt: p })}
-                />
-              ))}
-            </div>
+            {curatedRows.map((row) => (
+              <CuratedRow
+                key={row.key}
+                title={row.title}
+                subtitle={row.subtitle}
+                icon={row.icon}
+                tint={row.tint}
+                produkte={row.list}
+                onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+              />
+            ))}
           </>
+        ) : (
+          // ─── Such- / Filter-Ergebnisse als Liste ─────────────
+          // Wenn Search oder Marge-Filter aktiv: nur die gefilterte
+          // Liste anzeigen (mit der gewaehlten Sortierung).
+          <div className="space-y-1.5 pt-1">
+            <div className="flex items-center gap-2 pb-1.5 border-b border-white/10">
+              <BarChart3 className="w-3.5 h-3.5 text-zinc-300" />
+              <h2 className="text-[12px] font-bold uppercase tracking-widest text-zinc-200">
+                Suchergebnisse
+              </h2>
+              <span className="text-[10px] text-zinc-500">
+                {filteredProdukte.length} {filteredProdukte.length === 1 ? "Treffer" : "Treffer"}
+              </span>
+            </div>
+            {filteredProdukte.map((produkt, idx) => (
+              <ProduktRow
+                key={produkt.id}
+                produkt={produkt}
+                rank={idx + 1}
+                onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+              />
+            ))}
+          </div>
         )}
       </main>
 
@@ -1616,9 +1638,10 @@ export default function ChartsPage() {
                 {/* ─── Beispiel-Ads (Social Media) ──────────────── */}
                 <AdsBlock ads={p.extra?.ads} />
 
-                {/* ─── Beispiel-Dropshipping-Shop ───────────────── */}
+                {/* ─── Beispiel-Dropshipping-Shops (mehrere) ───── */}
                 <DropshippingBlock
-                  example={p.extra?.links?.dropshippingExample}
+                  examples={p.extra?.links?.dropshippingExamples}
+                  legacy={p.extra?.links?.dropshippingExample}
                   status={p.extra?.linkStatus?.dropshippingExampleOk}
                 />
 

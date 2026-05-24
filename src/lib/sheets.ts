@@ -855,8 +855,12 @@ export interface ProduktLinks {
   aliExpressProduct?: string;
   /** Kategorie-Sucheinstieg auf AliExpress (immer ein /wholesale-Link). */
   aliExpressCategory?: string;
-  /** Beispielshop, der das Produkt bereits per Dropshipping verkauft. */
+  /** Legacy: einzelner Beispielshop. Wird beim Lesen in dropshippingExamples
+   *  gemerged, beim Schreiben nicht mehr gesetzt. */
   dropshippingExample?: ProduktDropshippingExample;
+  /** Mehrere Beispiel-Shops die das Produkt bereits per Dropshipping
+   *  verkaufen — gezielt selektierte echte Stores, keine Reviewer-Sites. */
+  dropshippingExamples?: ProduktDropshippingExample[];
 }
 
 export interface ProduktLinkStatus {

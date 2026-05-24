@@ -284,19 +284,17 @@ async function searchAdsForPlatform(
 }
 
 /**
- * Suche nach einem REALEN Dropshipping-Shop, der das Produkt verkauft.
+ * Suche nach MEHREREN echten Dropshipping-Shops, die das Produkt
+ * verkaufen. Ziel: 3-5 Stueck, alle eindeutige Shopify-Stores oder
+ * dropshipping-typische Buden — keine Reviewer-Seiten, keine grossen
+ * Brand-Shops, keine Marktplaetze.
  *
- * Wir wollen KEINE grossen Marken/Marktplaetze (Amazon, Walmart,
- * Target, Best Buy, etc.) und auch keine etablierten Brand-Shops (Nike,
- * Apple, IKEA…). Stattdessen: typische Dropshipping-Buden mit
- * Shopify-Untermerken (myshopify.com), klassische /products/ Slugs,
- * "Pay with PayPal/Klarna", "Worldwide free shipping" — die ueblichen
- * Indikatoren.
+ * Liefert eine Array, sortiert nach Confidence (Strong-Matches zuerst).
  */
-async function findDropshippingExample(
+async function findDropshippingExamples(
   apiKey: string,
   productQuery: string,
-): Promise<ProduktDropshippingExample | undefined> {
+): Promise<ProduktDropshippingExample[]> {
   // Definitiv KEIN Dropshipping-Shop.
   const BANNED = new RegExp(
     [
@@ -357,49 +355,62 @@ async function findDropshippingExample(
     "i",
   );
 
-  // Starke Dropshipping-Shop-Indikatoren (Shopify-Default-Pfade
-  // + typische Shop-Marker).
-  const STRONG_SHOP_HINT = /(myshopify\.com|\/products\/[^/]+|\/collections\/[^/]+|shopify-cdn|shopify-static|woocommerce|\.shop$|\.store$)/i;
-  // Weichere Indikatoren (irgendwas was nach Shop aussieht).
-  const SOFT_SHOP_HINT = /(buy|kaufen|cart|warenkorb|checkout|product|shop|store|order)/i;
+  // Starker Dropshipping-Shop-Match: muss EINER dieser Indikatoren
+  // sein. Wir sind hier bewusst restriktiv um Garbage rauszuhalten.
+  const STRONG_SHOP_HINT = /(myshopify\.com|\/products\/[a-z0-9-]{3,}|\/collections\/[a-z0-9-]{3,}|shopify-cdn|shopify-static|woocommerce|\.shop\/|\.store\/)/i;
 
   let results: TavilyResult[] = [];
   try {
     const settled = await Promise.allSettled([
-      // 1) Klassischer Dropship-Style: /products/<slug> auf Shopify
-      tavilySearch(apiKey, `${productQuery} site:myshopify.com OR inurl:/products/`, "advanced", 10, false),
-      // 2) Typische Dropshipping-Marker im Text
-      tavilySearch(apiKey, `${productQuery} "free worldwide shipping" "add to cart"`, "basic", 8, false),
-      // 3) Buy-Intent generisch (fuer den Fallback)
-      tavilySearch(apiKey, `${productQuery} buy online dropshipping store`, "basic", 8, false),
+      // 1) Shopify Stores mit /products/ slugs (klassisch)
+      tavilySearch(apiKey, `${productQuery} inurl:/products/`, "advanced", 10, false),
+      // 2) Direkt site:myshopify.com
+      tavilySearch(apiKey, `${productQuery} site:myshopify.com`, "advanced", 10, false),
+      // 3) Klare Shop-Marker (Trust-Signale)
+      tavilySearch(apiKey, `${productQuery} "free worldwide shipping" "add to cart" -review -best`, "basic", 10, false),
+      // 4) Dropshipping-typische Domains
+      tavilySearch(apiKey, `${productQuery} "powered by shopify"`, "basic", 8, false),
     ]);
     for (const s of settled) {
       if (s.status === "fulfilled") results.push(...s.value.results);
     }
   } catch (e) {
-    console.warn("[Discover] dropshipping example search failed:", e);
+    console.warn("[Discover] dropshipping examples search failed:", e);
   }
-  results = results.filter((r) => r.url && !BANNED.test(r.url));
 
-  // 1. Versuch: starke Shopify-Indikatoren (myshopify, /products/ etc.)
-  for (const r of results) {
-    if (STRONG_SHOP_HINT.test(r.url)) {
-      console.log(`[Discover] dropshipping STRONG match: ${r.url}`);
-      return { url: r.url, title: r.title || "" };
+  // Domain-basiertes Dedupliziertes Sammeln. Ein Shop pro Domain.
+  const byDomain = new Map<string, ProduktDropshippingExample>();
+  function domainOf(url: string): string {
+    try {
+      return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    } catch {
+      return url;
     }
   }
-  // 2. Versuch: weiche Shop-Indikatoren + Title-Heuristik
-  for (const r of results) {
-    if (SOFT_SHOP_HINT.test(r.url) || SOFT_SHOP_HINT.test(r.title)) {
-      console.log(`[Discover] dropshipping SOFT match: ${r.url}`);
-      return { url: r.url, title: r.title || "" };
-    }
+  function looksReviewy(title: string, url: string): boolean {
+    const t = (title || "").toLowerCase();
+    const u = url.toLowerCase();
+    // Typische Review/Listicle-Signale
+    return (
+      /(\d+ best|top \d+|review|guide|listicle|comparison|vs\.?|tested|ranked)/.test(t) ||
+      /\/blog\/|\/article\/|\/news\/|\/guides?\//i.test(u)
+    );
   }
-  // 3. Kein guter Treffer — wir geben lieber NICHTS zurueck als einen
-  // unpassenden Link (z.B. einen Reviewer-Artikel). User-UI zeigt dann
-  // einfach den Dropshipping-Block nicht an.
-  console.log("[Discover] no good dropshipping example found");
-  return undefined;
+
+  for (const r of results) {
+    if (!r.url) continue;
+    if (BANNED.test(r.url)) continue;
+    if (!STRONG_SHOP_HINT.test(r.url)) continue;
+    if (looksReviewy(r.title, r.url)) continue;
+    const d = domainOf(r.url);
+    if (byDomain.has(d)) continue;
+    byDomain.set(d, { url: r.url, title: r.title || "" });
+    if (byDomain.size >= 5) break;
+  }
+
+  const out = Array.from(byDomain.values());
+  console.log(`[Discover] found ${out.length} dropshipping examples`);
+  return out;
 }
 
 // ─── Output schemas ──────────────────────────────────────────────
@@ -732,7 +743,7 @@ Antworte NUR mit JSON, ohne weiteren Text:
       // haben, wenn die AliExpress-Extract-Bilder im Browser blocken
       // (Referer-Header / Hotlink-Sperre).
       tavilySearch(tavilyKey, `${imageQuery} product photo`, "basic", 10, true),
-      findDropshippingExample(tavilyKey, imageQuery),
+      findDropshippingExamples(tavilyKey, imageQuery),
       ...adPlatforms.map((p) => searchAdsForPlatform(tavilyKey, p, imageQuery)),
     ]);
 
@@ -747,8 +758,9 @@ Antworte NUR mit JSON, ohne weiteren Text:
       aliRes.status === "fulfilled" ? aliRes.value.results : [];
     const imageSearchImages: string[] =
       imageRes.status === "fulfilled" ? imageRes.value.images : [];
-    const dropExample: ProduktDropshippingExample | undefined =
-      dropExampleResult.status === "fulfilled" ? dropExampleResult.value : undefined;
+    const dropExamples: ProduktDropshippingExample[] =
+      dropExampleResult.status === "fulfilled" ? dropExampleResult.value : [];
+    const dropExample = dropExamples[0]; // erster fuer Legacy-Status-Check
 
     // Ads zurück zu ihrer Plattform mappen
     const ads: ProduktAds = {};
@@ -974,7 +986,10 @@ Antworte NUR mit JSON:
         links: {
           aliExpressProduct,
           aliExpressCategory,
+          // Backwards-compat: erster Shop in Singular-Feld duplizieren.
           dropshippingExample: dropExample,
+          // Neue Array-Form: alle gefundenen Shops.
+          dropshippingExamples: dropExamples,
         },
         ads,
         linkStatus,

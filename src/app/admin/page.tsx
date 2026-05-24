@@ -40,7 +40,10 @@ interface ProduktAds {
 interface ProduktLinks {
   aliExpressProduct?: string;
   aliExpressCategory?: string;
+  /** Legacy: einzelner Shop. */
   dropshippingExample?: { url: string; title?: string };
+  /** Neu: mehrere Shops. */
+  dropshippingExamples?: { url: string; title?: string }[];
 }
 
 interface ProduktLinkStatus {
@@ -434,6 +437,8 @@ export default function AdminPage() {
   const [aiEvidence, setAiEvidence] = useState("");
   const [aiDepth, setAiDepth] = useState<"schnell" | "gruendlich">("schnell");
   const [aiKategorie, setAiKategorie] = useState("");
+  const [urlImportUrl, setUrlImportUrl] = useState("");
+  const [urlImporting, setUrlImporting] = useState(false);
   type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
@@ -1589,6 +1594,51 @@ export default function AdminPage() {
       setEditModal(true);
     } catch { setError("KI-Produktsuche fehlgeschlagen."); }
     finally { setAiDiscovering(false); }
+  }
+
+  // URL-basierte KI-Discovery: Admin gibt einen Link (Insta-Reel,
+  // TikTok-Video, Shopify-Produkt, AliExpress-Item), die KI extrahiert
+  // alle Daten drumherum (Bilder, Ads, Shops, Audience, Strategie).
+  // Fuellt dieselbe Edit-Modal wie die normale Discovery.
+  async function handleUrlDiscover() {
+    const url = urlImportUrl.trim();
+    if (!url || !/^https?:\/\//i.test(url)) {
+      setError("Bitte eine gueltige URL angeben (https://…).");
+      return;
+    }
+    setUrlImporting(true); setError(""); setSuccess(""); setAiEvidence("");
+    try {
+      const res = await fetch("/api/admin/products/discover-from-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "URL-Discovery fehlgeschlagen."); return; }
+      const p = data.produkt || {};
+      setEditProduct({
+        id: "",
+        sku: p.sku || "",
+        monat: "",
+        titel: p.titel || "",
+        beschreibung: p.beschreibung || "",
+        aliExpressLink: p.aliExpressLink || p.links?.aliExpressProduct || "",
+        images: Array.isArray(p.images) ? p.images : [],
+        stats: { ...EMPTY.stats, ...(p.stats || {}) },
+        finances: { ...EMPTY.finances, ...(p.finances || {}) },
+        links: p.links,
+        ads: p.ads,
+        linkStatus: p.linkStatus,
+        deepStats: p.deepStats,
+        audience: p.audience,
+        adStrategy: p.adStrategy,
+      });
+      setIsNew(true);
+      setAiEvidence(data.viralEvidence || "");
+      setEditModal(true);
+      setUrlImportUrl(""); // Input leeren nach Erfolg
+    } catch { setError("URL-Discovery fehlgeschlagen."); }
+    finally { setUrlImporting(false); }
   }
 
   // KI-Re-Discovery: generiert die KI-Daten für ein BESTEHENDES
@@ -3126,7 +3176,7 @@ export default function AdminPage() {
         {activeTab === "products" && (
           <AdminErrorBoundary label="Produkte">
         <>
-        <div className="flex flex-wrap gap-3 mb-6">
+        <div className="flex flex-wrap gap-3 mb-3">
           <button onClick={openNew} className="flex items-center gap-2 px-4 py-2.5 btn-accent rounded-xl text-sm font-medium"><Plus className="w-4 h-4" />Produkt hinzuf&uuml;gen</button>
           <input list="kategorie-liste" value={aiKategorie} onChange={(e) => setAiKategorie(e.target.value)} disabled={aiDiscovering} placeholder="Kategorie (optional)" className="px-3 py-2.5 glass border border-white/10 rounded-xl text-sm text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50" />
           <datalist id="kategorie-liste">{KATEGORIE_OPTIONS.map((k) => <option key={k} value={k} />)}</datalist>
@@ -3146,6 +3196,30 @@ export default function AdminPage() {
           <button onClick={handleRepairProducts} disabled={repairRunning} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-red-500/10 border border-red-500/25 text-red-200 hover:bg-red-500/15 transition disabled:opacity-50" title="Tauscht vertauschte Titel/Preis-Felder. Erst Dry-Run, dann commit.">
             {repairRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wand2 className="w-4 h-4" />}
             Daten reparieren
+          </button>
+        </div>
+
+        {/* ─── URL-basierte Discovery ────────────────────────── */}
+        {/* Admin gibt einen Insta/TikTok/Shopify/AliExpress-Link an,
+            KI extrahiert das Produkt drumherum + Ads + Shops. */}
+        <div className="flex flex-wrap items-center gap-2 mb-6 p-2.5 rounded-xl bg-pink-500/[0.04] border border-pink-500/20">
+          <Link2 className="w-4 h-4 text-pink-300 shrink-0 ml-1" />
+          <span className="text-xs text-pink-200 font-semibold shrink-0">Aus URL importieren:</span>
+          <input
+            type="url"
+            value={urlImportUrl}
+            onChange={(e) => setUrlImportUrl(e.target.value)}
+            disabled={urlImporting}
+            placeholder="https://www.tiktok.com/@…/video/… ODER Insta-Reel ODER Shopify-Produkt-URL"
+            className="flex-1 min-w-[260px] px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-white focus:outline-none focus:ring-2 focus:ring-pink-500 disabled:opacity-50 font-mono"
+          />
+          <button
+            onClick={handleUrlDiscover}
+            disabled={urlImporting || !urlImportUrl.trim()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-pink-500/20 border border-pink-500/35 text-pink-100 hover:bg-pink-500/30 transition disabled:opacity-50"
+          >
+            {urlImporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+            Analysieren
           </button>
         </div>
 
@@ -3541,22 +3615,38 @@ function LinksAdsEditor({
     { key: "youtube", label: "YouTube" },
   ];
 
-  function setLink(field: keyof ProduktLinks, value: string) {
+  function setAliField(field: "aliExpressCategory" | "aliExpressProduct", value: string) {
     const next: ProduktLinks = { ...(links || {}) };
-    if (field === "dropshippingExample") {
-      next.dropshippingExample = value ? { url: value, title: links?.dropshippingExample?.title } : undefined;
+    next[field] = value || undefined;
+    onLinksChange(next);
+  }
+  function setShopsText(raw: string) {
+    // Format: pro Zeile "URL | Optionaler Titel"
+    const examples = raw.split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [u, ...titleParts] = line.split("|").map((s) => s.trim());
+        return { url: u, title: titleParts.join("|").trim() || undefined };
+      })
+      .filter((s) => /^https?:\/\//i.test(s.url));
+    const next: ProduktLinks = { ...(links || {}) };
+    if (examples.length === 0) {
+      delete next.dropshippingExamples;
+      delete next.dropshippingExample;
     } else {
-      next[field] = value || undefined;
+      next.dropshippingExamples = examples;
+      next.dropshippingExample = examples[0]; // Legacy-Mirror
     }
     onLinksChange(next);
   }
-  function setDropshippingTitle(value: string) {
-    const next: ProduktLinks = { ...(links || {}) };
-    if (next.dropshippingExample) {
-      next.dropshippingExample = { ...next.dropshippingExample, title: value };
-    }
-    onLinksChange(next);
-  }
+  // Initial-Wert fuer Textarea: aus dropshippingExamples ODER Legacy.
+  const shopsText = (() => {
+    const list = (links?.dropshippingExamples && links.dropshippingExamples.length > 0)
+      ? links.dropshippingExamples
+      : (links?.dropshippingExample?.url ? [links.dropshippingExample] : []);
+    return list.map((s) => s.title ? `${s.url} | ${s.title}` : s.url).join("\n");
+  })();
   function setPlatformUrls(key: keyof ProduktAds, raw: string) {
     const urls = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
     const next: ProduktAds = { ...(ads || {}) };
@@ -3583,33 +3673,25 @@ function LinksAdsEditor({
             <input
               type="text"
               value={links?.aliExpressCategory || ""}
-              onChange={(e) => setLink("aliExpressCategory", e.target.value)}
+              onChange={(e) => setAliField("aliExpressCategory", e.target.value)}
               placeholder="https://www.aliexpress.com/wholesale?SearchText=..."
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-[11px]"
             />
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Dropshipping-Shop URL</label>
-              <input
-                type="text"
-                value={links?.dropshippingExample?.url || ""}
-                onChange={(e) => setLink("dropshippingExample", e.target.value)}
-                placeholder="https://shop.myshopify.com/products/..."
-                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-[11px]"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-zinc-400 mb-1">Dropshipping-Shop Titel</label>
-              <input
-                type="text"
-                value={links?.dropshippingExample?.title || ""}
-                onChange={(e) => setDropshippingTitle(e.target.value)}
-                placeholder="z. B. Best Treadmills Online"
-                disabled={!links?.dropshippingExample?.url}
-                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 text-[11px]"
-              />
-            </div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">
+              Dropshipping-Shops (eine URL pro Zeile, optional <code className="text-zinc-500">| Titel</code>)
+            </label>
+            <textarea
+              defaultValue={shopsText}
+              onBlur={(e) => setShopsText(e.target.value)}
+              rows={4}
+              placeholder={"https://example.myshopify.com/products/cool-thing | Cool Things Store\nhttps://another-shop.com/products/cool-thing"}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono text-[10px]"
+            />
+            <p className="text-[10px] text-zinc-600 mt-1">
+              Format pro Zeile: <code>URL | optionaler Titel</code>. Speichern beim Verlassen des Felds.
+            </p>
           </div>
         </div>
 
