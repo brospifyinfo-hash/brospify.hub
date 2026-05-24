@@ -124,6 +124,12 @@ interface ProduktAdStrategy {
   testDurationDays?: number;
 }
 
+interface ProduktVotes {
+  ups?: number;
+  downs?: number;
+  manualBoost?: number;
+}
+
 interface Produkt {
   id: string;
   sku: string;
@@ -142,11 +148,18 @@ interface Produkt {
     deepStats?: ProduktDeepStats;
     audience?: ProduktAudience;
     adStrategy?: ProduktAdStrategy;
+    votes?: ProduktVotes;
   };
 }
 
+/** Score = ups - downs + manualBoost. */
+function voteScore(v?: ProduktVotes): number {
+  if (!v) return 0;
+  return (v.ups ?? 0) - (v.downs ?? 0) + (v.manualBoost ?? 0);
+}
+
 // Sortier-Keys für die UI-Toolbar.
-type SortKey = "trend" | "viral" | "margin" | "growth" | "lowCompetition";
+type SortKey = "trend" | "viral" | "margin" | "growth" | "lowCompetition" | "popular";
 
 const MONTH_LABEL_DE = [
   "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
@@ -978,10 +991,16 @@ function StatTile({
 function ProduktRow({
   produkt,
   rank,
+  votes,
+  userVote,
+  onVote,
   onInfo,
 }: {
   produkt: Produkt;
   rank: number;
+  votes: ProduktVotes;
+  userVote: "up" | "down" | null;
+  onVote: (id: string, direction: "up" | "down") => void;
   onInfo: (p: Produkt) => void;
 }) {
   const price =
@@ -1058,10 +1077,13 @@ function ProduktRow({
           ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-1 shrink-0">
-        {/* EIN Button pro Produkt: oeffnet das Detail-Modal. Der
-            Import-Button lebt jetzt INNERHALB des Modals (zusammen
-            mit allen anderen Aktionen). */}
+      <div className="flex items-center gap-1.5 shrink-0">
+        <VoteButtons
+          votes={votes}
+          userVote={userVote}
+          onVote={(d) => onVote(produkt.id, d)}
+          size="sm"
+        />
         <button
           onClick={() => onInfo(produkt)}
           className="px-2.5 py-1.5 text-zinc-200 bg-white/5 border border-white/10 hover:bg-white/10 rounded-md flex items-center gap-1.5 text-xs font-medium transition"
@@ -1070,6 +1092,66 @@ function ProduktRow({
           <span className="hidden sm:inline">Details</span>
         </button>
       </div>
+    </div>
+  );
+}
+
+// ─── Vote-Buttons (Pfeil hoch / Pfeil runter + Score) ──────────
+// Klassischer Reddit-Style: ein Pfeil hoch, ein Pfeil runter, in der
+// Mitte der Score (ups - downs + manualBoost). Klick auf Pfeil setzt
+// Stimme; nochmal derselbe Pfeil = Stimme zurueck; anderer Pfeil =
+// Wechsel.
+function VoteButtons({
+  votes,
+  userVote,
+  onVote,
+  size = "sm",
+}: {
+  votes: ProduktVotes;
+  userVote: "up" | "down" | null;
+  onVote: (direction: "up" | "down") => void;
+  size?: "sm" | "md";
+}) {
+  const s = voteScore(votes);
+  const isCompact = size === "sm";
+  const iconCls = isCompact ? "w-3.5 h-3.5" : "w-4 h-4";
+  const padCls = isCompact ? "p-1" : "p-1.5";
+  const scoreCls = isCompact ? "text-[11px] min-w-[28px]" : "text-sm min-w-[32px]";
+  const upActive = userVote === "up";
+  const downActive = userVote === "down";
+  return (
+    <div className="inline-flex items-center gap-0.5 rounded-md bg-white/[0.04] border border-white/10">
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onVote("up"); }}
+        title="Hochpushen"
+        className={`${padCls} rounded-l-md transition ${
+          upActive
+            ? "text-emerald-300 bg-emerald-500/15"
+            : "text-zinc-400 hover:text-emerald-300 hover:bg-white/5"
+        }`}
+      >
+        <ArrowUpRight className={iconCls} />
+      </button>
+      <span
+        className={`${scoreCls} text-center font-bold tabular-nums ${
+          s > 0 ? "text-emerald-300" : s < 0 ? "text-red-300" : "text-zinc-400"
+        }`}
+      >
+        {s > 0 ? `+${s}` : s}
+      </span>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onVote("down"); }}
+        title="Runter pushen"
+        className={`${padCls} rounded-r-md transition ${
+          downActive
+            ? "text-red-300 bg-red-500/15"
+            : "text-zinc-400 hover:text-red-300 hover:bg-white/5"
+        }`}
+      >
+        <ArrowDownRight className={iconCls} />
+      </button>
     </div>
   );
 }
@@ -1367,6 +1449,9 @@ function CuratedRow({
   icon: Icon,
   tint,
   produkte: list,
+  getVotes,
+  userVotes,
+  onVote,
   onInfo,
 }: {
   title: string;
@@ -1374,6 +1459,9 @@ function CuratedRow({
   icon: typeof Flame;
   tint: string;
   produkte: Produkt[];
+  getVotes: (p: Produkt) => ProduktVotes;
+  userVotes: Record<string, "up" | "down">;
+  onVote: (id: string, direction: "up" | "down") => void;
   onInfo: (p: Produkt) => void;
 }) {
   return (
@@ -1397,6 +1485,9 @@ function CuratedRow({
             produkt={produkt}
             rank={idx + 1}
             tint={tint}
+            votes={getVotes(produkt)}
+            userVote={userVotes[produkt.id] || null}
+            onVote={onVote}
             onClick={() => onInfo(produkt)}
           />
         ))}
@@ -1409,11 +1500,17 @@ function CuratedCard({
   produkt,
   rank,
   tint,
+  votes,
+  userVote,
+  onVote,
   onClick,
 }: {
   produkt: Produkt;
   rank: number;
   tint: string;
+  votes: ProduktVotes;
+  userVote: "up" | "down" | null;
+  onVote: (id: string, direction: "up" | "down") => void;
   onClick: () => void;
 }) {
   const price =
@@ -1422,44 +1519,58 @@ function CuratedCard({
       ? Number(produkt.preis)
       : 0);
   const trend = produkt.extra?.stats?.trendScore ?? 0;
+  // <div> als Container (kein <button> wegen geschachteltem Vote-
+  // Button — sonst invalid HTML). Klick auf die Karte oeffnet das
+  // Detail-Modal; die Vote-Buttons sind eine separate Klickzone.
   return (
-    <button
-      onClick={onClick}
-      className="shrink-0 w-44 snap-start text-left rounded-xl overflow-hidden border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 transition group"
-    >
-      <div className="relative aspect-video bg-white/5 overflow-hidden">
-        <Thumb src={produkt.bildUrl} />
-        <div
-          className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold tabular-nums backdrop-blur-md border"
-          style={{ background: `${tint}25`, color: tint, borderColor: `${tint}40` }}
-        >
-          {rank}
+    <div className="shrink-0 w-44 snap-start rounded-xl overflow-hidden border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 transition group flex flex-col">
+      <button
+        type="button"
+        onClick={onClick}
+        className="text-left"
+      >
+        <div className="relative aspect-video bg-white/5 overflow-hidden">
+          <Thumb src={produkt.bildUrl} />
+          <div
+            className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold tabular-nums backdrop-blur-md border"
+            style={{ background: `${tint}25`, color: tint, borderColor: `${tint}40` }}
+          >
+            {rank}
+          </div>
         </div>
-      </div>
-      <div className="p-2 space-y-1">
-        <h3 className="text-[11px] font-semibold text-zinc-100 leading-tight line-clamp-2 min-h-[2.5em]">
-          {displayTitle(produkt)}
-        </h3>
-        <div className="flex items-center gap-1.5">
-          {price > 0 ? (
-            <span
-              className="text-xs font-bold text-[#95BF47] tabular-nums"
-              title="Preis kann schwanken"
-            >
-              {price}€<span className="text-[8px] text-zinc-500 ml-0.5">~</span>
-            </span>
-          ) : (
-            <span className="text-[10px] text-zinc-500 italic">Preis folgt</span>
-          )}
-          {trend > 0 && (
-            <span className="ml-auto inline-flex items-center gap-0.5 text-[9px] text-emerald-300 bg-emerald-500/10 px-1 py-0.5 rounded-full font-semibold">
-              <Zap className="w-2.5 h-2.5" />
-              {trend}%
-            </span>
-          )}
+        <div className="p-2 space-y-1">
+          <h3 className="text-[11px] font-semibold text-zinc-100 leading-tight line-clamp-2 min-h-[2.5em]">
+            {displayTitle(produkt)}
+          </h3>
+          <div className="flex items-center gap-1.5">
+            {price > 0 ? (
+              <span
+                className="text-xs font-bold text-[#95BF47] tabular-nums"
+                title="Preis kann schwanken"
+              >
+                {price}€<span className="text-[8px] text-zinc-500 ml-0.5">~</span>
+              </span>
+            ) : (
+              <span className="text-[10px] text-zinc-500 italic">Preis folgt</span>
+            )}
+            {trend > 0 && (
+              <span className="ml-auto inline-flex items-center gap-0.5 text-[9px] text-emerald-300 bg-emerald-500/10 px-1 py-0.5 rounded-full font-semibold">
+                <Zap className="w-2.5 h-2.5" />
+                {trend}%
+              </span>
+            )}
+          </div>
         </div>
+      </button>
+      <div className="px-2 pb-2 mt-auto">
+        <VoteButtons
+          votes={votes}
+          userVote={userVote}
+          onVote={(d) => onVote(produkt.id, d)}
+          size="sm"
+        />
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -1489,6 +1600,10 @@ export default function ChartsPage() {
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [hasShopifyToken, setHasShopifyToken] = useState(false);
+  // votedProducts: { [produktId]: "up" | "down" } — fuer Pfeil-Highlight
+  const [userVotes, setUserVotes] = useState<Record<string, "up" | "down">>({});
+  // Optimistic-Update-Tracker fuer Votes (Score-Delta pro Produkt)
+  const [voteOverrides, setVoteOverrides] = useState<Record<string, ProduktVotes>>({});
   const [searchTerm, setSearchTerm] = useState("");
   const [highMarginOnly, setHighMarginOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("trend");
@@ -1516,7 +1631,92 @@ export default function ChartsPage() {
       setHasShopifyToken(data.hasShopifyToken || false);
     });
     loadProducts();
+    // Pre-load: welche Produkte hat dieser User bereits gevotet?
+    fetch("/api/products/my-votes")
+      .then((r) => r.json())
+      .then((d) => setUserVotes(d.votes || {}))
+      .catch(() => {});
   }, [loadProducts, router]);
+
+  // Vote-Handler — optimistic update + Server-Roundtrip
+  async function handleVote(produktId: string, direction: "up" | "down") {
+    const prev = userVotes[produktId];
+    const produkt = produkte.find((p) => p.id === produktId);
+    if (!produkt) return;
+    const currentVotes: ProduktVotes =
+      voteOverrides[produktId] || produkt.extra?.votes || { ups: 0, downs: 0 };
+    let ups = currentVotes.ups ?? 0;
+    let downs = currentVotes.downs ?? 0;
+    let newVote: "up" | "down" | null = direction;
+    if (prev === direction) {
+      // Toggle: gleiche Richtung -> Vote zuruecknehmen
+      if (direction === "up") ups = Math.max(0, ups - 1);
+      else downs = Math.max(0, downs - 1);
+      newVote = null;
+    } else {
+      if (prev === "up") ups = Math.max(0, ups - 1);
+      else if (prev === "down") downs = Math.max(0, downs - 1);
+      if (direction === "up") ups += 1;
+      else downs += 1;
+    }
+    // Optimistic
+    setVoteOverrides((m) => ({
+      ...m,
+      [produktId]: { ups, downs, manualBoost: currentVotes.manualBoost },
+    }));
+    setUserVotes((m) => {
+      const next = { ...m };
+      if (newVote) next[produktId] = newVote;
+      else delete next[produktId];
+      return next;
+    });
+    // Server-Call
+    try {
+      const res = await fetch("/api/products/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ produktId, direction }),
+      });
+      if (res.ok) {
+        const d = await res.json();
+        // Server-Wahrheit uebernehmen (kann minimal abweichen)
+        setVoteOverrides((m) => ({
+          ...m,
+          [produktId]: {
+            ups: d.ups,
+            downs: d.downs,
+            manualBoost: d.manualBoost,
+          },
+        }));
+        setUserVotes((m) => {
+          const next = { ...m };
+          if (d.userVote) next[produktId] = d.userVote;
+          else delete next[produktId];
+          return next;
+        });
+      } else {
+        // Rollback bei Fehler
+        setUserVotes((m) => {
+          const next = { ...m };
+          if (prev) next[produktId] = prev;
+          else delete next[produktId];
+          return next;
+        });
+        setVoteOverrides((m) => {
+          const next = { ...m };
+          delete next[produktId];
+          return next;
+        });
+      }
+    } catch {
+      // ignore — optimistic stays, will reconcile on reload
+    }
+  }
+
+  /** Score fuer ein Produkt — aus Overrides falls vorhanden, sonst Sheet. */
+  function getProduktVotes(p: Produkt): ProduktVotes {
+    return voteOverrides[p.id] || p.extra?.votes || {};
+  }
 
   async function handleImport(produkt: Produkt) {
     if (!hasShopifyToken) return;
@@ -1563,9 +1763,11 @@ export default function ChartsPage() {
         if (ca !== cb) return ca - cb;
         return (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0);
       },
+      popular: (a, b) => voteScore(getProduktVotes(b)) - voteScore(getProduktVotes(a)),
     };
     return [...base].sort(sorters[sortKey]);
-  }, [produkte, searchTerm, highMarginOnly, sortKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produkte, searchTerm, highMarginOnly, sortKey, voteOverrides]);
   const totalProducts = produkte.length;
 
   // Stats-Overview-Strip oben auf der Seite. Aggregiert über die
@@ -1626,6 +1828,10 @@ export default function ChartsPage() {
     const byViral = [...filteredProdukte].sort(
       (a, b) => (b.extra?.stats?.viralScore ?? 0) - (a.extra?.stats?.viralScore ?? 0),
     );
+    const byPopular = [...filteredProdukte].sort(
+      (a, b) => voteScore(getProduktVotes(b)) - voteScore(getProduktVotes(a)),
+    );
+    const anyVotes = byPopular.some((p) => voteScore(getProduktVotes(p)) !== 0);
 
     return [
       {
@@ -1636,6 +1842,17 @@ export default function ChartsPage() {
         tint: "#F97316",
         list: byTrend.slice(0, 12),
       },
+      // Nur rendern wenn ueberhaupt schon jemand abgestimmt hat
+      ...(anyVotes
+        ? [{
+            key: "popular",
+            title: "Beliebteste bei Brospify",
+            subtitle: "Vom Brospify-Community per Up-/Downvote bewertet",
+            icon: ArrowUpRight,
+            tint: "#FBBF24",
+            list: byPopular.slice(0, 12),
+          }]
+        : []),
       {
         key: "viral",
         title: "Social-Media-Viralität",
@@ -1823,6 +2040,7 @@ export default function ChartsPage() {
                 <option value="margin">Alle: Marge</option>
                 <option value="growth">Alle: Wachstum</option>
                 <option value="lowCompetition">Alle: Wenig Konkurrenz</option>
+                <option value="popular">Alle: Beliebteste</option>
               </select>
             </div>
             <button
@@ -1888,6 +2106,9 @@ export default function ChartsPage() {
                 icon={row.icon}
                 tint={row.tint}
                 produkte={row.list}
+                getVotes={getProduktVotes}
+                userVotes={userVotes}
+                onVote={handleVote}
                 onInfo={(p) => setInfoModal({ open: true, produkt: p })}
               />
             ))}
@@ -1911,6 +2132,9 @@ export default function ChartsPage() {
                 icon={row.icon}
                 tint={row.tint}
                 produkte={row.list}
+                getVotes={getProduktVotes}
+                userVotes={userVotes}
+                onVote={handleVote}
                 onInfo={(p) => setInfoModal({ open: true, produkt: p })}
               />
             ))}
@@ -1931,6 +2155,9 @@ export default function ChartsPage() {
                 key={produkt.id}
                 produkt={produkt}
                 rank={idx + 1}
+                votes={getProduktVotes(produkt)}
+                userVote={userVotes[produkt.id] || null}
+                onVote={handleVote}
                 onInfo={(p) => setInfoModal({ open: true, produkt: p })}
               />
             ))}
@@ -1965,7 +2192,17 @@ export default function ChartsPage() {
 
               <div className="p-6 space-y-6">
                 <div>
-                  <h3 className="text-xl font-bold leading-tight">{displayTitle(p)}</h3>
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-xl font-bold leading-tight flex-1 min-w-0">{displayTitle(p)}</h3>
+                    <div className="shrink-0">
+                      <VoteButtons
+                        votes={getProduktVotes(p)}
+                        userVote={userVotes[p.id] || null}
+                        onVote={(d) => handleVote(p.id, d)}
+                        size="md"
+                      />
+                    </div>
+                  </div>
                   {p.beschreibung && <div className="text-sm text-zinc-400 mt-2 leading-relaxed [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-zinc-200 [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-semibold [&_h3]:text-zinc-200 [&_h3]:mt-2 [&_strong]:font-semibold [&_strong]:text-zinc-200" dangerouslySetInnerHTML={{ __html: p.beschreibung }} />}
                   {(!p.beschreibung || looksLikeAutoId(p.titel)) && (
                     <p className="text-xs text-amber-300/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">

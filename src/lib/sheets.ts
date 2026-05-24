@@ -193,6 +193,9 @@ export interface KundeProfile {
   /** Shopify subscription contract id. Links the licence to the recurring
    *  contract so cancellations can be matched precisely. */
   subscriptionContractId?: string;
+  /** Per-User Voting-Tracking: produktId -> "up" | "down". Verhindert
+   *  Doppelvotes pro Account und erlaubt Toggle-Verhalten. */
+  votedProducts?: Record<string, "up" | "down">;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
@@ -902,6 +905,16 @@ export interface ProduktAudience {
   painPoint?: string;
 }
 
+export interface ProduktVotes {
+  /** Anzahl positiver Stimmen (Pfeil hoch). */
+  ups?: number;
+  /** Anzahl negativer Stimmen (Pfeil runter). */
+  downs?: number;
+  /** Admin-Override: wird auf den Score addiert (kann negativ sein,
+   *  zum Hochpushen oder Drücken eines Produkts). */
+  manualBoost?: number;
+}
+
 export interface ProduktAdStrategy {
   /** Geschätzter Mindest-Tagesbudget in EUR. */
   dailyMinEur?: number;
@@ -933,6 +946,8 @@ export interface ProduktExtra {
   audience?: ProduktAudience;
   /** Ad-Strategie-Empfehlung (Budget, Format, Hooks). */
   adStrategy?: ProduktAdStrategy;
+  /** User-Voting-Score: ups + downs + manualBoost. */
+  votes?: ProduktVotes;
 }
 
 export interface Produkt {

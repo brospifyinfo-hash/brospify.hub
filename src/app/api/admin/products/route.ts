@@ -55,6 +55,7 @@ function buildExtra(body: Record<string, unknown>): {
   deepStats?: Record<string, unknown>;
   audience?: Record<string, unknown>;
   adStrategy?: Record<string, unknown>;
+  votes?: Record<string, unknown>;
 } {
   const nested = body.extra as Record<string, unknown> | undefined;
 
@@ -84,6 +85,7 @@ function buildExtra(body: Record<string, unknown>): {
   const deepStats = pickObj(nested?.deepStats) || pickObj(body.deepStats);
   const audience = pickObj(nested?.audience) || pickObj(body.audience);
   const adStrategy = pickObj(nested?.adStrategy) || pickObj(body.adStrategy);
+  const votes = pickObj(nested?.votes) || pickObj(body.votes);
 
   console.log("[buildExtra] nested?.images:", JSON.stringify(nested?.images));
   console.log("[buildExtra] body.images:", JSON.stringify(body.images));
@@ -93,7 +95,7 @@ function buildExtra(body: Record<string, unknown>): {
     !!links, !!ads, !!linkStatus, !!deepStats, !!audience, !!adStrategy,
   );
 
-  return { stats, finances, images, links, ads, linkStatus, deepStats, audience, adStrategy };
+  return { stats, finances, images, links, ads, linkStatus, deepStats, audience, adStrategy, votes };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

@@ -78,6 +78,12 @@ interface ProduktAdStrategy {
   testDurationDays?: number;
 }
 
+interface ProduktVotes {
+  ups?: number;
+  downs?: number;
+  manualBoost?: number;
+}
+
 interface ProduktExtra {
   stats?: { trendScore: number; viralScore: number; impulseBuyFactor: number; problemSolverIndex: number; marketSaturation: number };
   finances?: { buyPrice: number; recommendedSellPrice: number; profitMargin: number };
@@ -88,6 +94,7 @@ interface ProduktExtra {
   deepStats?: ProduktDeepStats;
   audience?: ProduktAudience;
   adStrategy?: ProduktAdStrategy;
+  votes?: ProduktVotes;
 }
 
 interface Produkt {
@@ -124,6 +131,7 @@ interface EditProduct {
   deepStats?: ProduktDeepStats;
   audience?: ProduktAudience;
   adStrategy?: ProduktAdStrategy;
+  votes?: ProduktVotes;
 }
 
 const EMPTY: EditProduct = {
@@ -1477,6 +1485,7 @@ export default function AdminPage() {
       deepStats: p.extra?.deepStats,
       audience: p.extra?.audience,
       adStrategy: p.extra?.adStrategy,
+      votes: p.extra?.votes,
     };
   }
 
@@ -1521,6 +1530,7 @@ export default function AdminPage() {
           ...(editProduct.deepStats ? { deepStats: editProduct.deepStats } : {}),
           ...(editProduct.audience ? { audience: editProduct.audience } : {}),
           ...(editProduct.adStrategy ? { adStrategy: editProduct.adStrategy } : {}),
+          ...(editProduct.votes ? { votes: editProduct.votes } : {}),
         },
       };
       console.log("=== [Save] PAYLOAD VOR DEM SENDEN ===");
@@ -1604,6 +1614,7 @@ export default function AdminPage() {
         deepStats: p.deepStats,
         audience: p.audience,
         adStrategy: p.adStrategy,
+        votes: p.votes,
       });
       setIsNew(true);
       setAiEvidence(data.viralEvidence || "");
@@ -1648,6 +1659,7 @@ export default function AdminPage() {
         deepStats: p.deepStats,
         audience: p.audience,
         adStrategy: p.adStrategy,
+        votes: p.votes,
       });
       setIsNew(true);
       setAiEvidence(data.viralEvidence || "");
@@ -1692,6 +1704,8 @@ export default function AdminPage() {
         deepStats: dp.deepStats || p.extra?.deepStats,
         audience: dp.audience || p.extra?.audience,
         adStrategy: dp.adStrategy || p.extra?.adStrategy,
+        // Re-Discovery soll bestehende User-Votes NICHT überschreiben
+        votes: p.extra?.votes,
       });
       setIsNew(false);
       setAiEvidence(data.viralEvidence || "");
@@ -3409,6 +3423,14 @@ export default function AdminPage() {
                   }
                 />
 
+                {/* ─── User-Voting Override (Admin kann faken) ─── */}
+                <VotesEditor
+                  votes={editProduct.votes}
+                  onChange={(votes) =>
+                    setEditProduct((prev) => (prev ? { ...prev, votes } : prev))
+                  }
+                />
+
                 {/* Image Drop Zone */}
                 <ImageDropZone
                   images={editProduct.images}
@@ -3760,6 +3782,89 @@ function LinksAdsEditor({
             Eine URL pro Zeile. Wird im Charts-Detail-Modal als anklickbare Chips beim jeweiligen Plattform-Icon angezeigt — Plattform-Icon erscheint nur wenn min. 1 URL gepflegt ist.
           </p>
         </div>
+      </div>
+    </details>
+  );
+}
+
+// ─── VotesEditor — Admin kann ups/downs/manualBoost faken ───────
+// Score = ups - downs + manualBoost. Mit manualBoost kann der Admin
+// ein Produkt prominent in die "Beliebteste"-Row pushen (+50) oder
+// es absichtlich runterdruecken (-30) ohne die echten User-Stimmen
+// zu loeschen.
+function VotesEditor({
+  votes,
+  onChange,
+}: {
+  votes?: ProduktVotes;
+  onChange: (v: ProduktVotes) => void;
+}) {
+  const ups = votes?.ups ?? 0;
+  const downs = votes?.downs ?? 0;
+  const boost = votes?.manualBoost ?? 0;
+  const score = ups - downs + boost;
+
+  function setField(field: keyof ProduktVotes, value: number) {
+    const safe = Number.isFinite(value) ? value : 0;
+    onChange({
+      ups: field === "ups" ? Math.max(0, Math.round(safe)) : ups,
+      downs: field === "downs" ? Math.max(0, Math.round(safe)) : downs,
+      manualBoost: field === "manualBoost" ? Math.round(safe) : boost,
+    });
+  }
+
+  return (
+    <details className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl overflow-hidden">
+      <summary className="cursor-pointer select-none px-4 py-3 flex items-center gap-2 hover:bg-white/[0.03] transition">
+        <ArrowUpCircle className="w-4 h-4 text-emerald-300" />
+        <span className="text-sm font-semibold text-zinc-200">User-Voting Override</span>
+        <span className={`ml-auto inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold tabular-nums border ${score > 0 ? "bg-emerald-500/15 text-emerald-300 border-emerald-500/30" : score < 0 ? "bg-red-500/15 text-red-300 border-red-500/30" : "bg-white/[0.04] text-zinc-400 border-white/10"}`}>
+          Score: {score > 0 ? "+" : ""}{score}
+        </span>
+      </summary>
+      <div className="p-4 space-y-3 border-t border-white/5">
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">
+              Ups
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={ups}
+              onChange={(e) => setField("ups", Number(e.target.value) || 0)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-500 tabular-nums"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">
+              Downs
+            </label>
+            <input
+              type="number"
+              min={0}
+              value={downs}
+              onChange={(e) => setField("downs", Number(e.target.value) || 0)}
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 tabular-nums"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">
+              Manual Boost
+            </label>
+            <input
+              type="number"
+              value={boost}
+              onChange={(e) => setField("manualBoost", Number(e.target.value) || 0)}
+              placeholder="z. B. +50 oder -30"
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-500 tabular-nums"
+            />
+          </div>
+        </div>
+        <p className="text-[10px] text-zinc-500 leading-snug">
+          <strong className="text-zinc-400">Score</strong> = ups - downs + manualBoost.
+          Mit <strong className="text-amber-400">Manual Boost</strong> kannst du ein Produkt prominent in die „Beliebteste bei Brospify"-Reihe pushen (+) oder absichtlich runterdrücken (-) ohne die echten User-Votes anzufassen.
+        </p>
       </div>
     </details>
   );
