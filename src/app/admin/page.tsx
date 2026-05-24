@@ -1492,16 +1492,21 @@ export default function AdminPage() {
           ...(editProduct.adStrategy ? { adStrategy: editProduct.adStrategy } : {}),
         },
       };
-      console.log("=== PAYLOAD VOR DEM SENDEN ===");
-      console.log("images:", JSON.stringify(images));
-      console.log("extra:", JSON.stringify(body.extra));
-      console.log("bildUrl:", body.bildUrl);
-      console.log("full body:", JSON.stringify(body));
+      console.log("=== [Save] PAYLOAD VOR DEM SENDEN ===");
+      console.log("[Save] isNew:", isNew, "rowIndex:", editProduct.rowIndex);
+      console.log("[Save] titel:", body.titel, "preis:", body.preis, "id:", body.id);
+      console.log("[Save] images:", JSON.stringify(images));
+      console.log("[Save] extra keys:", Object.keys(body.extra || {}).join(","));
+      console.log("[Save] full body:", JSON.stringify(body));
       const res = await fetch("/api/admin/products", { method: isNew ? "POST" : "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (!res.ok) { const d = await res.json(); setError(d.error); return; }
+      let d: Record<string, unknown> = {};
+      try { d = await res.json(); } catch { d = {}; }
+      console.log("[Save] HTTP", res.status, "response:", d);
+      if (!res.ok) { setError(String(d.error || `Speichern fehlgeschlagen (HTTP ${res.status})`)); return; }
       setEditModal(false); setEditProduct(null);
-      setSuccess(isNew ? "Produkt hinzugefügt." : "Produkt aktualisiert.");
-      setTimeout(() => setSuccess(""), 3000);
+      const warning = d.warning ? ` (${String(d.warning)})` : "";
+      setSuccess((isNew ? "Produkt hinzugefügt." : "Produkt aktualisiert.") + warning);
+      setTimeout(() => setSuccess(""), warning ? 8000 : 3000);
       await loadProducts();
     } catch { setError("Speichern fehlgeschlagen."); }
     finally { setSaving(false); }
