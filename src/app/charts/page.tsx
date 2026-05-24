@@ -44,6 +44,19 @@ import {
   Activity,
   Award,
   Filter,
+  // Category icons
+  Dumbbell,
+  Sparkle,
+  Home,
+  UtensilsCrossed,
+  Cpu,
+  Dog,
+  Baby,
+  Car,
+  Leaf,
+  Shirt,
+  Moon,
+  Lightbulb,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 
@@ -137,6 +150,120 @@ const MONTH_LABEL_DE = [
   "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
   "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
 ];
+
+// ─── Vorgefertigte Themen-Kategorien ────────────────────────────
+// Werden als zusaetzliche Rows UNTER den Trend-Rows gerendert.
+// Matching: case-insensitive Substring der `sku` ODER `titel`/`beschreibung`
+// gegen `keywords`. Eine Row wird nur gerendert wenn sie min. 1 Produkt
+// hat. Erstes passendes Keyword gewinnt — Doppelzuordnungen sind ok
+// (ein Produkt darf in mehreren Rows auftauchen, z.B. "Yoga-Matte"
+// in Sport + Wellness).
+const PREDEFINED_CATEGORIES: {
+  key: string;
+  label: string;
+  icon: typeof Flame;
+  tint: string;
+  keywords: string[];
+}[] = [
+  {
+    key: "sport",
+    label: "Sport & Fitness",
+    icon: Dumbbell,
+    tint: "#F97316",
+    keywords: ["sport", "fitness", "gym", "yoga", "training", "laufen", "workout", "muskel", "ausdauer"],
+  },
+  {
+    key: "beauty",
+    label: "Beauty & Pflege",
+    icon: Sparkle,
+    tint: "#EC4899",
+    keywords: ["beauty", "pflege", "kosmetik", "skincare", "haut", "haar", "make-up", "makeup", "nail", "lippen"],
+  },
+  {
+    key: "haushalt",
+    label: "Haushalt & Ordnung",
+    icon: Home,
+    tint: "#3B82F6",
+    keywords: ["haushalt", "putzen", "putz", "ordnung", "organize", "household", "reinigung", "staub", "wäsche"],
+  },
+  {
+    key: "kueche",
+    label: "Küche & Kochen",
+    icon: UtensilsCrossed,
+    tint: "#A855F7",
+    keywords: ["küche", "kueche", "kochen", "kitchen", "food", "essen", "backen", "trinken", "schneiden"],
+  },
+  {
+    key: "gadgets",
+    label: "Gadgets & Tech",
+    icon: Cpu,
+    tint: "#06B6D4",
+    keywords: ["gadget", "tech", "elektronik", "smart", "wireless", "bluetooth", "led", "usb", "akku", "ladegerät"],
+  },
+  {
+    key: "haustier",
+    label: "Haustier",
+    icon: Dog,
+    tint: "#F59E0B",
+    keywords: ["haustier", "hund", "katze", "pet", "tier", "futter", "spielzeug für", "halsband"],
+  },
+  {
+    key: "kinder",
+    label: "Kinder & Baby",
+    icon: Baby,
+    tint: "#FB7185",
+    keywords: ["kinder", "baby", "kids", "spielzeug", "lern", "kindersicher", "schnuller"],
+  },
+  {
+    key: "auto",
+    label: "Auto & Outdoor",
+    icon: Car,
+    tint: "#10B981",
+    keywords: ["auto", "car", "outdoor", "camping", "fahrrad", "kfz", "reise", "wandern", "halter"],
+  },
+  {
+    key: "garten",
+    label: "Garten & Pflanzen",
+    icon: Leaf,
+    tint: "#22C55E",
+    keywords: ["garten", "garden", "pflanze", "blumen", "rasen", "kräuter", "balkon", "samen"],
+  },
+  {
+    key: "mode",
+    label: "Mode & Accessoires",
+    icon: Shirt,
+    tint: "#8B5CF6",
+    keywords: ["mode", "fashion", "schmuck", "accessoir", "armband", "kette", "tasche", "geldbörse", "uhr", "brille"],
+  },
+  {
+    key: "wellness",
+    label: "Wellness & Schlaf",
+    icon: Moon,
+    tint: "#6366F1",
+    keywords: ["wellness", "schlaf", "sleep", "entspannung", "massage", "meditation", "stress", "aromatherapie"],
+  },
+  {
+    key: "deko",
+    label: "Heim-Deko & Licht",
+    icon: Lightbulb,
+    tint: "#FBBF24",
+    keywords: ["deko", "decor", "home", "lampe", "licht", "kerze", "bild", "wand", "vase", "innendekoration"],
+  },
+];
+
+/**
+ * Prueft ob ein Produkt zu einer Kategorie passt — anhand sku, titel
+ * und beschreibung (case-insensitive Substring).
+ */
+function produktMatchesCategory(
+  p: Produkt,
+  keywords: string[],
+): boolean {
+  const haystack = [p.sku, p.titel, p.beschreibung]
+    .map((s) => (s || "").toLowerCase())
+    .join(" ");
+  return keywords.some((k) => haystack.includes(k.toLowerCase()));
+}
 
 // ─── Defensive helpers ──────────────────────────────────────────
 // Daten in der Sheet sind nicht immer komplett (alte Importe, aborted
@@ -1337,6 +1464,31 @@ export default function ChartsPage() {
     ].filter((row) => row.list.length > 0);
   }, [filteredProdukte]);
 
+  // Vorgefertigte Themen-Kategorien. Pro Kategorie alle passenden
+  // Produkte (Match: sku/titel/beschreibung-Substring gegen Keywords).
+  // Innerhalb einer Kategorie wieder nach Trend sortiert. Kategorien
+  // ohne Treffer werden nicht gerendert.
+  const categoryRows = useMemo(() => {
+    if (filteredProdukte.length === 0) return [];
+    return PREDEFINED_CATEGORIES.map((cat) => {
+      const list = filteredProdukte
+        .filter((p) => produktMatchesCategory(p, cat.keywords))
+        .sort(
+          (a, b) =>
+            (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),
+        )
+        .slice(0, 12);
+      return {
+        key: cat.key,
+        title: cat.label,
+        subtitle: `${list.length} ${list.length === 1 ? "Produkt" : "Produkte"} in dieser Kategorie`,
+        icon: cat.icon,
+        tint: cat.tint,
+        list,
+      };
+    }).filter((row) => row.list.length > 0);
+  }, [filteredProdukte]);
+
   // Hero-Pick: der einzelne stärkste Produkt-Eintrag fürs Top-Banner.
   const heroPick = useMemo(() => {
     if (filteredProdukte.length === 0) return null;
@@ -1516,14 +1668,41 @@ export default function ChartsPage() {
             </p>
           </div>
         ) : searchTerm.trim() === "" && !highMarginOnly ? (
-          // ─── Default: kuratierte Trend-Rows ─────────────────
-          // Keine flache Gesamtliste mehr unten — die kuratierten
-          // Rows sind die Hauptansicht. Jede Row zeigt Top 12 fuer
-          // ihr Signal, horizontal scrollbar.
+          // ─── Default: Trend-Rows + Themen-Kategorien ─────────
+          // Erst die signalbasierten kuratierten Rows (Trending,
+          // Marge, Wachstum, etc.), dann die vorgefertigten Themen-
+          // Kategorien (Sport, Beauty, Haushalt, ...).
           <>
+            {/* Block 1 — Trend-Signale */}
             {curatedRows.map((row) => (
               <CuratedRow
                 key={row.key}
+                title={row.title}
+                subtitle={row.subtitle}
+                icon={row.icon}
+                tint={row.tint}
+                produkte={row.list}
+                onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+              />
+            ))}
+
+            {/* Block 2 — Themen-Kategorien (Sport, Beauty, ...) */}
+            {categoryRows.length > 0 && (
+              <div className="pt-3 pb-1 border-t border-white/5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Layers className="w-3.5 h-3.5 text-zinc-400" />
+                  <h2 className="text-[11px] font-bold uppercase tracking-widest text-zinc-300">
+                    Nach Themen
+                  </h2>
+                  <span className="text-[10px] text-zinc-600">
+                    {categoryRows.length} {categoryRows.length === 1 ? "Kategorie" : "Kategorien"}
+                  </span>
+                </div>
+              </div>
+            )}
+            {categoryRows.map((row) => (
+              <CuratedRow
+                key={`cat-${row.key}`}
                 title={row.title}
                 subtitle={row.subtitle}
                 icon={row.icon}
