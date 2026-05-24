@@ -242,14 +242,18 @@ export default function CodeBlocksPage() {
                 className="glass-strong rounded-xl border border-white/10 overflow-hidden flex flex-col text-left hover:border-cyan-500/30 transition group"
               >
                 <div className="relative aspect-video bg-white border-b border-white/5 overflow-hidden">
-                  {block.previewImageUrl ? (
+                  {/* LIVE-Render aus dem Code ist jetzt der Default —
+                      so sieht der User die echte Section statt einem
+                      zufaellig hochgeladenen Bild. previewImageUrl nur
+                      noch Fallback wenn der Code leer ist. */}
+                  {block.code ? (
+                    <CodeBlockPreview code={block.code} className="w-full h-full" />
+                  ) : block.previewImageUrl ? (
                     <img
                       src={block.previewImageUrl}
                       alt={block.title}
                       className="w-full h-full object-cover"
                     />
-                  ) : block.code ? (
-                    <CodeBlockPreview code={block.code} className="w-full h-full" />
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 text-[11px] gap-1 bg-zinc-900">
                       <Code2 className="w-8 h-8" />

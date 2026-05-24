@@ -166,23 +166,26 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       maxThemesInstall: 5,
       maxTeamMembers: 1,
     },
-    // Bronze: AI-Tools auf Upscaler + Background-Remover beschränkt.
-    // Keine generativen Tools (AI Chat/Studio, Blog, E-Mail).
+    // Bronze: NUR Upscaler + Background-Remover als AI-Tool. Browse-
+    // Features (Charts, Library, Themes-Galerie) bleiben aktiv damit
+    // der User die Plattform ueberhaupt benutzen kann. Generative
+    // Tools (SEO/Blog/Email/Studio/Chat) + Code-Blöcke + Coaching
+    // bleiben Silber/Gold vorbehalten.
     features: {
       ...emptyFeatures(),
       bgRemove: true,
       upscale: true,
-      seoAudit: true,
-      shopifyInsights: true,
       themesGallery: true,
       chartsAnalytics: true,
       library: true,
+      productImports: true,
     },
     bullets: [
       "2.000 Credits / Monat",
       "1 Shop, 50 Produkte",
-      "AI-Tools: Upscaler + Background-Remover",
-      "Theme-Galerie & Trend-Charts",
+      "AI-Tools: NUR Upscaler + Background-Remover",
+      "Trend-Charts & Theme-Galerie",
+      "Generative Tools & Code-Blöcke ab Silber",
     ],
   },
   {

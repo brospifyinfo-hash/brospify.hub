@@ -647,10 +647,10 @@ function DropshippingBlock({
               href={ex.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-200 hover:bg-indigo-500/15 transition text-sm"
+              className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-indigo-500/10 border border-indigo-500/25 text-indigo-200 hover:bg-indigo-500/15 transition text-sm min-w-0"
             >
               <Store className="w-4 h-4 shrink-0" />
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 overflow-hidden">
                 <div className="truncate font-medium">{ex.title || host}</div>
                 <div className="truncate text-[10px] text-indigo-300/70 font-mono">{host}</div>
               </div>
@@ -2234,17 +2234,17 @@ export default function ChartsPage() {
       {/* ─── INFO MODAL ───────────────────────────────────────── */}
       <AnimatePresence>
         {infoModal.open && p && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={() => setInfoModal({ open: false, produkt: null })}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:px-4" onClick={() => setInfoModal({ open: false, produkt: null })}>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-xl relative max-h-[90vh] overflow-y-auto"
+              className="bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl w-full max-w-xl relative max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
               onClick={(e) => e.stopPropagation()}
             >
-              <button onClick={() => setInfoModal({ open: false, produkt: null })} className="absolute top-4 right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
+              <button onClick={() => setInfoModal({ open: false, produkt: null })} className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
 
-              <div className="p-4 pb-0 space-y-2">
+              <div className="p-3 sm:p-4 pb-0 space-y-2">
                 {/* `key` mountet die Slideshow für jedes Produkt neu —
                     so wird das "broken"-Set / der idx sauber zurückgesetzt. */}
                 <ImageSlideshow key={p.id} images={allImages} />
@@ -2256,11 +2256,15 @@ export default function ChartsPage() {
                 </p>
               </div>
 
-              <div className="p-6 space-y-6">
+              <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
                 <div>
-                  <div className="flex items-start justify-between gap-3">
-                    <h3 className="text-xl font-bold leading-tight flex-1 min-w-0">{displayTitle(p)}</h3>
-                    <div className="shrink-0">
+                  {/* Auf Mobile: Titel oben, Votes drunter (column) —
+                      sonst quetschen sie sich auf engen Screens. */}
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+                    <h3 className="text-lg sm:text-xl font-bold leading-tight flex-1 min-w-0 break-words">
+                      {displayTitle(p)}
+                    </h3>
+                    <div className="shrink-0 self-start">
                       <VoteButtons
                         produkt={p}
                         votes={getProduktVotes(p)}
@@ -2270,7 +2274,7 @@ export default function ChartsPage() {
                       />
                     </div>
                   </div>
-                  {p.beschreibung && <div className="text-sm text-zinc-400 mt-2 leading-relaxed [&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-zinc-200 [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-semibold [&_h3]:text-zinc-200 [&_h3]:mt-2 [&_strong]:font-semibold [&_strong]:text-zinc-200" dangerouslySetInnerHTML={{ __html: p.beschreibung }} />}
+                  {p.beschreibung && <div className="text-sm text-zinc-400 mt-2 leading-relaxed break-words [&_p]:my-2 [&_p]:break-words [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:my-1 [&_li]:break-words [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-zinc-200 [&_h2]:mt-3 [&_h2]:mb-1 [&_h3]:font-semibold [&_h3]:text-zinc-200 [&_h3]:mt-2 [&_strong]:font-semibold [&_strong]:text-zinc-200 [&_a]:underline [&_a]:break-all" dangerouslySetInnerHTML={{ __html: p.beschreibung }} />}
                   {(!p.beschreibung || looksLikeAutoId(p.titel)) && (
                     <p className="text-xs text-amber-300/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
                       <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />

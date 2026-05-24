@@ -126,9 +126,15 @@ export async function POST(req: Request) {
     typeof customPromptRaw === "string"
       ? customPromptRaw.trim().slice(0, CUSTOM_PROMPT_MAX)
       : "";
+  // Quality-Booster anhaengen — Schluesselwoerter die IC-Light v2
+  // konsistent zu schaerferen, photorealistischen Outputs draengen.
+  // Werden NACH dem Custom-Prompt eingefuegt damit User-Wuensche
+  // weiterhin priorisiert werden.
+  const QUALITY_BOOSTER =
+    "photorealistic, ultra-detailed, high resolution, professional studio lighting, color-grading consistent with subject, perfect exposure";
   const finalPrompt = customPrompt
-    ? `${scene.prompt}, ${customPrompt}`
-    : scene.prompt;
+    ? `${scene.prompt}, ${customPrompt}, ${QUALITY_BOOSTER}`
+    : `${scene.prompt}, ${QUALITY_BOOSTER}`;
 
   // 3) Pre-process: pad to a centred white square so IC-Light has
   //    headroom to compose the subject in the new scene. Same dim
@@ -164,7 +170,14 @@ export async function POST(req: Request) {
       prompt: finalPrompt,
       negative_prompt: buildNegativePrompt(scene),
       image_size: "square_hd",
-      num_inference_steps: 28,
+      // Von 28 auf 40 hochgesetzt — deutlich saerfere Details +
+      // sauberere Schatten/Reflexionen ohne dass die Generierungszeit
+      // explodiert (~+5s pro Bild).
+      num_inference_steps: 40,
+      // guidance_scale: 4.5 ist der IC-Light v2 Default, etwas niedriger
+      // produziert natuerlichere Resultate. Wir lassen ihn explizit
+      // damit Fal nicht plotzlich was anderes einsetzt.
+      guidance_scale: 4.5,
       enable_safety_checker: false,
     });
     const relitUrl = iclight.images?.[0]?.url;

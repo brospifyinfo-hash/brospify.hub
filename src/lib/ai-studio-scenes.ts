@@ -41,8 +41,25 @@ export interface AiStudioScene {
   visual: SceneVisual;
 }
 
+// Massiv verschaerftes Negative-Prompt: viel mehr unerwuenschte
+// Artefakte explizit benennen damit IC-Light sie aktiv vermeidet.
+// Besonders wichtig: text/logo/watermark/typography (sonst halluziniert
+// das Modell gerne deutsche/englische Labels auf das Produkt), und
+// "duplicate subject" (sonst doppelt es das Produkt manchmal).
 const NEGATIVE_BASE =
-  "low quality, blurry, distorted, deformed, watermark, logo overlay, text artifact, oversaturated, plastic look";
+  "low quality, low resolution, blurry, out of focus, motion blur, " +
+  "distorted, deformed, warped, melted, broken proportions, " +
+  "watermark, logo overlay, brand text, fake brand label, typography, " +
+  "text artifact, signature, signature stamp, " +
+  "oversaturated, washed out, color banding, ugly colors, " +
+  "plastic look, fake plastic, cartoon, illustration, render look, " +
+  "3d render, video game graphic, anime style, " +
+  "duplicate subject, two products, repeated product, ghost copy, " +
+  "extra limbs, extra parts, broken object, " +
+  "harsh shadows, hard shadows, banding shadows, " +
+  "noise, jpeg artifact, compression artifact, grainy, " +
+  "wrong perspective, broken perspective, floating subject, " +
+  "cluttered background, messy background, distracting elements";
 
 export function buildNegativePrompt(scene: AiStudioScene): string {
   return scene.negativePrompt
@@ -56,7 +73,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Minimalistisches Podest",
     hint: "Cleanes Studio-Podest, weiches Licht",
     prompt:
-      "minimalist beige stone pedestal in a clean cream-coloured studio, soft diffused key light from the upper left, gentle ambient fill, faint contact shadow on the pedestal surface, premium product photography, shallow depth of field with creamy bokeh background",
+      "professional product photograph, minimalist beige stone pedestal in a clean cream-coloured studio, large softbox key light from upper left producing soft falloff, gentle ambient fill, realistic soft contact shadow on the pedestal surface, premium catalog photography style, shallow depth of field with creamy bokeh, shot on full-frame DSLR 85mm f/2.0, photorealistic, sharp focus on subject, magazine-quality lighting, color-accurate",
     visual: {
       background: "linear-gradient(180deg, #f5f1ea 0%, #e8e0d2 55%, #c9bda7 100%)",
       light:
@@ -71,7 +88,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Studio Licht",
     hint: "Heller Studio-Hintergrund, Catchlights",
     prompt:
-      "pure white seamless studio backdrop, two large softboxes producing crisp specular catchlights, faint floor reflection underneath the subject, professional bright high-key e-commerce product photography",
+      "professional product photograph, pure white seamless studio backdrop, two large softboxes producing crisp specular catchlights, faint clean floor reflection underneath the subject, professional bright high-key e-commerce product photography, color-accurate, sharp focus, shot on full-frame DSLR 85mm f/4.0, magazine-quality lighting, photorealistic",
     visual: {
       background: "linear-gradient(180deg, #ffffff 0%, #f0f0f3 60%, #d4d4da 100%)",
       light:
@@ -86,7 +103,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Marmor",
     hint: "Polierter Marmor, warmes Fensterlicht",
     prompt:
-      "polished white Carrara marble surface with soft grey veins, warm golden window light from the side casting a long soft shadow, faint mirror-like reflection on the marble, blurred neutral wall behind, luxury editorial product shot",
+      "professional product photograph, polished white Carrara marble surface with subtle grey veining, warm golden window light from the side casting a long soft natural shadow, faint mirror-like reflection on the marble, blurred neutral wall behind, luxury editorial product shot, shot on full-frame DSLR 85mm f/2.8, magazine-quality lighting, photorealistic, sharp focus on subject",
     visual: {
       background: "linear-gradient(180deg, #efece4 0%, #d8d2c3 55%, #b5ac99 100%)",
       light:
@@ -103,7 +120,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Natur",
     hint: "Eukalyptus, Sonnenflecken, organisch",
     prompt:
-      "fresh eucalyptus leaves and small wildflowers around the subject on a smooth pale stone surface, dappled morning sunlight breaking through leaves, soft natural shadows, slightly out-of-focus green foliage in the background, organic lifestyle product photography",
+      "professional product photograph, fresh eucalyptus leaves and small wildflowers carefully arranged around the subject on a smooth pale stone surface, dappled morning sunlight breaking through leaves, soft natural shadows, slightly out-of-focus rich green foliage in the background, organic lifestyle product photography, shot on full-frame DSLR 50mm f/2.0, photorealistic, sharp focus on subject, magazine-quality lighting",
     visual: {
       background: "linear-gradient(180deg, #d4e3c5 0%, #8aab73 55%, #4d6b3e 100%)",
       light:
@@ -120,7 +137,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Leinen Tisch",
     hint: "Beige Leinendecke, gemütlich",
     prompt:
-      "draped beige linen tablecloth with gentle folds, warm golden-hour side light spilling across the fabric, soft directional shadow, blurred neutral wall behind, cozy editorial lifestyle photography",
+      "professional product photograph, draped beige linen tablecloth with gentle natural folds, warm golden-hour side light spilling across the fabric texture, soft directional shadow, blurred neutral wall behind, cozy editorial lifestyle photography, shot on full-frame DSLR 85mm f/2.8, photorealistic, sharp focus, magazine-quality lighting",
     visual: {
       background: "linear-gradient(180deg, #f0e3cd 0%, #d4be95 60%, #9c8056 100%)",
       light:
@@ -135,7 +152,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Beton Loft",
     hint: "Industriell, urban, kühl",
     prompt:
-      "flat polished concrete surface, large window light from the left producing a long soft shadow, blurred industrial loft background with raw concrete walls, modern minimalist product photography",
+      "professional product photograph, flat polished concrete surface, large window light from the left producing a long soft natural shadow, blurred industrial loft background with raw concrete walls, modern minimalist product photography, shot on full-frame DSLR 50mm f/2.0, photorealistic, sharp focus on subject, magazine-quality lighting",
     visual: {
       background: "linear-gradient(180deg, #c9c9cc 0%, #8a8a90 55%, #4a4a52 100%)",
       light:
@@ -150,7 +167,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Walnuss Holz",
     hint: "Warmes Holz, sanftes Licht",
     prompt:
-      "warm dark walnut wood tabletop with visible grain, soft directional warm tungsten light from the upper right, blurred dark amber background, premium artisanal product photography",
+      "professional product photograph, warm dark walnut wood tabletop with visible natural grain, soft directional warm tungsten light from the upper right, blurred dark amber background, premium artisanal product photography, shot on full-frame DSLR 85mm f/2.8, photorealistic, sharp focus, magazine-quality lighting, color-accurate",
     visual: {
       background: "linear-gradient(180deg, #a07546 0%, #6b4628 55%, #3a2412 100%)",
       light:
@@ -165,7 +182,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Strand",
     hint: "Helles Tageslicht, sanfter Sand",
     prompt:
-      "smooth fine beach sand with subtle ripples around the subject, bright soft midday sunlight, blurred turquoise ocean and pale sky in the background, breezy lifestyle product photography",
+      "professional product photograph, smooth fine beach sand with subtle natural ripples around the subject, bright soft midday sunlight, blurred turquoise ocean and pale sky in the background, breezy lifestyle product photography, shot on full-frame DSLR 50mm f/2.8, photorealistic, sharp focus on subject, vibrant color-accurate",
     visual: {
       background: "linear-gradient(180deg, #c8e0e8 0%, #ecd9b5 55%, #c5a06f 100%)",
       light:
@@ -180,7 +197,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Rosé Gradient",
     hint: "Pastell, modern, soft",
     prompt:
-      "smooth rose-to-peach pastel gradient backdrop with subtle paper texture, soft even studio light, faint contact shadow underneath the subject, clean modern e-commerce product shot",
+      "professional product photograph, smooth rose-to-peach pastel gradient backdrop with subtle paper texture, soft even studio light, realistic faint contact shadow underneath the subject, clean modern e-commerce product shot, shot on full-frame DSLR 85mm f/4.0, photorealistic, sharp focus, color-accurate",
     visual: {
       background: "linear-gradient(180deg, #ffd9d4 0%, #f0a3a8 55%, #b87280 100%)",
       light:
@@ -193,7 +210,7 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
     label: "Midnight Studio",
     hint: "Dunkler Hintergrund, Moody",
     prompt:
-      "deep midnight-blue seamless studio backdrop, single rim light from the right creating a moody highlight on one side, faint reflection on a dark glossy floor, premium dramatic product photography",
+      "professional product photograph, deep midnight-blue seamless studio backdrop, single rim light from the right creating a moody dramatic highlight on one side, faint reflection on a dark glossy floor, premium dramatic luxury product photography, shot on full-frame DSLR 85mm f/2.8, cinematic lighting, photorealistic, sharp focus on subject",
     visual: {
       background: "linear-gradient(180deg, #2a3252 0%, #141a30 55%, #06091a 100%)",
       light:
@@ -203,6 +220,72 @@ export const AI_STUDIO_SCENES: readonly AiStudioScene[] = [
       product: "light",
       accent:
         "linear-gradient(85deg, transparent 70%, rgba(160, 190, 255, 0.20) 80%, transparent 92%)",
+    },
+  },
+  {
+    id: "kitchen",
+    label: "Küchen-Counter",
+    hint: "Modern, hell, lifestyle",
+    prompt:
+      "professional product photograph, polished bright white quartz kitchen countertop with subtle veining, large window light from upper-left producing soft natural shadows, slightly blurred modern minimalist kitchen background with sage-green cabinets and brass hardware, soft directional daylight, organic lifestyle product photography, shot on full-frame DSLR 50mm f/2.0, photorealistic, sharp focus, magazine-quality lighting",
+    visual: {
+      background: "linear-gradient(180deg, #f8f8f5 0%, #e6ebe2 55%, #b5c4ad 100%)",
+      light:
+        "radial-gradient(ellipse 65% 50% at 25% 18%, rgba(255, 250, 235, 0.6), transparent 55%)",
+      surface:
+        "linear-gradient(180deg, transparent 62%, rgba(80, 60, 35, 0.14) 100%)",
+      product: "dark",
+    },
+  },
+  {
+    id: "bedroom",
+    label: "Schlafzimmer",
+    hint: "Gemütlich, warm, lifestyle",
+    prompt:
+      "professional product photograph, soft beige linen sheets and a knitted cream-coloured throw blanket as a textured surface, warm late-afternoon golden window light from the side, blurred bedroom background with a wooden headboard and trailing greenery, cozy intimate lifestyle product photography, shot on full-frame DSLR 50mm f/1.8, photorealistic, shallow depth of field, warm color grading",
+    visual: {
+      background: "linear-gradient(180deg, #f3e8d4 0%, #d8c2a1 55%, #9c7e5c 100%)",
+      light:
+        "radial-gradient(ellipse 60% 45% at 80% 22%, rgba(255, 220, 160, 0.55), transparent 60%)",
+      surface:
+        "linear-gradient(180deg, transparent 55%, rgba(80, 50, 25, 0.18) 100%)",
+      product: "dark",
+      accent:
+        "linear-gradient(85deg, transparent 65%, rgba(255, 220, 170, 0.16) 78%, transparent 92%)",
+    },
+  },
+  {
+    id: "gym",
+    label: "Fitness / Gym",
+    hint: "Sportiv, dynamisch, urban",
+    prompt:
+      "professional product photograph, dark matte rubber gym floor with subtle texture, dramatic spotlight from the upper-right creating strong directional shadow, blurred industrial gym background with weight racks and chalk dust in the air, energetic sport product photography, shot on full-frame DSLR 50mm f/2.8, photorealistic, sharp focus on subject, cinematic moody lighting",
+    visual: {
+      background: "linear-gradient(180deg, #2e3138 0%, #1c1f24 55%, #0a0c10 100%)",
+      light:
+        "radial-gradient(ellipse 50% 60% at 78% 18%, rgba(255, 200, 130, 0.40), transparent 55%)",
+      surface:
+        "linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.55) 100%)",
+      product: "light",
+      accent:
+        "linear-gradient(85deg, transparent 70%, rgba(255, 180, 100, 0.18) 80%, transparent 92%)",
+    },
+  },
+  {
+    id: "autumn",
+    label: "Herbst Cozy",
+    hint: "Warme Farben, Kerzenlicht",
+    prompt:
+      "professional product photograph, weathered oak wood surface with scattered dry oak leaves and a cinnamon stick, warm flickering candlelight and soft amber tungsten light from the side, blurred warm autumn-toned background, intimate seasonal lifestyle product photography, shot on full-frame DSLR 85mm f/1.8, photorealistic, warm cinematic color grading, sharp focus on subject",
+    visual: {
+      background: "linear-gradient(180deg, #c0846c 0%, #8a4c2a 55%, #4a2510 100%)",
+      light:
+        "radial-gradient(ellipse 55% 50% at 78% 25%, rgba(255, 180, 100, 0.55), transparent 60%)",
+      surface:
+        "linear-gradient(180deg, transparent 55%, rgba(40, 20, 10, 0.45) 100%)",
+      product: "light",
+      accent:
+        "radial-gradient(circle at 15% 75%, rgba(255, 180, 80, 0.20) 0%, transparent 30%)",
     },
   },
 ] as const;
