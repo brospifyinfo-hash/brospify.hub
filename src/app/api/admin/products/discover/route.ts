@@ -11,9 +11,16 @@ import {
 } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
-// Pipeline runs ~40-100s (gruendlich kann mehr werden); Vercel clamped
-// das ohnehin auf das Plan-Limit. Wir setzen großzügig.
-export const maxDuration = 240;
+// WICHTIG: Vercel Hobby (Free) klemmt auf 60s. Wir setzen 60 statt
+// 240, damit wir nicht plotzlich auf einem hoeheren Plan ueberlaufen
+// und vor allem die Pipeline so optimiert ist dass sie zuverlaessig
+// in 50-55s durchlaeuft (Buffer fuer Plan-Limit-Cutoff).
+export const maxDuration = 60;
+
+// Global timeout guard — wir tracken seit dem Start und ueberspringen
+// die optionale Analytics-Phase wenn wir schon zu weit sind.
+const PIPELINE_SOFT_BUDGET_MS = 50_000;
+const startedAt = () => Date.now();
 
 // ─── Constants ───────────────────────────────────────────────────
 const MODEL = "claude-sonnet-4-6";
@@ -480,6 +487,12 @@ async function isUrlReachable(url: string): Promise<boolean> {
 // ─── Route ───────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
+  // Pipeline-Budget tracker — wenn wir schon nahe am Vercel-Hobby-
+  // Timeout (60s) sind, skippen wir den optionalen Analytics-Call.
+  const t0 = startedAt();
+  const elapsed = () => Date.now() - t0;
+  const overBudget = () => elapsed() > PIPELINE_SOFT_BUDGET_MS;
+
   const session = await getSession();
   if (!session.isLoggedIn || !session.isAdmin) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
@@ -706,8 +719,13 @@ Antworte NUR mit JSON, ohne weiteren Text:
     // ─── Claude 3 — OPTIONALE Deep-Analytics (separater Call) ──
     // Schlaegt das hier fehl, ist es egal — wir geben einfach leere
     // Defaults zurueck und das Produkt ist trotzdem komplett.
+    // SKIP wenn wir schon nahe am Vercel-Hobby-Timeout sind.
     let analytics: Record<string, unknown> | null = null;
-    try {
+    if (overBudget()) {
+      console.warn(
+        `[Discover] skipping analytics — over budget (${elapsed()}ms > ${PIPELINE_SOFT_BUDGET_MS}ms)`,
+      );
+    } else try {
       analytics = await claudeJson(
         client,
         `Du bist E-Commerce-Stratege. Liefere fuer das gegebene Produkt eine kurze Audience- und Ad-Strategie.
