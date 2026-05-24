@@ -3868,7 +3868,7 @@ function VotesEditor({
         <p className="text-[10px] text-zinc-500 leading-snug">
           <strong className="text-zinc-400">RAW-Score</strong> = ups - downs + manualBoost.
           Mit <strong className="text-amber-400">Manual Boost</strong> kannst du ein Produkt prominent in die „Beliebteste bei Brospify"-Reihe pushen (+) oder absichtlich runterdrücken (-) ohne die echten User-Votes anzufassen.
-          Im Charts wird zusätzlich ein <strong className="text-purple-400">Seed-Wert</strong> addiert (abgeleitet aus Trend/Viral/Wachstum + ID-Hash), damit kein Produkt jemals bei 0 startet — typisch +30 bis +200.
+          Im Charts wird zusätzlich ein <strong className="text-purple-400">Seed-Wert</strong> addiert (abgeleitet aus Trend/Viral/Wachstum + ID-Hash), damit kein Produkt jemals bei 0 startet — Range <strong>+20 bis +350</strong> (höher = bessere Metriken).
         </p>
       </div>
     </details>

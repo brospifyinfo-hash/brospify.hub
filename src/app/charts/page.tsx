@@ -179,13 +179,20 @@ function simpleHash(s: string): number {
 }
 
 function seedScore(p: Produkt): number {
-  const trend = p.extra?.stats?.trendScore ?? 0;
-  const viral = p.extra?.stats?.viralScore ?? 0;
-  const growth = p.extra?.deepStats?.growth90d ?? 0;
-  const base = Math.round((trend * 0.5 + viral * 0.4) * 1.2);
-  const growthBonus = growth > 0 ? Math.round(growth * 0.3) : 0;
-  const hashVar = simpleHash(p.id) % 20;
-  return Math.max(5, base + growthBonus + hashVar);
+  // Eingangsmetriken: alle 0-100 gestutzt (growth wird durch 2 geteilt
+  // weil sie bis 500 gehen kann, der Beitrag aber gedeckelt sein soll).
+  const trend = Math.max(0, Math.min(100, p.extra?.stats?.trendScore ?? 0));
+  const viral = Math.max(0, Math.min(100, p.extra?.stats?.viralScore ?? 0));
+  const growthRaw = p.extra?.deepStats?.growth90d ?? 0;
+  const growth = Math.max(0, Math.min(100, growthRaw / 2));
+  // Qualitaet 0-1 als gewichteter Mittelwert.
+  const quality = (trend * 0.5 + viral * 0.4 + growth * 0.1) / 100;
+  // Auf den Zielrange 20-350 mappen.
+  const base = 20 + quality * 330;
+  // Hash-Variation -15..+14 damit Produkte mit gleichen Stats nicht
+  // exakt denselben Wert haben.
+  const variation = (simpleHash(p.id) % 30) - 15;
+  return Math.max(20, Math.min(350, Math.round(base + variation)));
 }
 
 /** Endgueltiger Score wie er dem User gezeigt wird = echt + Seed. */
