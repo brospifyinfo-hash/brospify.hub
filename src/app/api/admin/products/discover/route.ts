@@ -333,6 +333,14 @@ const PICK_SCHEMA: Record<string, unknown> = {
   additionalProperties: false,
 };
 
+// SCHLANKES Core-Schema — nur die Felder die ABSOLUT da sein muessen
+// damit ein Produkt anlegbar ist. Wenn Claude hier nicht liefert, geht
+// das ganze Produkt zurueck als 502.
+//
+// Die Deep-Analytics-Felder (deepStats/audience/adStrategy) wurden hier
+// rausgenommen weil sie als required-Pflicht Claude oft dazu brachten,
+// JSON zu produzieren das schiefging — und dann blieben Titel/Preis
+// kaputt. Sie laufen jetzt in einem getrennten optionalen Schritt.
 const PRODUCT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -360,8 +368,17 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
       required: ["trendScore", "viralScore", "impulseBuyFactor", "problemSolverIndex", "marketSaturation"],
       additionalProperties: false,
     },
-    // Neue Deep-Analytics-Blöcke. Optional in der Schema, damit Claude
-    // bei sehr neuen/unklaren Produkten leere Defaults liefern darf.
+    viralEvidence: { type: "string" },
+  },
+  required: ["titel", "beschreibung", "kategorie", "finances", "stats", "viralEvidence"],
+  additionalProperties: false,
+};
+
+// Optional zweiter Claude-Call NUR fuer die Deep-Analytics. Bricht es,
+// macht nichts — Produkt ist trotzdem komplett speicherbar.
+const ANALYTICS_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
     deepStats: {
       type: "object",
       properties: {
@@ -399,9 +416,8 @@ const PRODUCT_SCHEMA: Record<string, unknown> = {
       required: ["dailyMinEur", "dailyRecommendedEur", "estimatedCpmEur", "bestFormat", "adHooks", "testDurationDays"],
       additionalProperties: false,
     },
-    viralEvidence: { type: "string" },
   },
-  required: ["titel", "beschreibung", "kategorie", "finances", "stats", "deepStats", "audience", "adStrategy", "viralEvidence"],
+  required: ["deepStats", "audience", "adStrategy"],
   additionalProperties: false,
 };
 
@@ -633,38 +649,18 @@ export async function POST(req: NextRequest) {
       images = [placeholderImageFor(imageQuery || produktName)];
     }
 
-    // ─── Claude 2 — synthesize the finished product ──────────────
+    // ─── Claude 2 — CORE-Synthese (Titel/Preis/Beschreibung/Stats) ──
+    // Schlank gehalten: nur die Pflichtfelder. Wenn das hier schiefgeht
+    // bricht alles ab — also wollen wir nichts riskieren mit zu vielen
+    // required-Feldern.
     const parsed = await claudeJson(
       client,
-      `Du bist ein E-Commerce-Experte für den deutschen Markt. Erstelle aus den gegebenen Web-Rechercheergebnissen einen fertigen, verkaufsstarken Charts-Eintrag MIT VOLLEN ANALYTICS.
+      `Du bist ein E-Commerce-Experte für den deutschen Markt. Erstelle aus den gegebenen Web-Rechercheergebnissen einen fertigen, verkaufsstarken Charts-Eintrag.
 
 SPRACHE: Titel und Beschreibung auf DEUTSCH. Beschreibung als sauberes, verkaufsstarkes HTML — nutze <p> für Absätze, <ul><li> für Aufzählungen und <strong> für Hervorhebungen. Kein übertriebener Emoji-Einsatz.
 KATEGORIE: ${kategorie ? `Verwende exakt "${kategorie}".` : "Wähle eine kurze, treffende Produktkategorie (z. B. Beauty, Haushalt, Sport, Haustier, Küche, Gadgets)."}
 PREISE: Falls eine ALIEXPRESS-PRODUKTSEITE im Kontext gegeben ist, übernimm den dort gelisteten Preis EXAKT als buyPrice (rechne USD bei Bedarf grob mit Faktor 0.93 in EUR um). Sonst schätze realistisch. Verkaufspreis = marktüblicher Dropshipping-Preis in EUR. WICHTIG: Beide Preise sind nur Richtwerte — der Hub zeigt dem Nutzer einen "Preis kann schwanken"-Hinweis.
 SCORES (0-100): trendScore = aktuelle Trendstärke, viralScore = Social-Media-Viralität, impulseBuyFactor = Impulskauf-Eignung, problemSolverIndex = wie stark es ein Problem löst, marketSaturation = Marktsättigung (höher = gesättigter).
-
-DEEP STATS:
-- competition (0-100): wie stark ist die Konkurrenz im deutschen Markt (100 = stark umkämpft)
-- seasonality (0-100): 0 = Evergreen ganzjährig, 100 = stark saisonal
-- peakMonths: Array von Monatsnummern 1-12 in denen Nachfrage Peak hat (z.B. [11,12] für X-Mas Produkte, [] wenn ganzjährig)
-- growth90d (-100..500): geschätzte Nachfrage-Veränderung in den letzten 90 Tagen in Prozent
-- repeatPurchaseRate (0-100): wie wahrscheinlich kommt ein Käufer für mehr zurück
-
-AUDIENCE:
-- primary: knapp die Hauptzielgruppe, z.B. "Gen-Z Fitness-Fans" oder "Familien mit Kleinkindern"
-- ageRange: z.B. "18-34" oder "25-54"
-- genderSkew: "male", "female" oder "balanced"
-- interests: 3-5 konkrete Targeting-Interessen für Meta/TikTok Ads
-- painPoint: in einem Satz das Problem das das Produkt löst
-
-AD STRATEGY:
-- dailyMinEur: realistisches Mindest-Tagesbudget zum Validieren (10-50€)
-- dailyRecommendedEur: empfohlenes Budget für sinnvolles Volumen (50-300€)
-- estimatedCpmEur: typischer CPM in EUR (5-25€ je nach Plattform/Audience)
-- bestFormat: konkrete Format-Empfehlung, z.B. "TikTok UGC-Video, 9:16, 15-30s, Hook in <2s"
-- adHooks: 3 konkrete deutsche Hookline-Beispiele für den ersten Frame (8-12 Worte je)
-- testDurationDays: empfohlene Testdauer vor Skalierung (3-14)
-
 VIRALITÄT: stütze dich ehrlich auf die gegebenen Quellen (TikTok, Meta/Facebook Ad Library, Trend-Plattformen).
 
 Antworte NUR mit JSON, ohne weiteren Text:
@@ -674,9 +670,6 @@ Antworte NUR mit JSON, ohne weiteren Text:
   "kategorie": "kurze Produktkategorie",
   "finances": { "buyPrice": 0.0, "recommendedSellPrice": 0.0 },
   "stats": { "trendScore": 0, "viralScore": 0, "impulseBuyFactor": 0, "problemSolverIndex": 0, "marketSaturation": 0 },
-  "deepStats": { "competition": 0, "seasonality": 0, "peakMonths": [], "growth90d": 0, "repeatPurchaseRate": 0 },
-  "audience": { "primary": "", "ageRange": "", "genderSkew": "balanced", "interests": [], "painPoint": "" },
-  "adStrategy": { "dailyMinEur": 0, "dailyRecommendedEur": 0, "estimatedCpmEur": 0, "bestFormat": "", "adHooks": [], "testDurationDays": 0 },
   "viralEvidence": "2-4 Sätze: warum dieses Produkt gerade viral ist, mit konkreten Signalen aus den Quellen."
 }`,
       `Produkt: ${produktName}\nMonat: ${monthYear}\n\n${trendContext}\n\n──────\n\n${resultsToContext("PRODUKT-DETAILSUCHE:", detail)}${aliExtractedContent ? `\n\n──────\n\nALIEXPRESS-PRODUKTSEITE (für exakten Preis):\n${aliExtractedContent.slice(0, 3500)}` : ""}`,
@@ -710,8 +703,56 @@ Antworte NUR mit JSON, ohne weiteren Text:
       marketSaturation: score(st.marketSaturation),
     };
 
+    // ─── Claude 3 — OPTIONALE Deep-Analytics (separater Call) ──
+    // Schlaegt das hier fehl, ist es egal — wir geben einfach leere
+    // Defaults zurueck und das Produkt ist trotzdem komplett.
+    let analytics: Record<string, unknown> | null = null;
+    try {
+      analytics = await claudeJson(
+        client,
+        `Du bist E-Commerce-Stratege. Liefere fuer das gegebene Produkt eine kurze Audience- und Ad-Strategie.
+
+DEEP STATS:
+- competition (0-100): Konkurrenz im deutschen Markt (100 = stark umkaempft)
+- seasonality (0-100): 0 = Evergreen, 100 = stark saisonal
+- peakMonths: Monatsnummern 1-12 wo Nachfrage Peak hat ([] wenn ganzjaehrig)
+- growth90d (-100..500): geschaetztes Nachfrage-Wachstum 90 Tage in Prozent
+- repeatPurchaseRate (0-100): Wiederkauf-Wahrscheinlichkeit
+
+AUDIENCE:
+- primary: knapp die Hauptzielgruppe
+- ageRange: "18-34", "25-54" etc.
+- genderSkew: "male" | "female" | "balanced"
+- interests: 3-5 Targeting-Interessen
+- painPoint: 1 Satz Problem das das Produkt loest
+
+AD STRATEGY:
+- dailyMinEur: Mindest-Tagesbudget zum Validieren (10-50)
+- dailyRecommendedEur: empfohlenes Tagesbudget (50-300)
+- estimatedCpmEur: typischer CPM (5-25)
+- bestFormat: konkrete Format-Empfehlung in einem Satz
+- adHooks: 3 konkrete deutsche Hookline-Beispiele
+- testDurationDays: empfohlene Testdauer (3-14)
+
+Antworte NUR mit JSON:
+{
+  "deepStats": { "competition": 0, "seasonality": 0, "peakMonths": [], "growth90d": 0, "repeatPurchaseRate": 0 },
+  "audience": { "primary": "", "ageRange": "", "genderSkew": "balanced", "interests": [], "painPoint": "" },
+  "adStrategy": { "dailyMinEur": 0, "dailyRecommendedEur": 0, "estimatedCpmEur": 0, "bestFormat": "", "adHooks": [], "testDurationDays": 0 }
+}`,
+        `Produkt: ${str(parsed.titel)}\nKategorie: ${kategorie || str(parsed.kategorie)}\nBeschreibung: ${str(parsed.beschreibung).slice(0, 800)}`,
+        2500,
+        ANALYTICS_SCHEMA,
+      );
+    } catch (e) {
+      console.warn("[Discover] analytics call failed (optional):", e);
+    }
+
     // ─── Deep Analytics normalisieren ────────────────────────────
-    const ds = (parsed.deepStats ?? {}) as Record<string, unknown>;
+    // Source: analytics-call ODER parsed (falls jemand das doch noch
+    // im Core schickt). Fallback: leere Defaults.
+    const analyticsObj = (analytics || parsed) as Record<string, unknown>;
+    const ds = (analyticsObj.deepStats ?? {}) as Record<string, unknown>;
     const peakRaw = Array.isArray(ds.peakMonths) ? ds.peakMonths : [];
     const deepStats: ProduktDeepStats = {
       competition: score(ds.competition),
@@ -723,7 +764,7 @@ Antworte NUR mit JSON, ohne weiteren Text:
       repeatPurchaseRate: score(ds.repeatPurchaseRate),
     };
 
-    const au = (parsed.audience ?? {}) as Record<string, unknown>;
+    const au = (analyticsObj.audience ?? {}) as Record<string, unknown>;
     const genderRaw = str(au.genderSkew).toLowerCase();
     const audience: ProduktAudience = {
       primary: str(au.primary),
@@ -736,7 +777,7 @@ Antworte NUR mit JSON, ohne weiteren Text:
       painPoint: str(au.painPoint),
     };
 
-    const ad = (parsed.adStrategy ?? {}) as Record<string, unknown>;
+    const ad = (analyticsObj.adStrategy ?? {}) as Record<string, unknown>;
     const adStrategy: ProduktAdStrategy = {
       dailyMinEur: Math.max(0, Math.round(num(ad.dailyMinEur))),
       dailyRecommendedEur: Math.max(0, Math.round(num(ad.dailyRecommendedEur))),
