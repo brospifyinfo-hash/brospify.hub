@@ -284,28 +284,94 @@ async function searchAdsForPlatform(
 }
 
 /**
- * Suche nach einem realen Dropshipping-Shop, der das Produkt verkauft.
- * Wir scannen die Treffer auf typische Shop-Indizien: myshopify.com,
- * /products/ Pfad, /collections/, /shop/ Pfad — und sortieren
- * Marktplätze (Amazon/eBay/AliExpress) explizit raus.
+ * Suche nach einem REALEN Dropshipping-Shop, der das Produkt verkauft.
+ *
+ * Wir wollen KEINE grossen Marken/Marktplaetze (Amazon, Walmart,
+ * Target, Best Buy, etc.) und auch keine etablierten Brand-Shops (Nike,
+ * Apple, IKEA…). Stattdessen: typische Dropshipping-Buden mit
+ * Shopify-Untermerken (myshopify.com), klassische /products/ Slugs,
+ * "Pay with PayPal/Klarna", "Worldwide free shipping" — die ueblichen
+ * Indikatoren.
  */
 async function findDropshippingExample(
   apiKey: string,
   productQuery: string,
 ): Promise<ProduktDropshippingExample | undefined> {
-  const MARKETPLACE_PATTERN =
-    /(amazon\.|ebay\.|aliexpress\.|temu\.|wish\.|alibaba\.|walmart\.|etsy\.|target\.|costco\.|wayfair\.)/i;
-  const SHOP_HINT =
-    /(myshopify\.com|\/products\/|\/collections\/|\/shop\/|shopify-cdn|shopify-static)/i;
+  // Definitiv KEIN Dropshipping-Shop.
+  const BANNED = new RegExp(
+    [
+      // Grosse Marktplaetze + Retail-Giganten
+      "amazon\\.",
+      "ebay\\.",
+      "aliexpress\\.",
+      "alibaba\\.",
+      "temu\\.",
+      "wish\\.",
+      "walmart\\.",
+      "etsy\\.",
+      "target\\.",
+      "costco\\.",
+      "wayfair\\.",
+      "bestbuy\\.",
+      "homedepot\\.",
+      "kohls\\.",
+      "macys\\.",
+      "ikea\\.",
+      "lidl\\.",
+      "otto\\.",
+      "zalando\\.",
+      "mediamarkt\\.",
+      "saturn\\.",
+      // Established brands die kein Dropshipping sind
+      "nike\\.",
+      "adidas\\.",
+      "apple\\.",
+      "microsoft\\.",
+      "samsung\\.",
+      "google\\.",
+      "lego\\.",
+      // Content-Plattformen, Reviews, Blogs (keine Shops!)
+      "youtube\\.",
+      "youtu\\.",
+      "tiktok\\.",
+      "instagram\\.",
+      "facebook\\.",
+      "pinterest\\.",
+      "reddit\\.",
+      "twitter\\.",
+      "x\\.com",
+      "linkedin\\.",
+      "medium\\.",
+      "wikipedia\\.",
+      "quora\\.",
+      "trustpilot\\.",
+      "yelp\\.",
+      "thegoodtrade\\.",
+      "wirecutter\\.",
+      "techcrunch\\.",
+      "forbes\\.",
+      "hearstapps\\.",
+      "buzzfeed\\.",
+      "nytimes\\.",
+    ].join("|"),
+    "i",
+  );
 
-  // Zwei Queries parallel: einmal generisch "shop", einmal mit
-  // typischen Shopify-Markern, damit wir auch Eigendomain-Shops finden
-  // (viele Dropshipper haben eine eigene .com hinter Shopify).
+  // Starke Dropshipping-Shop-Indikatoren (Shopify-Default-Pfade
+  // + typische Shop-Marker).
+  const STRONG_SHOP_HINT = /(myshopify\.com|\/products\/[^/]+|\/collections\/[^/]+|shopify-cdn|shopify-static|woocommerce|\.shop$|\.store$)/i;
+  // Weichere Indikatoren (irgendwas was nach Shop aussieht).
+  const SOFT_SHOP_HINT = /(buy|kaufen|cart|warenkorb|checkout|product|shop|store|order)/i;
+
   let results: TavilyResult[] = [];
   try {
     const settled = await Promise.allSettled([
-      tavilySearch(apiKey, `${productQuery} buy shop online`, "basic", 10, false),
-      tavilySearch(apiKey, `${productQuery} "add to cart" shop`, "basic", 8, false),
+      // 1) Klassischer Dropship-Style: /products/<slug> auf Shopify
+      tavilySearch(apiKey, `${productQuery} site:myshopify.com OR inurl:/products/`, "advanced", 10, false),
+      // 2) Typische Dropshipping-Marker im Text
+      tavilySearch(apiKey, `${productQuery} "free worldwide shipping" "add to cart"`, "basic", 8, false),
+      // 3) Buy-Intent generisch (fuer den Fallback)
+      tavilySearch(apiKey, `${productQuery} buy online dropshipping store`, "basic", 8, false),
     ]);
     for (const s of settled) {
       if (s.status === "fulfilled") results.push(...s.value.results);
@@ -313,18 +379,26 @@ async function findDropshippingExample(
   } catch (e) {
     console.warn("[Discover] dropshipping example search failed:", e);
   }
-  results = results.filter((r) => r.url);
+  results = results.filter((r) => r.url && !BANNED.test(r.url));
 
+  // 1. Versuch: starke Shopify-Indikatoren (myshopify, /products/ etc.)
   for (const r of results) {
-    if (MARKETPLACE_PATTERN.test(r.url)) continue;
-    if (!SHOP_HINT.test(r.url)) continue;
-    return { url: r.url, title: r.title || "" };
+    if (STRONG_SHOP_HINT.test(r.url)) {
+      console.log(`[Discover] dropshipping STRONG match: ${r.url}`);
+      return { url: r.url, title: r.title || "" };
+    }
   }
-  // Fallback: nimm den ersten nicht-marktplatz Treffer, falls da war.
+  // 2. Versuch: weiche Shop-Indikatoren + Title-Heuristik
   for (const r of results) {
-    if (MARKETPLACE_PATTERN.test(r.url)) continue;
-    return { url: r.url, title: r.title || "" };
+    if (SOFT_SHOP_HINT.test(r.url) || SOFT_SHOP_HINT.test(r.title)) {
+      console.log(`[Discover] dropshipping SOFT match: ${r.url}`);
+      return { url: r.url, title: r.title || "" };
+    }
   }
+  // 3. Kein guter Treffer — wir geben lieber NICHTS zurueck als einen
+  // unpassenden Link (z.B. einen Reviewer-Artikel). User-UI zeigt dann
+  // einfach den Dropshipping-Block nicht an.
+  console.log("[Discover] no good dropshipping example found");
   return undefined;
 }
 
@@ -519,26 +593,69 @@ export async function POST(req: NextRequest) {
   const cfg = DEPTH[depth];
 
   try {
-    // Existing catalog titles → exclusion list.
+    // ─── Exclude list ────────────────────────────────────────────
+    // Wir nehmen ALLE bisherigen Titel (nicht nur die letzten 40),
+    // plus extrahierte Schluesselwoerter — damit "Schraeglauf-Laufband"
+    // und "Walking Pad" und "Incline Treadmill" alle als "schon da"
+    // erkannt werden und Claude was Neues waehlt.
     let existingTitles: string[] = [];
+    let excludedKeywords: string[] = [];
     try {
       const all = await getAllProdukte();
-      existingTitles = all.map((p) => p.titel).filter(Boolean).slice(-40);
+      existingTitles = all.map((p) => p.titel).filter(Boolean);
+      // Aus allen Titeln Schluesselwoerter (>=4 Zeichen) extrahieren —
+      // Stopwords raus, lowercase, dedupliziert. Das fangen wir bei
+      // Claude als "diese Themen schon abgedeckt".
+      const stopWords = new Set([
+        "fuer", "mit", "und", "der", "die", "das", "von", "den", "eine",
+        "einen", "with", "and", "the", "for", "your", "from", "this",
+        "smart", "mini", "premium", "luxury", "ultra", "pro",
+      ]);
+      const kwSet = new Set<string>();
+      for (const t of existingTitles) {
+        for (const w of t.toLowerCase().split(/[^a-zÀ-ſ]+/)) {
+          if (w.length >= 4 && !stopWords.has(w)) kwSet.add(w);
+        }
+      }
+      excludedKeywords = Array.from(kwSet).slice(0, 80);
     } catch (e) {
       console.error("[Discover] could not load existing products:", e);
     }
 
     const client = new Anthropic({ apiKey: anthropicKey });
     const monthYear = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
+    const isoWeek = Math.ceil(
+      (new Date().getTime() - new Date(new Date().getFullYear(), 0, 1).getTime()) /
+        (7 * 24 * 60 * 60 * 1000),
+    );
 
     // ─── Phase A — trend discovery ───────────────────────────────
+    // Wir RANDOMISIEREN die Trend-Queries aus einem groesseren Pool,
+    // damit zwei aufeinanderfolgende Discovery-Calls verschiedene
+    // Suchergebnisse bekommen und Claude nicht immer dieselben
+    // Produkte vorschlaegt.
     const kat = kategorie ? ` ${kategorie}` : "";
-    const trendQueries = [
+    const trendQueryPool = [
       `Facebook Meta Ad Library winning${kat} dropshipping products ${monthYear}`,
       `viral trending${kat} dropshipping products ${monthYear} TikTok`,
       `TikTok made me buy it best selling${kat} product ${monthYear}`,
+      `TikTok Shop trending${kat} bestseller week ${isoWeek} ${monthYear}`,
+      `Instagram Reels viral${kat} product ${monthYear} new`,
       `winning${kat} dropshipping products to sell ${monthYear}`,
-    ].slice(0, cfg.trendQueries);
+      `new${kat} dropshipping product trend ${monthYear} not saturated`,
+      `Shopify trending${kat} stores new product ${monthYear}`,
+      `AdSpy winning ad${kat} dropshipping ${monthYear}`,
+      `dropshipping product ideas${kat} ${monthYear} viral hooks`,
+      `Pinterest trending${kat} products ${monthYear} buy`,
+      `Reddit r/dropship trending${kat} product ${monthYear}`,
+    ];
+    // Fisher-Yates shuffle, dann nimm die ersten cfg.trendQueries.
+    for (let i = trendQueryPool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [trendQueryPool[i], trendQueryPool[j]] = [trendQueryPool[j], trendQueryPool[i]];
+    }
+    const trendQueries = trendQueryPool.slice(0, cfg.trendQueries);
+    console.log("[Discover] trend queries:", trendQueries);
 
     const settled = await Promise.allSettled(
       trendQueries.map((q) => tavilySearch(tavilyKey, q, cfg.tavilyDepth, cfg.maxResults, false)),
@@ -558,17 +675,32 @@ export async function POST(req: NextRequest) {
       .map((r, i) => resultsToContext(`SUCHE ${i + 1}:`, r))
       .join("\n\n──────\n\n");
     const exclude = existingTitles.length
-      ? `\n\nDiese Produkte sind bereits im Katalog — wähle ein ANDERES:\n${existingTitles.map((t) => `- ${t}`).join("\n")}`
+      ? `\n\nDIESE PRODUKTE SIND BEREITS IM KATALOG — STRIKT VERMEIDEN, waehle THEMATISCH KLAR ANDERES:\n${existingTitles.map((t) => `- ${t}`).join("\n")}`
+      : "";
+    const keywordBlock = excludedKeywords.length
+      ? `\n\nDIESE SCHLUESSELWOERTER sind in den existierenden Produkten enthalten — meide thematisch aehnliche Produkte (auch wenn sie anders heissen):\n${excludedKeywords.join(", ")}`
       : "";
     const katNote = kategorie
-      ? `\n\nWICHTIG: Das gewählte Produkt MUSS klar in die Kategorie "${kategorie}" passen.`
+      ? `\n\nWICHTIG: Das gewaehlte Produkt MUSS klar in die Kategorie "${kategorie}" passen.`
       : "";
+    // Zufalls-Seed im Prompt zwingt Claude zu mehr Diversitaet, auch
+    // wenn die Tavily-Treffer mal aehnlich aussehen.
+    const seed = Math.random().toString(36).slice(2, 8);
 
     const pick = await claudeJson(
       client,
-      `Du bist ein Dropshipping-Experte. Du erhältst aktuelle Web-Suchergebnisse (u.a. aus der Meta/Facebook Ad Library und von TikTok) zu viralen US-Dropshipping-Trends. Wähle daraus EIN konkretes, gerade besonders virales Produkt (kein generischer Evergreen). Antworte NUR mit JSON, ohne weiteren Text:
+      `Du bist ein Dropshipping-Experte mit harten Anti-Wiederholungs-Regeln.
+
+REGELN:
+1. Waehle EIN konkretes Produkt das GERADE JETZT (Woche ${isoWeek} ${monthYear}) viral ist — Trend muss frisch sein, nicht Evergreen.
+2. NIEMALS ein Produkt vorschlagen das THEMATISCH zu den existierenden gehoert (siehe Ausschlussliste).
+3. KEINE Klassiker wie: Handy-Halter, Wasserflaschen, LED-Leisten, Massage-Pistole, Posture Corrector, Walking Pad/Laufband, Schlafmasken, Yoga-Matten, generische Kuechen-Gadgets — die sind alle ueberverkauft.
+4. Bevorzuge Produkte mit klarem viralem Signal in den Suchergebnissen (TikTok-Trend, hohe Ad-Library-Activity, neue Shop-Launches).
+5. Variations-Hint: ${seed} — jeder Discovery-Call MUSS thematisch anders sein als der vorherige.
+
+Antworte NUR mit JSON, ohne weiteren Text:
 {"produktName": "kurzer Produktname auf Deutsch", "imageQuery": "english product name for a shopping/image search, 3-6 words"}`,
-      `Heutiger Monat: ${monthYear}.${katNote}\n\n${trendContext}${exclude}`,
+      `Heutiger Monat: ${monthYear} (Woche ${isoWeek}).${katNote}${exclude}${keywordBlock}\n\nSUCHERGEBNISSE:\n\n${trendContext}`,
       600,
       PICK_SCHEMA,
     );
