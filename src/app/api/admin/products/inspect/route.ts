@@ -17,10 +17,10 @@ async function requireAdmin() {
   return session.isLoggedIn && session.isAdmin;
 }
 
+// Make-Style 8-Spalten-Schema (matched die echte Sheet-Struktur).
 const EXPECTED_COLUMNS = [
-  "ID",
+  "CJ_ID",
   "SKU",
-  "Monat",
   "Titel",
   "Bild_URL",
   "Beschreibung",
@@ -47,10 +47,10 @@ export async function GET(_req: NextRequest) {
     });
     const sheets = google.sheets({ version: "v4", auth });
 
-    // Lies die ersten 5 Zeilen + ALLE Spalten (A bis Z um sicher zu gehen).
+    // Lies Header + bis zu 30 Datenzeilen (genug fuer den Sanity-Check).
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: process.env.GOOGLE_SHEET_ID,
-      range: "Produkte!A1:Z5",
+      range: "Produkte!A1:Z30",
     });
     const rows = res.data.values || [];
     const header = rows[0] || [];

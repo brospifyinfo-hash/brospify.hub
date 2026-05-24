@@ -801,8 +801,21 @@ export async function expireOverdueSubscriptions(
 }
 
 // ─── PRODUKTE (Tab 2) ──────────────────────────────────────────
-// Columns: A=ID, B=SKU, C=Monat, D=Titel, E=Bild_URL,
-//          F=Beschreibung, G=Preis, H=AliExpress_Link, I=Extra_JSON
+// Echtes Sheet-Layout (Make.com-Style):
+//   A=CJ_ID, B=SKU, C=Titel, D=Bild_URL, E=Beschreibung,
+//   F=Preis, G=AliExpress_Link, H=Extra_JSON
+//
+// HINTERGRUND: Frueher hatten wir intern eine 9-Spalten-Form mit
+// einer Monat-Spalte zwischen SKU und Titel. Das Sheet selbst war
+// aber schon immer im Make-Style ohne Monat-Spalte, sodass das
+// Schreiben mit produkt.monat in C reinging und dann das echte
+// Titel in D rutschte → komplettes Versatz-Chaos und neue Produkte
+// wurden mit titel = ID gespeichert (Make-Automation hat das
+// auto-gefuellt). Schema ist jetzt direkt 8-spaltig.
+//
+// `monat` bleibt im Produkt-Typ als optionaler Legacy-String (wird
+// nirgendwo gelesen/geschrieben, nur dass alter aufrufender Code
+// kompilierbar bleibt).
 
 export interface ProduktStats {
   trendScore: number;
@@ -945,13 +958,13 @@ function rowToProdukt(row: string[], index: number): Produkt {
     rowIndex: index + 2,
     id: row[0] || "",
     sku: row[1] || "",
-    monat: row[2] || "",
-    titel: row[3] || "",
-    bildUrl: row[4] || "",
-    beschreibung: row[5] || "",
-    preis: row[6] || "",
-    aliExpressLink: row[7] || "",
-    extra: parseExtra(row[8] || ""),
+    monat: "", // Legacy-Feld, nicht mehr im Sheet
+    titel: row[2] || "",
+    bildUrl: row[3] || "",
+    beschreibung: row[4] || "",
+    preis: row[5] || "",
+    aliExpressLink: row[6] || "",
+    extra: parseExtra(row[7] || ""),
   };
 }
 
@@ -959,7 +972,7 @@ export async function getAllProdukte(): Promise<Produkt[]> {
   const sheets = getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A2:I",
+    range: "Produkte!A2:H",
   });
   const rows = res.data.values || [];
   return rows.map((row, i) => rowToProdukt(row, i));
@@ -972,15 +985,14 @@ export async function getProdukteBysku(sku: string): Promise<Produkt[]> {
 
 function produktToRow(produkt: Omit<Produkt, "rowIndex">): string[] {
   return [
-    produkt.id,
-    produkt.sku,
-    produkt.monat,
-    produkt.titel,
-    produkt.bildUrl,
-    produkt.beschreibung,
-    produkt.preis,
-    produkt.aliExpressLink,
-    JSON.stringify(produkt.extra || {}),
+    produkt.id,           // A: CJ_ID
+    produkt.sku,          // B: SKU
+    produkt.titel,        // C: Titel
+    produkt.bildUrl,      // D: Bild_URL
+    produkt.beschreibung, // E: Beschreibung
+    produkt.preis,        // F: Preis
+    produkt.aliExpressLink, // G: AliExpress_Link
+    JSON.stringify(produkt.extra || {}), // H: Extra_JSON
   ];
 }
 
@@ -988,7 +1000,7 @@ export async function addProdukt(produkt: Omit<Produkt, "rowIndex">): Promise<vo
   const sheets = getSheets();
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A:I",
+    range: "Produkte!A:H",
     valueInputOption: "RAW",
     requestBody: { values: [produktToRow(produkt)] },
   });
@@ -1001,7 +1013,7 @@ export async function updateProdukt(
   const sheets = getSheets();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `Produkte!A${rowIndex}:I${rowIndex}`,
+    range: `Produkte!A${rowIndex}:H${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [produktToRow(produkt)] },
   });
@@ -1014,7 +1026,7 @@ export async function bulkAddProdukte(
   const values = produkte.map((p) => produktToRow(p));
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "Produkte!A:I",
+    range: "Produkte!A:H",
     valueInputOption: "RAW",
     requestBody: { values },
   });
@@ -1024,13 +1036,13 @@ export async function deleteProdukt(rowIndex: number): Promise<void> {
   const sheets = getSheets();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `Produkte!A${rowIndex}:I${rowIndex}`,
+    range: `Produkte!A${rowIndex}:H${rowIndex}`,
     valueInputOption: "RAW",
-    requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
+    requestBody: { values: [["", "", "", "", "", "", "", ""]] },
   });
 }
 
-// Aktualisiert ausschließlich die `Extra_JSON`-Spalte einer Produktzeile.
+// Aktualisiert ausschließlich die `Extra_JSON`-Spalte (H) einer Produktzeile.
 // Wird vom Linkcheck-Cron genutzt: der will linkStatus pflegen, ohne
 // Titel/Preis/AliExpress-Link aus Versehen zu überschreiben.
 export async function updateProduktExtra(
@@ -1040,7 +1052,7 @@ export async function updateProduktExtra(
   const sheets = getSheets();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `Produkte!I${rowIndex}`,
+    range: `Produkte!H${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [[JSON.stringify(extra || {})]] },
   });
