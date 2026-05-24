@@ -179,20 +179,30 @@ function simpleHash(s: string): number {
 }
 
 function seedScore(p: Produkt): number {
-  // Eingangsmetriken: alle 0-100 gestutzt (growth wird durch 2 geteilt
-  // weil sie bis 500 gehen kann, der Beitrag aber gedeckelt sein soll).
-  const trend = Math.max(0, Math.min(100, p.extra?.stats?.trendScore ?? 0));
-  const viral = Math.max(0, Math.min(100, p.extra?.stats?.viralScore ?? 0));
-  const growthRaw = p.extra?.deepStats?.growth90d ?? 0;
-  const growth = Math.max(0, Math.min(100, growthRaw / 2));
-  // Qualitaet 0-1 als gewichteter Mittelwert.
-  const quality = (trend * 0.5 + viral * 0.4 + growth * 0.1) / 100;
-  // Auf den Zielrange 20-350 mappen.
-  const base = 20 + quality * 330;
-  // Hash-Variation -15..+14 damit Produkte mit gleichen Stats nicht
-  // exakt denselben Wert haben.
-  const variation = (simpleHash(p.id) % 30) - 15;
-  return Math.max(20, Math.min(350, Math.round(base + variation)));
+  // ALLE verfuegbaren Stats fliessen in die Quality-Berechnung ein —
+  // sonst landen Produkte mit aehnlichen Trend-/Viral-Werten alle
+  // in der gleichen Range.
+  const trend = Math.max(0, Math.min(100, p.extra?.stats?.trendScore ?? 50));
+  const viral = Math.max(0, Math.min(100, p.extra?.stats?.viralScore ?? 50));
+  const impulse = Math.max(0, Math.min(100, p.extra?.stats?.impulseBuyFactor ?? 50));
+  const problem = Math.max(0, Math.min(100, p.extra?.stats?.problemSolverIndex ?? 50));
+  const compInv = Math.max(0, Math.min(100, 100 - (p.extra?.deepStats?.competition ?? 50)));
+  const growth = Math.max(0, Math.min(100, Math.max(0, p.extra?.deepStats?.growth90d ?? 0) / 2));
+  const quality =
+    (trend * 0.25 + viral * 0.2 + impulse * 0.15 + problem * 0.1 + compInv * 0.15 + growth * 0.15) / 100;
+
+  // ID-Hash treibt die PRIMAERE Streuung — 0..310 random.
+  const h = simpleHash(p.id);
+  const hashSpread = h % 311;
+
+  // Quality biased nur ±50 (also Top-Produkt bekommt im Schnitt +50,
+  // schwaches -50). Hashspread bleibt dominant -> echte Variation.
+  const qualityBoost = Math.round((quality - 0.5) * 100);
+
+  // Zusaetzliches kleines Rauschen aus zweitem Hash-Slice (±15).
+  const noise = ((h >> 8) % 31) - 15;
+
+  return Math.max(20, Math.min(350, 20 + hashSpread + qualityBoost + noise));
 }
 
 /** Endgueltiger Score wie er dem User gezeigt wird = echt + Seed. */
