@@ -818,15 +818,11 @@ function StatTile({
 function ProduktRow({
   produkt,
   rank,
-  hasShopifyToken,
   onInfo,
-  onImport,
 }: {
   produkt: Produkt;
   rank: number;
-  hasShopifyToken: boolean;
   onInfo: (p: Produkt) => void;
-  onImport: (p: Produkt) => void;
 }) {
   const price =
     produkt.extra?.finances?.recommendedSellPrice ||
@@ -903,27 +899,211 @@ function ProduktRow({
         </div>
       </div>
       <div className="flex items-center gap-1 shrink-0">
+        {/* EIN Button pro Produkt: oeffnet das Detail-Modal. Der
+            Import-Button lebt jetzt INNERHALB des Modals (zusammen
+            mit allen anderen Aktionen). */}
         <button
           onClick={() => onInfo(produkt)}
-          className="p-1.5 text-zinc-400 bg-white/5 border border-white/10 rounded-md"
+          className="px-2.5 py-1.5 text-zinc-200 bg-white/5 border border-white/10 hover:bg-white/10 rounded-md flex items-center gap-1.5 text-xs font-medium transition"
         >
           <Info className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">Details</span>
         </button>
-        {hasShopifyToken ? (
-          <button
-            onClick={() => onImport(produkt)}
-            className="btn-accent px-2 py-1.5 text-xs font-medium rounded-md flex items-center gap-1"
-          >
-            <Rocket className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Import</span>
-          </button>
-        ) : (
-          <div className="p-1.5 text-zinc-500 bg-white/5 border border-white/10 rounded-md">
-            <AlertCircle className="w-3.5 h-3.5" />
-          </div>
-        )}
       </div>
     </div>
+  );
+}
+
+// ─── Hero-Banner: einzelner stärkster Pick prominent oben ───────
+function HeroBanner({
+  produkt,
+  onOpen,
+}: {
+  produkt: Produkt;
+  onOpen: (p: Produkt) => void;
+}) {
+  const price =
+    produkt.extra?.finances?.recommendedSellPrice ||
+    (produkt.preis && !Number.isNaN(Number(produkt.preis))
+      ? Number(produkt.preis)
+      : 0);
+  const margin = produkt.extra?.finances?.profitMargin ?? 0;
+  const trend = produkt.extra?.stats?.trendScore ?? 0;
+  const growth = produkt.extra?.deepStats?.growth90d;
+  const hookExample = produkt.extra?.adStrategy?.adHooks?.[0];
+  return (
+    <button
+      onClick={() => onOpen(produkt)}
+      className="group w-full text-left rounded-2xl overflow-hidden border border-white/10 bg-gradient-to-br from-purple-500/10 via-pink-500/5 to-orange-500/10 hover:border-white/25 transition relative"
+    >
+      <div className="flex flex-col md:flex-row gap-3 p-3 md:p-4">
+        <div className="w-full md:w-44 h-32 md:h-32 shrink-0 rounded-xl overflow-hidden bg-white/5">
+          <Thumb src={produkt.bildUrl} />
+        </div>
+        <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-orange-500/20 text-orange-200 border border-orange-500/30">
+              <Flame className="w-2.5 h-2.5" />
+              Top Pick
+            </span>
+            {trend > 0 && (
+              <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-300 bg-emerald-500/10 px-1.5 py-0.5 rounded-full font-semibold">
+                <Zap className="w-2.5 h-2.5" />
+                {trend}% Trend
+              </span>
+            )}
+            {typeof growth === "number" && growth !== 0 && (
+              <span
+                className={`inline-flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${growth > 0 ? "text-emerald-300 bg-emerald-500/10" : "text-red-300 bg-red-500/10"}`}
+              >
+                {growth > 0 ? (
+                  <ArrowUpRight className="w-2.5 h-2.5" />
+                ) : (
+                  <ArrowDownRight className="w-2.5 h-2.5" />
+                )}
+                {growth > 0 ? "+" : ""}
+                {growth}% 90T
+              </span>
+            )}
+          </div>
+          <h2 className="text-base md:text-lg font-bold text-zinc-100 leading-tight line-clamp-2">
+            {displayTitle(produkt)}
+          </h2>
+          {hookExample && (
+            <p className="text-[11px] text-zinc-400 italic line-clamp-2">
+              „{hookExample}"
+            </p>
+          )}
+          <div className="flex items-center gap-3 mt-auto">
+            {price > 0 && (
+              <span
+                className="text-lg font-bold text-[#95BF47] tabular-nums"
+                title="Preis kann schwanken"
+              >
+                {price}€<span className="text-[9px] text-zinc-500 ml-0.5">~</span>
+              </span>
+            )}
+            {margin > 0 && (
+              <span className="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full font-semibold">
+                <DollarSign className="w-3 h-3" />
+                +{margin.toFixed(2)}€ Marge
+              </span>
+            )}
+            <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-300 group-hover:text-white transition">
+              Details <ArrowRight className="w-3 h-3" />
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+// ─── Curated Row (Netflix-Style horizontal scroll) ──────────────
+// Eine Zeile pro Signal (Trending / Marge / Wachstum / Wenig
+// Konkurrenz / Viral). Horizontal scrollbar mit Snap.
+function CuratedRow({
+  title,
+  subtitle,
+  icon: Icon,
+  tint,
+  produkte: list,
+  onInfo,
+}: {
+  title: string;
+  subtitle: string;
+  icon: typeof Flame;
+  tint: string;
+  produkte: Produkt[];
+  onInfo: (p: Produkt) => void;
+}) {
+  return (
+    <div className="space-y-2 pt-1">
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: `${tint}15`, color: tint }}
+        >
+          <Icon className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold text-zinc-100 leading-tight">{title}</h2>
+          <p className="text-[10px] text-zinc-500 leading-tight">{subtitle}</p>
+        </div>
+        <span className="ml-auto text-[10px] text-zinc-600 tabular-nums shrink-0">
+          {list.length}
+        </span>
+      </div>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x snap-mandatory">
+        {list.map((produkt, idx) => (
+          <CuratedCard
+            key={produkt.id}
+            produkt={produkt}
+            rank={idx + 1}
+            tint={tint}
+            onClick={() => onInfo(produkt)}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CuratedCard({
+  produkt,
+  rank,
+  tint,
+  onClick,
+}: {
+  produkt: Produkt;
+  rank: number;
+  tint: string;
+  onClick: () => void;
+}) {
+  const price =
+    produkt.extra?.finances?.recommendedSellPrice ||
+    (produkt.preis && !Number.isNaN(Number(produkt.preis))
+      ? Number(produkt.preis)
+      : 0);
+  const trend = produkt.extra?.stats?.trendScore ?? 0;
+  return (
+    <button
+      onClick={onClick}
+      className="shrink-0 w-44 snap-start text-left rounded-xl overflow-hidden border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] hover:border-white/25 transition group"
+    >
+      <div className="relative aspect-video bg-white/5 overflow-hidden">
+        <Thumb src={produkt.bildUrl} />
+        <div
+          className="absolute top-1.5 left-1.5 w-6 h-6 rounded-md flex items-center justify-center text-[10px] font-bold tabular-nums backdrop-blur-md border"
+          style={{ background: `${tint}25`, color: tint, borderColor: `${tint}40` }}
+        >
+          {rank}
+        </div>
+      </div>
+      <div className="p-2 space-y-1">
+        <h3 className="text-[11px] font-semibold text-zinc-100 leading-tight line-clamp-2 min-h-[2.5em]">
+          {displayTitle(produkt)}
+        </h3>
+        <div className="flex items-center gap-1.5">
+          {price > 0 ? (
+            <span
+              className="text-xs font-bold text-[#95BF47] tabular-nums"
+              title="Preis kann schwanken"
+            >
+              {price}€<span className="text-[8px] text-zinc-500 ml-0.5">~</span>
+            </span>
+          ) : (
+            <span className="text-[10px] text-zinc-500 italic">Preis folgt</span>
+          )}
+          {trend > 0 && (
+            <span className="ml-auto inline-flex items-center gap-0.5 text-[9px] text-emerald-300 bg-emerald-500/10 px-1 py-0.5 rounded-full font-semibold">
+              <Zap className="w-2.5 h-2.5" />
+              {trend}%
+            </span>
+          )}
+        </div>
+      </div>
+    </button>
   );
 }
 
@@ -956,9 +1136,6 @@ export default function ChartsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [highMarginOnly, setHighMarginOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("trend");
-  /** "" = alle Kategorien zeigen, sonst Filter auf eine. */
-  const [activeCategory, setActiveCategory] = useState<string>("");
-  const [viewMode, setViewMode] = useState<"sections" | "list">("sections");
 
   // AI Import Modal
   const [aiModal, setAiModal] = useState<{ open: boolean; produkt: Produkt | null }>({ open: false, produkt: null });
@@ -1010,7 +1187,6 @@ export default function ChartsPage() {
       const t = (pr.titel || "").toLowerCase();
       if (q && !t.includes(q)) return false;
       if (highMarginOnly && (pr.extra?.finances?.profitMargin ?? 0) < 15) return false;
-      if (activeCategory && (pr.sku || "—") !== activeCategory) return false;
       return true;
     });
     const sorters: Record<SortKey, (a: Produkt, b: Produkt) => number> = {
@@ -1033,21 +1209,8 @@ export default function ChartsPage() {
       },
     };
     return [...base].sort(sorters[sortKey]);
-  }, [produkte, searchTerm, highMarginOnly, sortKey, activeCategory]);
+  }, [produkte, searchTerm, highMarginOnly, sortKey]);
   const totalProducts = produkte.length;
-
-  // Kategorien (SKU-basiert) für Filter-Chips + Sektions-Gruppierung.
-  // Leere SKU wird als "—" gerendert.
-  const categories = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const pr of produkte) {
-      const key = (pr.sku || "—").toUpperCase();
-      map.set(key, (map.get(key) || 0) + 1);
-    }
-    return Array.from(map.entries())
-      .map(([key, count]) => ({ key, count }))
-      .sort((a, b) => b.count - a.count);
-  }, [produkte]);
 
   // Stats-Overview-Strip oben auf der Seite. Aggregiert über die
   // CURRENTLY VISIBLE (gefilterte) Liste, damit die Zahlen mit dem
@@ -1086,17 +1249,82 @@ export default function ChartsPage() {
     };
   }, [filteredProdukte]);
 
-  // Gruppierte Sektionen für die Sections-View (gruppiert nach SKU).
-  const sections = useMemo(() => {
-    const map = new Map<string, Produkt[]>();
-    for (const pr of filteredProdukte) {
-      const k = (pr.sku || "—").toUpperCase();
-      if (!map.has(k)) map.set(k, []);
-      map.get(k)!.push(pr);
-    }
-    return Array.from(map.entries())
-      .map(([key, list]) => ({ key, list }))
-      .sort((a, b) => b.list.length - a.list.length);
+  // Kuratierte Trend-Rows (Netflix-Style). Jede Row ist ein Signal.
+  // KEINE Kategorien — wir wollen dem User Discovery nach RELEVANZ
+  // zeigen, nicht nach willkuerlichem SKU-Bucket.
+  const curatedRows = useMemo(() => {
+    if (filteredProdukte.length === 0) return [];
+    const byTrend = [...filteredProdukte].sort(
+      (a, b) => (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),
+    );
+    const byMargin = [...filteredProdukte].sort(
+      (a, b) => (b.extra?.finances?.profitMargin ?? 0) - (a.extra?.finances?.profitMargin ?? 0),
+    );
+    const byGrowth = [...filteredProdukte].sort(
+      (a, b) => (b.extra?.deepStats?.growth90d ?? -999) - (a.extra?.deepStats?.growth90d ?? -999),
+    );
+    const byLowComp = [...filteredProdukte].sort(
+      (a, b) =>
+        (a.extra?.deepStats?.competition ?? 100) - (b.extra?.deepStats?.competition ?? 100),
+    );
+    const byViral = [...filteredProdukte].sort(
+      (a, b) => (b.extra?.stats?.viralScore ?? 0) - (a.extra?.stats?.viralScore ?? 0),
+    );
+
+    return [
+      {
+        key: "trend",
+        title: "Heute trending",
+        subtitle: "Die heißesten Produkte gerade",
+        icon: Flame,
+        tint: "#F97316",
+        list: byTrend.slice(0, 12),
+      },
+      {
+        key: "viral",
+        title: "Social-Media-Viralität",
+        subtitle: "Stärkste Performance auf TikTok & Reels",
+        icon: Megaphone,
+        tint: "#A855F7",
+        list: byViral.slice(0, 12),
+      },
+      {
+        key: "margin",
+        title: "Höchste Marge",
+        subtitle: "Maximaler Profit pro Verkauf",
+        icon: Wallet,
+        tint: "#10B981",
+        list: byMargin.slice(0, 12),
+      },
+      {
+        key: "growth",
+        title: "Wachstums-Champions",
+        subtitle: "Größter Nachfrage-Anstieg in 90 Tagen",
+        icon: ArrowUpRight,
+        tint: "#22C55E",
+        list: byGrowth.slice(0, 12),
+      },
+      {
+        key: "lowComp",
+        title: "Wenig Konkurrenz",
+        subtitle: "Noch nicht überlaufen — jetzt einsteigen",
+        icon: Crosshair,
+        tint: "#3B82F6",
+        list: byLowComp.slice(0, 12),
+      },
+    ].filter((row) => row.list.length > 0);
+  }, [filteredProdukte]);
+
+  // Hero-Pick: der einzelne stärkste Produkt-Eintrag fürs Top-Banner.
+  const heroPick = useMemo(() => {
+    if (filteredProdukte.length === 0) return null;
+    return [...filteredProdukte].sort((a, b) => {
+      const ta = a.extra?.stats?.trendScore ?? 0;
+      const tb = b.extra?.stats?.trendScore ?? 0;
+      const va = a.extra?.stats?.viralScore ?? 0;
+      const vb = b.extra?.stats?.viralScore ?? 0;
+      return (tb * 0.6 + vb * 0.4) - (ta * 0.6 + va * 0.4);
+    })[0];
   }, [filteredProdukte]);
 
   if (loading) {
@@ -1182,7 +1410,15 @@ export default function ChartsPage() {
           </div>
         )}
 
-        {/* ─── Search + Sort + Filter ───────────────────────── */}
+        {/* ─── Hero-Pick (das stärkste Produkt prominent) ─── */}
+        {heroPick && (
+          <HeroBanner
+            produkt={heroPick}
+            onOpen={(p) => setInfoModal({ open: true, produkt: p })}
+          />
+        )}
+
+        {/* ─── Search + Sort + Filter (ohne Kategorien) ─── */}
         {produkte.length > 0 && (
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative flex-1 min-w-[180px]">
@@ -1202,11 +1438,11 @@ export default function ChartsPage() {
                 onChange={(e) => setSortKey(e.target.value as SortKey)}
                 className="appearance-none bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-7 py-1.5 text-[11px] outline-none focus:border-white/25 transition text-zinc-300"
               >
-                <option value="trend">Sort: Trend</option>
-                <option value="viral">Sort: Viral</option>
-                <option value="margin">Sort: Marge</option>
-                <option value="growth">Sort: Wachstum</option>
-                <option value="lowCompetition">Sort: Wenig Konkurrenz</option>
+                <option value="trend">Alle: Trend</option>
+                <option value="viral">Alle: Viral</option>
+                <option value="margin">Alle: Marge</option>
+                <option value="growth">Alle: Wachstum</option>
+                <option value="lowCompetition">Alle: Wenig Konkurrenz</option>
               </select>
             </div>
             <button
@@ -1220,57 +1456,6 @@ export default function ChartsPage() {
               <DollarSign className="w-3 h-3" />
               Top-Marge
             </button>
-            <div className="flex shrink-0 bg-white/[0.03] border border-white/10 rounded-lg overflow-hidden">
-              <button
-                onClick={() => setViewMode("sections")}
-                className={`px-2.5 py-1.5 text-[10px] font-semibold transition ${
-                  viewMode === "sections" ? "bg-white/10 text-zinc-100" : "text-zinc-500"
-                }`}
-                title="Nach Kategorien gruppiert"
-              >
-                <Layers className="w-3 h-3" />
-              </button>
-              <button
-                onClick={() => setViewMode("list")}
-                className={`px-2.5 py-1.5 text-[10px] font-semibold transition ${
-                  viewMode === "list" ? "bg-white/10 text-zinc-100" : "text-zinc-500"
-                }`}
-                title="Flache Rangliste"
-              >
-                <Hash className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ─── Kategorie-Chips ────────────────────────────────── */}
-        {categories.length > 1 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-            <button
-              onClick={() => setActiveCategory("")}
-              className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition ${
-                activeCategory === ""
-                  ? "bg-[#95BF47]/15 border-[#95BF47]/35 text-[#95BF47]"
-                  : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-zinc-200"
-              }`}
-            >
-              Alle <span className="opacity-60">·</span> {totalProducts}
-            </button>
-            {categories.map((c) => (
-              <button
-                key={c.key}
-                onClick={() =>
-                  setActiveCategory((prev) => (prev === c.key ? "" : c.key))
-                }
-                className={`shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold border transition ${
-                  activeCategory === c.key
-                    ? "bg-purple-500/15 border-purple-500/35 text-purple-200"
-                    : "bg-white/[0.03] border-white/10 text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                {c.key} <span className="opacity-60">·</span> {c.count}
-              </button>
-            ))}
           </div>
         )}
 
@@ -1308,68 +1493,47 @@ export default function ChartsPage() {
                 : "Probier einen anderen Suchbegriff oder deaktiviere den Filter."}
             </p>
           </div>
-        ) : viewMode === "sections" ? (
-          // Gruppierte Sektion-Ansicht: pro Kategorie ein eigener Block.
-          <div className="space-y-5">
-            {sections.map((sec) => {
-              // Mini-Aggregate pro Sektion für die Header-Pille.
-              const avgTrend = Math.round(
-                sec.list.reduce((s, p) => s + (p.extra?.stats?.trendScore ?? 0), 0) /
-                  sec.list.length,
-              );
-              return (
-                <div key={sec.key} className="space-y-1.5">
-                  <div className="flex items-center gap-2 pb-1.5 border-b border-white/10">
-                    <Layers className="w-3.5 h-3.5 text-purple-300" />
-                    <h2 className="text-[12px] font-bold uppercase tracking-widest text-zinc-200">
-                      {sec.key}
-                    </h2>
-                    <span className="text-[10px] text-zinc-500">
-                      {sec.list.length} {sec.list.length === 1 ? "Produkt" : "Produkte"}
-                    </span>
-                    <span className="ml-auto inline-flex items-center gap-1 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-500/10 text-purple-200 border border-purple-500/20">
-                      <Activity className="w-2.5 h-2.5" />
-                      Ø {avgTrend}% Trend
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {sec.list.map((produkt, idx) => (
-                      <ProduktRow
-                        key={produkt.id}
-                        produkt={produkt}
-                        rank={idx + 1}
-                        hasShopifyToken={hasShopifyToken}
-                        onInfo={(p) => setInfoModal({ open: true, produkt: p })}
-                        onImport={(p) => {
-                          setAiModal({ open: true, produkt: p });
-                          setAiResult(null);
-                          setAiError("");
-                        }}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
         ) : (
-          // Flache, sortierte Rangliste über alle gefilterten Produkte.
-          <div className="space-y-1.5">
-            {filteredProdukte.map((produkt, idx) => (
-              <ProduktRow
-                key={produkt.id}
-                produkt={produkt}
-                rank={idx + 1}
-                hasShopifyToken={hasShopifyToken}
-                onInfo={(p) => setInfoModal({ open: true, produkt: p })}
-                onImport={(p) => {
-                  setAiModal({ open: true, produkt: p });
-                  setAiResult(null);
-                  setAiError("");
-                }}
-              />
-            ))}
-          </div>
+          <>
+            {/* ─── Kuratierte Trend-Rows ─── */}
+            {/* Nicht nach Kategorien — sondern nach SIGNAL. Jede Row
+                 zeigt die Top 12 Produkte fuer ein bestimmtes Kriterium.
+                 Searchterm/Filter werden weiter respektiert. */}
+            {searchTerm.trim() === "" && !highMarginOnly &&
+              curatedRows.map((row) => (
+                <CuratedRow
+                  key={row.key}
+                  title={row.title}
+                  subtitle={row.subtitle}
+                  icon={row.icon}
+                  tint={row.tint}
+                  produkte={row.list}
+                  onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+                />
+              ))}
+
+            {/* ─── Komplette Liste — bei aktivem Filter ODER zusaetzlich
+                 unten als "Alle Produkte"-Block. ─── */}
+            <div className="space-y-1.5 pt-2">
+              <div className="flex items-center gap-2 pb-1.5 border-b border-white/10">
+                <Hash className="w-3.5 h-3.5 text-zinc-300" />
+                <h2 className="text-[12px] font-bold uppercase tracking-widest text-zinc-200">
+                  Alle Produkte
+                </h2>
+                <span className="text-[10px] text-zinc-500">
+                  {filteredProdukte.length} {filteredProdukte.length === 1 ? "Produkt" : "Produkte"}
+                </span>
+              </div>
+              {filteredProdukte.map((produkt, idx) => (
+                <ProduktRow
+                  key={produkt.id}
+                  produkt={produkt}
+                  rank={idx + 1}
+                  onInfo={(p) => setInfoModal({ open: true, produkt: p })}
+                />
+              ))}
+            </div>
+          </>
         )}
       </main>
 
@@ -1473,7 +1637,33 @@ export default function ChartsPage() {
                   categoryOk={p.extra?.linkStatus?.aliExpressCategoryOk}
                 />
 
-                <p className="text-[11px] text-zinc-600 leading-relaxed border-t border-zinc-800 pt-4">
+                {/* ─── Import-CTA (lebt jetzt im Detail-Modal) ─── */}
+                <div className="border-t border-zinc-800 pt-4 space-y-2">
+                  {hasShopifyToken ? (
+                    <button
+                      onClick={() => {
+                        setInfoModal({ open: false, produkt: null });
+                        setAiModal({ open: true, produkt: p });
+                        setAiResult(null);
+                        setAiError("");
+                      }}
+                      className="w-full btn-accent py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      <Rocket className="w-4 h-4" />
+                      In meinen Shop importieren
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => router.push("/setup")}
+                      className="w-full py-2.5 bg-amber-500/10 border border-amber-500/25 text-amber-200 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
+                    >
+                      <AlertCircle className="w-4 h-4" />
+                      Shop verbinden, um zu importieren
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-zinc-600 leading-relaxed">
                   Hinweis: Alle dargestellten Metriken, Margen und Scores basieren auf unseren internen Marktanalysen und aktuellen E-Commerce-Trends. Da der Markt dynamisch ist, können reale Einkaufspreise, Verfügbarkeiten und die Marktsättigung variieren. Diese Daten dienen als strategische Empfehlung und stellen keine Garantie für spezifische Umsätze oder Profite dar.
                 </p>
               </div>

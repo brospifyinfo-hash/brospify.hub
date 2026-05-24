@@ -11,6 +11,7 @@ import {
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
   Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
+  Link2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -3283,7 +3284,19 @@ export default function AdminPage() {
                     generiert, SKU bleibt leer. */}
                 <div><label className="block text-xs text-zinc-400 mb-1">Titel <span className="text-red-400">*</span></label><input type="text" value={editProduct.titel} onChange={e => setEditProduct({ ...editProduct, titel: e.target.value })} placeholder="z. B. Mini Snack Bag Sealer – Frische-Versiegler für Tüten" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
                 <div><label className="block text-xs text-zinc-400 mb-1">Beschreibung (HTML)</label><textarea value={editProduct.beschreibung} onChange={e => setEditProduct({ ...editProduct, beschreibung: e.target.value })} rows={4} placeholder="<p>Verkaufsstarker Text mit <ul><li>Vorteilen</li></ul></p>" className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" /></div>
-                <div><label className="block text-xs text-zinc-400 mb-1">AliExpress Link</label><input type="text" value={editProduct.aliExpressLink} onChange={e => setEditProduct({ ...editProduct, aliExpressLink: e.target.value })} placeholder="https://www.aliexpress.com/item/..." className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+                <div><label className="block text-xs text-zinc-400 mb-1">AliExpress Link (Produkt)</label><input type="text" value={editProduct.aliExpressLink} onChange={e => setEditProduct({ ...editProduct, aliExpressLink: e.target.value })} placeholder="https://www.aliexpress.com/item/..." className="w-full px-3 py-2 bg-zinc-800 border border-zinc-700 rounded-xl text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" /></div>
+
+                {/* ─── Erweiterte Links + Ads (manuell editierbar) ─── */}
+                <LinksAdsEditor
+                  links={editProduct.links}
+                  ads={editProduct.ads}
+                  onLinksChange={(links) =>
+                    setEditProduct((prev) => (prev ? { ...prev, links } : prev))
+                  }
+                  onAdsChange={(ads) =>
+                    setEditProduct((prev) => (prev ? { ...prev, ads } : prev))
+                  }
+                />
 
                 {/* Image Drop Zone */}
                 <ImageDropZone
@@ -3500,6 +3513,138 @@ export default function AdminPage() {
 // AliExpress-Kategorie/Produkt-Link mit Status-Ampel, Dropshipping-
 // Beispiel, Anzahl gefundener Beispiel-Ads pro Plattform. Werte werden
 // hier nicht editiert — sie überleben den Save-Roundtrip via Passthrough.
+
+// ─── LinksAdsEditor — manuelle Pflege aller Links + Ads ─────────
+// Erlaubt dem Admin, alle Links (AliExpress-Kategorie, Dropshipping-
+// Shop) und Beispiel-Ad-URLs (TikTok, Instagram, Facebook, YouTube)
+// nachträglich zu editieren. Werte fließen via editProduct.links und
+// editProduct.ads in den Save-Roundtrip (extra-JSON).
+//
+// Pro Plattform wird ein <textarea> verwendet — eine URL pro Zeile,
+// leere Zeilen werden beim Save herausgefiltert.
+
+function LinksAdsEditor({
+  links,
+  ads,
+  onLinksChange,
+  onAdsChange,
+}: {
+  links?: ProduktLinks;
+  ads?: ProduktAds;
+  onLinksChange: (links: ProduktLinks) => void;
+  onAdsChange: (ads: ProduktAds) => void;
+}) {
+  const platformList: { key: keyof ProduktAds; label: string }[] = [
+    { key: "tiktok", label: "TikTok" },
+    { key: "instagram", label: "Instagram" },
+    { key: "facebook", label: "Facebook" },
+    { key: "youtube", label: "YouTube" },
+  ];
+
+  function setLink(field: keyof ProduktLinks, value: string) {
+    const next: ProduktLinks = { ...(links || {}) };
+    if (field === "dropshippingExample") {
+      next.dropshippingExample = value ? { url: value, title: links?.dropshippingExample?.title } : undefined;
+    } else {
+      next[field] = value || undefined;
+    }
+    onLinksChange(next);
+  }
+  function setDropshippingTitle(value: string) {
+    const next: ProduktLinks = { ...(links || {}) };
+    if (next.dropshippingExample) {
+      next.dropshippingExample = { ...next.dropshippingExample, title: value };
+    }
+    onLinksChange(next);
+  }
+  function setPlatformUrls(key: keyof ProduktAds, raw: string) {
+    const urls = raw.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    const next: ProduktAds = { ...(ads || {}) };
+    if (urls.length === 0) {
+      delete next[key];
+    } else {
+      next[key] = urls;
+    }
+    onAdsChange(next);
+  }
+
+  return (
+    <details className="bg-zinc-800/40 border border-zinc-700/50 rounded-xl overflow-hidden">
+      <summary className="cursor-pointer select-none px-4 py-3 flex items-center gap-2 hover:bg-white/[0.03] transition">
+        <Link2 className="w-4 h-4 text-purple-300" />
+        <span className="text-sm font-semibold text-zinc-200">Erweiterte Links &amp; Beispiel-Ads</span>
+        <span className="ml-auto text-[10px] text-zinc-500">editierbar</span>
+      </summary>
+      <div className="p-4 space-y-4 border-t border-white/5">
+        <div className="space-y-3">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">AliExpress &amp; Dropshipping</div>
+          <div>
+            <label className="block text-xs text-zinc-400 mb-1">AliExpress Kategorie-Suche</label>
+            <input
+              type="text"
+              value={links?.aliExpressCategory || ""}
+              onChange={(e) => setLink("aliExpressCategory", e.target.value)}
+              placeholder="https://www.aliexpress.com/wholesale?SearchText=..."
+              className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-[11px]"
+            />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Dropshipping-Shop URL</label>
+              <input
+                type="text"
+                value={links?.dropshippingExample?.url || ""}
+                onChange={(e) => setLink("dropshippingExample", e.target.value)}
+                placeholder="https://shop.myshopify.com/products/..."
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-[11px]"
+              />
+            </div>
+            <div>
+              <label className="block text-xs text-zinc-400 mb-1">Dropshipping-Shop Titel</label>
+              <input
+                type="text"
+                value={links?.dropshippingExample?.title || ""}
+                onChange={(e) => setDropshippingTitle(e.target.value)}
+                placeholder="z. B. Best Treadmills Online"
+                disabled={!links?.dropshippingExample?.url}
+                className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 text-[11px]"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Beispiel-Ads (URL pro Zeile)</div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {platformList.map((p) => {
+              const value = (ads?.[p.key] || []).join("\n");
+              return (
+                <div key={p.key}>
+                  <label className="block text-xs text-zinc-400 mb-1 flex items-center gap-1.5">
+                    {p.label}
+                    <span className="text-[9px] text-zinc-600">
+                      ({(ads?.[p.key] || []).length})
+                    </span>
+                  </label>
+                  <textarea
+                    value={value}
+                    onChange={(e) => setPlatformUrls(p.key, e.target.value)}
+                    rows={3}
+                    placeholder={`https://www.${p.key}.com/...`}
+                    className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none font-mono text-[10px]"
+                  />
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-zinc-600">
+            Eine URL pro Zeile. Wird im Charts-Detail-Modal als anklickbare Chips beim jeweiligen Plattform-Icon angezeigt — Plattform-Icon erscheint nur wenn min. 1 URL gepflegt ist.
+          </p>
+        </div>
+      </div>
+    </details>
+  );
+}
 
 function DiscoveryDataPanel({
   links,
