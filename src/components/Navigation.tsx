@@ -39,6 +39,7 @@ import {
   Check,
   Code2,
   GraduationCap,
+  Coins,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo } from "@/lib/branding";
@@ -154,10 +155,12 @@ export default function Navigation() {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
+  const supportRef = useRef<HTMLDivElement>(null);
   const credits = useCredits();
   const tierState = useTier();
 
@@ -182,11 +185,15 @@ export default function Navigation() {
       if (accountRef.current && !accountRef.current.contains(e.target as Node)) {
         setAccountOpen(false);
       }
+      if (supportRef.current && !supportRef.current.contains(e.target as Node)) {
+        setSupportOpen(false);
+      }
     }
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setAiOpen(false);
         setAccountOpen(false);
+        setSupportOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -200,6 +207,7 @@ export default function Navigation() {
   // Close dropdowns on route change
   useEffect(() => {
     setAccountOpen(false);
+    setSupportOpen(false);
   }, [pathname]);
 
   async function handleLogout() {
@@ -426,23 +434,14 @@ export default function Navigation() {
                 </AnimatePresence>
               </div>
 
-              <Link
-                href="/ai-support"
-                className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
-                  isAiSupportActive ? "" : "hover:bg-white/[0.04]"
-                }`}
-              >
-                <Bot className="w-3.5 h-3.5 text-zinc-400" />
-                <span className="text-zinc-300">Support</span>
-                {isAiSupportActive && (
-                  <motion.div
-                    layoutId="nav-indicator"
-                    className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-lg"
-                    style={{ zIndex: -1 }}
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                  />
-                )}
-              </Link>
+              {/* Support-Dropdown: AI Support, Tickets, E-Mail Support
+                  alle direkt auswaehlbar — kein Zwischenklick noetig. */}
+              <SupportDropdown
+                supportRef={supportRef}
+                supportOpen={supportOpen}
+                setSupportOpen={setSupportOpen}
+                pathname={pathname}
+              />
             </div>
 
             {/* Right Side */}
@@ -641,6 +640,14 @@ export default function Navigation() {
               {/* ─── Tools ─── */}
               <SectionLabel>Tools</SectionLabel>
               <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} />
+
+              {/* ─── Einstellungen — jede Section direkt klickbar ─── */}
+              <SectionLabel>Einstellungen</SectionLabel>
+              <SheetItem href="/settings#account" icon={UserIcon} label="Account & Google" onClick={() => setMoreSheetOpen(false)} sub="Login & Verknuepfung" />
+              <SheetItem href="/settings#shopify" icon={Store} label="Shopify-Verbindung" onClick={() => setMoreSheetOpen(false)} sub="Credentials & Status" />
+              <SheetItem href="/settings#brand" icon={Palette} label="Brand-Kit" onClick={() => setMoreSheetOpen(false)} sub="Logo, Farben, Voice" />
+              <SheetItem href="/settings#legal" icon={Scale} label="Firmendaten" onClick={() => setMoreSheetOpen(false)} sub="Adresse, USt-ID, HR" />
+              <SheetItem href="/settings#plan" icon={Coins} label="Abo & Credits" onClick={() => setMoreSheetOpen(false)} sub="Status & Verlaengerung" />
 
               {/* ─── Support — with Tickets + E-Mail sub-items ─── */}
               <SectionLabel>Support</SectionLabel>
@@ -843,8 +850,9 @@ function ProfileAccountGroup({ session, pathname, onNavigate }: {
                 </span>
               </div>
               <SubItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={onNavigate} />
-              <SubItem href="/settings" icon={Settings} label="Einstellungen" active={pathname === "/settings"} onClick={onNavigate} />
               <SubItem href="/tiers" icon={Crown} label="Abo-Modelle" active={pathname === "/tiers"} onClick={onNavigate} />
+              {/* Einstellungen jetzt unten direkt im "Einstellungen"-Sheet
+                  als Dropdown-Sections — kein Doppellink mehr hier. */}
 
               {/* Shop */}
               <div className="px-1 pt-2 pb-0.5">
@@ -1095,13 +1103,6 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             onClick={onClose}
           />
           <MenuItem
-            href="/settings"
-            icon={Settings}
-            label="Einstellungen"
-            active={pathname === "/settings"}
-            onClick={onClose}
-          />
-          <MenuItem
             href="/credits"
             icon={Plus}
             label="Credits"
@@ -1116,6 +1117,48 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             active={pathname === "/tiers"}
             onClick={onClose}
             sub={tier ? `Aktuell: ${tier.label}` : "Plan wählen"}
+          />
+        </MenuGroup>
+
+        {/* Einstellungen — jede Section direkt anklickbar statt einem
+            "Einstellungen"-Sammellink. Hash-Anker oeffnet die Sektion
+            auf der Settings-Page (useEffect lauscht auf hashchange). */}
+        <MenuGroup label="Einstellungen">
+          <MenuItem
+            href="/settings#account"
+            icon={UserIcon}
+            label="Account & Google"
+            active={pathname === "/settings"}
+            onClick={onClose}
+            sub="Login & Verknuepfung"
+          />
+          <MenuItem
+            href="/settings#shopify"
+            icon={Store}
+            label="Shopify-Verbindung"
+            onClick={onClose}
+            sub="Credentials & Status"
+          />
+          <MenuItem
+            href="/settings#brand"
+            icon={Palette}
+            label="Brand-Kit"
+            onClick={onClose}
+            sub="Logo, Farben, Voice"
+          />
+          <MenuItem
+            href="/settings#legal"
+            icon={Scale}
+            label="Firmendaten"
+            onClick={onClose}
+            sub="Adresse, USt-ID, HR"
+          />
+          <MenuItem
+            href="/settings#plan"
+            icon={Coins}
+            label="Abo & Credits"
+            onClick={onClose}
+            sub="Status & Verlaengerung"
           />
         </MenuGroup>
 
@@ -1219,6 +1262,108 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
         </button>
       </div>
     </motion.div>
+  );
+}
+
+// ─── Support-Dropdown (Desktop Top-Bar) ─────────────────────────
+// Drei Support-Wege als direkter Dropdown statt einzelnen Links/
+// Subroutes. Visuell wie AI Tools (Icon links, Titel + Subtext rechts).
+
+interface SupportItem {
+  href: string;
+  label: string;
+  sub: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+}
+
+const SUPPORT_ITEMS: SupportItem[] = [
+  { href: "/ai-support", label: "AI Support", sub: "Sofort-Antworten vom KI-Bot", icon: Bot, color: "text-cyan-400" },
+  { href: "/ai-support?view=tickets", label: "Meine Tickets", sub: "Vergangene Anfragen & Verlauf", icon: Inbox, color: "text-amber-400" },
+  { href: "/email-support", label: "E-Mail Support", sub: "Direkt an unser Team schreiben", icon: Mail, color: "text-rose-400" },
+];
+
+function SupportDropdown({
+  supportRef, supportOpen, setSupportOpen, pathname,
+}: {
+  supportRef: React.RefObject<HTMLDivElement | null>;
+  supportOpen: boolean;
+  setSupportOpen: (v: boolean) => void;
+  pathname: string;
+}) {
+  const isAnyActive = SUPPORT_ITEMS.some((it) => pathname === it.href.split("?")[0]);
+  return (
+    <div ref={supportRef} className="relative">
+      <button
+        onClick={() => setSupportOpen(!supportOpen)}
+        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
+          isAnyActive ? "" : "hover:bg-white/[0.04]"
+        }`}
+      >
+        <Bot className="w-3.5 h-3.5 text-zinc-400" />
+        <span className="text-zinc-300">Support</span>
+        <ChevronDown
+          className={`w-2.5 h-2.5 text-zinc-400 transition-transform duration-200 ${supportOpen ? "rotate-180" : ""}`}
+        />
+        {isAnyActive && (
+          <motion.div
+            layoutId="nav-indicator"
+            className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-lg"
+            style={{ zIndex: -1 }}
+            transition={{ type: "spring", stiffness: 350, damping: 30 }}
+          />
+        )}
+      </button>
+
+      <AnimatePresence>
+        {supportOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.16 }}
+            className="absolute top-full mt-2 right-0 w-[300px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+            style={{
+              background: "rgba(12,12,14,0.97)",
+              backdropFilter: "blur(48px) saturate(180%)",
+              WebkitBackdropFilter: "blur(48px) saturate(180%)",
+            }}
+          >
+            <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
+              <div className="text-[11px] font-bold text-white">Brospify Support</div>
+              <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">3 Wege</div>
+            </div>
+            <div className="p-2 space-y-1">
+              {SUPPORT_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href.split("?")[0];
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setSupportOpen(false)}
+                    className={`group flex items-center gap-3 p-2.5 rounded-xl border transition ${
+                      isActive
+                        ? "border-[#95BF47]/25 bg-[#95BF47]/8"
+                        : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                      <Icon className={`w-4 h-4 ${item.color}`} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[13px] text-white truncate">{item.label}</div>
+                      <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">{item.sub}</div>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 

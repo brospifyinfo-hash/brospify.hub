@@ -42,6 +42,7 @@ import {
   XCircle,
   RefreshCcw,
   ShieldOff,
+  ExternalLink as ExternalLinkIcon,
 } from "lucide-react";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
@@ -82,7 +83,10 @@ export default function SettingsPage() {
     land: "Deutschland", email: "", telefon: "", ustId: "", handelsregister: "",
   });
 
-  // Subscription state — drives the Plan & Credits box.
+  // Subscription state — drives the Plan & Credits box. Kuendigung
+  // laeuft jetzt ausserhalb des Hubs direkt im Shopify Customer-Portal
+  // (Link, nicht Modal/API) — deshalb keine cancel-Loading/Message-State
+  // mehr.
   const [planSku, setPlanSku] = useState<string>("");
   const [planStatus, setPlanStatus] = useState<string>("");
   const [tierSince, setTierSince] = useState<string>("");
@@ -90,14 +94,38 @@ export default function SettingsPage() {
   const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string>("");
   const [lastRefillAt, setLastRefillAt] = useState<string>("");
   const [hasContractId, setHasContractId] = useState(false);
-  const [cancelLoading, setCancelLoading] = useState(false);
-  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [cancelMessage, setCancelMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const [openSection, setOpenSection] = useState<string>("account");
   const [saving, setSaving] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  // ── URL-Hash → Section ───────────────────────────────────────────
+  // /settings#brand oeffnet direkt die Brand-Kit Section und scrollt
+  // dahin. Hash-Werte muessen den Section-IDs entsprechen:
+  // account, shopify, brand, legal, plan.
+  // Wird beim Mount und bei jeder Hash-Aenderung ausgefuehrt — so
+  // funktionieren Dropdown-Links im Nav auch wenn der User schon auf
+  // /settings ist und nur den Hash wechselt.
+  useEffect(() => {
+    const SECTION_IDS = new Set(["account", "shopify", "brand", "legal", "plan"]);
+    const applyHash = () => {
+      const h = (window.location.hash || "").replace("#", "").trim();
+      if (h && SECTION_IDS.has(h)) {
+        setOpenSection(h);
+        // Kleiner Delay damit der framer-motion Akkordion vorher den
+        // expand startet — sonst scrollt Browser zu collapsed Section
+        // und der User sieht nur den Header.
+        setTimeout(() => {
+          const el = document.getElementById(`section-${h}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+      }
+    };
+    applyHash(); // Beim Mount
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -154,29 +182,6 @@ export default function SettingsPage() {
       .catch(() => router.push("/"));
   }, [router]);
 
-  // ── Abo kuendigen ──
-  const handleCancelSubscription = useCallback(async () => {
-    setCancelLoading(true);
-    setCancelMessage(null);
-    try {
-      const res = await fetch("/api/subscription/cancel", { method: "POST" });
-      const data = await res.json();
-      if (res.ok) {
-        setTierCanceledAt(data.tierCanceledAt || new Date().toISOString());
-        setCancelMessage({
-          ok: !!data.shopifyCanceled,
-          text: data.message || "Abo gekuendigt.",
-        });
-        setCancelConfirmOpen(false);
-      } else {
-        setCancelMessage({ ok: false, text: data.error || "Kuendigung fehlgeschlagen." });
-      }
-    } catch {
-      setCancelMessage({ ok: false, text: "Netzwerkfehler bei Kuendigung." });
-    } finally {
-      setCancelLoading(false);
-    }
-  }, []);
 
   // ── Section save helper ──
   const saveSection = useCallback(async (
@@ -629,78 +634,8 @@ export default function SettingsPage() {
           hasShopifyToken={hasShopifyToken}
           openSection={openSection}
           onToggle={() => setOpenSection(openSection === "plan" ? "" : "plan")}
-          onAskCancel={() => setCancelConfirmOpen(true)}
         />
       </div>
-
-      {/* ─── Kuendigungs-Bestaetigung ───────────────────────────── */}
-      <AnimatePresence>
-        {cancelConfirmOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
-            onClick={() => !cancelLoading && setCancelConfirmOpen(false)}
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              className="bg-zinc-950 border border-white/10 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
-                  <ShieldOff className="w-5 h-5 text-red-400" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="text-base font-bold text-white">Abo wirklich kuendigen?</h3>
-                  <p className="text-[12px] text-zinc-400 mt-1 leading-snug">
-                    Du hast Zugriff bis zum Ende der bereits bezahlten Periode
-                    {subscriptionEndsAt ? ` (${formatGermanDate(subscriptionEndsAt)})` : ""}.
-                    Danach werden keine neuen Credits mehr gutgeschrieben.
-                  </p>
-                </div>
-              </div>
-              {!hasContractId && (
-                <div className="text-[11px] bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-amber-300">
-                  Hinweis: Kein Shopify-Vertrag verknuepft &mdash; deine Kuendigung wird lokal gespeichert,
-                  aber du musst zusaetzlich <a href="mailto:support@brospify.com" className="underline">support@brospify.com</a> kontaktieren
-                  um die Shopify-Verlaengerung zu stoppen.
-                </div>
-              )}
-              {cancelMessage && (
-                <div className={`text-[11px] rounded-lg p-2.5 ${cancelMessage.ok ? "bg-green-500/10 border border-green-500/20 text-green-300" : "bg-red-500/10 border border-red-500/20 text-red-300"}`}>
-                  {cancelMessage.text}
-                </div>
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setCancelConfirmOpen(false)}
-                  disabled={cancelLoading}
-                  className="flex-1 py-2.5 text-xs font-semibold rounded-xl bg-white/[0.06] hover:bg-white/[0.10] transition disabled:opacity-50"
-                >
-                  Abbrechen
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelSubscription}
-                  disabled={cancelLoading}
-                  className="flex-1 py-2.5 text-xs font-semibold rounded-xl bg-red-600/90 hover:bg-red-600 text-white transition disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {cancelLoading ? (
-                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Kuendige...</>
-                  ) : (
-                    <><ShieldOff className="w-3.5 h-3.5" /> Ja, kuendigen</>
-                  )}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
@@ -724,13 +659,16 @@ interface PlanSectionProps {
   hasShopifyToken: boolean;
   openSection: string;
   onToggle: () => void;
-  onAskCancel: () => void;
 }
 
 function PlanSection({
   credits, planSku, planStatus, tierSince, tierCanceledAt, subscriptionEndsAt,
-  lastRefillAt, hasContractId, hasShopifyToken, openSection, onToggle, onAskCancel,
+  lastRefillAt, hasContractId, hasShopifyToken, openSection, onToggle,
 }: PlanSectionProps) {
+  // hasContractId aktuell unused — entfernen wenn nicht in 1-2 Wochen
+  // wieder gebraucht. Behalten weil API-Endpoint /api/subscription/cancel
+  // existiert und das Feld lesen koennte (future).
+  void hasContractId;
   const tierKey = tierFromSku(planSku);
   const tier = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
   const tierLabel = tierKey ? TIER_DISPLAY_LABEL[tierKey] : "Kein Abo";
@@ -839,14 +777,21 @@ function PlanSection({
             Mehr Credits
           </Link>
           {tierKey && !isCanceled && (
-            <button
-              type="button"
-              onClick={onAskCancel}
+            // Direkter Link zum Shopify Customer-Portal damit der Kunde sein Abo
+            // selbst bei Shopify kuendigt — keine Risiken durch API-Fehler, kein
+            // Modal noetig, Kunde sieht Stornoschein direkt im offiziellen
+            // Shopify-Account. URL kann via NEXT_PUBLIC_SHOPIFY_CUSTOMER_PORTAL_URL
+            // ueberschrieben werden falls die Shop-Adresse mal wechselt.
+            <a
+              href={process.env.NEXT_PUBLIC_SHOPIFY_CUSTOMER_PORTAL_URL || "https://brospify.com/account"}
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition"
             >
               <ShieldOff className="w-4 h-4" />
-              Abo kuendigen
-            </button>
+              Abo bei Shopify kuendigen
+              <ExternalLinkIcon className="w-3 h-3" />
+            </a>
           )}
           {(!tierKey || isExpired) && (
             <Link
@@ -912,9 +857,10 @@ function SettingsSection({
   return (
     <motion.div
       key={id}
+      id={`section-${id}`}
       initial={{ opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden"
+      className="rounded-xl border border-white/10 bg-white/[0.02] overflow-hidden scroll-mt-20"
     >
       <button
         onClick={onToggle}
