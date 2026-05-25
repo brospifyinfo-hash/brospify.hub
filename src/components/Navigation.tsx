@@ -56,13 +56,13 @@ interface SessionInfo {
   impersonatedBy?: string | null;
 }
 
+// Top-Bar: NUR Daily-Use Seiten. Tools/Support sind eigene Dropdowns.
+// Code-Blocks ist jetzt unter AI Tools, Coaching unter Support.
 const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home, feature: undefined },
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3, feature: "chartsAnalytics" as const },
   { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
   { href: "/themes", labelKey: "themes" as const, icon: Palette, feature: "themesGallery" as const },
-  { href: "/code-blocks", labelKey: "codeBlocks" as const, icon: Code2, feature: "codeBlocks" as const },
-  { href: "/coaching", labelKey: "coaching" as const, icon: GraduationCap, feature: "coaching" as const },
 ];
 
 const AI_TOOLS = [
@@ -125,6 +125,16 @@ const AI_TOOLS = [
     border: "border-purple-500/15",
     iconColor: "text-purple-400",
     feature: "aiStudio" as const,
+  },
+  {
+    href: "/code-blocks",
+    title: "Code-Blöcke",
+    desc: "AI-generierte HTML-Snippets · 10 Credits",
+    icon: Code2,
+    color: "from-emerald-500/15 to-teal-500/15",
+    border: "border-emerald-500/15",
+    iconColor: "text-emerald-400",
+    feature: "codeBlocks" as const,
   },
 ] as const;
 
@@ -630,30 +640,68 @@ export default function Navigation() {
         {moreSheetOpen && (
           <BottomSheet onClose={() => setMoreSheetOpen(false)} title="Mehr">
             <div className="space-y-2">
-              {/* ─── Profile & Account expandable ─── */}
-              <ProfileAccountGroup
-                session={session}
-                pathname={pathname}
-                onNavigate={() => setMoreSheetOpen(false)}
-              />
+              {/* Kompakter Avatar-Header — kein Expand mehr noetig,
+                  weil alle Profil/Account-Items unten in den
+                  Sektionen direkt klickbar sind. */}
+              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
+                {session.googleImage ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={session.googleImage} alt="" className="w-10 h-10 rounded-lg border border-white/[0.08] object-cover shrink-0" />
+                ) : (
+                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center shrink-0">
+                    <UserIcon className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[13px] font-semibold truncate">{session.googleName || "Profil"}</div>
+                  {session.googleEmail && (
+                    <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
+                  )}
+                </div>
+                {session.isAdmin && (
+                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                    Admin
+                  </span>
+                )}
+              </div>
 
-              {/* ─── Tools ─── */}
-              <SectionLabel>Tools</SectionLabel>
-              <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} />
+              {/* Mobile More-Sheet: identische Hierarchie wie Desktop
+                  Avatar-Menue. Reihenfolge: Konto → Einstellungen →
+                  Shop-Tools → Support → Rechtliches → (Verwaltung).
+                  Tools/Themes/Charts sind oben in der Bottom-Tab-Bar,
+                  AI-Tools im AI-Sheet — also nicht hier wiederholen. */}
 
-              {/* ─── Einstellungen — jede Section direkt klickbar ─── */}
+              {/* ─── Mein Konto ─── */}
+              <SectionLabel>Mein Konto</SectionLabel>
+              <SheetItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={() => setMoreSheetOpen(false)} sub="Persönliche Daten" />
+              <SheetItem href="/settings#plan" icon={Coins} label="Abo-Status" onClick={() => setMoreSheetOpen(false)} sub="Aktueller Plan + Verlängerung" />
+              <SheetItem href="/credits" icon={Plus} label="Credits aufladen" active={pathname === "/credits"} onClick={() => setMoreSheetOpen(false)} sub="Extra Credits kaufen" />
+              <SheetItem href="/tiers" icon={Crown} label="Abo upgraden" active={pathname === "/tiers"} onClick={() => setMoreSheetOpen(false)} sub="Mehr Credits pro Monat" />
+
+              {/* ─── Einstellungen (3 sections) ─── */}
               <SectionLabel>Einstellungen</SectionLabel>
-              <SheetItem href="/settings#account" icon={UserIcon} label="Account & Google" onClick={() => setMoreSheetOpen(false)} sub="Login & Verknuepfung" />
-              <SheetItem href="/settings#shopify" icon={Store} label="Shopify-Verbindung" onClick={() => setMoreSheetOpen(false)} sub="Credentials & Status" />
-              <SheetItem href="/settings#brand" icon={Palette} label="Brand-Kit" onClick={() => setMoreSheetOpen(false)} sub="Logo, Farben, Voice" />
-              <SheetItem href="/settings#legal" icon={Scale} label="Firmendaten" onClick={() => setMoreSheetOpen(false)} sub="Adresse, USt-ID, HR" />
-              <SheetItem href="/settings#plan" icon={Coins} label="Abo & Credits" onClick={() => setMoreSheetOpen(false)} sub="Status & Verlaengerung" />
+              <SheetItem href="/settings#account" icon={UserIcon} label="Account & Google" onClick={() => setMoreSheetOpen(false)} sub="Login & Verknüpfung" />
+              <SheetItem href="/settings#shopify" icon={Store} label="Shopify-Verbindung" onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
+              <SheetItem href="/settings#plan" icon={Coins} label="Abo verwalten" onClick={() => setMoreSheetOpen(false)} sub="Verlängerung, Kündigung" />
 
-              {/* ─── Support — with Tickets + E-Mail sub-items ─── */}
+              {/* ─── Shop-Tools ─── */}
+              <SectionLabel>Shop-Tools</SectionLabel>
+              <SheetItem href="/setup" icon={Store} label="Shop neu verbinden" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Shopify-Setup-Wizard" />
+              <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum, AGB, DSGVO" />
+
+              {/* ─── Support (4 Wege) ─── */}
               <SectionLabel>Support</SectionLabel>
-              <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub="Sofort-Antwort vom KI-Bot" />
               <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
               <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
+              <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team (Gold-only)" />
+
+              {/* ─── Rechtliches ─── */}
+              <SectionLabel>Rechtliches</SectionLabel>
+              <SheetItem href="https://brospify.com/policies/legal-notice" icon={FileText} label="Impressum" external onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label="Datenschutz" external onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="https://brospify.com/policies/terms-of-service" icon={Receipt} label="AGB" external onClick={() => setMoreSheetOpen(false)} />
+              <SheetItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label="Widerrufsbelehrung" external onClick={() => setMoreSheetOpen(false)} />
 
               {/* ─── Admin (if applicable) ─── */}
               {session.isAdmin && (
@@ -797,125 +845,9 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // Rechtstexte (für Shop), Impressum / Datenschutz / AGB / Widerruf
 // (links to brospify.com/policies for the platform-level pages).
 
-function ProfileAccountGroup({ session, pathname, onNavigate }: {
-  session: { googleName?: string; googleEmail?: string; googleImage?: string };
-  pathname: string;
-  onNavigate: () => void;
-}) {
-  const [open, setOpen] = useState(true);
-
-  return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-3 py-3"
-      >
-        {session.googleImage ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={session.googleImage} alt="" className="w-10 h-10 rounded-lg border border-white/[0.08] object-cover shrink-0" />
-        ) : (
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center shrink-0">
-            <UserIcon className="w-4 h-4 text-white" />
-          </div>
-        )}
-        <div className="min-w-0 flex-1 text-left">
-          <div className="text-[13px] sm:text-sm font-semibold truncate">{session.googleName || "Profil"}</div>
-          {session.googleEmail && (
-            <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
-          )}
-        </div>
-        <motion.div
-          animate={{ rotate: open ? 180 : 0 }}
-          transition={{ duration: 0.2 }}
-          className="shrink-0"
-        >
-          <ChevronDown className="w-4 h-4 text-zinc-500" />
-        </motion.div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {open && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="overflow-hidden"
-          >
-            <div className="px-2 pb-2 pt-1 space-y-1 border-t border-white/[0.04]">
-              {/* Account */}
-              <div className="px-1 pt-1 pb-0.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
-                  Account
-                </span>
-              </div>
-              <SubItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={onNavigate} />
-              <SubItem href="/tiers" icon={Crown} label="Abo-Modelle" active={pathname === "/tiers"} onClick={onNavigate} />
-              {/* Einstellungen jetzt unten direkt im "Einstellungen"-Sheet
-                  als Dropdown-Sections — kein Doppellink mehr hier. */}
-
-              {/* Shop */}
-              <div className="px-1 pt-2 pb-0.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
-                  Shop
-                </span>
-              </div>
-              <SubItem href="/setup" icon={Store} label="Shop verbinden / Setup" active={pathname === "/setup"} onClick={onNavigate} />
-              <SubItem href="/legal" icon={Scale} label="Rechtstexte für deinen Shop" active={pathname === "/legal"} onClick={onNavigate} />
-
-              {/* Brospify Hub legal */}
-              <div className="px-1 pt-2 pb-0.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
-                  Rechtliches
-                </span>
-              </div>
-              <SubItem href="https://brospify.com/policies/legal-notice" icon={FileText} label="Impressum" external onClick={onNavigate} />
-              <SubItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label="Datenschutzerklärung" external onClick={onNavigate} />
-              <SubItem href="https://brospify.com/policies/terms-of-service" icon={Receipt} label="AGB" external onClick={onNavigate} />
-              <SubItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label="Widerrufsbelehrung" external onClick={onNavigate} />
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function SubItem({ href, icon: Icon, label, active, external, onClick }: {
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active?: boolean;
-  external?: boolean;
-  onClick?: () => void;
-}) {
-  const inner = (
-    <>
-      <Icon className="w-3.5 h-3.5 shrink-0 text-zinc-400" />
-      <span className="text-[12.5px] font-medium flex-1 truncate">{label}</span>
-      {external
-        ? <ExternalLink className="w-3 h-3 text-zinc-600 shrink-0" />
-        : <ChevronRight className="w-3 h-3 text-zinc-600 shrink-0" />}
-    </>
-  );
-  const className = `flex items-center gap-2 px-2.5 py-2 rounded-lg transition ${
-    active
-      ? "bg-[#95BF47]/10 text-[#95BF47]"
-      : "text-zinc-200 hover:bg-white/[0.04] active:bg-white/[0.06]"
-  }`;
-  if (external) {
-    return (
-      <a href={href} target="_blank" rel="noopener noreferrer" onClick={onClick} className={className}>
-        {inner}
-      </a>
-    );
-  }
-  return (
-    <Link href={href} onClick={onClick} className={className}>
-      {inner}
-    </Link>
-  );
-}
+// ProfileAccountGroup + SubItem entfernt — durch direkte SheetItems
+// im Mobile-More-Sheet ersetzt, die identisch zur Desktop-Avatar-
+// Menue-Struktur sind. Keine Doppelung mehr.
 
 // ─── Global Credits Pill ────────────────────────────────────────
 // Always-visible balance display. Compact on mobile (icon + number),
@@ -1092,114 +1024,99 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
         </div>
       </div>
 
-      {/* Menu groups */}
+      {/* Menu groups — logische Hierarchie:
+          1. MEIN KONTO: alles ueber den Account-Status (Profil, Credits, Abo)
+          2. EINSTELLUNGEN: nur 3 - die Verwaltungs-Seiten
+          3. SHOP-TOOLS: Setup + Legal-Generator (ein-/zweimal genutzt)
+          4. RECHTLICHES: externe Policy-Pages (selten)
+          5. VERWALTUNG: admin-only
+
+          Doppelungen entfernt:
+          - "Support"-Gruppe ist raus (eigenes Top-Bar Dropdown)
+          - "Abo-Modelle" + "Credits" + "Abo & Credits" sind in MEIN KONTO
+            zusammengezogen mit klaren sub-Labels die ihren Zweck unter-
+            scheiden (Status / Aufladen / Upgrade) */}
       <div className="p-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
-        <MenuGroup label="Account">
+        <MenuGroup label="Mein Konto">
           <MenuItem
             href="/profile"
             icon={UserIcon}
             label="Mein Profil"
             active={pathname === "/profile"}
             onClick={onClose}
+            sub="Persönliche Daten"
+          />
+          <MenuItem
+            href="/settings#plan"
+            icon={Coins}
+            label="Abo-Status"
+            onClick={onClose}
+            sub={tier ? `${tier.label} aktiv` : "Kein Abo"}
           />
           <MenuItem
             href="/credits"
             icon={Plus}
-            label="Credits"
+            label="Credits aufladen"
             active={pathname === "/credits"}
             onClick={onClose}
-            sub="Aufladen & Verlauf"
+            sub="Extra Credits kaufen"
           />
-          <MenuItem
-            href="/tiers"
-            icon={Crown}
-            label="Abo-Modelle"
-            active={pathname === "/tiers"}
-            onClick={onClose}
-            sub={tier ? `Aktuell: ${tier.label}` : "Plan wählen"}
-          />
+          {tierKey !== "business" && (
+            <MenuItem
+              href="/tiers"
+              icon={Crown}
+              label="Abo upgraden"
+              active={pathname === "/tiers"}
+              onClick={onClose}
+              sub={tier ? `Mehr als ${tier.label}` : "Plan wählen"}
+              accent
+            />
+          )}
         </MenuGroup>
 
-        {/* Einstellungen — jede Section direkt anklickbar statt einem
-            "Einstellungen"-Sammellink. Hash-Anker oeffnet die Sektion
-            auf der Settings-Page (useEffect lauscht auf hashchange). */}
+        {/* Einstellungen — nur 3 Punkte nach dem Aufraeumen. Jeder
+            ist ein Hash-Anker auf /settings, die Page oeffnet die
+            entsprechende Section automatisch. */}
         <MenuGroup label="Einstellungen">
           <MenuItem
             href="/settings#account"
             icon={UserIcon}
             label="Account & Google"
-            active={pathname === "/settings"}
             onClick={onClose}
-            sub="Login & Verknuepfung"
+            sub="Login & Verknüpfung"
           />
           <MenuItem
             href="/settings#shopify"
             icon={Store}
             label="Shopify-Verbindung"
             onClick={onClose}
-            sub="Credentials & Status"
-          />
-          <MenuItem
-            href="/settings#brand"
-            icon={Palette}
-            label="Brand-Kit"
-            onClick={onClose}
-            sub="Logo, Farben, Voice"
-          />
-          <MenuItem
-            href="/settings#legal"
-            icon={Scale}
-            label="Firmendaten"
-            onClick={onClose}
-            sub="Adresse, USt-ID, HR"
+            sub="API-Credentials"
           />
           <MenuItem
             href="/settings#plan"
             icon={Coins}
-            label="Abo & Credits"
+            label="Abo verwalten"
             onClick={onClose}
-            sub="Status & Verlaengerung"
+            sub="Verlängerung, Kündigung"
           />
         </MenuGroup>
 
-        <MenuGroup label="Shop">
+        <MenuGroup label="Shop-Tools">
           <MenuItem
             href="/setup"
             icon={Store}
-            label="Shop verbinden"
+            label="Shop neu verbinden"
             active={pathname === "/setup"}
             onClick={onClose}
+            sub="Shopify-Setup-Wizard"
           />
           <MenuItem
             href="/legal"
             icon={Scale}
-            label="Rechtstexte für deinen Shop"
+            label="Rechtstexte generieren"
             active={pathname === "/legal"}
             onClick={onClose}
-          />
-        </MenuGroup>
-
-        <MenuGroup label="Support">
-          <MenuItem
-            href="/ai-support"
-            icon={Bot}
-            label="AI Support"
-            active={pathname === "/ai-support" && !pathname.includes("ticket")}
-            onClick={onClose}
-          />
-          <MenuItem
-            href="/ai-support?view=tickets"
-            icon={Inbox}
-            label="Meine Tickets"
-            active={false}
-            onClick={onClose}
-          />
-          <MenuItem
-            href="/email-support"
-            icon={Mail}
-            label="E-Mail Support"
-            active={pathname === "/email-support"}
-            onClick={onClose}
+            sub="Impressum, AGB, DSGVO"
           />
         </MenuGroup>
 
@@ -1281,6 +1198,7 @@ const SUPPORT_ITEMS: SupportItem[] = [
   { href: "/ai-support", label: "AI Support", sub: "Sofort-Antworten vom KI-Bot", icon: Bot, color: "text-cyan-400" },
   { href: "/ai-support?view=tickets", label: "Meine Tickets", sub: "Vergangene Anfragen & Verlauf", icon: Inbox, color: "text-amber-400" },
   { href: "/email-support", label: "E-Mail Support", sub: "Direkt an unser Team schreiben", icon: Mail, color: "text-rose-400" },
+  { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team (Gold)", icon: GraduationCap, color: "text-purple-400" },
 ];
 
 function SupportDropdown({

@@ -32,8 +32,6 @@ import {
   ChevronRight,
   Plus,
   X,
-  Palette as PaletteIcon,
-  Upload,
   Mail,
   Link2,
   Calendar,
@@ -51,12 +49,6 @@ import { tierFromSku, TIER_DISPLAY_LABEL, DEFAULT_TIERS, type TierKey } from "@/
 
 interface Profile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
-  brand_kit?: { logoUrl?: string; primaryColor?: string; accentColor?: string; toneOfVoice?: string };
-  legal_data?: {
-    firmenname?: string; inhaber?: string; strasse?: string; plz?: string;
-    stadt?: string; land?: string; email?: string; telefon?: string;
-    ustId?: string; handelsregister?: string;
-  };
   linkedGoogleEmail?: string;
   tier?: TierKey;
   tierSince?: string;
@@ -77,11 +69,6 @@ export default function SettingsPage() {
   const [linkedGoogleEmail, setLinkedGoogleEmail] = useState("");
 
   const [credentials, setCredentials] = useState({ clientId: "", clientSecret: "" });
-  const [brandKit, setBrandKit] = useState({ logoUrl: "", primaryColor: "#95BF47", accentColor: "#0EA5E9", toneOfVoice: "" });
-  const [legalData, setLegalData] = useState({
-    firmenname: "", inhaber: "", strasse: "", plz: "", stadt: "",
-    land: "Deutschland", email: "", telefon: "", ustId: "", handelsregister: "",
-  });
 
   // Subscription state — drives the Plan & Credits box. Kuendigung
   // laeuft jetzt ausserhalb des Hubs direkt im Shopify Customer-Portal
@@ -101,14 +88,11 @@ export default function SettingsPage() {
   const [error, setError] = useState("");
 
   // ── URL-Hash → Section ───────────────────────────────────────────
-  // /settings#brand oeffnet direkt die Brand-Kit Section und scrollt
-  // dahin. Hash-Werte muessen den Section-IDs entsprechen:
-  // account, shopify, brand, legal, plan.
-  // Wird beim Mount und bei jeder Hash-Aenderung ausgefuehrt — so
-  // funktionieren Dropdown-Links im Nav auch wenn der User schon auf
-  // /settings ist und nur den Hash wechselt.
+  // /settings#shopify oeffnet die Shopify-Section und scrollt dahin.
+  // Hash-Werte muessen den 3 verbleibenden Section-IDs entsprechen:
+  // account, shopify, plan. (brand + legal wurden entfernt.)
   useEffect(() => {
-    const SECTION_IDS = new Set(["account", "shopify", "brand", "legal", "plan"]);
+    const SECTION_IDS = new Set(["account", "shopify", "plan"]);
     const applyHash = () => {
       const h = (window.location.hash || "").replace("#", "").trim();
       if (h && SECTION_IDS.has(h)) {
@@ -149,24 +133,6 @@ export default function SettingsPage() {
         setCredentials({
           clientId: p.shopify_credentials?.clientId || "",
           clientSecret: p.shopify_credentials?.clientSecret || "",
-        });
-        setBrandKit({
-          logoUrl: p.brand_kit?.logoUrl || "",
-          primaryColor: p.brand_kit?.primaryColor || "#95BF47",
-          accentColor: p.brand_kit?.accentColor || "#0EA5E9",
-          toneOfVoice: p.brand_kit?.toneOfVoice || "",
-        });
-        setLegalData({
-          firmenname: p.legal_data?.firmenname || "",
-          inhaber: p.legal_data?.inhaber || "",
-          strasse: p.legal_data?.strasse || "",
-          plz: p.legal_data?.plz || "",
-          stadt: p.legal_data?.stadt || "",
-          land: p.legal_data?.land || "Deutschland",
-          email: p.legal_data?.email || "",
-          telefon: p.legal_data?.telefon || "",
-          ustId: p.legal_data?.ustId || "",
-          handelsregister: p.legal_data?.handelsregister || "",
         });
         // Subscription-Felder. SKU (B/S/G) ist Source of Truth via tierFromSku,
         // profile.tier ist nur Konvenienz. status (column C) zeigt aktiv/gekuendigt/abgelaufen.
@@ -232,22 +198,6 @@ export default function SettingsPage() {
     } finally {
       setSaving(null);
     }
-  }
-
-  async function handleLogoUpload(file: File) {
-    setSaving("brand");
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const r = await fetch("/api/upload", { method: "POST", body: fd });
-      if (r.ok) {
-        const data = await r.json();
-        const updated = { ...brandKit, logoUrl: data.url };
-        setBrandKit(updated);
-        await saveSection("brand", { brand_kit: updated });
-      }
-    } catch { /* ignore */ }
-    finally { setSaving(null); }
   }
 
   if (loading) {
@@ -408,218 +358,14 @@ export default function SettingsPage() {
           </div>
         </SettingsSection>
 
-        {/* ─── Brand Kit ────────────────────────────── */}
-        <SettingsSection
-          id="brand"
-          title="Brand-Kit"
-          desc="Logo, Farben, Tonalität — wird von allen AI-Tools genutzt"
-          icon={PaletteIcon}
-          color="#A855F7"
-          open={openSection === "brand"}
-          onToggle={() => setOpenSection(openSection === "brand" ? "" : "brand")}
-          saving={saving === "brand"}
-          saved={savedFlash === "brand"}
-        >
-          <div className="space-y-3">
-            {/* Logo upload */}
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
-                Logo
-              </label>
-              <div className="flex items-center gap-3">
-                <div className="w-14 h-14 rounded-xl bg-white/[0.04] border border-white/10 flex items-center justify-center overflow-hidden">
-                  {brandKit.logoUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={brandKit.logoUrl} alt="" className="w-full h-full object-contain" />
-                  ) : (
-                    <PaletteIcon className="w-5 h-5 text-zinc-600" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs hover:bg-white/[0.08] transition">
-                    <Upload className="w-3.5 h-3.5" />
-                    Logo hochladen
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) handleLogoUpload(f);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  {brandKit.logoUrl && (
-                    <button
-                      onClick={() => {
-                        const updated = { ...brandKit, logoUrl: "" };
-                        setBrandKit(updated);
-                        saveSection("brand", { brand_kit: updated });
-                      }}
-                      className="ml-2 text-[10px] text-zinc-500 hover:text-red-400 transition"
-                    >
-                      Entfernen
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Colors */}
-            <div className="grid grid-cols-2 gap-2.5">
-              <ColorField
-                label="Primärfarbe"
-                value={brandKit.primaryColor}
-                onChange={(v) => setBrandKit((p) => ({ ...p, primaryColor: v }))}
-              />
-              <ColorField
-                label="Akzent-Farbe"
-                value={brandKit.accentColor}
-                onChange={(v) => setBrandKit((p) => ({ ...p, accentColor: v }))}
-              />
-            </div>
-
-            {/* Tone of voice */}
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
-                Tonalität
-              </label>
-              <select
-                value={brandKit.toneOfVoice}
-                onChange={(e) => setBrandKit((p) => ({ ...p, toneOfVoice: e.target.value }))}
-                className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-white/25 transition"
-              >
-                <option value="">— Standard —</option>
-                <option value="freundlich">Freundlich & Locker</option>
-                <option value="seriös">Seriös & Professionell</option>
-                <option value="hip">Hip & Modern</option>
-                <option value="luxuriös">Luxuriös & Hochwertig</option>
-                <option value="minimal">Minimalistisch & Klar</option>
-              </select>
-              <p className="text-[10px] text-zinc-600 mt-1">
-                Wird von Blog, E-Mail und Produkt-Generator als Stil-Vorgabe genutzt.
-              </p>
-            </div>
-
-            <SaveButton
-              onClick={() => saveSection("brand", { brand_kit: brandKit })}
-              saving={saving === "brand"}
-              saved={savedFlash === "brand"}
-            />
-          </div>
-        </SettingsSection>
-
-        {/* ─── Legal / Firmendaten ─────────────────── */}
-        <SettingsSection
-          id="legal"
-          title="Firmendaten"
-          desc="Für automatische Rechtstexte (Impressum, AGB, Datenschutz)"
-          icon={Scale}
-          color="#3B82F6"
-          open={openSection === "legal"}
-          onToggle={() => setOpenSection(openSection === "legal" ? "" : "legal")}
-          saving={saving === "legal"}
-          saved={savedFlash === "legal"}
-        >
-          <div className="space-y-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <FormField
-                label="Firmenname"
-                value={legalData.firmenname}
-                onChange={(v) => setLegalData((p) => ({ ...p, firmenname: v }))}
-                placeholder="z.B. Brospify GmbH"
-              />
-              <FormField
-                label="Inhaber"
-                value={legalData.inhaber}
-                onChange={(v) => setLegalData((p) => ({ ...p, inhaber: v }))}
-                placeholder="Max Mustermann"
-              />
-            </div>
-            <FormField
-              label="Straße & Nr."
-              value={legalData.strasse}
-              onChange={(v) => setLegalData((p) => ({ ...p, strasse: v }))}
-              placeholder="Musterstraße 1"
-            />
-            <div className="grid grid-cols-3 gap-2">
-              <FormField
-                label="PLZ"
-                value={legalData.plz}
-                onChange={(v) => setLegalData((p) => ({ ...p, plz: v }))}
-                placeholder="12345"
-              />
-              <div className="col-span-2">
-                <FormField
-                  label="Stadt"
-                  value={legalData.stadt}
-                  onChange={(v) => setLegalData((p) => ({ ...p, stadt: v }))}
-                  placeholder="Berlin"
-                />
-              </div>
-            </div>
-            <div>
-              <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
-                Land
-              </label>
-              <select
-                value={legalData.land}
-                onChange={(e) => setLegalData((p) => ({ ...p, land: e.target.value }))}
-                className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-3 py-2.5 text-[13px] outline-none focus:border-white/25 transition"
-              >
-                <option value="Deutschland">Deutschland</option>
-                <option value={"Österreich"}>{"Österreich"}</option>
-                <option value="Schweiz">Schweiz</option>
-              </select>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <FormField
-                label="E-Mail"
-                value={legalData.email}
-                onChange={(v) => setLegalData((p) => ({ ...p, email: v }))}
-                type="email"
-                placeholder="kontakt@…"
-              />
-              <FormField
-                label="Telefon"
-                value={legalData.telefon}
-                onChange={(v) => setLegalData((p) => ({ ...p, telefon: v }))}
-                type="tel"
-                placeholder="+49 123…"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <FormField
-                label="USt-IdNr."
-                value={legalData.ustId}
-                onChange={(v) => setLegalData((p) => ({ ...p, ustId: v }))}
-                placeholder="DE123456789"
-                mono
-              />
-              <FormField
-                label="Handelsregister"
-                value={legalData.handelsregister}
-                onChange={(v) => setLegalData((p) => ({ ...p, handelsregister: v }))}
-                placeholder="HRB 12345"
-                mono
-              />
-            </div>
-
-            <SaveButton
-              onClick={() => saveSection("legal", { legal_data: legalData })}
-              saving={saving === "legal"}
-              saved={savedFlash === "legal"}
-            />
-
-            <Link
-              href="/legal"
-              className="block text-center w-full py-2 text-[11px] text-zinc-400 hover:text-white transition"
-            >
-              → Rechtstexte für deinen Shop generieren
-            </Link>
-          </div>
-        </SettingsSection>
+        {/* Brand-Kit + Firmendaten wurden entfernt. Brand-Kit Daten
+            werden trotzdem noch von AI-Tools genutzt wenn sie im
+            Profile-JSON vorhanden sind (siehe Profile-Type) — sie
+            koennen jetzt nur nicht mehr ueber die Settings-UI gepflegt
+            werden. Falls wir das doch nochmal wollen: Section-Code im
+            Git-History ist erreichbar. Rechtstexte-Generator unter
+            /legal nutzt eigene Formularfelder, ist also nicht auf die
+            entfernte "Firmendaten"-Section angewiesen. */}
 
         {/* ─── Abo & Credits ─────────── */}
         <PlanSection
@@ -966,37 +712,6 @@ function ReadOnlyField({ label, value, icon: Icon }: {
         <div className="text-[12px] text-zinc-200 truncate font-mono">
           {value}
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Color picker field ──────────────────────────────────────────
-
-function ColorField({ label, value, onChange }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <div>
-      <label className="block text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
-        {label}
-      </label>
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          className="w-9 h-9 rounded-md bg-transparent border border-white/10 cursor-pointer shrink-0"
-        />
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          maxLength={7}
-          className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-lg px-2.5 py-2 text-[12px] font-mono outline-none focus:border-white/25 transition"
-        />
       </div>
     </div>
   );
