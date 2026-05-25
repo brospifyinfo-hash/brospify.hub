@@ -143,29 +143,42 @@ export async function POST(req: NextRequest) {
 
     console.log("[Tickets] Created:", ticket.id, "for", ticket.customerKey, "subject:", ticket.subject);
 
-    // Admin-Email-Benachrichtigung. Fire-and-forget — wenn das mailen
-    // failed soll der API-Call nicht failen.
-    void (async () => {
-      try {
-        let customerEmail = session.googleEmail || "";
-        if (session.lizenzschluessel) {
-          const k = await findKundeByKey(session.lizenzschluessel);
-          if (k?.kundenEmail) customerEmail = k.kundenEmail;
-        }
-        await sendAdminTicketAlert({
-          ticketId: ticket.id,
-          subject: ticket.subject,
-          customerName: ticket.customerName,
-          customerEmail,
-          customerKey: ticket.customerKey,
-          initialMessage: initialMessage?.trim() || undefined,
-        });
-      } catch (e) {
-        console.warn("[Tickets] admin notify failed:", e);
+    // Admin-Email-Benachrichtigung. Frueher fire-and-forget (void),
+    // aber Vercel serverless killt das Promise nachdem die Response
+    // raus ist -> Mail wurde nie verschickt. Jetzt AWAITED damit der
+    // Send wirklich durchlaeuft, bevor wir antworten. Kosten: 300-800ms
+    // extra Latenz beim Ticket-Submit, dafuer kommt die Mail garantiert.
+    let emailStatus = "skipped";
+    let emailError: string | undefined;
+    try {
+      let customerEmail = session.googleEmail || "";
+      if (session.lizenzschluessel) {
+        const k = await findKundeByKey(session.lizenzschluessel);
+        if (k?.kundenEmail) customerEmail = k.kundenEmail;
       }
-    })();
+      const sendResult = await sendAdminTicketAlert({
+        ticketId: ticket.id,
+        subject: ticket.subject,
+        customerName: ticket.customerName,
+        customerEmail,
+        customerKey: ticket.customerKey,
+        initialMessage: initialMessage?.trim() || undefined,
+      });
+      if (sendResult.sent) {
+        emailStatus = "sent";
+        console.log("[Tickets] admin email sent ok:", sendResult.id);
+      } else {
+        emailStatus = "failed";
+        emailError = sendResult.error;
+        console.warn("[Tickets] admin email NOT sent:", sendResult.error);
+      }
+    } catch (e) {
+      emailStatus = "exception";
+      emailError = e instanceof Error ? e.message : String(e);
+      console.error("[Tickets] admin email threw:", e);
+    }
 
-    return NextResponse.json({ success: true, ticket });
+    return NextResponse.json({ success: true, ticket, emailStatus, emailError });
   } catch (error) {
     console.error("[Tickets] POST error:", error);
     return NextResponse.json({ error: "Fehler beim Erstellen des Tickets." }, { status: 500 });

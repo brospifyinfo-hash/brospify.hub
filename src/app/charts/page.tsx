@@ -152,6 +152,18 @@ interface Produkt {
   };
 }
 
+/** Marge in Prozent (Aufschlag auf den Einkaufspreis).
+ *  Beispiel: Einkauf 5€, Verkauf 25€ → (25-5)/5*100 = 400%.
+ *  Ranking-Maßstab: 100% bedeutet doppelter Preis, 300% = 4-fach. */
+function marginPercent(p: Produkt): number {
+  const f = p.extra?.finances;
+  if (!f) return 0;
+  const buy = f.buyPrice ?? 0;
+  const margin = f.profitMargin ?? 0;
+  if (buy <= 0) return 0;
+  return Math.round((margin / buy) * 100);
+}
+
 /** REAL Score nur aus echten Stimmen + Admin-Override. */
 function rawVoteScore(v?: ProduktVotes): number {
   if (!v) return 0;
@@ -1127,9 +1139,13 @@ function ProduktRow({
             </span>
           ) : null}
           {produkt.extra?.finances?.profitMargin ? (
-            <span className="hidden sm:flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full">
+            <span
+              className="hidden sm:flex items-center gap-1 text-xs text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded-full"
+              title={`Marge: +${produkt.extra.finances.profitMargin.toFixed(2)}€ (${marginPercent(produkt)}%)`}
+            >
               <DollarSign className="w-3 h-3" />
-              +{produkt.extra.finances.profitMargin.toFixed(2)}€
+              +{marginPercent(produkt)}%
+              <span className="opacity-60 text-[10px]">({produkt.extra.finances.profitMargin.toFixed(2)}€)</span>
             </span>
           ) : null}
         </div>
@@ -1487,9 +1503,13 @@ function HeroBanner({
               </span>
             )}
             {margin > 0 && (
-              <span className="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full font-semibold">
+              <span
+                className="inline-flex items-center gap-1 text-xs text-amber-300 bg-amber-500/10 px-2 py-0.5 rounded-full font-semibold"
+                title={`+${margin.toFixed(2)}€ Marge`}
+              >
                 <DollarSign className="w-3 h-3" />
-                +{margin.toFixed(2)}€ Marge
+                +{marginPercent(produkt)}% Marge
+                <span className="opacity-60 text-[10px]">({margin.toFixed(2)}€)</span>
               </span>
             )}
             <span className="ml-auto inline-flex items-center gap-1 text-[11px] text-zinc-300 group-hover:text-white transition">
@@ -1805,7 +1825,10 @@ export default function ChartsPage() {
     const base = produkte.filter((pr) => {
       const t = (pr.titel || "").toLowerCase();
       if (q && !t.includes(q)) return false;
-      if (highMarginOnly && (pr.extra?.finances?.profitMargin ?? 0) < 15) return false;
+      // "Top-Marge"-Filter: jetzt PROZENT-basiert (>= 100% Aufschlag,
+      // d.h. mindestens Verdoppelung des Einkaufspreises). Vorher war
+      // das ein willkuerlicher 15€-Threshold.
+      if (highMarginOnly && marginPercent(pr) < 100) return false;
       return true;
     });
     const sorters: Record<SortKey, (a: Produkt, b: Produkt) => number> = {
@@ -1813,9 +1836,9 @@ export default function ChartsPage() {
         (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),
       viral: (a, b) =>
         (b.extra?.stats?.viralScore ?? 0) - (a.extra?.stats?.viralScore ?? 0),
-      margin: (a, b) =>
-        (b.extra?.finances?.profitMargin ?? 0) -
-        (a.extra?.finances?.profitMargin ?? 0),
+      // Marge-Sort jetzt nach PROZENT — billige Produkte mit hohem
+      // Aufschlag schlagen teure Produkte mit absoluten Euro-Margen.
+      margin: (a, b) => marginPercent(b) - marginPercent(a),
       growth: (a, b) =>
         (b.extra?.deepStats?.growth90d ?? -200) -
         (a.extra?.deepStats?.growth90d ?? -200),
@@ -1843,7 +1866,8 @@ export default function ChartsPage() {
       return {
         count: 0,
         avgTrend: 0,
-        avgMargin: 0,
+        avgMarginPct: 0,
+        avgMarginEur: 0,
         topCategory: "",
         hotCount: 0,
         avgGrowth: 0,
@@ -1859,10 +1883,11 @@ export default function ChartsPage() {
     return {
       count: list.length,
       avgTrend: Math.round(sum((p) => p.extra?.stats?.trendScore ?? 0) / list.length),
-      avgMargin:
-        Math.round(
-          (sum((p) => p.extra?.finances?.profitMargin ?? 0) / list.length) * 100,
-        ) / 100,
+      // Ø Marge ist jetzt in PROZENT — vergleichbar zwischen Produkten
+      // unabhaengig vom Preis-Level.
+      avgMarginPct: Math.round(sum((p) => marginPercent(p)) / list.length),
+      // Euro-Average bleibt fuer Tooltip-Hinweise.
+      avgMarginEur: Math.round((sum((p) => p.extra?.finances?.profitMargin ?? 0) / list.length) * 100) / 100,
       topCategory: topCat,
       hotCount: list.filter((p) => (p.extra?.stats?.trendScore ?? 0) >= 80).length,
       avgGrowth: Math.round(
@@ -1879,8 +1904,11 @@ export default function ChartsPage() {
     const byTrend = [...filteredProdukte].sort(
       (a, b) => (b.extra?.stats?.trendScore ?? 0) - (a.extra?.stats?.trendScore ?? 0),
     );
+    // Sortierung nach Marge-PROZENT (Aufschlag relativ zum Einkauf),
+    // nicht nach absoluten Euro — so faellt ein 5€->50€ Schnaeppchen
+    // (900%) ueber ein 100€->150€ Premium-Produkt (50%).
     const byMargin = [...filteredProdukte].sort(
-      (a, b) => (b.extra?.finances?.profitMargin ?? 0) - (a.extra?.finances?.profitMargin ?? 0),
+      (a, b) => marginPercent(b) - marginPercent(a),
     );
     const byGrowth = [...filteredProdukte].sort(
       (a, b) => (b.extra?.deepStats?.growth90d ?? -999) - (a.extra?.deepStats?.growth90d ?? -999),
@@ -2051,8 +2079,8 @@ export default function ChartsPage() {
             />
             <StatTile
               label="Ø Marge"
-              value={`${overview.avgMargin.toFixed(2)}€`}
-              sub="Verkauf - Einkauf"
+              value={`+${overview.avgMarginPct}%`}
+              sub={`≈ ${overview.avgMarginEur.toFixed(2)}€`}
               icon={Wallet}
               tint="#10B981"
             />
@@ -2309,34 +2337,88 @@ export default function ChartsPage() {
                       </div>
                       <div className="text-center">
                         <div className="text-xs text-zinc-500 mb-1">Marge</div>
-                        <div className="text-lg font-bold text-emerald-400">+{p.extra.finances.profitMargin.toFixed(2)}&euro;</div>
+                        {/* Marge in PROZENT als Haupt-Anzeige, EUR-Betrag
+                            als kleiner Hinweis darunter. So sieht der User
+                            sofort wie stark der Aufschlag ist (Vergleichbar
+                            zwischen Produkten). */}
+                        <div className="text-lg font-bold text-emerald-400">
+                          +{marginPercent(p)}%
+                        </div>
+                        <div className="text-[10px] text-emerald-300/70 tabular-nums">
+                          ≈ +{p.extra.finances.profitMargin.toFixed(2)}€
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-1.5 text-[10px] text-amber-300/90 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1.5 mt-1">
                       <AlertCircle className="w-3 h-3 shrink-0" />
-                      <span>Preise sind Richtwerte &mdash; der reale Preis kann schwanken.</span>
+                      <span>Preise sind Richtwerte &mdash; der reale Preis kann schwanken. Marge-% = Aufschlag auf den Einkaufspreis.</span>
                     </div>
                   </div>
                 )}
 
-                {/* ─── Markt / Saison / Wachstum ────────────────── */}
-                <DeepStatsBlock ds={p.extra?.deepStats} />
+                {/* ─── Legacy-Produkt-Check ──────────────────────
+                    Wenn KEINER der erweiterten Datenblöcke vorhanden
+                    ist (Produkt wurde vor dem grossen Discovery-Update
+                    erstellt), zeigen wir EINE freundliche Meldung
+                    statt 5 leerer Sektionen. */}
+                {(() => {
+                  const ads = p.extra?.ads;
+                  const hasAds = ads && (
+                    (ads.tiktok?.length ?? 0) > 0 ||
+                    (ads.instagram?.length ?? 0) > 0 ||
+                    (ads.facebook?.length ?? 0) > 0 ||
+                    (ads.youtube?.length ?? 0) > 0
+                  );
+                  const hasShops =
+                    (p.extra?.links?.dropshippingExamples?.length ?? 0) > 0 ||
+                    !!p.extra?.links?.dropshippingExample?.url;
+                  const hasDeepStats = !!p.extra?.deepStats && (
+                    (p.extra.deepStats.competition ?? 0) > 0 ||
+                    (p.extra.deepStats.seasonality ?? 0) > 0 ||
+                    (p.extra.deepStats.repeatPurchaseRate ?? 0) > 0 ||
+                    (p.extra.deepStats.peakMonths?.length ?? 0) > 0
+                  );
+                  const hasAudience = !!p.extra?.audience?.primary;
+                  const hasAdStrategy = !!p.extra?.adStrategy?.bestFormat ||
+                    (p.extra?.adStrategy?.adHooks?.length ?? 0) > 0;
+                  const isLegacy = !hasAds && !hasShops && !hasDeepStats && !hasAudience && !hasAdStrategy;
+                  if (isLegacy) {
+                    return (
+                      <div className="flex items-start gap-2 px-3 py-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-zinc-300">
+                        <Info className="w-4 h-4 shrink-0 mt-0.5 text-zinc-400" />
+                        <div className="text-xs leading-relaxed">
+                          <strong className="text-zinc-200">Keine erweiterten Daten verfügbar.</strong>
+                          <p className="mt-0.5 text-zinc-400">
+                            Dieses Produkt wurde vor dem letzten großen Update angelegt — Beispiel-Ads (TikTok/Instagram/Facebook/YouTube), Dropshipping-Shop-Beispiele, Zielgruppen-Analyse, Ad-Strategie und Markt-Daten sind hier nicht verfügbar.
+                            <br/><span className="text-zinc-500">Neu via KI-Discovery angelegte Produkte zeigen das alles automatisch.</span>
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <>
+                      {/* ─── Markt / Saison / Wachstum ──────────── */}
+                      <DeepStatsBlock ds={p.extra?.deepStats} />
 
-                {/* ─── Zielgruppe + Targeting ───────────────────── */}
-                <AudienceBlock a={p.extra?.audience} />
+                      {/* ─── Zielgruppe + Targeting ─────────────── */}
+                      <AudienceBlock a={p.extra?.audience} />
 
-                {/* ─── Ad-Strategie (Budget + Format + Hooks) ──── */}
-                <AdStrategyBlock s={p.extra?.adStrategy} />
+                      {/* ─── Ad-Strategie (Budget + Format + Hooks) */}
+                      <AdStrategyBlock s={p.extra?.adStrategy} />
 
-                {/* ─── Beispiel-Ads (Social Media) ──────────────── */}
-                <AdsBlock ads={p.extra?.ads} />
+                      {/* ─── Beispiel-Ads (Social Media) ────────── */}
+                      <AdsBlock ads={p.extra?.ads} />
 
-                {/* ─── Beispiel-Dropshipping-Shops (mehrere) ───── */}
-                <DropshippingBlock
-                  examples={p.extra?.links?.dropshippingExamples}
-                  legacy={p.extra?.links?.dropshippingExample}
-                  status={p.extra?.linkStatus?.dropshippingExampleOk}
-                />
+                      {/* ─── Beispiel-Dropshipping-Shops ──────── */}
+                      <DropshippingBlock
+                        examples={p.extra?.links?.dropshippingExamples}
+                        legacy={p.extra?.links?.dropshippingExample}
+                        status={p.extra?.linkStatus?.dropshippingExampleOk}
+                      />
+                    </>
+                  );
+                })()}
 
                 {/* ─── AliExpress Links (Kategorie + Produkt) ───── */}
                 {/* Kategorie wird synthetisiert wenn nicht gespeichert —

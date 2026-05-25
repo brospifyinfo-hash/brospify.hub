@@ -315,33 +315,35 @@ export async function deductCredits(
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
 
-  // Admin-Email NACH dem Sheet-Write — fail-open, never blocks the
-  // deduction.
+  // Admin-Email NACH dem Sheet-Write. Vorher war das fire-and-forget
+  // (void), aber Vercel killt das Promise nach der Response → kam nie
+  // an. Jetzt awaited — ~600ms extra Latenz bei Cross-Down (passiert
+  // selten weil's nur EINMAL pro Threshold-Unterschreitung feuert).
   if (crossedDown && !credits.lowCreditsAlertedAt) {
-    void (async () => {
-      try {
-        // Dynamic import um Circular-Dep zu vermeiden (email importiert
-        // potenziell auch indirekt aus sheets).
-        const { sendAdminLowCreditsAlert } = await import("./email");
-        // Kunden-Info aus dem Sheet holen.
-        const all = await getAllKunden();
-        const kunde = all.find((k) => k.rowIndex === rowIndex);
-        if (kunde) {
-          await sendAdminLowCreditsAlert({
-            customerName: kunde.profile?.legal_data?.firmenname ||
-              kunde.profile?.legal_data?.inhaber ||
-              kunde.kundenEmail ||
-              kunde.lizenzschluessel,
-            customerEmail: kunde.kundenEmail,
-            customerKey: kunde.lizenzschluessel,
-            balance: newBalance,
-            threshold: LOW_CREDITS_THRESHOLD,
-          });
+    try {
+      const { sendAdminLowCreditsAlert } = await import("./email");
+      const all = await getAllKunden();
+      const kunde = all.find((k) => k.rowIndex === rowIndex);
+      if (kunde) {
+        const r = await sendAdminLowCreditsAlert({
+          customerName: kunde.profile?.legal_data?.firmenname ||
+            kunde.profile?.legal_data?.inhaber ||
+            kunde.kundenEmail ||
+            kunde.lizenzschluessel,
+          customerEmail: kunde.kundenEmail,
+          customerKey: kunde.lizenzschluessel,
+          balance: newBalance,
+          threshold: LOW_CREDITS_THRESHOLD,
+        });
+        if (r.sent) {
+          console.log("[deductCredits] low-credits alert sent:", r.id);
+        } else {
+          console.warn("[deductCredits] low-credits alert NOT sent:", r.error);
         }
-      } catch (e) {
-        console.warn("[deductCredits] low-credits alert failed:", e);
       }
-    })();
+    } catch (e) {
+      console.warn("[deductCredits] low-credits alert failed:", e);
+    }
   }
   return { success: true, remaining: next.balance };
 }
