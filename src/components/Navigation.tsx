@@ -9,6 +9,8 @@ import {
   BarChart3,
   Palette,
   Settings,
+  Settings as SettingsIcon,
+  Zap,
   LogOut,
   Menu,
   X,
@@ -56,13 +58,45 @@ interface SessionInfo {
   impersonatedBy?: string | null;
 }
 
-// Top-Bar: NUR Daily-Use Seiten. Tools/Support sind eigene Dropdowns.
-// Code-Blocks ist jetzt unter AI Tools, Coaching unter Support.
+// Top-Bar: NUR Daily-Browsing Seiten. Tools/Support/Shop-Einstellungen
+// sind eigene Dropdowns. Themes ist jetzt unter Shop-Einstellungen-
+// Dropdown, deshalb hier raus.
 const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home, feature: undefined },
   { href: "/charts", labelKey: "charts" as const, icon: BarChart3, feature: "chartsAnalytics" as const },
   { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
-  { href: "/themes", labelKey: "themes" as const, icon: Palette, feature: "themesGallery" as const },
+];
+
+// ─── Shop-Einstellungen Dropdown ─────────────────────────────────
+// Tools die DIREKT ans Shopify-Theme gehen: Themes-Galerie zum Pushen,
+// Code-Blocks fuer Liquid-Snippets. NICHT die Connection-Verwaltung —
+// die liegt im Profil-Dropdown unter "Shopify-Verbindung".
+interface ShopSettingsItem {
+  href: string;
+  label: string;
+  sub: string;
+  icon: React.ComponentType<{ className?: string }>;
+  color: string;
+  feature?: "themesGallery" | "codeBlocks";
+}
+
+const SHOP_SETTINGS_ITEMS: ShopSettingsItem[] = [
+  {
+    href: "/themes",
+    label: "Themes",
+    sub: "Theme-Galerie + Push",
+    icon: Palette,
+    color: "text-fuchsia-400",
+    feature: "themesGallery",
+  },
+  {
+    href: "/code-blocks",
+    label: "Liquid-Blöcke",
+    sub: "Code-Snippets für dein Theme",
+    icon: Code2,
+    color: "text-emerald-400",
+    feature: "codeBlocks",
+  },
 ];
 
 const AI_TOOLS = [
@@ -126,16 +160,9 @@ const AI_TOOLS = [
     iconColor: "text-purple-400",
     feature: "aiStudio" as const,
   },
-  {
-    href: "/code-blocks",
-    title: "Code-Blöcke",
-    desc: "AI-generierte HTML-Snippets · 10 Credits",
-    icon: Code2,
-    color: "from-emerald-500/15 to-teal-500/15",
-    border: "border-emerald-500/15",
-    iconColor: "text-emerald-400",
-    feature: "codeBlocks" as const,
-  },
+  // Code-Blöcke ist jetzt unter Shop-Einstellungen-Dropdown (passt
+  // logisch besser — Liquid ist Shopify-spezifisch, nicht generisches
+  // AI-Tool).
 ] as const;
 
 // ─── Mobile bottom-tab destinations ────────────────────────────────
@@ -166,11 +193,13 @@ export default function Navigation() {
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [shopSettingsOpen, setShopSettingsOpen] = useState(false);
   const [aiSheetOpen, setAiSheetOpen] = useState(false);
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
   const accountRef = useRef<HTMLDivElement>(null);
   const supportRef = useRef<HTMLDivElement>(null);
+  const shopSettingsRef = useRef<HTMLDivElement>(null);
   const credits = useCredits();
   const tierState = useTier();
 
@@ -198,12 +227,16 @@ export default function Navigation() {
       if (supportRef.current && !supportRef.current.contains(e.target as Node)) {
         setSupportOpen(false);
       }
+      if (shopSettingsRef.current && !shopSettingsRef.current.contains(e.target as Node)) {
+        setShopSettingsOpen(false);
+      }
     }
     function handleKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
         setAiOpen(false);
         setAccountOpen(false);
         setSupportOpen(false);
+        setShopSettingsOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -218,6 +251,7 @@ export default function Navigation() {
   useEffect(() => {
     setAccountOpen(false);
     setSupportOpen(false);
+    setShopSettingsOpen(false);
   }, [pathname]);
 
   async function handleLogout() {
@@ -444,8 +478,18 @@ export default function Navigation() {
                 </AnimatePresence>
               </div>
 
-              {/* Support-Dropdown: AI Support, Tickets, E-Mail Support
-                  alle direkt auswaehlbar — kein Zwischenklick noetig. */}
+              {/* Shop-Einstellungen Dropdown: Themes + Liquid-Blöcke.
+                  Nur Shopify-spezifische Theme/Code-Tools. */}
+              <ShopSettingsDropdown
+                shopSettingsRef={shopSettingsRef}
+                shopSettingsOpen={shopSettingsOpen}
+                setShopSettingsOpen={setShopSettingsOpen}
+                pathname={pathname}
+                tierState={tierState}
+              />
+
+              {/* Support-Dropdown: AI Support, Tickets, E-Mail Support,
+                  Privates Coaching. */}
               <SupportDropdown
                 supportRef={supportRef}
                 supportOpen={supportOpen}
@@ -665,29 +709,28 @@ export default function Navigation() {
                 )}
               </div>
 
-              {/* Mobile More-Sheet: identische Hierarchie wie Desktop
-                  Avatar-Menue. Reihenfolge: Konto → Einstellungen →
-                  Shop-Tools → Support → Rechtliches → (Verwaltung).
-                  Tools/Themes/Charts sind oben in der Bottom-Tab-Bar,
-                  AI-Tools im AI-Sheet — also nicht hier wiederholen. */}
+              {/* Mobile More-Sheet: gleiche Hierarchie wie Desktop.
+                  5 Sektionen: Mein Profil, Konto-Extras, Shop-Einstellungen,
+                  Support, (Admin). Rechtliches ist nur noch im Footer. */}
 
-              {/* ─── Mein Konto ─── */}
-              <SectionLabel>Mein Konto</SectionLabel>
-              <SheetItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={() => setMoreSheetOpen(false)} sub="Persönliche Daten" />
-              <SheetItem href="/settings#plan" icon={Coins} label="Abo-Status" onClick={() => setMoreSheetOpen(false)} sub="Aktueller Plan + Verlängerung" />
+              {/* ─── Mein Profil ─── */}
+              <SectionLabel>Mein Profil</SectionLabel>
+              <SheetItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={() => setMoreSheetOpen(false)} sub="Persönliche Daten + Tickets" />
+              <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login, Google-Verknüpfung" />
+              <SheetItem href="/account/subscription" icon={Coins} label="Abo verwalten" active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub="Status, Credits, Verlängerung" />
+              <SheetItem href="/account/shopify" icon={Store} label="Shopify-Verbindung" active={pathname === "/account/shopify"} onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
+              <SheetItem href="/setup" icon={Zap} label="Setup einrichten" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Verbindungs-Wizard" />
+
+              {/* ─── Konto-Extras ─── */}
+              <SectionLabel>Konto-Extras</SectionLabel>
               <SheetItem href="/credits" icon={Plus} label="Credits aufladen" active={pathname === "/credits"} onClick={() => setMoreSheetOpen(false)} sub="Extra Credits kaufen" />
               <SheetItem href="/tiers" icon={Crown} label="Abo upgraden" active={pathname === "/tiers"} onClick={() => setMoreSheetOpen(false)} sub="Mehr Credits pro Monat" />
+              <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum + AGB für deinen Shop" />
 
-              {/* ─── Einstellungen (3 sections) ─── */}
-              <SectionLabel>Einstellungen</SectionLabel>
-              <SheetItem href="/settings#account" icon={UserIcon} label="Account & Google" onClick={() => setMoreSheetOpen(false)} sub="Login & Verknüpfung" />
-              <SheetItem href="/settings#shopify" icon={Store} label="Shopify-Verbindung" onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
-              <SheetItem href="/settings#plan" icon={Coins} label="Abo verwalten" onClick={() => setMoreSheetOpen(false)} sub="Verlängerung, Kündigung" />
-
-              {/* ─── Shop-Tools ─── */}
-              <SectionLabel>Shop-Tools</SectionLabel>
-              <SheetItem href="/setup" icon={Store} label="Shop neu verbinden" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Shopify-Setup-Wizard" />
-              <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum, AGB, DSGVO" />
+              {/* ─── Shop-Einstellungen ─── */}
+              <SectionLabel>Shop-Einstellungen</SectionLabel>
+              <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-Galerie + Push" />
+              <SheetItem href="/code-blocks" icon={Code2} label="Liquid-Blöcke" active={pathname === "/code-blocks"} onClick={() => setMoreSheetOpen(false)} sub="Code-Snippets für dein Theme" />
 
               {/* ─── Support (4 Wege) ─── */}
               <SectionLabel>Support</SectionLabel>
@@ -695,13 +738,6 @@ export default function Navigation() {
               <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
               <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
               <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team (Gold-only)" />
-
-              {/* ─── Rechtliches ─── */}
-              <SectionLabel>Rechtliches</SectionLabel>
-              <SheetItem href="https://brospify.com/policies/legal-notice" icon={FileText} label="Impressum" external onClick={() => setMoreSheetOpen(false)} />
-              <SheetItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label="Datenschutz" external onClick={() => setMoreSheetOpen(false)} />
-              <SheetItem href="https://brospify.com/policies/terms-of-service" icon={Receipt} label="AGB" external onClick={() => setMoreSheetOpen(false)} />
-              <SheetItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label="Widerrufsbelehrung" external onClick={() => setMoreSheetOpen(false)} />
 
               {/* ─── Admin (if applicable) ─── */}
               {session.isAdmin && (
@@ -844,6 +880,103 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // Tapping the header expands a sub-list with Profil, Einstellungen,
 // Rechtstexte (für Shop), Impressum / Datenschutz / AGB / Widerruf
 // (links to brospify.com/policies for the platform-level pages).
+
+// ─── Shop-Einstellungen Dropdown (Desktop Top-Bar) ──────────────
+// Themes-Galerie + Liquid-Blöcke. Beide tier-gated.
+
+function ShopSettingsDropdown({
+  shopSettingsRef, shopSettingsOpen, setShopSettingsOpen, pathname, tierState,
+}: {
+  shopSettingsRef: React.RefObject<HTMLDivElement | null>;
+  shopSettingsOpen: boolean;
+  setShopSettingsOpen: (v: boolean) => void;
+  pathname: string;
+  tierState: ReturnType<typeof useTier>;
+}) {
+  const isAnyActive = SHOP_SETTINGS_ITEMS.some((it) => pathname === it.href || pathname.startsWith(it.href + "/"));
+  return (
+    <div ref={shopSettingsRef} className="relative">
+      <button
+        onClick={() => setShopSettingsOpen(!shopSettingsOpen)}
+        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
+          isAnyActive ? "" : "hover:bg-white/[0.04]"
+        }`}
+      >
+        <Store className="w-3.5 h-3.5 text-zinc-400" />
+        <span className="text-zinc-300">Shop-Einstellungen</span>
+        <ChevronDown className={`w-2.5 h-2.5 text-zinc-400 transition-transform duration-200 ${shopSettingsOpen ? "rotate-180" : ""}`} />
+        {isAnyActive && (
+          <motion.div
+            layoutId="nav-indicator"
+            className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-lg"
+            style={{ zIndex: -1 }}
+            transition={{ type: "spring", stiffness: 350, damping: 30 }}
+          />
+        )}
+      </button>
+
+      <AnimatePresence>
+        {shopSettingsOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.16 }}
+            className="absolute top-full mt-2 right-0 w-[300px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
+            style={{
+              background: "rgba(12,12,14,0.97)",
+              backdropFilter: "blur(48px) saturate(180%)",
+              WebkitBackdropFilter: "blur(48px) saturate(180%)",
+            }}
+          >
+            <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
+              <div className="text-[11px] font-bold text-white">Shop-Einstellungen</div>
+              <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">Theme & Liquid</div>
+            </div>
+            <div className="p-2 space-y-1">
+              {SHOP_SETTINGS_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+                const locked = !!item.feature && !tierState.loading && !tierState.has(item.feature);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setShopSettingsOpen(false)}
+                    title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
+                    className={`group flex items-center gap-3 p-2.5 rounded-xl border transition ${
+                      isActive
+                        ? "border-[#95BF47]/25 bg-[#95BF47]/8"
+                        : locked
+                        ? "border-white/[0.03] bg-white/[0.01] opacity-60"
+                        : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                      {locked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Icon className={`w-4 h-4 ${item.color}`} />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[13px] text-white truncate flex items-center gap-1.5">
+                        {item.label}
+                        {locked && (
+                          <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0 border border-amber-500/20">
+                            Upgrade
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">{item.sub}</div>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
+                  </Link>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 // ProfileAccountGroup + SubItem entfernt — durch direkte SheetItems
 // im Mobile-More-Sheet ersetzt, die identisch zur Desktop-Avatar-
@@ -1024,35 +1157,55 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
         </div>
       </div>
 
-      {/* Menu groups — logische Hierarchie:
-          1. MEIN KONTO: alles ueber den Account-Status (Profil, Credits, Abo)
-          2. EINSTELLUNGEN: nur 3 - die Verwaltungs-Seiten
-          3. SHOP-TOOLS: Setup + Legal-Generator (ein-/zweimal genutzt)
-          4. RECHTLICHES: externe Policy-Pages (selten)
-          5. VERWALTUNG: admin-only
-
-          Doppelungen entfernt:
-          - "Support"-Gruppe ist raus (eigenes Top-Bar Dropdown)
-          - "Abo-Modelle" + "Credits" + "Abo & Credits" sind in MEIN KONTO
-            zusammengezogen mit klaren sub-Labels die ihren Zweck unter-
-            scheiden (Status / Aufladen / Upgrade) */}
+      {/* Profil-Dropdown: exakt die 4 vom User gewuenschten Items.
+          Keine Rechtliches-Group hier — die ist im globalen Footer. */}
       <div className="p-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
-        <MenuGroup label="Mein Konto">
+        <MenuGroup label="Mein Profil">
           <MenuItem
             href="/profile"
             icon={UserIcon}
             label="Mein Profil"
             active={pathname === "/profile"}
             onClick={onClose}
-            sub="Persönliche Daten"
+            sub="Persönliche Daten + Tickets"
           />
           <MenuItem
-            href="/settings#plan"
-            icon={Coins}
-            label="Abo-Status"
+            href="/account/settings"
+            icon={SettingsIcon}
+            label="Einstellungen"
+            active={pathname === "/account/settings"}
             onClick={onClose}
-            sub={tier ? `${tier.label} aktiv` : "Kein Abo"}
+            sub="Login, Google-Verknüpfung"
           />
+          <MenuItem
+            href="/account/subscription"
+            icon={Coins}
+            label="Abo verwalten"
+            active={pathname === "/account/subscription"}
+            onClick={onClose}
+            sub={tier ? `${tier.label} · Status & Credits` : "Status & Credits"}
+          />
+          <MenuItem
+            href="/account/shopify"
+            icon={Store}
+            label="Shopify-Verbindung"
+            active={pathname === "/account/shopify"}
+            onClick={onClose}
+            sub="API-Credentials"
+          />
+          <MenuItem
+            href="/setup"
+            icon={Zap}
+            label="Setup einrichten"
+            active={pathname === "/setup"}
+            onClick={onClose}
+            sub="Verbindungs-Wizard"
+          />
+        </MenuGroup>
+
+        {/* Extras direkt unter Profil — schnell erreichbar, fuehren
+            zu eigenstaendigen Seiten. */}
+        <MenuGroup label="Konto-Extras">
           <MenuItem
             href="/credits"
             icon={Plus}
@@ -1072,82 +1225,13 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
               accent
             />
           )}
-        </MenuGroup>
-
-        {/* Einstellungen — nur 3 Punkte nach dem Aufraeumen. Jeder
-            ist ein Hash-Anker auf /settings, die Page oeffnet die
-            entsprechende Section automatisch. */}
-        <MenuGroup label="Einstellungen">
-          <MenuItem
-            href="/settings#account"
-            icon={UserIcon}
-            label="Account & Google"
-            onClick={onClose}
-            sub="Login & Verknüpfung"
-          />
-          <MenuItem
-            href="/settings#shopify"
-            icon={Store}
-            label="Shopify-Verbindung"
-            onClick={onClose}
-            sub="API-Credentials"
-          />
-          <MenuItem
-            href="/settings#plan"
-            icon={Coins}
-            label="Abo verwalten"
-            onClick={onClose}
-            sub="Verlängerung, Kündigung"
-          />
-        </MenuGroup>
-
-        <MenuGroup label="Shop-Tools">
-          <MenuItem
-            href="/setup"
-            icon={Store}
-            label="Shop neu verbinden"
-            active={pathname === "/setup"}
-            onClick={onClose}
-            sub="Shopify-Setup-Wizard"
-          />
           <MenuItem
             href="/legal"
             icon={Scale}
             label="Rechtstexte generieren"
             active={pathname === "/legal"}
             onClick={onClose}
-            sub="Impressum, AGB, DSGVO"
-          />
-        </MenuGroup>
-
-        <MenuGroup label="Rechtliches">
-          <MenuItem
-            href="https://brospify.com/policies/legal-notice"
-            icon={FileText}
-            label="Impressum"
-            external
-            onClick={onClose}
-          />
-          <MenuItem
-            href="https://brospify.com/policies/privacy-policy"
-            icon={Shield}
-            label="Datenschutz"
-            external
-            onClick={onClose}
-          />
-          <MenuItem
-            href="https://brospify.com/policies/terms-of-service"
-            icon={Receipt}
-            label="AGB"
-            external
-            onClick={onClose}
-          />
-          <MenuItem
-            href="https://brospify.com/policies/refund-policy"
-            icon={Undo2}
-            label="Widerrufsbelehrung"
-            external
-            onClick={onClose}
+            sub="Für deinen Shop"
           />
         </MenuGroup>
 
