@@ -35,10 +35,12 @@ import {
   updateKundeField,
   updateKundeProfile,
   upsertKundeByKey,
+  applySubscriptionRefill,
   type Kunde,
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
 import { writeOrderMetafield } from "@/lib/shopify";
+import { tierFromSku, DEFAULT_TIERS, TIER_DISPLAY_LABEL } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -204,11 +206,41 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
   const existing = await findKundeByEmail(email);
   if (existing) {
     const newEndsAt = new Date(Date.now() + SUBSCRIPTION_WINDOW_DAYS * DAY_MS).toISOString();
+    // Re-read profile AFTER potential refill to avoid clobbering the
+    // credits update. We update tier-window separately from refill so
+    // each is independently traceable in the audit log.
     await updateKundeProfile(existing.rowIndex, {
       ...existing.profile,
       subscriptionEndsAt: newEndsAt,
       shopifyCustomerId: existing.profile.shopifyCustomerId || customerId || undefined,
     });
+    // ── Monthly credits refill ──────────────────────────────────
+    // Bronze = 500, Silber = 2000, Gold = 10000. Idempotent via orderId,
+    // so a Shopify retry never double-credits the customer.
+    const tierKey = tierFromSku(sku);
+    const tierDef = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
+    let refillAmount = 0;
+    let refillStatus: "skipped" | "applied" | "duplicate" | "error" = "skipped";
+    if (tierDef && orderName && tierDef.monthlyCreditAllowance > 0) {
+      try {
+        // Re-fetch profile to pick up the tierSince update we just wrote.
+        const fresh = await findKundeByEmail(email);
+        if (fresh) {
+          const refill = await applySubscriptionRefill(
+            fresh.rowIndex,
+            fresh.profile,
+            tierDef.monthlyCreditAllowance,
+            orderName,
+            TIER_DISPLAY_LABEL[tierKey!],
+          );
+          refillAmount = tierDef.monthlyCreditAllowance;
+          refillStatus = refill.alreadyFulfilled ? "duplicate" : "applied";
+        }
+      } catch (e) {
+        refillStatus = "error";
+        console.error("[shopify/webhook] refill failed on renewal:", e);
+      }
+    }
     // Keep the status column live — a renewal un-expires a lapsed row.
     if (["abgelaufen", "expired"].includes((existing.status || "").trim().toLowerCase())) {
       await updateKundeField(existing.rowIndex, "C", "aktiv");
@@ -221,9 +253,9 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
       actor: "shopify.webhook",
       action: "webhook.renewal",
       target: existing.lizenzschluessel,
-      details: { shopDomain, orderName, email, subscriptionEndsAt: newEndsAt },
+      details: { shopDomain, orderName, email, subscriptionEndsAt: newEndsAt, refillAmount, refillStatus },
     });
-    return NextResponse.json({ ok: true, action: "renewed", key: existing.lizenzschluessel });
+    return NextResponse.json({ ok: true, action: "renewed", key: existing.lizenzschluessel, refillAmount, refillStatus });
   }
 
   // 3. New customer → fresh licence key.
@@ -259,6 +291,34 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     return NextResponse.json({ ok: false, error: "Sheet-Fehler." }, { status: 500 });
   }
 
+  // ── Monthly credits refill for the first paid order ────────────
+  // Same logic as renewal but on the row we just upserted. We re-read
+  // by license key so applySubscriptionRefill operates on the fresh
+  // profile that includes the just-set tier/sku from upsertKundeByKey.
+  const tierKey = tierFromSku(sku);
+  const tierDef = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
+  let refillAmount = 0;
+  let refillStatus: "skipped" | "applied" | "duplicate" | "error" = "skipped";
+  if (tierDef && orderName && tierDef.monthlyCreditAllowance > 0) {
+    try {
+      const fresh = await findKundeByKey(licenseKey);
+      if (fresh) {
+        const refill = await applySubscriptionRefill(
+          fresh.rowIndex,
+          fresh.profile,
+          tierDef.monthlyCreditAllowance,
+          orderName,
+          TIER_DISPLAY_LABEL[tierKey!],
+        );
+        refillAmount = tierDef.monthlyCreditAllowance;
+        refillStatus = refill.alreadyFulfilled ? "duplicate" : "applied";
+      }
+    } catch (e) {
+      refillStatus = "error";
+      console.error("[shopify/webhook] refill failed on new customer:", e);
+    }
+  }
+
   // Primary delivery: stamp the key onto the order so Shopify's own
   // confirmation email renders {{ order.metafields.custom.license_key }}.
   let metafieldWritten = false;
@@ -291,6 +351,7 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
       metafieldError,
       emailSent: mailResult.sent,
       emailError: mailResult.error,
+      refillAmount, refillStatus,
     },
   });
 
@@ -299,6 +360,8 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     action: "created",
     key: licenseKey,
     deliveryPath: metafieldWritten ? "shopify-metafield" : "resend",
+    refillAmount,
+    refillStatus,
   });
 }
 

@@ -29,6 +29,9 @@ export async function GET() {
       profile,
       shopDomain: kunde.shopDomain,
       kundenEmail: kunde.kundenEmail,
+      sku: kunde.sku,
+      bestellnummer: kunde.bestellnummer,
+      status: kunde.status,
       hasShopifyToken: !!kunde.shopifyToken,
       credits: {
         balance: creditState.balance,

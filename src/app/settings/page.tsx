@@ -36,10 +36,17 @@ import {
   Upload,
   Mail,
   Link2,
+  Calendar,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  RefreshCcw,
+  ShieldOff,
 } from "lucide-react";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
+import { tierFromSku, TIER_DISPLAY_LABEL, DEFAULT_TIERS, type TierKey } from "@/lib/tiers-shared";
 
 interface Profile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
@@ -50,6 +57,12 @@ interface Profile {
     ustId?: string; handelsregister?: string;
   };
   linkedGoogleEmail?: string;
+  tier?: TierKey;
+  tierSince?: string;
+  tierCanceledAt?: string;
+  subscriptionEndsAt?: string;
+  lastSubscriptionRefillAt?: string;
+  subscriptionContractId?: string;
 }
 
 export default function SettingsPage() {
@@ -68,6 +81,18 @@ export default function SettingsPage() {
     firmenname: "", inhaber: "", strasse: "", plz: "", stadt: "",
     land: "Deutschland", email: "", telefon: "", ustId: "", handelsregister: "",
   });
+
+  // Subscription state — drives the Plan & Credits box.
+  const [planSku, setPlanSku] = useState<string>("");
+  const [planStatus, setPlanStatus] = useState<string>("");
+  const [tierSince, setTierSince] = useState<string>("");
+  const [tierCanceledAt, setTierCanceledAt] = useState<string>("");
+  const [subscriptionEndsAt, setSubscriptionEndsAt] = useState<string>("");
+  const [lastRefillAt, setLastRefillAt] = useState<string>("");
+  const [hasContractId, setHasContractId] = useState(false);
+  const [cancelLoading, setCancelLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [cancelMessage, setCancelMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   const [openSection, setOpenSection] = useState<string>("account");
   const [saving, setSaving] = useState<string | null>(null);
@@ -115,10 +140,43 @@ export default function SettingsPage() {
           ustId: p.legal_data?.ustId || "",
           handelsregister: p.legal_data?.handelsregister || "",
         });
+        // Subscription-Felder. SKU (B/S/G) ist Source of Truth via tierFromSku,
+        // profile.tier ist nur Konvenienz. status (column C) zeigt aktiv/gekuendigt/abgelaufen.
+        setPlanSku(data.sku || "");
+        setPlanStatus(data.status || "");
+        setTierSince(p.tierSince || "");
+        setTierCanceledAt(p.tierCanceledAt || "");
+        setSubscriptionEndsAt(p.subscriptionEndsAt || "");
+        setLastRefillAt(p.lastSubscriptionRefillAt || "");
+        setHasContractId(!!(p.subscriptionContractId && p.subscriptionContractId.trim()));
         setLoading(false);
       })
       .catch(() => router.push("/"));
   }, [router]);
+
+  // ── Abo kuendigen ──
+  const handleCancelSubscription = useCallback(async () => {
+    setCancelLoading(true);
+    setCancelMessage(null);
+    try {
+      const res = await fetch("/api/subscription/cancel", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setTierCanceledAt(data.tierCanceledAt || new Date().toISOString());
+        setCancelMessage({
+          ok: !!data.shopifyCanceled,
+          text: data.message || "Abo gekuendigt.",
+        });
+        setCancelConfirmOpen(false);
+      } else {
+        setCancelMessage({ ok: false, text: data.error || "Kuendigung fehlgeschlagen." });
+      }
+    } catch {
+      setCancelMessage({ ok: false, text: "Netzwerkfehler bei Kuendigung." });
+    } finally {
+      setCancelLoading(false);
+    }
+  }, []);
 
   // ── Section save helper ──
   const saveSection = useCallback(async (
@@ -558,34 +616,280 @@ export default function SettingsPage() {
           </div>
         </SettingsSection>
 
-        {/* ─── Plan & Credits (read-only) ─────────── */}
-        <SettingsSection
-          id="plan"
-          title="Plan & Credits"
-          desc={`${credits.balance.toLocaleString("de-DE")} Credits verfügbar`}
-          icon={Coins}
-          color="#F59E0B"
-          open={openSection === "plan"}
+        {/* ─── Abo & Credits ─────────── */}
+        <PlanSection
+          credits={credits}
+          planSku={planSku}
+          planStatus={planStatus}
+          tierSince={tierSince}
+          tierCanceledAt={tierCanceledAt}
+          subscriptionEndsAt={subscriptionEndsAt}
+          lastRefillAt={lastRefillAt}
+          hasContractId={hasContractId}
+          hasShopifyToken={hasShopifyToken}
+          openSection={openSection}
           onToggle={() => setOpenSection(openSection === "plan" ? "" : "plan")}
-        >
-          <div className="space-y-3">
-            <div className="grid grid-cols-3 gap-2">
-              <KPICard label="Plan" value="Managed" color="#95BF47" />
-              <KPICard label="Credits" value={credits.balance.toLocaleString("de-DE")} color="#F59E0B" />
-              <KPICard label="Shop" value={hasShopifyToken ? "Aktiv" : "—"} color="#3B82F6" />
-            </div>
-            <Link
-              href="/credits"
-              className="btn-accent w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold"
-            >
-              <Plus className="w-4 h-4" />
-              Mehr Credits
-            </Link>
-          </div>
-        </SettingsSection>
+          onAskCancel={() => setCancelConfirmOpen(true)}
+        />
       </div>
+
+      {/* ─── Kuendigungs-Bestaetigung ───────────────────────────── */}
+      <AnimatePresence>
+        {cancelConfirmOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            onClick={() => !cancelLoading && setCancelConfirmOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-zinc-950 border border-white/10 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
+                  <ShieldOff className="w-5 h-5 text-red-400" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-base font-bold text-white">Abo wirklich kuendigen?</h3>
+                  <p className="text-[12px] text-zinc-400 mt-1 leading-snug">
+                    Du hast Zugriff bis zum Ende der bereits bezahlten Periode
+                    {subscriptionEndsAt ? ` (${formatGermanDate(subscriptionEndsAt)})` : ""}.
+                    Danach werden keine neuen Credits mehr gutgeschrieben.
+                  </p>
+                </div>
+              </div>
+              {!hasContractId && (
+                <div className="text-[11px] bg-amber-500/10 border border-amber-500/20 rounded-lg p-2.5 text-amber-300">
+                  Hinweis: Kein Shopify-Vertrag verknuepft &mdash; deine Kuendigung wird lokal gespeichert,
+                  aber du musst zusaetzlich <a href="mailto:support@brospify.com" className="underline">support@brospify.com</a> kontaktieren
+                  um die Shopify-Verlaengerung zu stoppen.
+                </div>
+              )}
+              {cancelMessage && (
+                <div className={`text-[11px] rounded-lg p-2.5 ${cancelMessage.ok ? "bg-green-500/10 border border-green-500/20 text-green-300" : "bg-red-500/10 border border-red-500/20 text-red-300"}`}>
+                  {cancelMessage.text}
+                </div>
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCancelConfirmOpen(false)}
+                  disabled={cancelLoading}
+                  className="flex-1 py-2.5 text-xs font-semibold rounded-xl bg-white/[0.06] hover:bg-white/[0.10] transition disabled:opacity-50"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCancelSubscription}
+                  disabled={cancelLoading}
+                  className="flex-1 py-2.5 text-xs font-semibold rounded-xl bg-red-600/90 hover:bg-red-600 text-white transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {cancelLoading ? (
+                    <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Kuendige...</>
+                  ) : (
+                    <><ShieldOff className="w-3.5 h-3.5" /> Ja, kuendigen</>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
+}
+
+// ─── Plan & Credits Section ──────────────────────────────────────
+// Komplexer als die anderen Sections weil sie 3 Zustande visualisiert:
+//   - aktiv (Plan + naechster Refill + Cancel-Button)
+//   - gekuendigt-laufzeit (Plan + "Zugriff bis X" + reaktivieren-Hinweis)
+//   - kein Plan (Tier-Auswahl-Link zum Shop)
+// Bekommt alle Felder als Props weil Settings-Page seinen State direkt managed.
+
+interface PlanSectionProps {
+  credits: { balance: number; totalPurchased: number; totalUsed: number; loading?: boolean };
+  planSku: string;
+  planStatus: string;
+  tierSince: string;
+  tierCanceledAt: string;
+  subscriptionEndsAt: string;
+  lastRefillAt: string;
+  hasContractId: boolean;
+  hasShopifyToken: boolean;
+  openSection: string;
+  onToggle: () => void;
+  onAskCancel: () => void;
+}
+
+function PlanSection({
+  credits, planSku, planStatus, tierSince, tierCanceledAt, subscriptionEndsAt,
+  lastRefillAt, hasContractId, hasShopifyToken, openSection, onToggle, onAskCancel,
+}: PlanSectionProps) {
+  const tierKey = tierFromSku(planSku);
+  const tier = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
+  const tierLabel = tierKey ? TIER_DISPLAY_LABEL[tierKey] : "Kein Abo";
+  const monthlyAllowance = tier?.monthlyCreditAllowance || 0;
+  const isCanceled = !!tierCanceledAt;
+  const isExpired = subscriptionEndsAt && new Date(subscriptionEndsAt) < new Date();
+  const statusLabel = isExpired ? "Abgelaufen" : isCanceled ? "Gekuendigt" : tierKey ? "Aktiv" : "Kein Abo";
+  const statusColor = isExpired ? "#EF4444" : isCanceled ? "#F59E0B" : tierKey ? "#10B981" : "#71717A";
+
+  return (
+    <SettingsSection
+      id="plan"
+      title="Abo & Credits"
+      desc={`${tierLabel} · ${credits.balance.toLocaleString("de-DE")} Credits verfuegbar`}
+      icon={Coins}
+      color="#F59E0B"
+      open={openSection === "plan"}
+      onToggle={onToggle}
+    >
+      <div className="space-y-4">
+        {/* KPI-Reihe */}
+        <div className="grid grid-cols-3 gap-2">
+          <KPICard label="Plan" value={tierLabel} color="#95BF47" />
+          <KPICard label="Status" value={statusLabel} color={statusColor} />
+          <KPICard label="Credits" value={credits.balance.toLocaleString("de-DE")} color="#F59E0B" />
+        </div>
+
+        {/* Tier-Details */}
+        {tier && (
+          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-3 space-y-2.5">
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="text-zinc-400">Monatliche Credits</span>
+              <span className="font-mono font-semibold text-[#95BF47]">
+                {monthlyAllowance.toLocaleString("de-DE")} / Monat
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[12px]">
+              <span className="text-zinc-400">Preis</span>
+              <span className="font-mono text-zinc-300">{tier.priceMonthlyEur} EUR / Monat</span>
+            </div>
+            {tierSince && (
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-zinc-400 flex items-center gap-1.5">
+                  <Calendar className="w-3 h-3" /> Abo seit
+                </span>
+                <span className="text-zinc-300">{formatGermanDate(tierSince)}</span>
+              </div>
+            )}
+            {lastRefillAt && (
+              <div className="flex items-center justify-between text-[12px]">
+                <span className="text-zinc-400 flex items-center gap-1.5">
+                  <RefreshCcw className="w-3 h-3" /> Letzte Aufladung
+                </span>
+                <span className="text-zinc-300">{formatGermanRelative(lastRefillAt)}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Status-Box: Aktiv / Gekuendigt / Abgelaufen */}
+        {tierKey && isCanceled && !isExpired && subscriptionEndsAt && (
+          <div className="rounded-xl border border-amber-500/20 bg-amber-500/[0.06] p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-[12px] font-semibold text-amber-300">
+              <ShieldOff className="w-3.5 h-3.5" /> Abo gekuendigt
+            </div>
+            <p className="text-[11px] text-amber-200/80 leading-snug">
+              Du hast vollen Zugriff bis <b>{formatGermanDate(subscriptionEndsAt)}</b>.
+              Danach werden keine neuen Credits mehr gutgeschrieben. Deine
+              verbleibenden {credits.balance.toLocaleString("de-DE")} Credits
+              kannst du weiterhin nutzen.
+            </p>
+          </div>
+        )}
+
+        {tierKey && isExpired && (
+          <div className="rounded-xl border border-red-500/20 bg-red-500/[0.06] p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-[12px] font-semibold text-red-300">
+              <XCircle className="w-3.5 h-3.5" /> Abo abgelaufen
+            </div>
+            <p className="text-[11px] text-red-200/80 leading-snug">
+              Dein Abo ist seit {formatGermanDate(subscriptionEndsAt)} ausgelaufen.
+              Verlaengere es im Brospify-Shop um wieder Zugriff auf alle Tools zu bekommen.
+            </p>
+          </div>
+        )}
+
+        {tierKey && !isCanceled && !isExpired && subscriptionEndsAt && (
+          <div className="rounded-xl border border-green-500/20 bg-green-500/[0.06] p-3 space-y-1.5">
+            <div className="flex items-center gap-2 text-[12px] font-semibold text-green-300">
+              <CheckCircle2 className="w-3.5 h-3.5" /> Abo aktiv
+            </div>
+            <p className="text-[11px] text-green-200/80 leading-snug">
+              Naechste Verlaengerung &amp; Aufladung am <b>{formatGermanDate(subscriptionEndsAt)}</b> ({formatGermanRelative(subscriptionEndsAt)}).
+              Du erhaeltst dann automatisch <b>{monthlyAllowance.toLocaleString("de-DE")} neue Credits</b>.
+            </p>
+          </div>
+        )}
+
+        {/* Action-Reihe */}
+        <div className="grid grid-cols-2 gap-2">
+          <Link
+            href="/credits"
+            className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-white/[0.06] hover:bg-white/[0.10] transition"
+          >
+            <Plus className="w-4 h-4" />
+            Mehr Credits
+          </Link>
+          {tierKey && !isCanceled && (
+            <button
+              type="button"
+              onClick={onAskCancel}
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition"
+            >
+              <ShieldOff className="w-4 h-4" />
+              Abo kuendigen
+            </button>
+          )}
+          {(!tierKey || isExpired) && (
+            <Link
+              href="/tiers"
+              className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold btn-accent"
+            >
+              <Sparkles className="w-4 h-4" />
+              Abo abschliessen
+            </Link>
+          )}
+        </div>
+
+        {/* Shop-Status */}
+        <div className="flex items-center justify-between text-[11px] text-zinc-500 pt-1 border-t border-white/[0.04]">
+          <span>Shopify-Shop</span>
+          <span className={hasShopifyToken ? "text-green-400" : "text-zinc-500"}>
+            {hasShopifyToken ? "Verbunden" : "Nicht verbunden"}
+          </span>
+        </div>
+      </div>
+    </SettingsSection>
+  );
+}
+
+// ─── Datum-Helfer ────────────────────────────────────────────────
+function formatGermanDate(iso: string): string {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" });
+  } catch { return iso; }
+}
+
+function formatGermanRelative(iso: string): string {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const diffMs = t - Date.now();
+  const diffDays = Math.round(diffMs / 86400000);
+  if (Math.abs(diffDays) < 1) return "heute";
+  if (diffDays === 1) return "morgen";
+  if (diffDays === -1) return "gestern";
+  if (diffDays > 0) return `in ${diffDays} Tagen`;
+  return `vor ${Math.abs(diffDays)} Tagen`;
 }
 
 // ─── Settings section (collapsible card) ─────────────────────────

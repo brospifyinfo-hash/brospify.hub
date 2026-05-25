@@ -95,7 +95,7 @@ export interface OnboardingChecklist {
 export interface CreditTransaction {
   /** ISO timestamp */
   ts: string;
-  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke";
+  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke" | "subscription";
   /** Positive for credits added, negative for deductions. */
   delta: number;
   /** Resulting balance after this transaction. */
@@ -178,6 +178,17 @@ export interface KundeProfile {
   tierSince?: string;
   /** Set when the user (or admin) cancels the tier. Empty when active. */
   tierCanceledAt?: string;
+  /** ISO timestamp of the last successful subscription credit refill.
+   *  Updated by applySubscriptionRefill() on every paid renewal. Used
+   *  by the settings UI to display "Letzte Aufladung: X Tage her". */
+  lastSubscriptionRefillAt?: string;
+  /** Shopify subscription_contract id. Set during the first order-paid
+   *  webhook if available, or by subscription_contracts/create event.
+   *  Lets the cancel-endpoint call the Shopify Admin API to cancel the
+   *  contract there too — not just mark it canceled locally. */
+  subscriptionContractId?: string;
+  /** Shopify customer id (numeric). Backfill from order webhook. */
+  shopifyCustomerId?: string;
   /** First-seen timestamp. Backfilled to oldest credits.log entry on read if missing. */
   signupAt?: string;
   /** Theme IDs the user has unlocked via one-time purchase. Access requires
@@ -190,13 +201,6 @@ export interface KundeProfile {
    *  order pushes it forward, so a stopped subscription auto-expires.
    *  Absent = no time-based expiry (still gated by `status` + `blocked`). */
   subscriptionEndsAt?: string;
-  /** Shopify customer id (numeric, as string). Stored on first order so
-   *  later subscription_contracts/update webhooks can match the licence
-   *  even when their payload only carries customer_id, not the email. */
-  shopifyCustomerId?: string;
-  /** Shopify subscription contract id. Links the licence to the recurring
-   *  contract so cancellations can be matched precisely. */
-  subscriptionContractId?: string;
   /** Per-User Voting-Tracking: produktId -> "up" | "down". Verhindert
    *  Doppelvotes pro Account und erlaubt Toggle-Verhalten. */
   votedProducts?: Record<string, "up" | "down">;
@@ -383,6 +387,58 @@ export async function addCredits(
     ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
+  return { success: true, balance: next.balance, alreadyFulfilled: false };
+}
+
+// Subscription-driven monthly refill. Called from the Shopify
+// orders/paid webhook for every recurring tier payment. Idempotent:
+// the orderId is added to fulfilledOrders so a replay never double-
+// credits. Bumps balance + totalPurchased, writes a "subscription"
+// log entry, and stamps lastSubscriptionRefillAt on the profile so
+// the settings UI can display "Letzte Aufladung: vor X Tagen".
+//
+// Unlike addCredits this DOES NOT default the type to "topup" — the
+// audit log differentiates "user paid for a renewal" (subscription)
+// from "user bought an extra pack" (topup), so admin reporting can
+// separate recurring revenue from credit-pack revenue.
+export async function applySubscriptionRefill(
+  rowIndex: number,
+  profile: KundeProfile,
+  amount: number,
+  orderId: string,
+  tierLabel: string,
+): Promise<{ success: boolean; balance: number; alreadyFulfilled: boolean }> {
+  const safeAmount = Math.max(0, Math.round(amount));
+  if (safeAmount === 0) {
+    return { success: true, balance: normalizeCredits(profile.credits).balance, alreadyFulfilled: false };
+  }
+  const credits = normalizeCredits(profile.credits);
+  const fulfilled = credits.fulfilledOrders || [];
+  if (orderId && fulfilled.includes(orderId)) {
+    return { success: true, balance: credits.balance, alreadyFulfilled: true };
+  }
+  const newBalance = credits.balance + safeAmount;
+  const next: CreditsRecord = {
+    ...credits,
+    balance: newBalance,
+    totalPurchased: credits.totalPurchased + safeAmount,
+    fulfilledOrders: orderId ? [...fulfilled, orderId] : fulfilled,
+    log: appendLog(credits.log, {
+      ts: new Date().toISOString(),
+      type: "subscription",
+      delta: safeAmount,
+      balanceAfter: newBalance,
+      reason: `${tierLabel}-Abo Monats-Credits`,
+      ref: orderId,
+    }),
+    lastUpdated: new Date().toISOString(),
+    ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
+  };
+  await updateKundeProfile(rowIndex, {
+    ...profile,
+    credits: next,
+    lastSubscriptionRefillAt: new Date().toISOString(),
+  });
   return { success: true, balance: next.balance, alreadyFulfilled: false };
 }
 

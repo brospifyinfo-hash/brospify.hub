@@ -152,8 +152,11 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     priceMonthlyEur: 19,
     priceYearlyEur: 190,
     trialDays: 7,
-    startingCredits: 1000,
-    monthlyCreditAllowance: 2000,
+    // 500 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
+    // (orders/paid webhook). startingCredits = erste Zahlung,
+    // monthlyCreditAllowance = jedes Renewal danach. Beide gleich.
+    startingCredits: 500,
+    monthlyCreditAllowance: 500,
     limits: {
       maxProducts: 50,
       maxBlogsPerMonth: 10,
@@ -181,7 +184,7 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       productImports: true,
     },
     bullets: [
-      "2.000 Credits / Monat",
+      "500 Credits / Monat",
       "1 Shop, 50 Produkte",
       "AI-Tools: NUR Upscaler + Background-Remover",
       "Trend-Charts & Theme-Galerie",
@@ -200,8 +203,8 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     priceMonthlyEur: 49,
     priceYearlyEur: 490,
     trialDays: 7,
-    startingCredits: 2500,
-    monthlyCreditAllowance: 7500,
+    startingCredits: 2000,
+    monthlyCreditAllowance: 2000,
     limits: {
       maxProducts: 250,
       maxBlogsPerMonth: 50,
@@ -223,7 +226,7 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       customBranding: false,
     },
     bullets: [
-      "7.500 Credits / Monat",
+      "2.000 Credits / Monat",
       "3 Shops, 250 Produkte",
       "Alle AI-Tools + Code-Blöcke",
       "Priority-Support",
@@ -241,8 +244,8 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     priceMonthlyEur: 99,
     priceYearlyEur: 990,
     trialDays: 14,
-    startingCredits: 5000,
-    monthlyCreditAllowance: 20000,
+    startingCredits: 10000,
+    monthlyCreditAllowance: 10000,
     limits: {
       maxProducts: -1,
       maxBlogsPerMonth: -1,
@@ -258,7 +261,7 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     // Gold: alles inkl. Code-Blöcke + privates Coaching + WhatsApp-Support.
     features: allFeatures(),
     bullets: [
-      "20.000 Credits / Monat",
+      "10.000 Credits / Monat",
       "Alle Tools + Code-Blöcke",
       "Privates Coaching + WhatsApp-Support",
       "API-Zugang & White-Label",

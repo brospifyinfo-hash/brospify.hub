@@ -79,6 +79,76 @@ export interface WriteOrderMetafieldArgs {
   type?: string;
 }
 
+// ─── Subscription contract cancel ───────────────────────
+// Shopify Subscriptions live behind the GraphQL Admin API, not REST.
+// Mutation: subscriptionContractCancel(subscriptionContractId: ID!)
+// Required scopes: write_own_subscription_contracts (or
+// write_customer_payment_methods + write_subscription_contracts when
+// managing on behalf of a customer).
+//
+// We pass the contract GID (`gid://shopify/SubscriptionContract/<n>`).
+// The caller usually has just the numeric id we stored in
+// kundeProfile.subscriptionContractId — we accept both and normalize.
+
+export interface CancelSubscriptionArgs {
+  contractId: string; // numeric or full GID
+}
+
+export async function cancelShopifySubscription(
+  args: CancelSubscriptionArgs,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const domain = (process.env.SHOPIFY_SHOP_DOMAIN || "").trim();
+  const token = (process.env.SHOPIFY_ADMIN_TOKEN || "").trim();
+  if (!domain || !token) {
+    return { ok: false, error: "SHOPIFY_SHOP_DOMAIN or SHOPIFY_ADMIN_TOKEN not configured" };
+  }
+  const raw = (args.contractId || "").trim();
+  if (!raw) return { ok: false, error: "Missing contractId" };
+  const gid = raw.startsWith("gid://") ? raw : `gid://shopify/SubscriptionContract/${raw}`;
+  const query = `
+    mutation cancel($id: ID!) {
+      subscriptionContractCancel(subscriptionContractId: $id) {
+        contract { id status }
+        userErrors { field message }
+      }
+    }
+  `;
+  try {
+    const url = `https://${domain}/admin/api/2024-01/graphql.json`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "X-Shopify-Access-Token": token,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ query, variables: { id: gid } }),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, error: `Shopify ${res.status}: ${txt}` };
+    }
+    const data = (await res.json()) as {
+      data?: {
+        subscriptionContractCancel?: {
+          contract?: { id?: string; status?: string };
+          userErrors?: { field?: string[]; message?: string }[];
+        };
+      };
+      errors?: { message?: string }[];
+    };
+    if (data.errors?.length) {
+      return { ok: false, error: data.errors.map((e) => e.message).join("; ") };
+    }
+    const errs = data.data?.subscriptionContractCancel?.userErrors || [];
+    if (errs.length) {
+      return { ok: false, error: errs.map((e) => e.message).filter(Boolean).join("; ") };
+    }
+    return { ok: true, status: data.data?.subscriptionContractCancel?.contract?.status };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "unknown" };
+  }
+}
+
 export async function writeOrderMetafield(args: WriteOrderMetafieldArgs): Promise<{ ok: boolean; error?: string }> {
   const domain = (process.env.SHOPIFY_SHOP_DOMAIN || "").trim();
   const token = (process.env.SHOPIFY_ADMIN_TOKEN || "").trim();

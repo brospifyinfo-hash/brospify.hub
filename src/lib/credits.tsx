@@ -91,40 +91,103 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const refresh = useCallback(async () => {
+  // Retry-Backoff bei 401/Network-Fehlern. Bei OAuth-Redirect kann es
+  // sein dass der Session-Cookie auf dem ersten /api/profile call noch
+  // nicht propagiert ist und der Server 401 wirft. Vorher hatten wir
+  // dann loading: false + balance: 0 gesetzt — das hat dem User
+  // "0 Credits" angezeigt obwohl er gerade Bronze gekauft hat.
+  // Jetzt: bis zu RETRY_MAX Versuche mit zunehmenden Delays, und
+  // loading bleibt true solange keine erfolgreiche Antwort kam.
+  //
+  // lastSyncedAt liegt zusaetzlich in einer Ref — wir koennen es im
+  // refresh-Closure lesen ohne es als useCallback-dep zu haben (wuerde
+  // sonst eine infinite-loop ueber den useEffect ausloesen, weil jeder
+  // erfolgreiche refresh lastSyncedAt aktualisiert).
+  const RETRY_MAX = 4;
+  const RETRY_DELAYS_MS = [300, 800, 1600, 3000];
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastSyncedAtRef = useRef(0);
+
+  const refresh = useCallback(async (): Promise<void> => {
     const token = ++fetchTokenRef.current;
-    try {
-      const res = await fetch("/api/profile", { cache: "no-store" });
-      if (!res.ok) {
-        // Still mark as "loaded" so the pill stops showing the dots
-        // forever; a 401 means the user isn't logged in, no panic.
+    // Vorhandenen retry-Timer canceln, neuer Fetch uebernimmt.
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+
+    const scheduleRetry = (reason: string) => {
+      if (retryCountRef.current >= RETRY_MAX) {
+        // Aufgegeben — endgueltig loading: false setzen damit die UI
+        // nicht ewig hangs (z.B. echter Logout-Fall).
         if (token === fetchTokenRef.current) {
           setState((s) => ({ ...s, loading: false }));
         }
         return;
       }
+      const delay = RETRY_DELAYS_MS[Math.min(retryCountRef.current, RETRY_DELAYS_MS.length - 1)];
+      retryCountRef.current += 1;
+      retryTimerRef.current = setTimeout(() => {
+        retryTimerRef.current = null;
+        void refresh();
+      }, delay);
+      console.log(`[credits] retry #${retryCountRef.current} in ${delay}ms (${reason})`);
+    };
+
+    try {
+      const res = await fetch("/api/profile", { cache: "no-store" });
+      if (!res.ok) {
+        // 403: account blocked → kein retry, endgueltig.
+        if (res.status === 403) {
+          if (token === fetchTokenRef.current) {
+            setState((s) => ({ ...s, loading: false }));
+          }
+          return;
+        }
+        // Wenn schon mal erfolgreich: kein retry, alte balance bleibt sichtbar.
+        if (lastSyncedAtRef.current > 0) {
+          if (token === fetchTokenRef.current) {
+            setState((s) => ({ ...s, loading: false }));
+          }
+          return;
+        }
+        scheduleRetry(`HTTP ${res.status}`);
+        return;
+      }
       const data = await res.json();
       const c = data.credits;
       if (c && token === fetchTokenRef.current) {
+        retryCountRef.current = 0; // Reset retry counter bei Erfolg
+        const ts = Date.now();
         const next: CreditsState = {
           balance: Math.max(0, Number(c.balance) || 0),
           totalPurchased: Math.max(0, Number(c.totalPurchased) || 0),
           totalUsed: Math.max(0, Number(c.totalUsed) || 0),
           loading: false,
-          lastSyncedAt: Date.now(),
+          lastSyncedAt: ts,
         };
+        lastSyncedAtRef.current = ts;
         setState(next);
         broadcast({
           balance: next.balance,
           totalPurchased: next.totalPurchased,
           totalUsed: next.totalUsed,
-          ts: next.lastSyncedAt,
+          ts,
         });
       } else if (token === fetchTokenRef.current) {
-        setState((s) => ({ ...s, loading: false }));
+        // Antwort kam aber kein credits-Objekt → behandle wie 404-Race.
+        if (lastSyncedAtRef.current === 0) {
+          scheduleRetry("no credits in response");
+        } else {
+          setState((s) => ({ ...s, loading: false }));
+        }
       }
-    } catch {
-      if (token === fetchTokenRef.current) {
+    } catch (err) {
+      // Network error → retry nur bei initialem Mount.
+      if (token === fetchTokenRef.current && lastSyncedAtRef.current === 0) {
+        scheduleRetry(`network: ${err instanceof Error ? err.message : "unknown"}`);
+      } else if (token === fetchTokenRef.current) {
         setState((s) => ({ ...s, loading: false }));
       }
     }
@@ -176,8 +239,8 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
         const p = event.data;
         if (!p || typeof p.balance !== "number") return;
         setState((s) => {
-          // Ignore older snapshots.
           if (p.ts < s.lastSyncedAt) return s;
+          lastSyncedAtRef.current = p.ts;
           return {
             balance: Math.max(0, p.balance),
             totalPurchased: Math.max(0, p.totalPurchased),
@@ -198,6 +261,11 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("online", onOnline);
       stopPolling();
+      // Ausstehenden retry-Timer canceln damit kein Fetch nach unmount feuert
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
       try {
         channelRef.current?.close();
       } catch { /* ignore */ }

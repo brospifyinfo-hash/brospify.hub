@@ -50,3 +50,6 @@ next-env.d.ts
 ids.txt
 
 .vercel
+
+# Claude Code session/worktree state
+.claude/

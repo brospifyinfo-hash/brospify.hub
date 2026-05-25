@@ -113,7 +113,23 @@ export async function sendLicenseEmail(args: LicenseEmailArgs): Promise<SendResu
     <div style="background:#0c0c0c;color:#95BF47;font-family:'SF Mono','Menlo','Monaco',monospace;font-size:18px;letter-spacing:1px;padding:18px;border-radius:8px;text-align:center;margin:24px 0;font-weight:700;">
       ${escapeHtml(args.licenseKey)}
     </div>
-    <h2 style="font-size:16px;color:#111;margin:24px 0 8px;">So aktivierst du dein Theme</h2>
+    <h2 style="font-size:16px;color:#111;margin:24px 0 8px;">1. Brospify Hub öffnen</h2>
+    <p style="font-size:14px;color:#333;line-height:1.6;margin:0 0 12px;">
+      Im Hub findest du alle KI-Tools, deine Credits, Trend-Charts und vieles mehr:
+    </p>
+    <div style="text-align:center;margin:16px 0 24px;">
+      <a href="https://brospifyhub.com/login"
+         style="display:inline-block;background:#95BF47;color:#fff;font-weight:700;
+                font-size:15px;text-decoration:none;padding:14px 28px;border-radius:8px;
+                box-shadow:0 2px 6px rgba(149,191,71,0.3);">
+        Zum Brospify Hub &rarr;
+      </a>
+    </div>
+    <p style="font-size:13px;color:#666;margin:0 0 20px;text-align:center;">
+      Mit deinem Lizenzschlüssel oben einloggen.
+    </p>
+
+    <h2 style="font-size:16px;color:#111;margin:24px 0 8px;">2. Theme in deinem Shopify-Shop aktivieren</h2>
     <ol style="font-size:14px;color:#333;line-height:1.6;padding-left:20px;margin:0 0 20px;">
       <li>Shopify Admin → <b>Online-Shop</b> → <b>Themes</b> → Brospify Theme öffnen.</li>
       <li>In den Theme-Einstellungen das Feld <b>„Lizenzschlüssel"</b> suchen.</li>
@@ -121,7 +137,8 @@ export async function sendLicenseEmail(args: LicenseEmailArgs): Promise<SendResu
     </ol>
     <p style="font-size:13px;color:#666;line-height:1.5;margin:24px 0 0;">
       Bei Fragen oder Problemen melde dich einfach unter
-      <a href="mailto:support@brospify.com" style="color:#95BF47;text-decoration:none;">support@brospify.com</a>.
+      <a href="mailto:support@brospify.com" style="color:#95BF47;text-decoration:none;">support@brospify.com</a>
+      oder direkt im Hub unter <b>Support</b> &rarr; <b>Ticket erstellen</b>.
     </p>
     <p style="font-size:12px;color:#999;margin:32px 0 0;border-top:1px solid #eee;padding-top:16px;">
       Diese Mail wurde automatisch nach Bestelleingang versendet.<br>
@@ -137,15 +154,17 @@ vielen Dank für deinen Kauf${orderLine}! Hier ist dein Brospify Lizenzschlüsse
 
   ${args.licenseKey}
 
-So aktivierst du:
-1. Shopify Admin → Online-Shop → Themes → Brospify Theme
-2. Theme-Einstellungen → Feld "Lizenzschlüssel" suchen
-3. Schlüssel einfügen und speichern. Fertig.
+1. Brospify Hub öffnen: https://brospifyhub.com/login
+   → Mit obigem Lizenzschlüssel einloggen.
 
-Bei Fragen: support@brospify.com
+2. Theme in deinem Shop aktivieren:
+   → Shopify Admin → Online-Shop → Themes → Brospify Theme
+   → Theme-Einstellungen → Feld "Lizenzschlüssel" → einfügen + speichern.
+
+Bei Fragen: support@brospify.com oder direkt im Hub unter Support.
 
 Brospify
-brospify.com`;
+brospify.com · brospifyhub.com`;
 
   return sendViaResend({
     to: args.to,
