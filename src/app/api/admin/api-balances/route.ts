@@ -21,7 +21,7 @@ export const maxDuration = 30;
 type BalanceStatus = "ok" | "low" | "empty" | "unknown" | "not-configured";
 
 interface ProviderBalance {
-  provider: "deepseek" | "fal" | "replicate";
+  provider: "deepseek" | "fal" | "replicate" | "anthropic" | "tavily" | "resend";
   label: string;
   configured: boolean;
   status: BalanceStatus;
@@ -163,20 +163,227 @@ async function checkReplicate(): Promise<ProviderBalance> {
   }
 }
 
+// ─── Anthropic (Claude) ─────────────────────────────────────────
+// Anthropic hat keinen oeffentlichen Balance-Endpoint. Wir koennen
+// nur den Token validieren via einem 1-Token Test-Call (billiger
+// als organizations/usage_report welcher Admin-Permissions
+// braucht).
+async function checkAnthropic(): Promise<ProviderBalance> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) {
+    return {
+      provider: "anthropic",
+      label: "Anthropic (Charts-Discovery)",
+      configured: false,
+      status: "not-configured",
+    };
+  }
+  try {
+    // 1-Token-Call gegen das kleinste Modell — pruefen ob der Key gueltig
+    // ist und ob wir noch Credits haben (sonst HTTP 402).
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 1,
+        messages: [{ role: "user", content: "1" }],
+      }),
+      cache: "no-store",
+    });
+    if (res.status === 401 || res.status === 403) {
+      return {
+        provider: "anthropic",
+        label: "Anthropic (Charts-Discovery)",
+        configured: true,
+        status: "unknown",
+        error: `Unauthorized (${res.status}) — Token pruefen.`,
+      };
+    }
+    if (res.status === 402 || res.status === 429) {
+      return {
+        provider: "anthropic",
+        label: "Anthropic (Charts-Discovery)",
+        configured: true,
+        status: "empty",
+        error: `Quota erschoepft oder Rate-Limit (${res.status}).`,
+      };
+    }
+    if (!res.ok) {
+      const txt = await res.text();
+      return {
+        provider: "anthropic",
+        label: "Anthropic (Charts-Discovery)",
+        configured: true,
+        status: "unknown",
+        error: `${res.status}: ${txt.slice(0, 100)}`,
+      };
+    }
+    return {
+      provider: "anthropic",
+      label: "Anthropic (Charts-Discovery)",
+      configured: true,
+      status: "ok",
+      raw: "Anthropic hat keinen Balance-Endpoint, aber Token ist gueltig und es kommen Antworten zurueck (kein 402).",
+    };
+  } catch (err) {
+    return {
+      provider: "anthropic",
+      label: "Anthropic (Charts-Discovery)",
+      configured: true,
+      status: "unknown",
+      error: err instanceof Error ? err.message.slice(0, 100) : "Netzwerkfehler",
+    };
+  }
+}
+
+// ─── Tavily ─────────────────────────────────────────────────────
+// GET https://api.tavily.com/usage liefert die monatliche Quota.
+async function checkTavily(): Promise<ProviderBalance> {
+  const key = process.env.TAVILY_API_KEY;
+  if (!key) {
+    return {
+      provider: "tavily",
+      label: "Tavily (Web-Suche)",
+      configured: false,
+      status: "not-configured",
+    };
+  }
+  try {
+    const res = await fetch("https://api.tavily.com/usage", {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      // Token gueltig pruefen ueber einen Mini-Such-Call
+      const test = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ query: "ping", max_results: 1 }),
+        cache: "no-store",
+      });
+      if (test.status === 401 || test.status === 403) {
+        return {
+          provider: "tavily",
+          label: "Tavily (Web-Suche)",
+          configured: true,
+          status: "unknown",
+          error: "Unauthorized — Token pruefen.",
+        };
+      }
+      if (test.status === 402 || test.status === 429) {
+        return {
+          provider: "tavily",
+          label: "Tavily (Web-Suche)",
+          configured: true,
+          status: "empty",
+          error: "Quota erschoepft.",
+        };
+      }
+      return {
+        provider: "tavily",
+        label: "Tavily (Web-Suche)",
+        configured: true,
+        status: "ok",
+        raw: "Tavily /usage nicht erreichbar, aber /search-Call funktioniert.",
+      };
+    }
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const data: any = await res.json();
+    const left = Number(data?.requests_left ?? data?.remaining ?? 0);
+    const total = Number(data?.requests_limit ?? data?.limit ?? 0);
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    const status: BalanceStatus = left <= 0 ? "empty" : left < 100 ? "low" : "ok";
+    return {
+      provider: "tavily",
+      label: "Tavily (Web-Suche)",
+      configured: true,
+      status,
+      raw: total
+        ? `${left.toLocaleString("de-DE")} von ${total.toLocaleString("de-DE")} Requests uebrig.`
+        : `${left.toLocaleString("de-DE")} Requests uebrig.`,
+      endpoint: "/usage",
+    };
+  } catch (err) {
+    return {
+      provider: "tavily",
+      label: "Tavily (Web-Suche)",
+      configured: true,
+      status: "unknown",
+      error: err instanceof Error ? err.message.slice(0, 100) : "Netzwerkfehler",
+    };
+  }
+}
+
+// ─── Resend (E-Mail) ────────────────────────────────────────────
+// Resend hat einen /v1/api-keys-Endpoint nur um zu validieren dass
+// der Key existiert. Quota/Balance nicht oeffentlich.
+async function checkResend(): Promise<ProviderBalance> {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) {
+    return {
+      provider: "resend",
+      label: "Resend (E-Mails)",
+      configured: false,
+      status: "not-configured",
+    };
+  }
+  try {
+    const res = await fetch("https://api.resend.com/api-keys", {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: "no-store",
+    });
+    if (res.status === 401 || res.status === 403) {
+      return {
+        provider: "resend",
+        label: "Resend (E-Mails)",
+        configured: true,
+        status: "unknown",
+        error: "Unauthorized — Token pruefen.",
+      };
+    }
+    return {
+      provider: "resend",
+      label: "Resend (E-Mails)",
+      configured: true,
+      status: "ok",
+      raw: "Resend hat keinen oeffentlichen Balance-Endpoint, aber Token ist gueltig.",
+    };
+  } catch (err) {
+    return {
+      provider: "resend",
+      label: "Resend (E-Mails)",
+      configured: true,
+      status: "unknown",
+      error: err instanceof Error ? err.message.slice(0, 100) : "Netzwerkfehler",
+    };
+  }
+}
+
 export async function GET() {
   const session = await getSession();
   if (!session.isLoggedIn || !session.isAdmin) {
     return NextResponse.json({ error: "Nur für Admins." }, { status: 403 });
   }
 
-  const [deepseek, fal, replicate] = await Promise.all([
+  const [deepseek, fal, replicate, anthropic, tavily, resend] = await Promise.all([
     checkDeepSeek(),
     checkFal(),
     checkReplicate(),
+    checkAnthropic(),
+    checkTavily(),
+    checkResend(),
   ]);
 
   return NextResponse.json({
     generatedAt: new Date().toISOString(),
-    providers: [deepseek, fal, replicate],
+    providers: [deepseek, fal, replicate, anthropic, tavily, resend],
   });
 }

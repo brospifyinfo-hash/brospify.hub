@@ -6,8 +6,10 @@ import {
   getTicketById,
   addTicket,
   updateTicket,
+  findKundeByKey,
 } from "@/lib/sheets";
 import type { TicketMessage } from "@/lib/sheets";
+import { sendAdminTicketAlert } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -140,6 +142,28 @@ export async function POST(req: NextRequest) {
     }
 
     console.log("[Tickets] Created:", ticket.id, "for", ticket.customerKey, "subject:", ticket.subject);
+
+    // Admin-Email-Benachrichtigung. Fire-and-forget — wenn das mailen
+    // failed soll der API-Call nicht failen.
+    void (async () => {
+      try {
+        let customerEmail = session.googleEmail || "";
+        if (session.lizenzschluessel) {
+          const k = await findKundeByKey(session.lizenzschluessel);
+          if (k?.kundenEmail) customerEmail = k.kundenEmail;
+        }
+        await sendAdminTicketAlert({
+          ticketId: ticket.id,
+          subject: ticket.subject,
+          customerName: ticket.customerName,
+          customerEmail,
+          customerKey: ticket.customerKey,
+          initialMessage: initialMessage?.trim() || undefined,
+        });
+      } catch (e) {
+        console.warn("[Tickets] admin notify failed:", e);
+      }
+    })();
 
     return NextResponse.json({ success: true, ticket });
   } catch (error) {

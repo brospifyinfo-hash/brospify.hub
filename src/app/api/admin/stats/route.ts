@@ -88,6 +88,16 @@ interface StatsResponse {
   heatmap: number[][];
   /** Daily transaction counts over the last 14 days, oldest first. */
   daily14d: { date: string; deduct: number; topup: number; admin: number }[];
+  creditsConsumed: {
+    today: number;
+    last7d: number;
+    last30d: number;
+    prev7d: number;
+    trend7dPct: number;
+    costEurToday: number;
+    costEurLast7d: number;
+    costEurLast30d: number;
+  };
   /** Tool usage breakdown — derived from deduct entries' `reason`. */
   toolUsage: ToolUsage[];
   /** Top 10 customers by credits used in the last 30 days. */
@@ -181,6 +191,21 @@ export async function GET() {
     let sumBalance = 0;
     let sumTotalPurchased = 0;
     let sumTotalUsed = 0;
+    // Zeitfenster-Verbrauch — fuer das "Credit-Verbrauch heute/7d/30d"-
+    // Panel im Admin-Dashboard. Inkl. EUR-Kosten und prev7d fuer Trend.
+    let consumedToday = 0;
+    let consumedLast7d = 0;
+    let consumedLast30d = 0;
+    let consumedPrev7d = 0; // 7-14 days ago, fuer den Trend-Vergleich
+    let costEurToday = 0;
+    let costEurLast7d = 0;
+    let costEurLast30d = 0;
+    const tStartToday = (() => {
+      const d = new Date();
+      d.setUTCHours(0, 0, 0, 0);
+      return d.getTime();
+    })();
+    const t14d_alt = Date.now() - 14 * 24 * 3600 * 1000;
     const topUserMap = new Map<string, { tx: number; used: number; email: string; shopDomain: string; balance: number; key: string }>();
 
     for (const k of kunden) {
@@ -273,6 +298,23 @@ export async function GET() {
             m.costEur += cost.eur;
             m.creditsCharged += Math.abs(tx.delta);
             monthlyToolMap.set(reason, m);
+          }
+
+          // Zeitfenster-Aggregate fuer den Credit-Verbrauch-Panel.
+          const abs = Math.abs(tx.delta);
+          if (ts >= tStartToday) {
+            consumedToday += abs;
+            costEurToday += cost.eur;
+          }
+          if (ts >= t7d) {
+            consumedLast7d += abs;
+            costEurLast7d += cost.eur;
+          } else if (ts >= t14d_alt) {
+            consumedPrev7d += abs;
+          }
+          if (ts >= t30d) {
+            consumedLast30d += abs;
+            costEurLast30d += cost.eur;
           }
         }
 
@@ -399,6 +441,21 @@ export async function GET() {
       toolUsage,
       topUsers,
       recentTx,
+      // Time-windowed Credit-Verbrauch fuer den prominenten Dashboard-
+      // Panel. trend7d = +x% wenn der aktuelle 7-Tage-Verbrauch ueber
+      // dem Vorperiode liegt, sonst negativ.
+      creditsConsumed: {
+        today: consumedToday,
+        last7d: consumedLast7d,
+        last30d: consumedLast30d,
+        prev7d: consumedPrev7d,
+        trend7dPct: consumedPrev7d > 0
+          ? +(((consumedLast7d - consumedPrev7d) / consumedPrev7d) * 100).toFixed(1)
+          : (consumedLast7d > 0 ? 100 : 0),
+        costEurToday: +costEurToday.toFixed(2),
+        costEurLast7d: +costEurLast7d.toFixed(2),
+        costEurLast30d: +costEurLast30d.toFixed(2),
+      },
       money: (() => {
         const revenueThisMonthEur = +(revenueThisMonthCredits * CREDIT_PRICE_EUR).toFixed(2);
         const revenueAllTimeEur = +(revenueAllTimeCredits * CREDIT_PRICE_EUR).toFixed(2);

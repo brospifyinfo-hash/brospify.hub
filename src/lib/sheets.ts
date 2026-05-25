@@ -123,6 +123,10 @@ export interface CreditsRecord {
   // Capped at MAX_LOG_ENTRIES; oldest get rolled off.
   log?: CreditTransaction[];
   lastUpdated?: string;
+  // ISO-Timestamp wann zuletzt die "Credits niedrig"-Admin-Mail
+  // ausgeloest wurde. Wird beim naechsten Aufladen (addCredits /
+  // setBalance) wieder geleert, damit das nicht permanent supprimiert.
+  lowCreditsAlertedAt?: string;
   // Legacy fields kept so an in-flight migration of an existing
   // profile doesn't lose context. Safe to drop after a few weeks.
   month?: string;
@@ -267,6 +271,10 @@ export function getCreditsState(profile: KundeProfile): {
 // subsequent profile load. The current shape passes `credits` as
 // the base and only overrides what changes.
 
+// Schwellwert ab dem wir den Admin per E-Mail benachrichtigen.
+// Wird nur EINMAL pro Cross-Down getriggert (lowCreditsAlertedAt).
+const LOW_CREDITS_THRESHOLD = 200;
+
 export async function deductCredits(
   rowIndex: number,
   profile: KundeProfile,
@@ -281,7 +289,13 @@ export async function deductCredits(
   if (credits.balance < safeAmount) {
     return { success: false, remaining: credits.balance };
   }
+  const oldBalance = credits.balance;
   const newBalance = credits.balance - safeAmount;
+  // Trigger Admin-Mail wenn der Kunde JETZT unter den Schwellwert
+  // faellt (Crossover) und vorher noch nicht alertet wurde. Verhindert
+  // Spam wenn der Kunde knapp unter dem Threshold mehrfach kleine
+  // Aktionen macht.
+  const crossedDown = oldBalance >= LOW_CREDITS_THRESHOLD && newBalance < LOW_CREDITS_THRESHOLD;
   const next: CreditsRecord = {
     ...credits,
     balance: newBalance,
@@ -294,8 +308,41 @@ export async function deductCredits(
       reason,
     }),
     lastUpdated: new Date().toISOString(),
+    // Stempel setzen so wir nicht beim naechsten Aufladen wieder
+    // direkt alerten. Wird beim addCredits/setBalance zurueckgesetzt
+    // wenn balance wieder ueber dem Threshold ist.
+    ...(crossedDown ? { lowCreditsAlertedAt: new Date().toISOString() } : {}),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
+
+  // Admin-Email NACH dem Sheet-Write — fail-open, never blocks the
+  // deduction.
+  if (crossedDown && !credits.lowCreditsAlertedAt) {
+    void (async () => {
+      try {
+        // Dynamic import um Circular-Dep zu vermeiden (email importiert
+        // potenziell auch indirekt aus sheets).
+        const { sendAdminLowCreditsAlert } = await import("./email");
+        // Kunden-Info aus dem Sheet holen.
+        const all = await getAllKunden();
+        const kunde = all.find((k) => k.rowIndex === rowIndex);
+        if (kunde) {
+          await sendAdminLowCreditsAlert({
+            customerName: kunde.profile?.legal_data?.firmenname ||
+              kunde.profile?.legal_data?.inhaber ||
+              kunde.kundenEmail ||
+              kunde.lizenzschluessel,
+            customerEmail: kunde.kundenEmail,
+            customerKey: kunde.lizenzschluessel,
+            balance: newBalance,
+            threshold: LOW_CREDITS_THRESHOLD,
+          });
+        }
+      } catch (e) {
+        console.warn("[deductCredits] low-credits alert failed:", e);
+      }
+    })();
+  }
   return { success: true, remaining: next.balance };
 }
 
@@ -329,6 +376,9 @@ export async function addCredits(
       ref: orderId,
     }),
     lastUpdated: new Date().toISOString(),
+    // Wenn neue Balance den Threshold wieder ueberschreitet, Alert-Flag
+    // loeschen damit beim naechsten Cross-Down erneut benachrichtigt wird.
+    ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
   return { success: true, balance: next.balance, alreadyFulfilled: false };
@@ -360,6 +410,7 @@ export async function setCreditsBalance(
       ref,
     }),
     lastUpdated: new Date().toISOString(),
+    ...(target >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
   return { success: true, balance: target, delta };
@@ -483,6 +534,7 @@ export async function redeemCode(
       ref: upper,
     }),
     lastUpdated: new Date().toISOString(),
+    ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
   return { success: true, balance: next.balance };
@@ -518,6 +570,7 @@ export async function adminAdjustCredits(
       ref: adminRef,
     }),
     lastUpdated: new Date().toISOString(),
+    ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
   };
   await updateKundeProfile(rowIndex, { ...profile, credits: next });
   return { success: true, balance: next.balance };

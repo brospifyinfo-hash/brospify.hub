@@ -145,6 +145,86 @@ brospify.com`;
   });
 }
 
+// ─── Admin-Notifications (Tickets + Low-Credits) ─────────────
+// Geht IMMER an die zentrale Support-Adresse, nicht an Kunden.
+// Wird vom /api/tickets POST (neuer Ticket) und vom credit-deduct
+// path (wenn balance < threshold) aufgerufen. Fail-open — bei
+// Konfig-Fehler nur warnen.
+
+const ADMIN_SUPPORT_EMAIL = "brospify.info@gmail.com";
+
+export interface AdminTicketAlertArgs {
+  ticketId: string;
+  subject: string;
+  customerName: string;
+  customerEmail?: string;
+  customerKey: string;
+  initialMessage?: string;
+}
+
+export async function sendAdminTicketAlert(args: AdminTicketAlertArgs): Promise<SendResult> {
+  const html = `
+    <div style="font-family:-apple-system,sans-serif;color:#1f2937;line-height:1.5;">
+      <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin-bottom:16px;font-size:13px;">
+        <strong style="color:#95BF47;">🎫 Neues Brospify-Ticket</strong><br/>
+        <hr style="border:none;border-top:1px solid #e5e7eb;margin:8px 0;"/>
+        <strong>Ticket-ID:</strong> <code>${escapeHtml(args.ticketId)}</code><br/>
+        <strong>Von:</strong> ${escapeHtml(args.customerName)}<br/>
+        ${args.customerEmail ? `<strong>E-Mail:</strong> <a href="mailto:${escapeHtml(args.customerEmail)}">${escapeHtml(args.customerEmail)}</a><br/>` : ""}
+        <strong>Lizenz:</strong> <code>${escapeHtml(args.customerKey)}</code>
+      </div>
+      <h2 style="font-size:16px;margin:0 0 8px 0;">${escapeHtml(args.subject)}</h2>
+      ${args.initialMessage ? `<div style="white-space:pre-wrap;font-size:14px;background:#fafafa;padding:12px;border-radius:6px;border-left:3px solid #95BF47;">${escapeHtml(args.initialMessage)}</div>` : ""}
+      <p style="margin-top:24px;font-size:11px;color:#6b7280;">
+        Hub-Link: <a href="https://brospifyhub.com/admin">brospifyhub.com/admin</a> &rarr; Tickets
+      </p>
+    </div>
+  `.trim();
+  return sendViaResend({
+    to: ADMIN_SUPPORT_EMAIL,
+    subject: `[Brospify Hub] 🎫 Neues Ticket: ${args.subject}`,
+    html,
+    text: `Neues Ticket\nID: ${args.ticketId}\nVon: ${args.customerName} (${args.customerEmail || "—"})\nLizenz: ${args.customerKey}\nBetreff: ${args.subject}\n\n${args.initialMessage || ""}`,
+    replyTo: args.customerEmail || undefined,
+  });
+}
+
+export interface AdminLowCreditsAlertArgs {
+  customerName: string;
+  customerEmail?: string;
+  customerKey: string;
+  balance: number;
+  threshold: number;
+}
+
+export async function sendAdminLowCreditsAlert(args: AdminLowCreditsAlertArgs): Promise<SendResult> {
+  const html = `
+    <div style="font-family:-apple-system,sans-serif;color:#1f2937;line-height:1.5;">
+      <div style="background:#fef3c7;padding:16px;border-radius:8px;margin-bottom:16px;font-size:13px;border-left:4px solid #f59e0b;">
+        <strong style="color:#92400e;">⚠ Kunden-Credits laufen aus</strong><br/>
+        <hr style="border:none;border-top:1px solid #fde68a;margin:8px 0;"/>
+        <strong>Kunde:</strong> ${escapeHtml(args.customerName)}<br/>
+        ${args.customerEmail ? `<strong>E-Mail:</strong> <a href="mailto:${escapeHtml(args.customerEmail)}">${escapeHtml(args.customerEmail)}</a><br/>` : ""}
+        <strong>Lizenz:</strong> <code>${escapeHtml(args.customerKey)}</code><br/>
+        <strong>Aktuelles Guthaben:</strong> <span style="font-size:18px;font-weight:700;color:#dc2626;">${args.balance.toLocaleString("de-DE")}</span> Credits
+        <span style="color:#6b7280;">(Schwelle ${args.threshold.toLocaleString("de-DE")})</span>
+      </div>
+      <p style="font-size:13px;color:#374151;">
+        Der Kunde hat eben den Schwellwert unterschritten. Bei Bedarf kannst du im Admin-Panel manuell Credits gutschreiben oder einen Voucher-Code generieren.
+      </p>
+      <p style="margin-top:20px;font-size:11px;color:#6b7280;">
+        Hub-Link: <a href="https://brospifyhub.com/admin">brospifyhub.com/admin</a> &rarr; Kunden
+      </p>
+    </div>
+  `.trim();
+  return sendViaResend({
+    to: ADMIN_SUPPORT_EMAIL,
+    subject: `[Brospify Hub] ⚠ Credits niedrig: ${args.customerName} (${args.balance})`,
+    html,
+    text: `Credits niedrig\nKunde: ${args.customerName} (${args.customerEmail || "—"})\nLizenz: ${args.customerKey}\nBalance: ${args.balance} (Schwelle ${args.threshold})`,
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

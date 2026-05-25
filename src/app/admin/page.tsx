@@ -171,6 +171,16 @@ interface AdminStats {
   generatedAt: string;
   customers: { total: number; activeLast7d: number; activeLast30d: number; withShopify: number; withGoogle: number; starterGranted: number; admins: number };
   credits: { sumBalance: number; sumTotalPurchased: number; sumTotalUsed: number; avgBalance: number; avgUsed: number };
+  creditsConsumed: {
+    today: number;
+    last7d: number;
+    last30d: number;
+    prev7d: number;
+    trend7dPct: number;
+    costEurToday: number;
+    costEurLast7d: number;
+    costEurLast30d: number;
+  };
   subscriptions: {
     activeTotal: number;
     byTier: Record<AdminTierKey, number>;
@@ -4402,6 +4412,55 @@ function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoR
 
       {/* KPI Grid */}
       <SectionTitle title="Kunden & Credits (Stand jetzt)" desc="Schnapsschuss aller Kunden im System. Balance = Credits, die noch in deren Konten liegen." />
+      {/* ─── Credit-Verbrauch Panel (prominent) ─── */}
+      {stats.creditsConsumed && (
+        <div className="rounded-xl border border-amber-500/25 bg-gradient-to-br from-amber-500/[0.05] to-red-500/[0.05] p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <ArrowDownCircle className="w-4 h-4 text-amber-400" />
+            <h3 className="text-xs font-bold uppercase tracking-widest text-amber-200">
+              Credit-Verbrauch deiner User
+            </h3>
+            <span className="text-[10px] text-zinc-500">live aggregiert</span>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.04] p-2.5">
+              <div className="text-[9px] uppercase tracking-widest text-amber-300/80 font-semibold">Heute</div>
+              <div className="text-base font-bold text-amber-100 tabular-nums mt-0.5">
+                {stats.creditsConsumed.today.toLocaleString("de-DE")}
+              </div>
+              <div className="text-[9px] text-amber-300/60 mt-0.5">
+                ≈ {stats.creditsConsumed.costEurToday.toFixed(2)}€ Kosten
+              </div>
+            </div>
+            <div className="rounded-lg border border-orange-500/20 bg-orange-500/[0.04] p-2.5">
+              <div className="flex items-center justify-between">
+                <div className="text-[9px] uppercase tracking-widest text-orange-300/80 font-semibold">Letzte 7 Tage</div>
+                {stats.creditsConsumed.trend7dPct !== 0 && (
+                  <span className={`text-[9px] font-bold ${stats.creditsConsumed.trend7dPct > 0 ? "text-emerald-400" : "text-red-400"}`}>
+                    {stats.creditsConsumed.trend7dPct > 0 ? "+" : ""}{stats.creditsConsumed.trend7dPct}%
+                  </span>
+                )}
+              </div>
+              <div className="text-base font-bold text-orange-100 tabular-nums mt-0.5">
+                {stats.creditsConsumed.last7d.toLocaleString("de-DE")}
+              </div>
+              <div className="text-[9px] text-orange-300/60 mt-0.5">
+                ≈ {stats.creditsConsumed.costEurLast7d.toFixed(2)}€ · vs. vorher {stats.creditsConsumed.prev7d.toLocaleString("de-DE")}
+              </div>
+            </div>
+            <div className="rounded-lg border border-red-500/20 bg-red-500/[0.04] p-2.5">
+              <div className="text-[9px] uppercase tracking-widest text-red-300/80 font-semibold">Letzte 30 Tage</div>
+              <div className="text-base font-bold text-red-100 tabular-nums mt-0.5">
+                {stats.creditsConsumed.last30d.toLocaleString("de-DE")}
+              </div>
+              <div className="text-[9px] text-red-300/60 mt-0.5">
+                ≈ {stats.creditsConsumed.costEurLast30d.toFixed(2)}€ Kosten
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
         <BigKpi label="Kunden gesamt" value={stats.customers.total} icon={Users} color="#3B82F6" />
         <BigKpi label="Aktiv (7d)" value={stats.customers.activeLast7d} icon={Zap} color="#10B981" hint={`${stats.customers.activeLast30d} in 30d`} />
