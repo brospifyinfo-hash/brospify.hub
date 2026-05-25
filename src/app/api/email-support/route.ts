@@ -56,7 +56,13 @@ export async function POST(req: NextRequest) {
   }
 
   const apiKey = (process.env.RESEND_API_KEY || "").trim();
-  const fromAddr = (process.env.RESEND_FROM_EMAIL || "").trim();
+  // Admin-Mails bevorzugen die Hub-Domain (RESEND_ADMIN_FROM_EMAIL),
+  // fallen aber sauber auf RESEND_FROM_EMAIL zurueck wenn der Hub-FROM
+  // nicht konfiguriert ist. So funktioniert das Setup auch mit nur einer
+  // verifizierten Domain.
+  const fromAddr =
+    (process.env.RESEND_ADMIN_FROM_EMAIL || "").trim() ||
+    (process.env.RESEND_FROM_EMAIL || "").trim();
   if (!apiKey || !fromAddr) {
     return NextResponse.json(
       { error: "E-Mail-Versand ist serverseitig nicht konfiguriert. Bitte Admin kontaktieren." },

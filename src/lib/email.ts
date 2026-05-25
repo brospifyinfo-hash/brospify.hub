@@ -4,10 +4,18 @@
 // which uses fetch() everywhere.
 //
 // Configuration (Vercel env vars):
-//   RESEND_API_KEY     — required. Get from resend.com → API Keys.
-//   RESEND_FROM_EMAIL  — required. Must be a verified domain on
-//                        Resend (e.g. "noreply@brospify.com").
-//                        Verification is a 5-min DNS-record step.
+//   RESEND_API_KEY            — required. Get from resend.com → API Keys.
+//   RESEND_FROM_EMAIL         — required. Customer-facing FROM addr.
+//                               Must be a verified domain on Resend
+//                               (e.g. "noreply@brospify.com").
+//                               Used for licence-key delivery so the
+//                               customer recognises the shop domain.
+//   RESEND_ADMIN_FROM_EMAIL   — optional. Admin-facing FROM addr for
+//                               internal alerts (tickets, low credits).
+//                               Defaults to RESEND_FROM_EMAIL if unset.
+//                               Recommended: "noreply@brospifyhub.com"
+//                               so the hub admin can filter alerts in
+//                               their inbox by sender domain.
 //
 // All helpers FAIL OPEN: if Resend isn't configured we log a
 // warning and return { sent: false } but never throw. License
@@ -28,11 +36,14 @@ interface SendArgs {
   html: string;
   text?: string;
   replyTo?: string;
+  /** Override the default FROM. Falls back to RESEND_FROM_EMAIL. */
+  from?: string;
 }
 
 async function sendViaResend(args: SendArgs): Promise<SendResult> {
   const apiKey = (process.env.RESEND_API_KEY || "").trim();
-  const from = (process.env.RESEND_FROM_EMAIL || "").trim();
+  const defaultFrom = (process.env.RESEND_FROM_EMAIL || "").trim();
+  const from = (args.from || defaultFrom).trim();
   if (!apiKey) {
     console.warn("[email] RESEND_API_KEY not set — skipping send.");
     return { sent: false, error: "RESEND_API_KEY not configured" };
@@ -153,6 +164,14 @@ brospify.com`;
 
 const ADMIN_SUPPORT_EMAIL = "brospify.info@gmail.com";
 
+/** FROM-address for admin-facing alerts (tickets, low-credits).
+ *  Lets the hub send internal notifications from a different
+ *  verified domain than customer-facing licence mails. */
+function adminFromAddress(): string | undefined {
+  const v = (process.env.RESEND_ADMIN_FROM_EMAIL || "").trim();
+  return v || undefined; // undefined → sendViaResend falls back to RESEND_FROM_EMAIL
+}
+
 export interface AdminTicketAlertArgs {
   ticketId: string;
   subject: string;
@@ -182,6 +201,7 @@ export async function sendAdminTicketAlert(args: AdminTicketAlertArgs): Promise<
   `.trim();
   return sendViaResend({
     to: ADMIN_SUPPORT_EMAIL,
+    from: adminFromAddress(),
     subject: `[Brospify Hub] 🎫 Neues Ticket: ${args.subject}`,
     html,
     text: `Neues Ticket\nID: ${args.ticketId}\nVon: ${args.customerName} (${args.customerEmail || "—"})\nLizenz: ${args.customerKey}\nBetreff: ${args.subject}\n\n${args.initialMessage || ""}`,
@@ -219,6 +239,7 @@ export async function sendAdminLowCreditsAlert(args: AdminLowCreditsAlertArgs): 
   `.trim();
   return sendViaResend({
     to: ADMIN_SUPPORT_EMAIL,
+    from: adminFromAddress(),
     subject: `[Brospify Hub] ⚠ Credits niedrig: ${args.customerName} (${args.balance})`,
     html,
     text: `Credits niedrig\nKunde: ${args.customerName} (${args.customerEmail || "—"})\nLizenz: ${args.customerKey}\nBalance: ${args.balance} (Schwelle ${args.threshold})`,

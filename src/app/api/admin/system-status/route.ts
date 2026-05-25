@@ -46,7 +46,8 @@ const ENV_VARS_TO_CHECK = [
   { key: "LICENSE_WRITE_KEY", required: true, label: "License WRITE Key (Make.com)" },
   { key: "SHOPIFY_WEBHOOK_SECRET", required: false, label: "Shopify Webhook Secret" },
   { key: "RESEND_API_KEY", required: false, label: "Resend API Key (Mail)" },
-  { key: "RESEND_FROM_EMAIL", required: false, label: "Resend From-Address" },
+  { key: "RESEND_FROM_EMAIL", required: false, label: "Resend From (Kunde / brospify.com)" },
+  { key: "RESEND_ADMIN_FROM_EMAIL", required: false, label: "Resend From (Admin-Alerts / brospifyhub.com)" },
   { key: "CRON_SECRET", required: false, label: "Cron Secret (Vercel Cron)" },
 ];
 
