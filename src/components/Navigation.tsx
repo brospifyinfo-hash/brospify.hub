@@ -97,6 +97,15 @@ const SHOP_SETTINGS_ITEMS: ShopSettingsItem[] = [
     color: "text-emerald-400",
     feature: "codeBlocks",
   },
+  {
+    href: "/legal",
+    label: "Rechtstexte generieren",
+    sub: "Impressum, AGB, DSGVO für deinen Shop",
+    icon: Scale,
+    color: "text-blue-400",
+    // Kein feature-flag — Rechtstexte sind ein Pflichttool fuer
+    // jeden Shop, deshalb auch fuer Bronze freigeschaltet.
+  },
 ];
 
 const AI_TOOLS = [
@@ -709,28 +718,23 @@ export default function Navigation() {
                 )}
               </div>
 
-              {/* Mobile More-Sheet: gleiche Hierarchie wie Desktop.
-                  5 Sektionen: Mein Profil, Konto-Extras, Shop-Einstellungen,
-                  Support, (Admin). Rechtliches ist nur noch im Footer. */}
+              {/* Mobile More-Sheet: exakt 3 Sektionen + Admin.
+                  Konto-Extras komplett raus. Rechtstexte ist jetzt in
+                  Shop-Einstellungen (Pflicht-Tool fuer jeden Shop).
+                  Rechtliche Brospify-Links sind nur im globalen Footer. */}
 
-              {/* ─── Mein Profil ─── */}
-              <SectionLabel>Mein Profil</SectionLabel>
-              <SheetItem href="/profile" icon={UserIcon} label="Mein Profil" active={pathname === "/profile"} onClick={() => setMoreSheetOpen(false)} sub="Persönliche Daten + Tickets" />
-              <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login, Google-Verknüpfung" />
+              {/* ─── Profil — die 4 Items ─── */}
+              <SectionLabel>Profil</SectionLabel>
+              <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login & Google-Verknüpfung" />
               <SheetItem href="/account/subscription" icon={Coins} label="Abo verwalten" active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub="Status, Credits, Verlängerung" />
               <SheetItem href="/account/shopify" icon={Store} label="Shopify-Verbindung" active={pathname === "/account/shopify"} onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
               <SheetItem href="/setup" icon={Zap} label="Setup einrichten" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Verbindungs-Wizard" />
 
-              {/* ─── Konto-Extras ─── */}
-              <SectionLabel>Konto-Extras</SectionLabel>
-              <SheetItem href="/credits" icon={Plus} label="Credits aufladen" active={pathname === "/credits"} onClick={() => setMoreSheetOpen(false)} sub="Extra Credits kaufen" />
-              <SheetItem href="/tiers" icon={Crown} label="Abo upgraden" active={pathname === "/tiers"} onClick={() => setMoreSheetOpen(false)} sub="Mehr Credits pro Monat" />
-              <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum + AGB für deinen Shop" />
-
-              {/* ─── Shop-Einstellungen ─── */}
+              {/* ─── Shop-Einstellungen (3 Items) ─── */}
               <SectionLabel>Shop-Einstellungen</SectionLabel>
               <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-Galerie + Push" />
               <SheetItem href="/code-blocks" icon={Code2} label="Liquid-Blöcke" active={pathname === "/code-blocks"} onClick={() => setMoreSheetOpen(false)} sub="Code-Snippets für dein Theme" />
+              <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum, AGB, DSGVO" />
 
               {/* ─── Support (4 Wege) ─── */}
               <SectionLabel>Support</SectionLabel>
@@ -1098,55 +1102,68 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
         WebkitBackdropFilter: "blur(48px) saturate(180%)",
       }}
     >
-      {/* Header — avatar + name + tier chip */}
+      {/* Header — grosses Profilbild + Email/Lizenz prominent.
+          Email steht oben (wenn da), sonst Lizenzschluessel als
+          monospace darunter. Tier-Chip rechts oben. */}
       <div className="relative p-4 border-b border-white/[0.06] overflow-hidden">
-        {/* Subtle gradient accent based on tier color */}
         <div
           className="absolute inset-0 opacity-30 pointer-events-none"
           style={{
             background:
               tierKey === "business"
-                ? "radial-gradient(circle at top right, rgba(251,191,36,0.14), transparent 65%)"
+                ? "radial-gradient(circle at top right, rgba(251,191,36,0.16), transparent 65%)"
                 : tierKey === "pro"
-                ? "radial-gradient(circle at top right, rgba(168,85,247,0.14), transparent 65%)"
+                ? "radial-gradient(circle at top right, rgba(168,85,247,0.16), transparent 65%)"
                 : tierKey === "starter"
-                ? "radial-gradient(circle at top right, rgba(6,182,212,0.12), transparent 65%)"
-                : "radial-gradient(circle at top right, rgba(149,191,71,0.10), transparent 65%)",
+                ? "radial-gradient(circle at top right, rgba(6,182,212,0.14), transparent 65%)"
+                : "radial-gradient(circle at top right, rgba(149,191,71,0.12), transparent 65%)",
           }}
         />
-        <div className="relative flex items-center gap-3">
+        <div className="relative flex items-start gap-3">
+          {/* Profilbild – grossformatig damit es klar erkennbar ist */}
           {session.googleImage ? (
             /* eslint-disable-next-line @next/next/no-img-element */
             <img
               src={session.googleImage}
               alt=""
-              className="w-12 h-12 rounded-xl border border-white/[0.10] object-cover shrink-0"
+              className="w-14 h-14 rounded-xl border border-white/[0.12] object-cover shrink-0 shadow-lg"
             />
           ) : (
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/[0.10] flex items-center justify-center shrink-0">
-              <span className="text-base font-bold text-white">
-                {(session.googleName || "U")[0].toUpperCase()}
+            <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/[0.12] flex items-center justify-center shrink-0 shadow-lg">
+              <span className="text-lg font-bold text-white">
+                {(session.googleName || session.googleEmail || session.lizenzschluessel || "U")[0].toUpperCase()}
               </span>
             </div>
           )}
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-bold truncate">{session.googleName || "Profil"}</div>
-            {session.googleEmail && (
-              <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
+          <div className="min-w-0 flex-1 pt-0.5">
+            {/* Primary: Email wenn vorhanden, sonst Name */}
+            <div className="text-[13px] font-bold text-white truncate">
+              {session.googleEmail || session.googleName || "Konto"}
+            </div>
+            {/* Secondary: Lizenzschluessel monospace, klein, voll sichtbar */}
+            {session.lizenzschluessel && (
+              <div className="text-[10.5px] text-zinc-500 truncate font-mono mt-0.5">
+                {session.lizenzschluessel}
+              </div>
             )}
-            <div className="mt-1.5 flex items-center gap-1.5">
+            {/* Tier oder Admin Badge */}
+            <div className="mt-2 flex items-center gap-1.5 flex-wrap">
               {session.isAdmin ? (
-                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
                   <Shield className="w-2.5 h-2.5" /> Admin
                 </span>
               ) : tier ? (
                 <span
-                  className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${chipStyle.bg} ${chipStyle.text} ${chipStyle.border}`}
+                  className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${chipStyle.bg} ${chipStyle.text} ${chipStyle.border}`}
                 >
                   {tierKey === "business" && <Crown className="w-2.5 h-2.5" />}
                   {tier.label}
                 </span>
-              ) : null}
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-500/10 text-zinc-500 border border-zinc-500/20">
+                  Kein Abo
+                </span>
+              )}
               {tier && tier.priceMonthlyEur > 0 && !session.isAdmin && (
                 <span className="text-[9px] text-zinc-500 tabular-nums">
                   {tier.priceMonthlyEur} €/Mo
@@ -1159,23 +1176,19 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
 
       {/* Profil-Dropdown: exakt die 4 vom User gewuenschten Items.
           Keine Rechtliches-Group hier — die ist im globalen Footer. */}
+      {/* Profil-Dropdown: EXAKT die 4 vom User gewuenschten Items.
+          Credits/Abo upgraden sind in der "/account/subscription" Seite
+          als prominente Action-Buttons erreichbar. Rechtstexte ist in
+          Shop-Einstellungen Dropdown. */}
       <div className="p-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
-        <MenuGroup label="Mein Profil">
-          <MenuItem
-            href="/profile"
-            icon={UserIcon}
-            label="Mein Profil"
-            active={pathname === "/profile"}
-            onClick={onClose}
-            sub="Persönliche Daten + Tickets"
-          />
+        <div className="space-y-0.5">
           <MenuItem
             href="/account/settings"
             icon={SettingsIcon}
             label="Einstellungen"
             active={pathname === "/account/settings"}
             onClick={onClose}
-            sub="Login, Google-Verknüpfung"
+            sub="Login & Google-Verknüpfung"
           />
           <MenuItem
             href="/account/subscription"
@@ -1201,39 +1214,7 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             onClick={onClose}
             sub="Verbindungs-Wizard"
           />
-        </MenuGroup>
-
-        {/* Extras direkt unter Profil — schnell erreichbar, fuehren
-            zu eigenstaendigen Seiten. */}
-        <MenuGroup label="Konto-Extras">
-          <MenuItem
-            href="/credits"
-            icon={Plus}
-            label="Credits aufladen"
-            active={pathname === "/credits"}
-            onClick={onClose}
-            sub="Extra Credits kaufen"
-          />
-          {tierKey !== "business" && (
-            <MenuItem
-              href="/tiers"
-              icon={Crown}
-              label="Abo upgraden"
-              active={pathname === "/tiers"}
-              onClick={onClose}
-              sub={tier ? `Mehr als ${tier.label}` : "Plan wählen"}
-              accent
-            />
-          )}
-          <MenuItem
-            href="/legal"
-            icon={Scale}
-            label="Rechtstexte generieren"
-            active={pathname === "/legal"}
-            onClick={onClose}
-            sub="Für deinen Shop"
-          />
-        </MenuGroup>
+        </div>
 
         {session.isAdmin && (
           <MenuGroup label="Verwaltung">
