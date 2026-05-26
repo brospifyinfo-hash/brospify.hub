@@ -1,19 +1,21 @@
 // ─── /api/version ────────────────────────────────────────────
-// Diagnose-Endpoint. Liefert die zur Build-Zeit eingefrorene
-// Versionskennung zurueck. So sehen wir SOFORT (per curl oder im
-// Browser) ob der von uns gepushte Code wirklich auf Vercel laeuft.
+// Live Version-Indicator fuer das Mobile-Menue.
 //
-// Vercel cached statische Routen unter Umstaenden aggressiv — mit
-// `dynamic = "force-dynamic"` wird der Endpoint pro Request neu
-// gerendert.
+// version    = Semantische Version, manuell gepflegt bei groesseren
+//              Releases. Wird im Menue als "Brospify Hub v1.2" gezeigt.
+// buildTime  = Erste 7 Chars vom Vercel-Git-Commit-SHA. Updates
+//              automatisch bei JEDEM Deploy ohne manuelles Bumpen,
+//              damit der User sofort sieht ob ein Update durch ist.
+// deployedAt = ISO-Timestamp des letzten Commits.
+//
+// `force-dynamic` weil Vercel sonst die JSON-Response cachen wuerde
+// und wir nie eine neue Version sehen ohne Cache-Bust.
 
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-// Bumpen wenn was Wichtiges geaendert wurde — so kann der User per
-// curl pruefen welche Version live ist.
-const APP_VERSION = "v2026-05-24-postverify-v2";
+const APP_VERSION = "v1.2";
 
 export async function GET() {
   return NextResponse.json({

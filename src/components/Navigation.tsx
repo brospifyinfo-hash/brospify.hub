@@ -693,63 +693,73 @@ export default function Navigation() {
         {moreSheetOpen && (
           <BottomSheet onClose={() => setMoreSheetOpen(false)} title="Mehr">
             <div className="space-y-2">
-              {/* Kompakter Avatar-Header — kein Expand mehr noetig,
-                  weil alle Profil/Account-Items unten in den
-                  Sektionen direkt klickbar sind. */}
-              <div className="flex items-center gap-3 p-3 rounded-xl border border-white/[0.06] bg-white/[0.02]">
-                {session.googleImage ? (
-                  /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={session.googleImage} alt="" className="w-10 h-10 rounded-lg border border-white/[0.08] object-cover shrink-0" />
-                ) : (
-                  <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-500/25 to-purple-500/25 border border-white/[0.08] flex items-center justify-center shrink-0">
-                    <UserIcon className="w-4 h-4 text-white" />
+              {/* ═══ PROFIL — Section mit Pfeil, DEFAULT OFFEN ═══
+                  Header zeigt Profilbild + Email/Lizenz. Pfeil kann
+                  zum Einklappen genutzt werden, aber ist beim Oeffnen
+                  des Sheets immer aufgeklappt. */}
+              <MobileSection
+                title="Profil"
+                defaultOpen={true}
+                headerSlot={
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    {session.googleImage ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img src={session.googleImage} alt="" className="w-11 h-11 rounded-xl border border-white/[0.10] object-cover shrink-0 shadow-md" />
+                    ) : (
+                      <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500/30 to-purple-500/30 border border-white/[0.10] flex items-center justify-center shrink-0 shadow-md">
+                        <span className="text-sm font-bold text-white">
+                          {(session.googleName || session.googleEmail || session.lizenzschluessel || "U")[0].toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 text-left">
+                      <div className="text-[13px] font-bold text-white truncate">
+                        {session.googleEmail || session.googleName || "Konto"}
+                      </div>
+                      {session.lizenzschluessel && (
+                        <div className="text-[10px] text-zinc-500 truncate font-mono">
+                          {session.lizenzschluessel}
+                        </div>
+                      )}
+                    </div>
+                    {session.isAdmin && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25 shrink-0">
+                        Admin
+                      </span>
+                    )}
                   </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <div className="text-[13px] font-semibold truncate">{session.googleName || "Profil"}</div>
-                  {session.googleEmail && (
-                    <div className="text-[10px] text-zinc-500 truncate">{session.googleEmail}</div>
-                  )}
-                </div>
-                {session.isAdmin && (
-                  <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/25">
-                    Admin
-                  </span>
-                )}
-              </div>
+                }
+              >
+                <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login & Google-Verknüpfung" />
+                <SheetItem href="/account/subscription" icon={Coins} label="Abo verwalten" active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub="Status, Credits, Verlängerung" />
+                <SheetItem href="/account/shopify" icon={Store} label="Shopify-Verbindung" active={pathname === "/account/shopify"} onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
+                <SheetItem href="/setup" icon={Zap} label="Setup einrichten" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Verbindungs-Wizard" />
+              </MobileSection>
 
-              {/* Mobile More-Sheet: exakt 3 Sektionen + Admin.
-                  Konto-Extras komplett raus. Rechtstexte ist jetzt in
-                  Shop-Einstellungen (Pflicht-Tool fuer jeden Shop).
-                  Rechtliche Brospify-Links sind nur im globalen Footer. */}
+              {/* ═══ SHOP-EINSTELLUNGEN — Section mit Pfeil, DEFAULT ZU ═══ */}
+              <MobileSection title="Shop-Einstellungen" icon={Store} defaultOpen={false}>
+                <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-Galerie + Push" />
+                <SheetItem href="/code-blocks" icon={Code2} label="Liquid-Blöcke" active={pathname === "/code-blocks"} onClick={() => setMoreSheetOpen(false)} sub="Code-Snippets für dein Theme" />
+                <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum, AGB, DSGVO" />
+              </MobileSection>
 
-              {/* ─── Profil — die 4 Items ─── */}
-              <SectionLabel>Profil</SectionLabel>
-              <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login & Google-Verknüpfung" />
-              <SheetItem href="/account/subscription" icon={Coins} label="Abo verwalten" active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub="Status, Credits, Verlängerung" />
-              <SheetItem href="/account/shopify" icon={Store} label="Shopify-Verbindung" active={pathname === "/account/shopify"} onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
-              <SheetItem href="/setup" icon={Zap} label="Setup einrichten" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Verbindungs-Wizard" />
+              {/* ═══ SUPPORT — Section mit Pfeil, DEFAULT ZU ═══ */}
+              <MobileSection title="Support" icon={Bot} defaultOpen={false}>
+                <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub="Sofort-Antwort vom KI-Bot" />
+                <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
+                <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
+                <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team (Gold-only)" />
+              </MobileSection>
 
-              {/* ─── Shop-Einstellungen (3 Items) ─── */}
-              <SectionLabel>Shop-Einstellungen</SectionLabel>
-              <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-Galerie + Push" />
-              <SheetItem href="/code-blocks" icon={Code2} label="Liquid-Blöcke" active={pathname === "/code-blocks"} onClick={() => setMoreSheetOpen(false)} sub="Code-Snippets für dein Theme" />
-              <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum, AGB, DSGVO" />
-
-              {/* ─── Support (4 Wege) ─── */}
-              <SectionLabel>Support</SectionLabel>
-              <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub="Sofort-Antwort vom KI-Bot" />
-              <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
-              <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
-              <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team (Gold-only)" />
-
-              {/* ─── Admin (if applicable) ─── */}
+              {/* Admin */}
               {session.isAdmin && (
-                <>
-                  <SectionLabel>Verwaltung</SectionLabel>
-                  <SheetItem href="/admin" icon={Settings} label="Admin-Panel" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} />
-                </>
+                <MobileSection title="Verwaltung" icon={Shield} defaultOpen={false}>
+                  <SheetItem href="/admin" icon={Settings} label="Admin-Panel" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} sub="Voller Zugriff" />
+                </MobileSection>
               )}
+
+              {/* ═══ RECHTLICHES + VERSION — direkt im Menue unten ═══ */}
+              <MobileLegalFooter onNavigate={() => setMoreSheetOpen(false)} />
 
               {/* ─── Logout ─── */}
               <div className="pt-2">
@@ -864,6 +874,134 @@ function SheetItem({ href, icon: Icon, label, active, onClick, accent, external,
     <Link href={href} onClick={onClick} className={className}>
       {inner}
     </Link>
+  );
+}
+
+// ─── Collapsible Mobile Section (mit Pfeil + Animation) ─────────
+// Im Mehr-Sheet auf Mobile: Header mit Title + ChevronDown der je
+// nach State rotiert. Children werden ein/ausgeblendet via height
+// animation. defaultOpen steuert den initial-State (Profil = true,
+// Shop-Einstellungen + Support = false).
+
+function MobileSection({
+  title, icon: Icon, defaultOpen, headerSlot, children,
+}: {
+  title: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  defaultOpen: boolean;
+  headerSlot?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left active:bg-white/[0.04] transition"
+      >
+        {headerSlot ?? (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {Icon && (
+              <div className="w-7 h-7 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
+                <Icon className="w-3.5 h-3.5 text-zinc-300" />
+              </div>
+            )}
+            <span className="text-[13px] font-bold text-white">{title}</span>
+          </div>
+        )}
+        <motion.div
+          animate={{ rotate: open ? 180 : 0 }}
+          transition={{ duration: 0.18 }}
+          className="shrink-0 ml-2"
+        >
+          <ChevronDown className="w-4 h-4 text-zinc-500" />
+        </motion.div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="overflow-hidden"
+          >
+            <div className="px-2 pb-2 pt-1 space-y-1 border-t border-white/[0.04]">
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ─── Mobile Legal Footer im Mehr-Sheet (NICHT global!) ──────────
+// Direkt im Sheet unten: Impressum/Datenschutz/AGB/Widerruf + Version.
+// Version wird live aus /api/version geholt und zeigt commit-SHA, so
+// dass User sofort sieht ob ein Deploy durch ist.
+
+function MobileLegalFooter({ onNavigate }: { onNavigate: () => void }) {
+  const [version, setVersion] = useState<{ version: string; buildTime: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/version", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.version) setVersion({ version: data.version, buildTime: data.buildTime || "" });
+      })
+      .catch(() => {});
+  }, []);
+
+  return (
+    <div className="pt-2 mt-2 border-t border-white/[0.06] space-y-2">
+      {/* Rechtstexte als kompakte Link-Liste */}
+      <div className="px-2 pb-1">
+        <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+          Rechtliches
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-1.5 px-1">
+        <LegalLink href="https://brospify.com/policies/legal-notice" label="Impressum" onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/privacy-policy" label="Datenschutz" onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/terms-of-service" label="AGB" onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/refund-policy" label="Widerruf" onClick={onNavigate} />
+      </div>
+
+      {/* Version-Indicator — updated automatisch bei jedem Deploy */}
+      <div className="flex items-center justify-between px-3 pt-3 pb-1 text-[10px] text-zinc-600">
+        <span className="font-semibold text-zinc-500">Brospify Hub</span>
+        <span className="font-mono">
+          {version ? (
+            <>
+              {version.version}
+              {version.buildTime && (
+                <span className="text-zinc-700"> · {version.buildTime}</span>
+              )}
+            </>
+          ) : (
+            "…"
+          )}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function LegalLink({ href, label, onClick }: { href: string; label: string; onClick?: () => void }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClick}
+      className="flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] active:bg-white/[0.06] transition"
+    >
+      <span className="text-[11px] font-medium text-zinc-300 truncate">{label}</span>
+      <ExternalLink className="w-2.5 h-2.5 text-zinc-600 shrink-0" />
+    </a>
   );
 }
 
