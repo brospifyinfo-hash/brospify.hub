@@ -362,9 +362,15 @@ export interface FireOrderResult {
   errorMessage?: string;
 }
 
+// orderCreate takes TWO args in API 2024-10:
+//   order:   OrderCreateOrderInput!     — line items, financial status, tags, …
+//   options: OrderCreateOptionsInput    — sendReceipt, sendFulfillmentReceipt,
+//                                         inventoryBehaviour
+// Putting the notification toggles inside `order` is rejected with
+// "Field is not defined on OrderCreateOrderInput".
 const ORDER_CREATE_MUTATION = `
-  mutation LoadTestOrderCreate($order: OrderCreateOrderInput!) {
-    orderCreate(order: $order) {
+  mutation LoadTestOrderCreate($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
+    orderCreate(order: $order, options: $options) {
       order { id name }
       userErrors { field message }
     }
@@ -391,8 +397,15 @@ export async function fireSingleOrder(input: FireOrderInput): Promise<FireOrderR
           tags: [input.tag, "loadtest", "brospify-hub"],
           note: `Brospify Hub load test · session=${input.sessionId}`,
           financialStatus: "PAID",
+        },
+        options: {
           sendReceipt: false,
           sendFulfillmentReceipt: false,
+          // Load tests should never deplete inventory — otherwise a
+          // tracked product runs out after a few hundred fires and
+          // every subsequent order fails with "out of stock", which
+          // measures the wrong thing.
+          inventoryBehaviour: "BYPASS",
         },
       },
     });
