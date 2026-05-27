@@ -43,7 +43,20 @@ export async function GET(req: NextRequest) {
   session.oauthNonce = `loadtest:${shop}:${nonce}`;
   await session.save();
 
-  const base = process.env.NEXT_PUBLIC_APP_URL || `https://${req.nextUrl.host}`;
+  // Prefer the public host the admin actually hit (carries through
+  // Vercel's proxy as x-forwarded-host) — env-var fallback is last
+  // because NEXT_PUBLIC_APP_URL was pointing at the internal vercel.app
+  // hostname in production, which then doesn't match the redirect URL
+  // the admin registered on brospifyhub.com in Shopify's Dev Dashboard.
+  const forwardedHost = req.headers.get("x-forwarded-host");
+  const rawHost = forwardedHost || req.headers.get("host") || req.nextUrl.host;
+  const envBase = process.env.NEXT_PUBLIC_APP_URL || "";
+  // Don't trust env if it's an internal vercel.app — that's the bug we just fixed.
+  const base = rawHost && !rawHost.endsWith(".vercel.app")
+    ? `https://${rawHost}`
+    : envBase && !envBase.includes(".vercel.app")
+    ? envBase
+    : `https://${rawHost}`;
   const redirectUri = `${base.replace(/\/$/, "")}/api/admin/loadtest/oauth/callback`;
 
   const url = new URL(`https://${shop}/admin/oauth/authorize`);
