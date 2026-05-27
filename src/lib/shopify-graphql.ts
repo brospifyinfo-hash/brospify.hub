@@ -360,6 +360,14 @@ export interface FireOrderResult {
   throttled: boolean;
   cost?: ShopifyCostDebug;
   errorMessage?: string;
+  // Diagnostic echo of what Shopify actually stored — surfaces the
+  // sourceName Shopify accepted (or silently rewrote) so we can spot
+  // when "loadtester" gets fallback'd to "import" without an error.
+  diagnostics?: {
+    storedSourceName?: string | null;
+    storedSourceIdentifier?: string | null;
+    appTitle?: string | null;
+  };
 }
 
 // orderCreate takes TWO args in API 2024-10:
@@ -371,7 +379,13 @@ export interface FireOrderResult {
 const ORDER_CREATE_MUTATION = `
   mutation LoadTestOrderCreate($order: OrderCreateOrderInput!, $options: OrderCreateOptionsInput) {
     orderCreate(order: $order, options: $options) {
-      order { id name }
+      order {
+        id
+        name
+        sourceName
+        sourceIdentifier
+        app { id title }
+      }
       userErrors { field message }
     }
   }
@@ -379,7 +393,13 @@ const ORDER_CREATE_MUTATION = `
 
 interface OrderCreateData {
   orderCreate: {
-    order: { id: string; name: string } | null;
+    order: {
+      id: string;
+      name: string;
+      sourceName?: string | null;
+      sourceIdentifier?: string | null;
+      app?: { id?: string; title?: string } | null;
+    } | null;
     userErrors: { field: string[] | null; message: string }[];
   };
 }
@@ -446,6 +466,11 @@ export async function fireSingleOrder(input: FireOrderInput): Promise<FireOrderR
       throttled: false,
       cost: res.cost,
       errorMessage: order ? undefined : "Shopify returned no order and no userErrors.",
+      diagnostics: order ? {
+        storedSourceName: order.sourceName ?? null,
+        storedSourceIdentifier: order.sourceIdentifier ?? null,
+        appTitle: order.app?.title ?? null,
+      } : undefined,
     };
   } catch (err) {
     const latencyMs = Date.now() - start;

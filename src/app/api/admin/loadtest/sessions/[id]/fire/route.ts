@@ -61,5 +61,6 @@ export async function POST(
     throttled: result.throttled,
     cost: result.cost,
     error: result.errorMessage,
+    diagnostics: result.diagnostics,
   });
 }
