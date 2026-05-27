@@ -397,6 +397,17 @@ export async function fireSingleOrder(input: FireOrderInput): Promise<FireOrderR
           tags: [input.tag, "loadtest", "brospify-hub"],
           note: `Brospify Hub load test · session=${input.sessionId}`,
           financialStatus: "PAID",
+          // `sourceName: "web"` makes Shopify render the order as
+          // "via Online Store" instead of the default "via import".
+          // For a load test this matches the path the storefront and
+          // webhooks would exercise in production, so theme/webhook
+          // throughput is what's actually being measured.
+          //
+          // Only acceptable because verifyDevStore() rejects any non-
+          // partnerDevelopment shop at config-save time — on a real
+          // shop "via import" is a useful signal that orders are
+          // coming through the API rather than a real checkout.
+          sourceName: "web",
         },
         options: {
           sendReceipt: false,
