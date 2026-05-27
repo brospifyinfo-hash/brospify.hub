@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -22,23 +22,18 @@ import {
   Camera,
   BarChart3,
   Mail,
-  Palette,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  Users,
-  Target,
-  ShoppingBag,
   Play,
   Pencil,
   Eye,
   EyeOff,
   Megaphone,
-  AlertTriangle,
   Zap,
-  FolderHeart,
-  ArrowRight,
+  ListChecks,
   Link2,
+  ArrowRight,
+  ArrowUp,
+  ArrowDown,
+  GripVertical,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useTier } from "@/lib/use-tier";
@@ -78,32 +73,13 @@ interface NewsPost {
   createdAt: string;
 }
 
-interface Insights {
-  connected: boolean;
-  needsReconnect?: boolean;
-  reconnectReason?: string;
-  hasOrders?: boolean;
-  partialErrors?: { kind: string; status?: number; message: string }[];
-  window?: { since: string; until: string; totalOrders: number };
-  today?: { orders: number; revenue: number; revenueDeltaPct: number; ordersDelta: number };
-  conversionTrend?: { date: string; value: number }[];
-  aovWeeks?: { label: string; aov: number }[];
-  hotspots?: { hour: number; count: number }[];
-  productRanking?: { id: number; title: string; units: number; revenue: number; estimatedProfit: number }[];
-  crossSellPairs?: { a: string; b: string; count: number }[];
-  missedRevenue?: { amount: number; count: number; trendPct: number };
-  returning?: { ratePct: number; customers: number; trend: { label: string; rate: number }[] };
-  bestHour?: { hour: number; label: string; sharePct: number; recommendation: string };
-}
-
-interface LibraryItem {
+interface StartTask {
   rowIndex: number;
   id: string;
-  type: "image" | "email";
-  source: "upscaler" | "bg-remover" | "ai-studio" | "email-templates" | "other";
   title: string;
-  thumbnailUrl: string;
-  assetUrl: string;
+  bodyHtml: string;
+  sort: number;
+  active: boolean;
   createdAt: string;
 }
 
@@ -134,16 +110,15 @@ export default function HomePage() {
   const tierState = useTier();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
+  const [tasksDone, setTasksDone] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-
-  const [insights, setInsights] = useState<Insights | null>(null);
-  const [insightsLoading, setInsightsLoading] = useState(true);
 
   const [posts, setPosts] = useState<NewsPost[]>([]);
   const [newsAdminOpen, setNewsAdminOpen] = useState(false);
   const [activePost, setActivePost] = useState<NewsPost | null>(null);
 
-  const [libraryRecent, setLibraryRecent] = useState<LibraryItem[]>([]);
+  const [tasks, setTasks] = useState<StartTask[]>([]);
+  const [tasksAdminOpen, setTasksAdminOpen] = useState(false);
 
   const loadPosts = useCallback(async () => {
     try {
@@ -155,29 +130,12 @@ export default function HomePage() {
     } catch { /* ignore */ }
   }, []);
 
-  const loadInsights = useCallback(async () => {
-    setInsightsLoading(true);
+  const loadTasks = useCallback(async () => {
     try {
-      const res = await fetch("/api/shopify/insights");
+      const res = await fetch("/api/admin/start-tasks");
       if (res.ok) {
         const data = await res.json();
-        setInsights(data);
-      } else {
-        setInsights({ connected: false });
-      }
-    } catch {
-      setInsights({ connected: false });
-    } finally {
-      setInsightsLoading(false);
-    }
-  }, []);
-
-  const loadLibrary = useCallback(async () => {
-    try {
-      const res = await fetch("/api/library/items");
-      if (res.ok) {
-        const data = await res.json();
-        setLibraryRecent((data.items || []).slice(0, 6));
+        setTasks(data.tasks || []);
       }
     } catch { /* ignore */ }
   }, []);
@@ -200,14 +158,14 @@ export default function HomePage() {
           cl.setup_complete = true;
         }
         setChecklist(cl);
+        setTasksDone(profile.onboarding_tasks_done || {});
         setLoading(false);
       })
       .catch(() => router.push("/"));
 
     loadPosts();
-    loadInsights();
-    loadLibrary();
-  }, [router, loadPosts, loadInsights, loadLibrary]);
+    loadTasks();
+  }, [router, loadPosts, loadTasks]);
 
   if (loading || !session) {
     return (
@@ -220,8 +178,23 @@ export default function HomePage() {
   const completed = SETUP_STEPS.filter((s) => checklist[s.key]).length;
   const progress = (completed / SETUP_STEPS.length) * 100;
   const allDone = completed === SETUP_STEPS.length;
-  const shopConnected = !!(session.hasShopifyToken || session.hasShopifyConnection);
   const firstName = (session.googleName || "").split(" ")[0] || "";
+
+  async function toggleTaskDone(id: string, nextDone: boolean) {
+    setTasksDone((prev) => {
+      const next = { ...prev };
+      if (nextDone) next[id] = true;
+      else delete next[id];
+      return next;
+    });
+    try {
+      await fetch("/api/start-tasks/done", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, done: nextDone }),
+      });
+    } catch { /* keep optimistic value */ }
+  }
 
   return (
     <div className="min-h-screen bg-mesh">
@@ -230,10 +203,9 @@ export default function HomePage() {
       <div className="fixed top-20 right-6 w-56 h-56 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-6 w-48 h-48 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      {/* Same density on mobile + desktop — desktop just gets extra width */}
       <div className="max-w-5xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3 sm:space-y-4">
 
-        {/* ─── Greeting (compact) ─────────────────────── */}
+        {/* ─── Greeting ───────────────────────────────── */}
         <motion.div
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -256,17 +228,7 @@ export default function HomePage() {
         {/* ─── Abo-Status Banner ─────────────────────── */}
         <AboStatusBanner tierState={tierState} isAdmin={!!session.isAdmin} />
 
-        {/* ─── Reconnect banner (visible above everything when scopes missing) ── */}
-        {shopConnected && insights?.needsReconnect && (
-          <ReconnectBanner reason={insights.reconnectReason} onClick={() => router.push("/setup")} />
-        )}
-
-        {/* ─── Today KPI strip — always visible if shop connected ──── */}
-        {shopConnected && (
-          <TodayStrip today={insights?.today ?? { orders: 0, revenue: 0, revenueDeltaPct: 0, ordersDelta: 0 }} />
-        )}
-
-        {/* ─── Compact setup progress (1 line on mobile) ─── */}
+        {/* ─── Compact setup progress ─────────────────── */}
         <CompactProgress
           completed={completed}
           total={SETUP_STEPS.length}
@@ -276,7 +238,34 @@ export default function HomePage() {
           onClick={() => router.push("/setup")}
         />
 
-        {/* ─── Quick Tiles (4 cols mobile, very compact) ─── */}
+        {/* ─── Start-Tasks (Bis du verkaufst) ──────────── */}
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <SectionHeader
+              icon={ListChecks}
+              title="Bis du verkaufst"
+              sub="Hak die Schritte ab, sobald du sie erledigt hast."
+              inline
+            />
+            {session.isAdmin && (
+              <button
+                onClick={() => setTasksAdminOpen(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition shrink-0"
+              >
+                <Plus className="w-3 h-3" /> Verwalten
+              </button>
+            )}
+          </div>
+          <StartTasksList
+            tasks={tasks.filter((t) => t.active || session.isAdmin)}
+            doneMap={tasksDone}
+            onToggle={toggleTaskDone}
+            adminEmpty={tasks.length === 0 && session.isAdmin}
+            onOpenAdmin={() => setTasksAdminOpen(true)}
+          />
+        </section>
+
+        {/* ─── Quick Tiles ───────────────────────────── */}
         <section>
           <SectionHeader icon={Zap} title="Schnellzugriff" />
           <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
@@ -307,41 +296,6 @@ export default function HomePage() {
             ))}
           </div>
         </section>
-
-        {/* ─── Shop Insights ───────────────────────── */}
-        <section>
-          <SectionHeader
-            icon={TrendingUp}
-            title="Shop-Insights"
-            sub={shopConnected ? "Aus deinen Shopify-Daten — nicht im Standard-Dashboard" : "Verbinde deinen Shop, um Live-Daten zu sehen"}
-          />
-          <InsightsGrid
-            insights={insights}
-            loading={insightsLoading}
-            shopConnected={shopConnected}
-            onConnect={() => router.push("/setup")}
-          />
-        </section>
-
-        {/* ─── Recent library items ───────────────── */}
-        {libraryRecent.length > 0 && (
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <SectionHeader icon={FolderHeart} title="Neulich erstellt" inline />
-              <button
-                onClick={() => router.push("/library")}
-                className="text-[10px] sm:text-[11px] font-semibold text-[#95BF47] hover:underline flex items-center gap-1"
-              >
-                Mediathek <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-            <div className="flex gap-2 overflow-x-auto -mx-3 px-3 sm:-mx-0 sm:px-0 snap-x snap-mandatory pb-1">
-              {libraryRecent.map((it) => (
-                <RecentLibraryThumb key={it.id} item={it} onOpen={() => router.push("/library")} />
-              ))}
-            </div>
-          </section>
-        )}
 
         {/* ─── News Section ──────────────────────── */}
         {(posts.length > 0 || session.isAdmin) && (
@@ -380,107 +334,14 @@ export default function HomePage() {
         {activePost && activePost.type === "text" && (
           <NewsTextDetail post={activePost} onClose={() => setActivePost(null)} />
         )}
+        {tasksAdminOpen && (
+          <StartTasksAdminModal
+            tasks={tasks}
+            onClose={() => setTasksAdminOpen(false)}
+            onRefresh={loadTasks}
+          />
+        )}
       </AnimatePresence>
-    </div>
-  );
-}
-
-// ─── Today KPI strip ─────────────────────────────────────────────
-
-function ReconnectBanner({ reason, onClick }: { reason?: string; onClick: () => void }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: -6 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-amber-500/30 bg-amber-500/[0.08] p-3 flex items-start gap-2"
-    >
-      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-0">
-        <div className="text-[12px] font-bold text-amber-300 leading-tight">
-          Shop muss neu verbunden werden
-        </div>
-        <div className="text-[10px] text-amber-200/80 mt-0.5 leading-snug">
-          {reason || "Dein Token hat keine read_orders-Permission. Reconnect bringt alle Charts zurück."}
-        </div>
-      </div>
-      <button
-        onClick={onClick}
-        className="shrink-0 px-3 py-1.5 rounded-lg bg-amber-500 text-black text-[11px] font-bold hover:brightness-110 transition"
-      >
-        Setup
-      </button>
-    </motion.div>
-  );
-}
-
-function TodayStrip({ today }: { today: NonNullable<Insights["today"]> }) {
-  const positive = today.revenueDeltaPct >= 0;
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.05 }}
-      className="grid grid-cols-3 gap-1.5 sm:gap-3"
-    >
-      <KpiCard
-        label="Heute"
-        value={`${today.revenue.toFixed(0)} €`}
-        sub="Umsatz"
-        delta={today.revenueDeltaPct === 0 ? null : `${positive ? "+" : ""}${today.revenueDeltaPct}%`}
-        positive={positive}
-        accent="#10B981"
-      />
-      <KpiCard
-        label="Heute"
-        value={String(today.orders)}
-        sub={today.orders === 1 ? "Bestellung" : "Bestellungen"}
-        delta={today.ordersDelta === 0 ? null : `${today.ordersDelta > 0 ? "+" : ""}${today.ordersDelta}`}
-        positive={today.ordersDelta >= 0}
-        accent="#8B5CF6"
-      />
-      <KpiCard
-        label="Avg"
-        value={
-          today.orders > 0
-            ? `${(today.revenue / today.orders).toFixed(0)} €`
-            : "—"
-        }
-        sub="Warenkorb"
-        accent="#F59E0B"
-      />
-    </motion.div>
-  );
-}
-
-function KpiCard({ label, value, sub, delta, positive, accent }: {
-  label: string;
-  value: string;
-  sub: string;
-  delta?: string | null;
-  positive?: boolean;
-  accent: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-2.5 overflow-hidden relative">
-      <div className="absolute top-0 right-0 w-12 h-12 rounded-full opacity-10 blur-xl" style={{ background: accent }} />
-      <div className="relative">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500">{label}</span>
-          {delta && (
-            <span
-              className={`text-[9px] font-bold tabular-nums px-1 py-0.5 rounded ${
-                positive ? "text-emerald-300 bg-emerald-500/10" : "text-red-300 bg-red-500/10"
-              }`}
-            >
-              {delta}
-            </span>
-          )}
-        </div>
-        <div className="text-base sm:text-lg font-bold tabular-nums leading-none" style={{ color: accent }}>
-          {value}
-        </div>
-        <div className="text-[10px] text-zinc-500 mt-0.5 truncate">{sub}</div>
-      </div>
     </div>
   );
 }
@@ -506,7 +367,7 @@ function SectionHeader({ icon: Icon, title, sub, inline }: {
   );
 }
 
-// ─── Compact progress (one-line on mobile) ────────────────────
+// ─── Compact progress ─────────────────────────────────────────
 
 function CompactProgress({ completed, total, progress, allDone, steps, onClick }: {
   completed: number;
@@ -564,385 +425,502 @@ function CompactProgress({ completed, total, progress, allDone, steps, onClick }
   );
 }
 
-// ─── Insights grid (compact) ─────────────────────────────────
+// ─── Start-tasks list (user view) ────────────────────────────
 
-function InsightsGrid({ insights, loading, shopConnected, onConnect }: {
-  insights: Insights | null;
-  loading: boolean;
-  shopConnected: boolean;
-  onConnect: () => void;
+function StartTasksList({ tasks, doneMap, onToggle, adminEmpty, onOpenAdmin }: {
+  tasks: StartTask[];
+  doneMap: Record<string, boolean>;
+  onToggle: (id: string, next: boolean) => void;
+  adminEmpty: boolean;
+  onOpenAdmin: () => void;
 }) {
-  if (!shopConnected) {
-    return <InsightsPlaceholder onConnect={onConnect} mode="not-connected" />;
-  }
-  if (loading || !insights) {
+  if (adminEmpty && tasks.length === 0) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-3">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="rounded-xl sm:rounded-2xl border border-white/[0.06] bg-white/[0.02] h-24 sm:h-32 animate-pulse" />
-        ))}
+      <button
+        onClick={onOpenAdmin}
+        className="w-full p-4 rounded-xl border border-dashed border-white/10 text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition flex items-center justify-center gap-1.5 text-xs"
+      >
+        <Plus className="w-3.5 h-3.5" /> Erste Start-Aufgabe anlegen
+      </button>
+    );
+  }
+  if (tasks.length === 0) {
+    return (
+      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-6 text-center text-[12px] text-zinc-500">
+        Bisher keine Aufgaben hinterlegt. Schau bald wieder rein.
       </div>
     );
   }
-  if (insights.connected === false) {
-    return <InsightsPlaceholder onConnect={onConnect} mode="not-connected" />;
-  }
-  if (insights.needsReconnect) {
-    return <InsightsPlaceholder onConnect={onConnect} mode="needs-reconnect" reason={insights.reconnectReason} />;
-  }
-  if (insights.hasOrders === false) {
-    return <InsightsPlaceholder onConnect={onConnect} mode="no-orders" />;
-  }
-
+  const totalActive = tasks.filter((t) => t.active).length;
+  const doneCount = tasks.filter((t) => t.active && doneMap[t.id]).length;
+  const allDone = totalActive > 0 && doneCount === totalActive;
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-1.5 sm:gap-3">
-      <ConversionTrendCard data={insights.conversionTrend || []} />
-      <AovBarsCard data={insights.aovWeeks || []} />
-      <HotspotsCard data={insights.hotspots || []} />
-      <ProductRankingCard data={insights.productRanking || []} />
-      <CrossSellCard data={insights.crossSellPairs || []} />
-      <MissedRevenueCard data={insights.missedRevenue} />
-      <ReturningCard data={insights.returning} />
-      <BestHourCard data={insights.bestHour} />
-    </div>
-  );
-}
-
-function InsightsPlaceholder({ onConnect, mode, reason }: {
-  onConnect: () => void;
-  mode: "not-connected" | "needs-reconnect" | "no-orders";
-  reason?: string;
-}) {
-  const stub = ["Conversion", "AOV", "Hotspots", "Top-Produkte", "Verlust", "Wiederkehrer"];
-  const config = {
-    "not-connected": {
-      iconColor: "#95BF47",
-      title: "Verbinde deinen Shopify-Store",
-      desc: "Wir berechnen Conversion-Trends, Hotspots & versteckten Umsatz aus deinen Bestelldaten.",
-      cta: "Shop verbinden",
-    },
-    "needs-reconnect": {
-      iconColor: "#F59E0B",
-      title: "Shop muss neu verbunden werden",
-      desc: reason || "Dein Token hat nicht alle Bereiche. Verbinde den Shop neu, dann sind read_orders + read_customers drin.",
-      cta: "Neu verbinden",
-    },
-    "no-orders": {
-      iconColor: "#3B82F6",
-      title: "Noch keine Bestellungen im Zeitraum",
-      desc: "Sobald die ersten Bestellungen reinkommen, zeigen wir dir hier Conversion, Hotspots, Top-Produkte und mehr.",
-      cta: "Setup prüfen",
-    },
-  }[mode];
-  return (
-    <div className="relative rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 sm:p-5 overflow-hidden">
-      <div className="grid grid-cols-3 gap-1.5 mb-3 opacity-30 pointer-events-none">
-        {stub.map((s) => (
-          <div key={s} className="rounded-lg border border-white/10 bg-white/[0.02] p-2 h-16 flex flex-col justify-end">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500 truncate">{s}</div>
-            <div className="h-1 bg-white/10 rounded-full mt-1.5">
-              <div className="h-full w-1/2 bg-zinc-600 rounded-full" />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="text-center">
-        <div
-          className="inline-flex items-center justify-center w-9 h-9 rounded-xl border mb-2"
-          style={{ background: `${config.iconColor}15`, borderColor: `${config.iconColor}30` }}
-        >
-          <Store className="w-4 h-4" style={{ color: config.iconColor }} />
+    <div className="space-y-1.5">
+      {totalActive > 0 && (
+        <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-semibold mb-1.5">
+          <span className="text-zinc-500">Fortschritt</span>
+          <span className={allDone ? "text-emerald-300" : "text-zinc-400"}>
+            {doneCount}/{totalActive}
+            {allDone && " · Du bist startklar! \u{1F680}"}
+          </span>
         </div>
-        <h3 className="text-sm font-bold mb-1">{config.title}</h3>
-        <p className="text-[11px] text-zinc-500 mb-3 max-w-md mx-auto leading-relaxed">{config.desc}</p>
-        <button
-          onClick={onConnect}
-          className="btn-accent px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 mx-auto"
-        >
-          <Store className="w-3.5 h-3.5" />
-          {config.cta}
-        </button>
-      </div>
+      )}
+      {tasks.map((t, i) => (
+        <StartTaskItem
+          key={t.id}
+          task={t}
+          done={!!doneMap[t.id]}
+          onToggle={(next) => onToggle(t.id, next)}
+          index={i}
+        />
+      ))}
     </div>
   );
 }
 
-function InsightCard({ icon: Icon, title, accent = "#95BF47", children }: {
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  title: string;
-  accent?: string;
-  children: React.ReactNode;
+function StartTaskItem({ task, done, onToggle, index }: {
+  task: StartTask;
+  done: boolean;
+  onToggle: (next: boolean) => void;
+  index: number;
 }) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 6 }}
+      initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-2.5 flex flex-col gap-2 min-h-[8rem]"
+      transition={{ delay: index * 0.02 }}
+      className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 transition ${
+        done
+          ? "border-emerald-500/25 bg-emerald-500/[0.06]"
+          : task.active
+            ? "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]"
+            : "border-white/[0.04] bg-white/[0.01] opacity-60"
+      }`}
     >
-      <div className="flex items-center gap-1.5">
-        <div
-          className="w-5 h-5 rounded-md flex items-center justify-center border shrink-0"
-          style={{ backgroundColor: `${accent}15`, borderColor: `${accent}30` }}
-        >
-          <Icon className="w-3 h-3" style={{ color: accent }} />
+      <button
+        type="button"
+        onClick={() => onToggle(!done)}
+        className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
+          done
+            ? "bg-emerald-500 border-emerald-400 text-black"
+            : "bg-white/[0.02] border-white/15 text-transparent hover:border-white/35"
+        }`}
+        aria-label={done ? "Aufgabe entmarkieren" : "Aufgabe als erledigt markieren"}
+      >
+        <Check className="w-3.5 h-3.5" strokeWidth={3} />
+      </button>
+      <div className="min-w-0 flex-1">
+        <div className={`text-[13px] font-semibold leading-snug ${done ? "text-emerald-200 line-through decoration-emerald-400/50" : "text-zinc-100"}`}>
+          {task.title}
+          {!task.active && (
+            <span className="ml-2 text-[9px] uppercase tracking-widest text-zinc-500 font-bold">
+              inaktiv
+            </span>
+          )}
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-300 truncate">{title}</span>
+        {task.bodyHtml && (
+          <div
+            className="text-[12px] text-zinc-400 leading-relaxed mt-1 task-html"
+            dangerouslySetInnerHTML={{ __html: task.bodyHtml }}
+          />
+        )}
       </div>
-      {children}
     </motion.div>
   );
 }
 
-function ConversionTrendCard({ data }: { data: { date: string; value: number }[] }) {
-  const avg = data.length > 0 ? data.reduce((a, b) => a + b.value, 0) / data.length : 0;
-  const last = data.at(-1)?.value ?? 0;
-  const first = data[0]?.value ?? 0;
-  const trend = last - first;
-  return (
-    <InsightCard icon={Target} title="Conversion" accent="#10B981">
-      <div className="flex items-baseline gap-1.5">
-        <div className="text-base font-bold tabular-nums">{avg.toFixed(1)}%</div>
-        <div className={`text-[10px] font-semibold flex items-center gap-0.5 ${trend >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-          {trend >= 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
-          {trend >= 0 ? "+" : ""}{trend.toFixed(1)}pp
-        </div>
-      </div>
-      <SparkLine data={data.map((d) => d.value)} color="#10B981" />
-      <div className="text-[9px] text-zinc-500">14 Tage</div>
-    </InsightCard>
-  );
-}
+// ─── Start-tasks admin modal ────────────────────────────────
 
-function AovBarsCard({ data }: { data: { label: string; aov: number }[] }) {
-  const max = Math.max(...data.map((d) => d.aov), 1);
-  const last = data.at(-1)?.aov ?? 0;
+function StartTasksAdminModal({ tasks, onClose, onRefresh }: {
+  tasks: StartTask[];
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [editing, setEditing] = useState<StartTask | null>(null);
+  const [creating, setCreating] = useState(false);
+
   return (
-    <InsightCard icon={ShoppingBag} title="Bestellwert" accent="#8B5CF6">
-      <div className="flex items-baseline gap-1.5">
-        <div className="text-base font-bold tabular-nums">{last.toFixed(2)} €</div>
-      </div>
-      <div className="flex items-end gap-[1px] h-8">
-        {data.map((d) => (
-          <div key={d.label} className="flex-1 flex flex-col items-center gap-1">
-            <div
-              className="w-full rounded-t-sm bg-gradient-to-t from-[#8B5CF6] to-[#A78BFA]"
-              style={{ height: `${Math.max(2, (d.aov / max) * 100)}%` }}
-            />
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm sm:px-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 60 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[#0c0c0c] border border-white/10 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[90vh] overflow-hidden shadow-2xl flex flex-col"
+      >
+        <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <h3 className="text-sm sm:text-base font-bold flex items-center gap-2">
+            <ListChecks className="w-4 h-4 sm:w-5 sm:h-5 text-[#95BF47]" />
+            Start-Aufgaben verwalten
+          </h3>
+          <div className="flex items-center gap-2">
+            {!creating && !editing && (
+              <button
+                onClick={() => setCreating(true)}
+                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#95BF47] text-black font-semibold text-xs hover:brightness-110 transition"
+              >
+                <Plus className="w-3 h-3" /> Neu
+              </button>
+            )}
+            <button onClick={onClose} className="p-1 hover:bg-white/[0.05] rounded-lg transition">
+              <X className="w-4 h-4 text-zinc-500" />
+            </button>
           </div>
-        ))}
-      </div>
-      <div className="text-[9px] text-zinc-500">8 Wochen</div>
-    </InsightCard>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {creating ? (
+            <StartTaskForm onCancel={() => setCreating(false)} onSaved={() => { setCreating(false); onRefresh(); }} />
+          ) : editing ? (
+            <StartTaskForm initial={editing} onCancel={() => setEditing(null)} onSaved={() => { setEditing(null); onRefresh(); }} />
+          ) : (
+            <StartTaskAdminList tasks={tasks} onEdit={setEditing} onRefresh={onRefresh} />
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
-function HotspotsCard({ data }: { data: { hour: number; count: number }[] }) {
-  const max = Math.max(...data.map((d) => d.count), 1);
-  return (
-    <InsightCard icon={Clock} title="Hotspots" accent="#F59E0B">
-      <div className="text-[10px] text-zinc-400 -mb-0.5">Bestellungen / Stunde (60d)</div>
-      <div className="flex items-end gap-[1px] h-8 mt-0.5">
-        {data.map((d) => (
-          <div
-            key={d.hour}
-            title={`${d.hour}:00 — ${d.count}`}
-            className="flex-1 rounded-t-sm bg-gradient-to-t from-[#F59E0B] to-[#FBBF24] opacity-80"
-            style={{ height: `${Math.max(2, (d.count / max) * 100)}%` }}
-          />
-        ))}
+function StartTaskAdminList({ tasks, onEdit, onRefresh }: {
+  tasks: StartTask[];
+  onEdit: (t: StartTask) => void;
+  onRefresh: () => void;
+}) {
+  async function handleDelete(rowIndex: number) {
+    if (!confirm("Aufgabe löschen?")) return;
+    await fetch("/api/admin/start-tasks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rowIndex }),
+    });
+    onRefresh();
+  }
+  async function toggleActive(t: StartTask) {
+    await fetch("/api/admin/start-tasks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rowIndex: t.rowIndex, active: !t.active }),
+    });
+    onRefresh();
+  }
+  async function move(t: StartTask, delta: number) {
+    // Sort uses gaps of 10 so we can re-shuffle without re-numbering
+    // every neighbour. We swap sort values with the adjacent task.
+    const sorted = [...tasks].sort((a, b) => a.sort - b.sort);
+    const idx = sorted.findIndex((x) => x.id === t.id);
+    const target = sorted[idx + delta];
+    if (!target) return;
+    await Promise.all([
+      fetch("/api/admin/start-tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: t.rowIndex, sort: target.sort }),
+      }),
+      fetch("/api/admin/start-tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: target.rowIndex, sort: t.sort }),
+      }),
+    ]);
+    onRefresh();
+  }
+  if (tasks.length === 0) {
+    return (
+      <div className="text-center py-10 text-zinc-500 text-sm">
+        Noch keine Aufgaben. Tippe oben auf „Neu&ldquo;.
       </div>
-      <div className="flex justify-between text-[8px] text-zinc-600 tabular-nums">
-        <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
-      </div>
-    </InsightCard>
-  );
-}
-
-function ProductRankingCard({ data }: { data: { id: number; title: string; estimatedProfit: number; units: number }[] }) {
-  const max = Math.max(...data.map((d) => d.estimatedProfit), 1);
+    );
+  }
+  const sorted = [...tasks].sort((a, b) => a.sort - b.sort);
   return (
-    <InsightCard icon={Package} title="Top-Produkte" accent="#EC4899">
-      {data.length === 0 ? (
-        <div className="text-[10px] text-zinc-500 mt-1">Noch keine Bestellungen.</div>
-      ) : (
-        <div className="space-y-1">
-          {data.slice(0, 4).map((p, i) => (
-            <div key={p.id} className="flex items-center gap-1.5">
-              <span className="text-[9px] font-bold text-zinc-500 w-2 tabular-nums shrink-0">{i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-1 mb-0.5">
-                  <span className="text-[10px] truncate">{p.title}</span>
-                  <span className="text-[9px] font-semibold tabular-nums text-zinc-300 shrink-0">
-                    {p.estimatedProfit.toFixed(0)} €
-                  </span>
-                </div>
-                <div className="h-1 rounded-full bg-white/5 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-[#EC4899] to-[#F472B6]"
-                    style={{ width: `${(p.estimatedProfit / max) * 100}%` }}
-                  />
-                </div>
-              </div>
+    <div className="space-y-1.5">
+      {sorted.map((t, i) => (
+        <div key={t.id} className="flex items-start gap-2 p-2 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+          <div className="flex flex-col items-center gap-0.5 pt-1 shrink-0 text-zinc-500">
+            <GripVertical className="w-3.5 h-3.5" />
+            <button onClick={() => move(t, -1)} disabled={i === 0} className="p-0.5 hover:text-white disabled:opacity-30">
+              <ArrowUp className="w-3 h-3" />
+            </button>
+            <button onClick={() => move(t, 1)} disabled={i === sorted.length - 1} className="p-0.5 hover:text-white disabled:opacity-30">
+              <ArrowDown className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 mb-0.5">
+              {!t.active && <span className="text-[8px] text-zinc-500 uppercase tracking-widest font-bold">inaktiv</span>}
             </div>
-          ))}
+            <div className="text-xs sm:text-sm font-semibold leading-snug">{t.title}</div>
+            {t.bodyHtml && (
+              <div
+                className="text-[11px] text-zinc-400 leading-snug mt-1 line-clamp-2 task-html"
+                dangerouslySetInnerHTML={{ __html: t.bodyHtml }}
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => toggleActive(t)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-lg transition">
+              {t.active ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
+            <button onClick={() => onEdit(t)} className="p-1.5 text-zinc-500 hover:text-white hover:bg-white/[0.05] rounded-lg transition">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => handleDelete(t.rowIndex)} className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition">
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-      )}
-      <div className="text-[9px] text-zinc-500 mt-auto">≈ Gewinn · 60 Tage</div>
-    </InsightCard>
+      ))}
+    </div>
   );
 }
 
-function CrossSellCard({ data }: { data: { a: string; b: string; count: number }[] }) {
-  return (
-    <InsightCard icon={Link2} title="Häufig zusammen" accent="#0EA5E9">
-      {data.length === 0 ? (
-        <div className="text-[10px] text-zinc-500 mt-1 leading-snug">
-          Noch keine Mehrfach-Bestellungen. Sobald Kunden 2+ Produkte zusammen kaufen, zeigen wir Bundle-Empfehlungen.
-        </div>
-      ) : (
-        <div className="space-y-1 flex-1">
-          {data.slice(0, 3).map((p, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-[10px] leading-tight">
-              <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-cyan-500/15 text-cyan-300 text-[9px] font-bold shrink-0 tabular-nums">
-                {p.count}
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-zinc-200">{p.a}</div>
-                <div className="text-zinc-500 text-[9px] my-0.5">+</div>
-                <div className="truncate text-zinc-200">{p.b}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-      <div className="text-[9px] text-zinc-500 mt-auto">
-        {data.length > 0 ? "Bundle-Idee: 2-für-1 Rabatt" : "Bundle-Empfehlung"}
-      </div>
-    </InsightCard>
-  );
-}
+function StartTaskForm({ initial, onCancel, onSaved }: {
+  initial?: StartTask;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [title, setTitle] = useState(initial?.title || "");
+  const [bodyHtml, setBodyHtml] = useState(initial?.bodyHtml || "");
+  const [saving, setSaving] = useState(false);
 
-function MissedRevenueCard({ data }: { data?: Insights["missedRevenue"] }) {
-  if (!data) return null;
-  const trendPositive = data.trendPct < 0;
+  async function handleSave() {
+    if (!title.trim()) return;
+    setSaving(true);
+    try {
+      if (initial) {
+        await fetch("/api/admin/start-tasks", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rowIndex: initial.rowIndex, title, bodyHtml }),
+        });
+      } else {
+        await fetch("/api/admin/start-tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, bodyHtml }),
+        });
+      }
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <InsightCard icon={AlertTriangle} title="Verlust" accent="#EF4444">
+    <div className="space-y-3">
       <div>
-        <div className="text-base font-bold tabular-nums text-red-400">
-          {data.amount.toFixed(0)} €
-        </div>
-        <div className="text-[10px] text-zinc-400 mt-0.5">
-          {data.count} Cart-Abandon · 30d
-        </div>
+        <label className="block text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">
+          Titel
+        </label>
+        <input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="z. B. Lege deinen ersten Artikel an"
+          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-[#95BF47]/40 transition placeholder:text-zinc-600"
+        />
       </div>
-      <div className="flex items-center gap-1">
-        <div
-          className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-            trendPositive ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
-          }`}
+
+      <div>
+        <label className="block text-[10px] uppercase tracking-widest font-semibold text-zinc-500 mb-1">
+          Beschreibung
+        </label>
+        <RichTextEditor value={bodyHtml} onChange={setBodyHtml} />
+        <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
+          Markiere ein Wort und tippe auf <Link2 className="w-2.5 h-2.5 inline -mt-0.5" /> um einen Link einzufügen. Du kannst auch
+          <strong className="text-zinc-300"> fett</strong> und <em className="text-zinc-300">kursiv</em> setzen.
+        </p>
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <button
+          onClick={onCancel}
+          className="px-3 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-xs sm:text-sm text-zinc-300 hover:bg-white/[0.08] transition"
         >
-          {trendPositive ? <TrendingDown className="w-2.5 h-2.5" /> : <TrendingUp className="w-2.5 h-2.5" />}
-          {data.trendPct > 0 ? "+" : ""}{data.trendPct}%
+          Abbrechen
+        </button>
+        <motion.button
+          whileTap={{ scale: 0.97 }}
+          onClick={handleSave}
+          disabled={saving || !title.trim()}
+          className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-[#95BF47] text-black font-bold text-xs sm:text-sm disabled:opacity-40 transition"
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+          {initial ? "Speichern" : "Erstellen"}
+        </motion.button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Rich-text editor (selection → link) ─────────────────────
+// contentEditable surface with three actions: fett, kursiv, link.
+// The link action takes the current selection and wraps it with
+// a sanitised <a href=…>. We keep the HTML simple so the server-
+// side sanitiser can handle it deterministically. Empty content
+// reports back as "" so we don't store <br/> placeholders.
+
+function RichTextEditor({ value, onChange }: {
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [showLink, setShowLink] = useState(false);
+  const [linkHref, setLinkHref] = useState("");
+  const savedRange = useRef<Range | null>(null);
+
+  // Hydrate the editor once. We can't keep mirroring `value` into
+  // innerHTML on every change because that would wipe the caret on
+  // every keystroke. Re-sync only if the prop diverges significantly
+  // (parent rewrites it, e.g. after save+reopen).
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    if (el.innerHTML !== value) {
+      el.innerHTML = value || "";
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function emit() {
+    const el = editorRef.current;
+    if (!el) return;
+    const html = el.innerHTML.trim();
+    onChange(html === "<br>" || html === "<div><br></div>" ? "" : html);
+  }
+
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      savedRange.current = sel.getRangeAt(0).cloneRange();
+    }
+  }
+
+  function restoreSelection() {
+    const sel = window.getSelection();
+    if (!sel || !savedRange.current) return;
+    sel.removeAllRanges();
+    sel.addRange(savedRange.current);
+  }
+
+  function execFormat(cmd: "bold" | "italic") {
+    editorRef.current?.focus();
+    // execCommand is officially deprecated but still the simplest
+    // path for a minimal selection-aware editor. Modern Selection
+    // API alternatives would balloon this file 5×.
+    document.execCommand(cmd);
+    emit();
+  }
+
+  function openLinkPrompt() {
+    saveSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed) {
+      alert("Markiere zuerst das Wort, das verlinkt werden soll.");
+      return;
+    }
+    setLinkHref("https://");
+    setShowLink(true);
+  }
+
+  function applyLink() {
+    if (!linkHref.trim()) { setShowLink(false); return; }
+    editorRef.current?.focus();
+    restoreSelection();
+    document.execCommand("createLink", false, linkHref.trim());
+    // Force target=_blank on the just-created anchor.
+    const sel = window.getSelection();
+    let node: Node | null = sel?.anchorNode || null;
+    while (node && node !== editorRef.current) {
+      if (node.nodeType === 1 && (node as HTMLElement).tagName === "A") {
+        (node as HTMLAnchorElement).setAttribute("target", "_blank");
+        (node as HTMLAnchorElement).setAttribute("rel", "noopener noreferrer");
+        break;
+      }
+      node = node.parentNode;
+    }
+    setShowLink(false);
+    setLinkHref("");
+    emit();
+  }
+
+  function removeLink() {
+    editorRef.current?.focus();
+    document.execCommand("unlink");
+    emit();
+  }
+
+  return (
+    <div className="border border-white/[0.08] rounded-xl bg-white/[0.04] overflow-hidden focus-within:border-[#95BF47]/40 transition">
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-white/[0.06] bg-white/[0.02]">
+        <ToolbarButton onClick={() => execFormat("bold")} title="Fett (Strg+B)">
+          <span className="font-bold text-[12px]">B</span>
+        </ToolbarButton>
+        <ToolbarButton onClick={() => execFormat("italic")} title="Kursiv (Strg+I)">
+          <span className="italic text-[12px]">I</span>
+        </ToolbarButton>
+        <div className="w-px h-4 bg-white/10 mx-1" />
+        <ToolbarButton onClick={openLinkPrompt} title="Link an Markierung setzen">
+          <Link2 className="w-3.5 h-3.5" />
+        </ToolbarButton>
+        <ToolbarButton onClick={removeLink} title="Link entfernen">
+          <span className="text-[10px] font-bold">x↗</span>
+        </ToolbarButton>
+      </div>
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        onInput={emit}
+        onBlur={emit}
+        className="task-html min-h-[110px] px-3 py-2.5 text-sm text-zinc-100 outline-none leading-relaxed empty:before:content-[attr(data-placeholder)] empty:before:text-zinc-600"
+        data-placeholder="Optionale Beschreibung — markiere Wörter und mach sie zu Links."
+      />
+      {showLink && (
+        <div className="flex items-center gap-2 px-2 py-2 border-t border-white/[0.06] bg-white/[0.02]">
+          <Link2 className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
+          <input
+            type="url"
+            autoFocus
+            value={linkHref}
+            onChange={(e) => setLinkHref(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); applyLink(); } }}
+            placeholder="https://…"
+            className="flex-1 bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1.5 text-xs outline-none focus:border-[#95BF47]/40 placeholder:text-zinc-600"
+          />
+          <button onClick={applyLink} className="px-2.5 py-1.5 rounded-md bg-[#95BF47] text-black font-semibold text-xs">
+            Setzen
+          </button>
+          <button onClick={() => { setShowLink(false); setLinkHref(""); }} className="px-2 py-1.5 rounded-md text-zinc-500 hover:text-white text-xs">
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
-        <span className="text-[9px] text-zinc-500">vs Vorperiode</span>
-      </div>
-    </InsightCard>
-  );
-}
-
-function ReturningCard({ data }: { data?: Insights["returning"] }) {
-  if (!data) return null;
-  return (
-    <InsightCard icon={Users} title="Wiederkehrer" accent="#06B6D4">
-      <div className="flex items-baseline gap-1.5">
-        <div className="text-base font-bold tabular-nums">{data.ratePct}%</div>
-        <div className="text-[10px] text-zinc-500">{data.customers} Kunden</div>
-      </div>
-      <SparkLine data={data.trend.map((t) => t.rate)} color="#06B6D4" />
-      <div className="text-[9px] text-zinc-500">6 Wochen</div>
-    </InsightCard>
-  );
-}
-
-function BestHourCard({ data }: { data?: Insights["bestHour"] }) {
-  if (!data) return null;
-  return (
-    <InsightCard icon={Clock} title="Beste Zeit" accent="#A855F7">
-      <div className="flex items-baseline gap-1.5">
-        <div className="text-xl font-bold tabular-nums text-purple-300">{data.label}</div>
-        <div className="text-[10px] text-zinc-500">{data.sharePct}%</div>
-      </div>
-      <div className="text-[10px] leading-snug text-zinc-300 bg-purple-500/10 border border-purple-500/20 rounded-md p-1.5">
-        <Sparkles className="w-2.5 h-2.5 inline mr-1 text-purple-400" />
-        {data.recommendation}
-      </div>
-    </InsightCard>
-  );
-}
-
-// ─── SparkLine ─────────────────────────────────────────────────
-
-function SparkLine({ data, color }: { data: number[]; color: string }) {
-  const w = 200;
-  const h = 36;
-  const path = useMemo(() => {
-    if (data.length === 0) return "";
-    const max = Math.max(...data, 1);
-    const min = Math.min(...data, 0);
-    const range = Math.max(max - min, 1);
-    const step = w / Math.max(data.length - 1, 1);
-    return data
-      .map((v, i) => {
-        const x = i * step;
-        const y = h - ((v - min) / range) * (h - 4) - 2;
-        return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [data]);
-
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full h-7 sm:h-9">
-      <defs>
-        <linearGradient id={`grad-${color.replace("#", "")}`} x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.4" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      {path && (
-        <>
-          <path d={`${path} L${w},${h} L0,${h} Z`} fill={`url(#grad-${color.replace("#", "")})`} />
-          <path d={path} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </>
       )}
-    </svg>
+    </div>
   );
 }
 
-// ─── Recent library thumb ───────────────────────────────────
-
-function RecentLibraryThumb({ item, onOpen }: { item: LibraryItem; onOpen: () => void }) {
+function ToolbarButton({ children, onClick, title }: {
+  children: React.ReactNode;
+  onClick: () => void;
+  title: string;
+}) {
   return (
     <button
-      onClick={onOpen}
-      className="w-20 sm:w-24 shrink-0 snap-start text-left"
+      type="button"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={onClick}
+      title={title}
+      className="w-7 h-7 rounded-md text-zinc-300 hover:bg-white/[0.08] hover:text-white inline-flex items-center justify-center transition"
     >
-      <div className="aspect-square rounded-lg sm:rounded-xl overflow-hidden border border-white/[0.08] bg-zinc-900 hover:border-white/20 transition relative">
-        {item.thumbnailUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.thumbnailUrl}
-            alt={item.title}
-            loading="lazy"
-            decoding="async"
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-rose-500/10">
-            <Mail className="w-4 h-4 text-rose-400" />
-          </div>
-        )}
-      </div>
-      <div className="text-[9px] sm:text-[10px] text-zinc-400 truncate mt-1">{item.title}</div>
+      {children}
     </button>
   );
 }
@@ -1459,11 +1437,6 @@ function FileUploadField({ label, url, setUrl, inputRef, uploading, onPick }: {
 }
 
 // ─── Abo-Status Banner ─────────────────────────────────────────
-// One-line status pill above the dashboard. When the user has an
-// active abo (Bronze/Silber/Gold), it shows the plan with a metallic
-// chip and a "Verwalten" CTA → /tiers. When there's no abo, it nudges
-// them to pick a plan with a prominent buy CTA. Admins see a faint
-// info chip — they have everything anyway.
 
 function AboStatusBanner({ tierState, isAdmin }: { tierState: ReturnType<typeof useTier>; isAdmin: boolean }) {
   const tier = tierState.tier;

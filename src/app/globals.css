@@ -478,6 +478,33 @@ textarea.input-glass {
   --bsf-toolbar-border: rgba(255, 255, 255, 0.12);
 }
 
+/* ─── Rich-text bodies (admin-curated start tasks) ───
+   Whitelist of inline tags rendered with our brand styling so admins
+   can drop links and emphasis into the home checklist without each
+   site adopting raw browser defaults. Matches the sanitiser allowlist
+   in lib/sanitize-html.ts. */
+.task-html a {
+  color: #b6e07d;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-color: rgba(149, 191, 71, 0.45);
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.task-html a:hover {
+  color: #d4f1a6;
+  text-decoration-color: rgba(149, 191, 71, 0.9);
+}
+.task-html strong,
+.task-html b {
+  color: #fafafa;
+  font-weight: 700;
+}
+.task-html em,
+.task-html i {
+  font-style: italic;
+  color: #e4e4e7;
+}
+
 /* ─── Subtle gradient outline used on accent cards ─── */
 .accent-ring {
   position: relative;

@@ -122,11 +122,11 @@ export default function OnboardingPage() {
               <ul className="space-y-3 mb-8 text-zinc-400">
                 <li className="flex items-start gap-3">
                   <Store className="w-4 h-4 text-[#95BF47] mt-1 shrink-0" />
-                  <span>1-Klick Produkt-Import in deinen Shop</span>
+                  <span>Theme-Updates direkt in Shopify pushen</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Store className="w-4 h-4 text-[#95BF47] mt-1 shrink-0" />
-                  <span>Theme-Updates direkt in Shopify pushen</span>
+                  <span>AliExpress-Quellen mit Audience &amp; Ad-Strategie</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <Shield className="w-4 h-4 text-[#95BF47] mt-1 shrink-0" />

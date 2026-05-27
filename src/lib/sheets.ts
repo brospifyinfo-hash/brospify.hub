@@ -159,6 +159,11 @@ export interface KundeProfile {
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
   onboarding_checklist?: OnboardingChecklist;
+  /** Per-user check-off state for the admin-curated StartTasks list
+   *  (home page). Key = StartTask.id, value = true once the user
+   *  ticks the task. Stored here (not in a separate sheet) so we
+   *  don't add roundtrips for what's effectively a small flag map. */
+  onboarding_tasks_done?: Record<string, boolean>;
   // ── Admin-only fields ─────────────────────────────────────────
   /** Free-text note set by admin in the customers panel. */
   adminNote?: string;
@@ -1612,6 +1617,115 @@ export async function deleteNewsPost(rowIndex: number): Promise<void> {
     range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
+  });
+}
+
+// ─── START TASKS (Tab "StartTasks") ───────────────────────────────
+// Admin-curated checklist that replaces the old Shopify-app-only
+// insights on the home page. Each task is a short title plus optional
+// rich text (sanitised HTML — only <a>, <strong>, <em>, <br>) that the
+// admin maintains in the home page's Verwalten modal.
+//   A=ID, B=Title, C=BodyHtml, D=Sort, E=Active, F=CreatedAt
+// Users tick tasks off; completion is stored per-user in
+// KundeProfile.onboarding_tasks_done so it never overwrites the
+// shared task definitions.
+
+const START_TASKS_HEADERS = ["ID", "Title", "BodyHtml", "Sort", "Active", "CreatedAt"];
+
+export interface StartTask {
+  rowIndex: number;
+  id: string;
+  title: string;
+  bodyHtml: string;
+  sort: number;
+  active: boolean;
+  createdAt: string;
+}
+
+function rowToStartTask(row: string[], index: number): StartTask {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    title: row[1] || "",
+    bodyHtml: row[2] || "",
+    sort: Number(row[3] || 0) || 0,
+    active: row[4] !== "false",
+    createdAt: row[5] || "",
+  };
+}
+
+export async function getAllStartTasks(): Promise<StartTask[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("StartTasks", START_TASKS_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "StartTasks!A2:F",
+    });
+    const rows = res.data.values || [];
+    const list = rows.map((row, i) => rowToStartTask(row, i)).filter((t) => t.id);
+    list.sort((a, b) => a.sort - b.sort || (a.createdAt || "").localeCompare(b.createdAt || ""));
+    return list;
+  } catch {
+    return [];
+  }
+}
+
+export async function addStartTask(task: Omit<StartTask, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await ensureSheet("StartTasks", START_TASKS_HEADERS);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "StartTasks!A:F",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        task.id, task.title, task.bodyHtml, String(task.sort),
+        String(task.active), task.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function updateStartTask(
+  rowIndex: number,
+  patch: Partial<Omit<StartTask, "rowIndex" | "id" | "createdAt">>,
+): Promise<void> {
+  const sheets = getSheets();
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: `StartTasks!A${rowIndex}:F${rowIndex}`,
+  });
+  const row = res.data.values?.[0] || [];
+  const merged: StartTask = {
+    rowIndex,
+    id: row[0] || "",
+    title: patch.title ?? row[1] ?? "",
+    bodyHtml: patch.bodyHtml ?? row[2] ?? "",
+    sort: patch.sort ?? Number(row[3] || 0) ?? 0,
+    active: patch.active ?? row[4] !== "false",
+    createdAt: row[5] || "",
+  };
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `StartTasks!A${rowIndex}:F${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        merged.id, merged.title, merged.bodyHtml, String(merged.sort),
+        String(merged.active), merged.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function deleteStartTask(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `StartTasks!A${rowIndex}:F${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", ""]] },
   });
 }
 

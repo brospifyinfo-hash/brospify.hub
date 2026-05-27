@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2,
   Check,
   Copy,
   X,
@@ -14,7 +13,6 @@ import {
   AlertTriangle,
   ChevronRight,
   ChevronLeft,
-  Rocket,
   Info,
   BarChart3,
   Zap,
@@ -23,7 +21,6 @@ import {
   PieChart,
   DollarSign,
   Link2,
-  Sparkles,
   ArrowRight,
   Store,
   Music2,
@@ -1677,12 +1674,8 @@ export default function ChartsPage() {
   const router = useRouter();
   const [produkte, setProdukte] = useState<Produkt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [importingId, setImportingId] = useState<string | null>(null);
-  const [successModal, setSuccessModal] = useState<{ open: boolean; aliExpressLink: string }>({ open: false, aliExpressLink: "" });
   const [infoModal, setInfoModal] = useState<{ open: boolean; produkt: Produkt | null }>({ open: false, produkt: null });
-  const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
-  const [hasShopifyToken, setHasShopifyToken] = useState(false);
   // votedProducts: { [produktId]: "up" | "down" } — fuer Pfeil-Highlight
   const [userVotes, setUserVotes] = useState<Record<string, "up" | "down">>({});
   // Optimistic-Update-Tracker fuer Votes (Score-Delta pro Produkt)
@@ -1690,13 +1683,6 @@ export default function ChartsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [highMarginOnly, setHighMarginOnly] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("trend");
-
-  // AI Import Modal
-  const [aiModal, setAiModal] = useState<{ open: boolean; produkt: Produkt | null }>({ open: false, produkt: null });
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiResult, setAiResult] = useState<{ title: string; body_html: string; tags?: string } | null>(null);
-  const [aiImporting, setAiImporting] = useState(false);
-  const [aiError, setAiError] = useState("");
 
   const loadProducts = useCallback(async () => {
     try {
@@ -1711,7 +1697,6 @@ export default function ChartsPage() {
   useEffect(() => {
     fetch("/api/auth/session").then(r => r.json()).then(data => {
       if (!data.isLoggedIn) { router.push("/"); return; }
-      setHasShopifyToken(data.hasShopifyToken || false);
     });
     loadProducts();
     // Pre-load: welche Produkte hat dieser User bereits gevotet?
@@ -1799,23 +1784,6 @@ export default function ChartsPage() {
   /** Score fuer ein Produkt — aus Overrides falls vorhanden, sonst Sheet. */
   function getProduktVotes(p: Produkt): ProduktVotes {
     return voteOverrides[p.id] || p.extra?.votes || {};
-  }
-
-  async function handleImport(produkt: Produkt) {
-    if (!hasShopifyToken) return;
-    setImportingId(produkt.id);
-    setError("");
-    try {
-      const res = await fetch("/api/products/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ produktId: produkt.id }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
-      setSuccessModal({ open: true, aliExpressLink: data.aliExpressLink || produkt.aliExpressLink || "" });
-    } catch { setError("Import fehlgeschlagen."); }
-    finally { setImportingId(null); }
   }
 
   // Apply search + filter + sort — must run BEFORE any early return
@@ -2043,7 +2011,7 @@ export default function ChartsPage() {
               <span className="truncate">Winning Charts</span>
             </h1>
             <p className="text-[11px] text-zinc-500 mt-0.5">
-              Aktuelle Trends aus dem US-Markt · Audience · Ad-Strategie · 1-Klick-Import
+              Aktuelle Trends aus dem US-Markt · Audience · Ad-Strategie · AliExpress-Quellen
             </p>
           </div>
         </div>
@@ -2147,20 +2115,6 @@ export default function ChartsPage() {
             >
               <DollarSign className="w-3 h-3" />
               Top-Marge
-            </button>
-          </div>
-        )}
-
-        {/* Token banner — slim on mobile */}
-        {!hasShopifyToken && (
-          <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 text-amber-300 px-3 py-2.5 rounded-xl">
-            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-            <p className="flex-1 text-[11px] leading-snug">
-              <span className="font-semibold">Shop nicht verbunden.</span>{" "}
-              <span className="hidden sm:inline">1-Klick-Import deaktiviert.</span>
-            </p>
-            <button onClick={() => router.push("/setup")} className="shrink-0 btn-accent px-2.5 py-1.5 rounded-lg text-[11px] font-medium">
-              Verbinden
             </button>
           </div>
         )}
@@ -2446,204 +2400,10 @@ export default function ChartsPage() {
                 {/* ─── Rechts-Hinweise / Compliance ───────────── */}
                 <ComplianceBlock category={p.sku} />
 
-                {/* ─── Import-CTA (lebt jetzt im Detail-Modal) ─── */}
-                <div className="border-t border-zinc-800 pt-4 space-y-2">
-                  {hasShopifyToken ? (
-                    <button
-                      onClick={() => {
-                        setInfoModal({ open: false, produkt: null });
-                        setAiModal({ open: true, produkt: p });
-                        setAiResult(null);
-                        setAiError("");
-                      }}
-                      className="w-full btn-accent py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2"
-                    >
-                      <Rocket className="w-4 h-4" />
-                      In meinen Shop importieren
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => router.push("/setup")}
-                      className="w-full py-2.5 bg-amber-500/10 border border-amber-500/25 text-amber-200 rounded-xl text-sm font-medium flex items-center justify-center gap-2"
-                    >
-                      <AlertCircle className="w-4 h-4" />
-                      Shop verbinden, um zu importieren
-                    </button>
-                  )}
-                </div>
-
                 <p className="text-[11px] text-zinc-600 leading-relaxed">
                   Hinweis: Alle dargestellten Metriken, Margen und Scores basieren auf unseren internen Marktanalysen und aktuellen E-Commerce-Trends. Da der Markt dynamisch ist, können reale Einkaufspreise, Verfügbarkeiten und die Marktsättigung variieren. Diese Daten dienen als strategische Empfehlung und stellen keine Garantie für spezifische Umsätze oder Profite dar.
                 </p>
               </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ─── AI IMPORT MODAL ─────────────────────────────────── */}
-      <AnimatePresence>
-        {aiModal.open && aiModal.produkt && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={() => { if (!aiLoading && !aiImporting) setAiModal({ open: false, produkt: null }); }}>
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 10 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-lg relative max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button onClick={() => { if (!aiLoading && !aiImporting) setAiModal({ open: false, produkt: null }); }} className="absolute top-4 right-4 z-10 p-1.5 bg-zinc-800 rounded-full"><X className="w-4 h-4" /></button>
-
-              <div className="p-6 space-y-5">
-                {/* Product Preview */}
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-xl bg-white/5 overflow-hidden shrink-0">
-                    <Thumb src={aiModal.produkt.bildUrl} />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold truncate">{aiResult?.title || displayTitle(aiModal.produkt)}</h3>
-                    <p className="text-sm text-[#95BF47] font-semibold" title="Preis kann schwanken">
-                      {aiModal.produkt.extra?.finances?.recommendedSellPrice || aiModal.produkt.preis || "—"}&euro;
-                      <span className="text-[10px] text-zinc-500 ml-1">~ kann schwanken</span>
-                    </p>
-                  </div>
-                </div>
-
-                {aiError && (
-                  <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />{aiError}
-                  </div>
-                )}
-
-                {/* AI Result Preview */}
-                {aiResult && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm font-medium text-purple-400">
-                      <Sparkles className="w-4 h-4" />KI-optimierter Text
-                    </div>
-                    <div className="bg-zinc-800/80 border border-zinc-700 rounded-xl p-4 max-h-60 overflow-y-auto">
-                      <h4 className="font-bold text-sm mb-2">{aiResult.title}</h4>
-                      <div className="text-xs text-zinc-400 leading-relaxed prose-invert" dangerouslySetInnerHTML={{ __html: aiResult.body_html }} />
-                    </div>
-                    {aiResult.tags && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {aiResult.tags.split(",").map((tag, i) => (
-                          <span key={i} className="px-2 py-0.5 bg-purple-500/10 text-purple-300 text-[10px] rounded-full">{tag.trim()}</span>
-                        ))}
-                      </div>
-                    )}
-                    <button
-                      onClick={async () => {
-                        setAiImporting(true); setAiError("");
-                        try {
-                          const res = await fetch("/api/products/import", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ produktId: aiModal.produkt!.id, optimizedTitle: aiResult.title, optimizedBodyHtml: aiResult.body_html }),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) { setAiError(data.error || "Import fehlgeschlagen"); return; }
-                          setAiModal({ open: false, produkt: null });
-                          setSuccessModal({ open: true, aliExpressLink: data.aliExpressLink || aiModal.produkt!.aliExpressLink || "" });
-                        } catch { setAiError("Import fehlgeschlagen."); }
-                        finally { setAiImporting(false); }
-                      }}
-                      disabled={aiImporting}
-                      className="w-full btn-accent py-2.5 rounded-xl font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      {aiImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Rocket className="w-4 h-4" />KI-Text importieren</>}
-                    </button>
-                  </div>
-                )}
-
-                {/* Action Buttons (before AI result) */}
-                {!aiResult && (
-                  <div className="space-y-3">
-                    <button
-                      onClick={async () => {
-                        setAiLoading(true); setAiError("");
-                        try {
-                          const res = await fetch("/api/products/ai-optimize", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ produktId: aiModal.produkt!.id }),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) { setAiError(data.error || "KI-Optimierung fehlgeschlagen"); return; }
-                          setAiResult(data.optimized);
-                        } catch { setAiError("Verbindung fehlgeschlagen."); }
-                        finally { setAiLoading(false); }
-                      }}
-                      disabled={aiLoading || aiImporting}
-                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2.5 bg-purple-600/20 border border-purple-500/30 text-purple-300 hover:bg-purple-600/30 transition disabled:opacity-50"
-                    >
-                      {aiLoading ? (
-                        <><Loader2 className="w-5 h-5 animate-spin" />KI analysiert Produkt...</>
-                      ) : (
-                        <><Sparkles className="w-5 h-5" />KI-Optimierung<ArrowRight className="w-4 h-4" /></>
-                      )}
-                    </button>
-
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-800" /></div>
-                      <div className="relative flex justify-center text-xs"><span className="px-3 bg-zinc-900 text-zinc-600">oder</span></div>
-                    </div>
-
-                    <button
-                      onClick={async () => {
-                        setAiImporting(true); setAiError("");
-                        try {
-                          const res = await fetch("/api/products/import", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ produktId: aiModal.produkt!.id }),
-                          });
-                          const data = await res.json();
-                          if (!res.ok) { setAiError(data.error || "Import fehlgeschlagen"); return; }
-                          setAiModal({ open: false, produkt: null });
-                          setSuccessModal({ open: true, aliExpressLink: data.aliExpressLink || aiModal.produkt!.aliExpressLink || "" });
-                        } catch { setAiError("Import fehlgeschlagen."); }
-                        finally { setAiImporting(false); }
-                      }}
-                      disabled={aiLoading || aiImporting}
-                      className="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2.5 glass border border-white/10 text-zinc-300 hover:bg-white/5 transition disabled:opacity-50"
-                    >
-                      {aiImporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Rocket className="w-5 h-5" />Direkt-Import (Skip AI)</>}
-                    </button>
-
-                    <p className="text-[10px] text-zinc-600 text-center">KI-Optimierung nutzt DeepSeek AI, um Titel &amp; Beschreibung verkaufsstark zu formulieren. (3x pro Monat verfügbar)</p>
-                  </div>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ─── SUCCESS MODAL ────────────────────────────────────── */}
-      <AnimatePresence>
-        {successModal.open && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-md relative">
-              <button onClick={() => setSuccessModal({ open: false, aliExpressLink: "" })} className="absolute top-4 right-4 text-zinc-500"><X className="w-5 h-5" /></button>
-              <div className="text-center mb-6">
-                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-emerald-500/10 mb-4"><Check className="w-7 h-7 text-emerald-400" /></div>
-                <h3 className="text-lg font-bold">Produkt erfolgreich importiert!</h3>
-                <p className="text-zinc-400 text-sm mt-2">Kopiere den Link und füge ihn in DSers ein:</p>
-              </div>
-              {successModal.aliExpressLink && (
-                <>
-                  <div className="flex items-center gap-2 bg-zinc-800 border border-zinc-700 rounded-xl p-3">
-                    <input type="text" value={successModal.aliExpressLink} readOnly className="flex-1 bg-transparent text-sm text-zinc-300 outline-none truncate" />
-                    <button onClick={() => { navigator.clipboard.writeText(successModal.aliExpressLink); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="shrink-0 p-2 rounded-lg">
-                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4 text-zinc-400" />}
-                    </button>
-                  </div>
-                  <a href={successModal.aliExpressLink} target="_blank" rel="noopener noreferrer" className="mt-3 w-full py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl font-medium text-sm flex items-center justify-center gap-2 text-zinc-300">
-                    <ExternalLink className="w-4 h-4" />Link öffnen
-                  </a>
-                </>
-              )}
             </motion.div>
           </motion.div>
         )}

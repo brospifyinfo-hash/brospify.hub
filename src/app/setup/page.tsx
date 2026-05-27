@@ -336,7 +336,7 @@ function SetupContent() {
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <p className="text-amber-400 text-xs flex items-center gap-1.5 min-w-0">
                   <Info className="w-3.5 h-3.5 shrink-0" />
-                  Übersprungen — 1-Klick-Import deaktiviert.
+                  Übersprungen — du kannst die Verbindung später ergänzen.
                 </p>
                 <button
                   onClick={() => setReconnectMode(true)}
@@ -585,7 +585,7 @@ function SetupContent() {
                 </div>
                 <h3 className="text-base sm:text-lg font-bold">Schritt überspringen?</h3>
                 <p className="text-zinc-400 text-xs mt-1.5 leading-relaxed">
-                  Ohne Shopify-Verbindung kein automatischer 1-Klick-Import.
+                  Ohne Shopify-Verbindung können einige Auto-Sync-Funktionen nicht arbeiten.
                 </p>
               </div>
               <div className="flex gap-2">

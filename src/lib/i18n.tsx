@@ -76,7 +76,7 @@ const de = {
     stepNav: "Navigation",
     stepNavDesc: "Hier findest du alle wichtigen Bereiche deines Dashboards.",
     stepCharts: "Winning Charts",
-    stepChartsDesc: "Entdecke die besten Dropshipping-Produkte mit Analysen & 1-Klick Import.",
+    stepChartsDesc: "Entdecke die besten Dropshipping-Produkte mit Analysen, Audience-Insights & AliExpress-Quellen.",
     stepThemes: "Themes",
     stepThemesDesc: "Lade das optimierte Shopify-Theme herunter oder pushe es direkt.",
     stepProfile: "Profil",
