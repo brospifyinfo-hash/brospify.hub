@@ -42,6 +42,7 @@ import {
   Code2,
   GraduationCap,
   Coins,
+  Gauge,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo } from "@/lib/branding";
@@ -755,6 +756,7 @@ export default function Navigation() {
               {session.isAdmin && (
                 <MobileSection title="Verwaltung" icon={Shield} defaultOpen={false}>
                   <SheetItem href="/admin" icon={Settings} label="Admin-Panel" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} sub="Voller Zugriff" />
+                  <SheetItem href="/admin/loadtest" icon={Gauge} label="Load-Tester" active={pathname === "/admin/loadtest"} onClick={() => setMoreSheetOpen(false)} sub="Shopify Dev-Store Standhaftigkeit" />
                 </MobileSection>
               )}
 
@@ -1361,6 +1363,14 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
               icon={Settings}
               label="Admin-Panel"
               active={pathname === "/admin"}
+              onClick={onClose}
+              accent
+            />
+            <MenuItem
+              href="/admin/loadtest"
+              icon={Gauge}
+              label="Load-Tester"
+              active={pathname === "/admin/loadtest"}
               onClick={onClose}
               accent
             />

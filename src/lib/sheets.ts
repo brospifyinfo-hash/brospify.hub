@@ -2556,3 +2556,221 @@ export async function getSystemLogs(
     return [];
   }
 }
+
+// ─── LOAD TEST SESSIONS (Tab "LoadTestSessions") ────────────────
+// Admin-only Shopify Development-Store load tester. Each row = one
+// run: target product, requested duration, chosen frequency mode,
+// and the live counters that the dashboard reads back. Strictly
+// scoped to *.myshopify.com dev stores (validated at write time)
+// so a stray production credential can never end up here.
+
+export type LoadTestMode = "subsecond" | "secondly" | "burst" | "mixed";
+export type LoadTestStatus = "running" | "completed" | "stopped" | "failed";
+
+export interface LoadTestSession {
+  rowIndex: number;
+  id: string;
+  productId: string;
+  productTitle: string;
+  variantId: string;
+  unitPrice: string;
+  durationMinutes: number;
+  mode: LoadTestMode;
+  devStoreDomain: string;
+  tag: string;
+  startedAt: string;
+  endsAt: string;
+  stoppedAt: string;
+  status: LoadTestStatus;
+  ordersAttempted: number;
+  ordersSucceeded: number;
+  ordersFailed: number;
+  rateLimited: number;
+  avgLatencyMs: number;
+  lastError: string;
+  createdBy: string;
+}
+
+const LOADTEST_HEADERS = [
+  "ID", "ProductID", "ProductTitle", "VariantID", "UnitPrice",
+  "DurationMinutes", "Mode", "DevStoreDomain", "Tag",
+  "StartedAt", "EndsAt", "StoppedAt", "Status",
+  "OrdersAttempted", "OrdersSucceeded", "OrdersFailed",
+  "RateLimited", "AvgLatencyMs", "LastError", "CreatedBy",
+];
+
+function rowToLoadTestSession(row: string[], index: number): LoadTestSession {
+  return {
+    rowIndex: index + 2,
+    id: row[0] || "",
+    productId: row[1] || "",
+    productTitle: row[2] || "",
+    variantId: row[3] || "",
+    unitPrice: row[4] || "",
+    durationMinutes: Number.parseFloat(row[5] || "0") || 0,
+    mode: (row[6] as LoadTestMode) || "mixed",
+    devStoreDomain: row[7] || "",
+    tag: row[8] || "",
+    startedAt: row[9] || "",
+    endsAt: row[10] || "",
+    stoppedAt: row[11] || "",
+    status: (row[12] as LoadTestStatus) || "running",
+    ordersAttempted: Number.parseInt(row[13] || "0", 10) || 0,
+    ordersSucceeded: Number.parseInt(row[14] || "0", 10) || 0,
+    ordersFailed: Number.parseInt(row[15] || "0", 10) || 0,
+    rateLimited: Number.parseInt(row[16] || "0", 10) || 0,
+    avgLatencyMs: Number.parseFloat(row[17] || "0") || 0,
+    lastError: row[18] || "",
+    createdBy: row[19] || "",
+  };
+}
+
+async function ensureLoadTestSheet(): Promise<void> {
+  await ensureSheet("LoadTestSessions", LOADTEST_HEADERS);
+}
+
+export async function listLoadTestSessions(): Promise<LoadTestSession[]> {
+  const sheets = getSheets();
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "LoadTestSessions!A2:T",
+    });
+    const rows = res.data.values || [];
+    const items = rows
+      .map((row, i) => rowToLoadTestSession(row as string[], i))
+      .filter((s) => s.id);
+    // Newest first by startedAt
+    items.sort((a, b) => (b.startedAt || "").localeCompare(a.startedAt || ""));
+    return items;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Unable to parse range") || msg.includes("not found")) {
+      await ensureLoadTestSheet();
+      return [];
+    }
+    console.error("[Sheets] listLoadTestSessions error:", err);
+    return [];
+  }
+}
+
+export async function getLoadTestSession(id: string): Promise<LoadTestSession | null> {
+  if (!id) return null;
+  const all = await listLoadTestSessions();
+  return all.find((s) => s.id === id) || null;
+}
+
+export async function createLoadTestSession(
+  input: Omit<LoadTestSession, "rowIndex" | "ordersAttempted" | "ordersSucceeded" | "ordersFailed" | "rateLimited" | "avgLatencyMs" | "lastError" | "stoppedAt">,
+): Promise<LoadTestSession> {
+  const sheets = getSheets();
+  const row = [
+    input.id,
+    input.productId,
+    input.productTitle,
+    input.variantId,
+    input.unitPrice,
+    String(input.durationMinutes),
+    input.mode,
+    input.devStoreDomain,
+    input.tag,
+    input.startedAt,
+    input.endsAt,
+    "",                 // stoppedAt
+    input.status,
+    "0",                // attempted
+    "0",                // succeeded
+    "0",                // failed
+    "0",                // rateLimited
+    "0",                // avgLatency
+    "",                 // lastError
+    input.createdBy || "",
+  ];
+  try {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "LoadTestSessions!A:T",
+      valueInputOption: "RAW",
+      requestBody: { values: [row] },
+    });
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("Unable to parse range") || msg.includes("not found")) {
+      await ensureLoadTestSheet();
+      await sheets.spreadsheets.values.append({
+        spreadsheetId: SHEET_ID(),
+        range: "LoadTestSessions!A:T",
+        valueInputOption: "RAW",
+        requestBody: { values: [row] },
+      });
+    } else {
+      throw err;
+    }
+  }
+  const created = await getLoadTestSession(input.id);
+  if (!created) {
+    throw new Error("LoadTestSession write succeeded but row could not be read back");
+  }
+  return created;
+}
+
+export interface LoadTestMetricsUpdate {
+  ordersAttempted?: number;
+  ordersSucceeded?: number;
+  ordersFailed?: number;
+  rateLimited?: number;
+  avgLatencyMs?: number;
+  lastError?: string;
+}
+
+// Patch counters on an existing session row. Writes only the columns
+// that were passed in so the dashboard's frequent metric pings stay
+// cheap (Sheets has a 60 req/min/user write quota).
+export async function updateLoadTestSessionMetrics(
+  rowIndex: number,
+  patch: LoadTestMetricsUpdate,
+): Promise<void> {
+  const sheets = getSheets();
+  const data: { range: string; values: string[][] }[] = [];
+  if (typeof patch.ordersAttempted === "number") {
+    data.push({ range: `LoadTestSessions!N${rowIndex}`, values: [[String(patch.ordersAttempted)]] });
+  }
+  if (typeof patch.ordersSucceeded === "number") {
+    data.push({ range: `LoadTestSessions!O${rowIndex}`, values: [[String(patch.ordersSucceeded)]] });
+  }
+  if (typeof patch.ordersFailed === "number") {
+    data.push({ range: `LoadTestSessions!P${rowIndex}`, values: [[String(patch.ordersFailed)]] });
+  }
+  if (typeof patch.rateLimited === "number") {
+    data.push({ range: `LoadTestSessions!Q${rowIndex}`, values: [[String(patch.rateLimited)]] });
+  }
+  if (typeof patch.avgLatencyMs === "number") {
+    data.push({ range: `LoadTestSessions!R${rowIndex}`, values: [[String(Math.round(patch.avgLatencyMs))]] });
+  }
+  if (typeof patch.lastError === "string") {
+    data.push({ range: `LoadTestSessions!S${rowIndex}`, values: [[patch.lastError.slice(0, 500)]] });
+  }
+  if (data.length === 0) return;
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID(),
+    requestBody: { valueInputOption: "RAW", data },
+  });
+}
+
+export async function markLoadTestSessionDone(
+  rowIndex: number,
+  status: LoadTestStatus,
+): Promise<void> {
+  const sheets = getSheets();
+  const now = new Date().toISOString();
+  await sheets.spreadsheets.values.batchUpdate({
+    spreadsheetId: SHEET_ID(),
+    requestBody: {
+      valueInputOption: "RAW",
+      data: [
+        { range: `LoadTestSessions!L${rowIndex}`, values: [[now]] }, // stoppedAt
+        { range: `LoadTestSessions!M${rowIndex}`, values: [[status]] },
+      ],
+    },
+  });
+}
