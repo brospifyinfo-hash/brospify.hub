@@ -13,6 +13,7 @@ import {
   Activity,
   AlertTriangle,
   Check,
+  ChevronRight,
   Clock,
   Cog,
   Gauge,
@@ -177,8 +178,17 @@ function nextDelay(
 
 // ─── Page ─────────────────────────────────────────────────────
 
+interface ConfigState {
+  domain: string;
+  tokenSet: boolean;
+  tokenSuffix: string;
+  clientIdSet: boolean;
+  clientIdSuffix: string;
+  clientSecretSet: boolean;
+}
+
 export default function LoadTestPage() {
-  const [config, setConfig] = useState<{ domain: string; tokenSet: boolean; tokenSuffix: string } | null>(null);
+  const [config, setConfig] = useState<ConfigState | null>(null);
   const [configLoading, setConfigLoading] = useState(true);
   const [products, setProducts] = useState<DevStoreProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -230,6 +240,15 @@ export default function LoadTestPage() {
   useEffect(() => {
     void loadConfig();
     void loadHistory();
+    // Pickup OAuth-callback success: the callback page redirects with
+    // ?oauth=ok so we know to celebrate + drop the query param.
+    if (typeof window !== "undefined" && new URL(window.location.href).searchParams.get("oauth") === "ok") {
+      setTopBanner({ kind: "ok", text: "Dev-Store via OAuth verbunden — Token sicher gespeichert." });
+      const url = new URL(window.location.href);
+      url.searchParams.delete("oauth");
+      window.history.replaceState({}, "", url.toString());
+      setTimeout(() => setTopBanner(null), 4500);
+    }
   }, [loadConfig, loadHistory]);
 
   useEffect(() => {
@@ -354,55 +373,96 @@ function ConfigSection({
   loading,
   onSaved,
 }: {
-  config: { domain: string; tokenSet: boolean; tokenSuffix: string } | null;
+  config: ConfigState | null;
   loading: boolean;
   onSaved: () => void | Promise<void>;
 }) {
   const [domain, setDomain] = useState("");
-  const [token, setToken] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [clientId, setClientId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [manualToken, setManualToken] = useState("");
+  const [showManual, setShowManual] = useState(false);
+  const [busy, setBusy] = useState<"save" | "connect" | "manual" | null>(null);
   const [err, setErr] = useState("");
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (config) setDomain(config.domain || "");
   }, [config]);
-
-  // First-load: auto-expand if no token is configured yet.
   useEffect(() => {
     if (config && !config.tokenSet) setExpanded(true);
   }, [config]);
 
-  const handleSave = async () => {
+  // Save Client ID + Client Secret + Domain (no OAuth yet).
+  const saveCredentials = async (silent = false): Promise<boolean> => {
     setErr("");
-    setSaving(true);
+    if (!silent) setBusy("save");
     try {
       const res = await fetch("/api/admin/loadtest/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain, token }),
+        body: JSON.stringify({ domain, clientId, clientSecret }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Speichern fehlgeschlagen.");
-      setToken("");
+      if (!silent) await onSaved();
+      return true;
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Unbekannter Fehler");
+      return false;
+    } finally {
+      if (!silent) setBusy(null);
+    }
+  };
+
+  // One-shot "save and connect" — save creds, then bounce through OAuth.
+  const saveAndConnect = async () => {
+    setErr("");
+    setBusy("connect");
+    const ok = await saveCredentials(true);
+    if (!ok) {
+      setBusy(null);
+      return;
+    }
+    // Hard navigate so the browser carries the iron-session cookie
+    // through Shopify and back to /callback.
+    window.location.href = `/api/admin/loadtest/oauth/start?shop=${encodeURIComponent(domain)}`;
+  };
+
+  const saveManualToken = async () => {
+    setErr("");
+    setBusy("manual");
+    try {
+      const res = await fetch("/api/admin/loadtest/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain, token: manualToken }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Speichern fehlgeschlagen.");
+      setManualToken("");
       setExpanded(false);
       await onSaved();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Unbekannter Fehler");
     } finally {
-      setSaving(false);
+      setBusy(null);
     }
   };
+
+  const callbackUrl = typeof window !== "undefined"
+    ? `${window.location.origin}/api/admin/loadtest/oauth/callback`
+    : "https://brospifyhub.com/api/admin/loadtest/oauth/callback";
 
   return (
     <Section
       title="Konfiguration"
       icon={<Cog className="w-4 h-4 text-zinc-300" />}
-      sub="Dev-Store-Handle + Admin Access Token"
+      sub="OAuth-App + Dev-Store-Domain"
       headerRight={
         config?.tokenSet ? (
           <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-[#95BF47] bg-[#95BF47]/10 border border-[#95BF47]/25 rounded-full px-2 py-0.5">
-            <Check className="w-3 h-3" /> Konfiguriert
+            <Check className="w-3 h-3" /> Verbunden
           </span>
         ) : (
           <span className="inline-flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded-full px-2 py-0.5">
@@ -420,7 +480,7 @@ function ConfigSection({
           {config?.tokenSet && !expanded && (
             <div className="flex items-center justify-between gap-3">
               <div className="text-[13px] text-zinc-300">
-                Aktuell:{" "}
+                Aktuell verbunden mit{" "}
                 <code className="bg-white/5 px-1.5 py-0.5 rounded text-white">{config.domain}</code>
                 <span className="text-zinc-500"> · Token endet auf </span>
                 <code className="bg-white/5 px-1.5 py-0.5 rounded text-zinc-400">…{config.tokenSuffix}</code>
@@ -435,31 +495,53 @@ function ConfigSection({
           )}
 
           {(!config?.tokenSet || expanded) && (
-            <div className="space-y-3">
+            <div className="space-y-4">
+              {/* OAuth-Setup-Anleitung */}
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3 text-[12px] text-zinc-300 leading-relaxed">
+                <div className="font-bold text-white mb-1">Setup in Shopify Dev Dashboard</div>
+                <ol className="list-decimal list-inside space-y-1 text-zinc-400">
+                  <li>Im <a href="https://shopify.dev/dashboard" target="_blank" rel="noopener noreferrer" className="text-[#95BF47] hover:underline">Dev Dashboard</a> → deine App (z.B. {"„"}LOADTESTER{"“"}) öffnen.</li>
+                  <li>Tab <span className="text-white">{"„"}Einstellungen{"“"} → {"„"}Konfiguration{"“"}</span>.</li>
+                  <li>Bei <span className="text-white">App URL</span> eintragen: <code className="bg-white/5 text-zinc-200 px-1 rounded">https://brospifyhub.com/admin/loadtest</code></li>
+                  <li>Bei <span className="text-white">Allowed redirection URL(s)</span> eintragen:{" "}
+                    <code className="bg-white/5 text-zinc-200 px-1 rounded">{callbackUrl}</code></li>
+                  <li>Bei <span className="text-white">Admin API Access Scopes</span>: <code className="bg-white/5 text-zinc-200 px-1 rounded">write_orders</code> + <code className="bg-white/5 text-zinc-200 px-1 rounded">read_products</code></li>
+                  <li>Speichern + neue Version {"„"}Veröffentlichen{"“"}. Dann unter <span className="text-white">Client credentials</span> die Client ID + Client Secret kopieren.</li>
+                </ol>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Field label="Client ID (aus Dev Dashboard)">
+                  <input
+                    type="text"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    placeholder={config?.clientIdSet ? `…${config.clientIdSuffix} (gespeichert)` : "399d861e2d95eb44fd894207beb46695"}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#95BF47]/50 outline-none font-mono"
+                  />
+                </Field>
+                <Field label="Client Secret">
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={clientSecret}
+                    onChange={(e) => setClientSecret(e.target.value)}
+                    placeholder={config?.clientSecretSet ? "•••••••••• (gespeichert)" : "Aus Dev Dashboard → Client credentials"}
+                    className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#95BF47]/50 outline-none font-mono"
+                  />
+                </Field>
+              </div>
+
               <Field label="Dev-Store Handle">
                 <input
                   type="text"
                   value={domain}
                   onChange={(e) => setDomain(e.target.value)}
-                  placeholder="my-dev-store.myshopify.com"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#95BF47]/50 focus:bg-white/[0.05] outline-none transition"
+                  placeholder="brospify.myshopify.com"
+                  className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#95BF47]/50 outline-none"
                 />
                 <Hint>
-                  Genau die <code>*.myshopify.com</code>-Adresse — keine Custom-Domain.
-                </Hint>
-              </Field>
-              <Field label="Admin Access Token">
-                <input
-                  type="password"
-                  autoComplete="off"
-                  value={token}
-                  onChange={(e) => setToken(e.target.value)}
-                  placeholder="shpat_… (Custom App im Dev-Store mit write_orders + read_products Scope)"
-                  className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#95BF47]/50 focus:bg-white/[0.05] outline-none transition font-mono"
-                />
-                <Hint>
-                  Generieren: Shopify Admin → Settings → Apps and sales channels → Develop apps → App erstellen → API credentials.
-                  Erforderliche Scopes: <code>write_orders</code>, <code>read_products</code>.
+                  Genau die <code>*.myshopify.com</code>-Adresse deines Dev-Stores. Wird vom Server gegen Shopify verifiziert (Plan muss <code>partnerDevelopment</code> sein).
                 </Hint>
               </Field>
 
@@ -470,20 +552,34 @@ function ConfigSection({
                 </div>
               )}
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center flex-wrap gap-2">
                 <button
-                  onClick={handleSave}
-                  disabled={saving || !domain.trim() || !token.trim()}
-                  className="inline-flex items-center gap-1.5 bg-[#95BF47] hover:bg-[#86ad3f] text-black font-bold text-[13px] px-4 py-2 rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={saveAndConnect}
+                  disabled={
+                    busy !== null ||
+                    !domain.trim() ||
+                    (!clientId.trim() && !config?.clientIdSet) ||
+                    (!clientSecret.trim() && !config?.clientSecretSet)
+                  }
+                  className="inline-flex items-center gap-2 bg-[#95BF47] hover:bg-[#86ad3f] disabled:opacity-40 disabled:cursor-not-allowed text-black font-bold text-[13px] px-4 py-2 rounded-lg transition shadow-[0_4px_20px_-6px_rgba(149,191,71,0.6)]"
                 >
-                  {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                  Speichern
+                  {busy === "connect" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
+                  Speichern & per OAuth verbinden
+                </button>
+                <button
+                  onClick={() => saveCredentials(false)}
+                  disabled={busy !== null || !domain.trim()}
+                  className="inline-flex items-center gap-1.5 text-[12px] text-zinc-300 hover:text-white px-3 py-2 rounded-lg border border-white/10 hover:bg-white/[0.04] transition disabled:opacity-40"
+                >
+                  {busy === "save" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                  Nur speichern
                 </button>
                 {config?.tokenSet && (
                   <button
                     onClick={() => {
                       setExpanded(false);
-                      setToken("");
+                      setClientId("");
+                      setClientSecret("");
                       setErr("");
                     }}
                     className="text-[12px] text-zinc-400 hover:text-white px-3 py-2 rounded-lg border border-white/10 hover:bg-white/[0.04] transition"
@@ -492,6 +588,45 @@ function ConfigSection({
                   </button>
                 )}
               </div>
+
+              {/* Manual token fallback (legacy path) */}
+              <details className="rounded-xl border border-white/[0.06] bg-white/[0.015]">
+                <summary
+                  className="cursor-pointer list-none px-3 py-2 text-[11.5px] text-zinc-400 hover:text-white flex items-center gap-1.5"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setShowManual((v) => !v);
+                  }}
+                >
+                  <ChevronRight className={`w-3 h-3 transition-transform ${showManual ? "rotate-90" : ""}`} />
+                  Alternative: bestehenden <code className="text-zinc-300">shpat_</code>-Token direkt einfügen
+                </summary>
+                {showManual && (
+                  <div className="px-3 pb-3 pt-1 space-y-2 border-t border-white/[0.04]">
+                    <Field label="Admin Access Token">
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={manualToken}
+                        onChange={(e) => setManualToken(e.target.value)}
+                        placeholder="shpat_…"
+                        className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:border-[#95BF47]/50 outline-none font-mono"
+                      />
+                      <Hint>
+                        Funktioniert nur, falls dein Account Custom-Apps im Store-Admin erlaubt (älterer Pfad). Sonst OAuth oben.
+                      </Hint>
+                    </Field>
+                    <button
+                      onClick={saveManualToken}
+                      disabled={busy !== null || !domain.trim() || !manualToken.trim()}
+                      className="inline-flex items-center gap-1.5 bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 text-zinc-200 hover:text-white font-bold text-[12px] px-3 py-1.5 rounded-lg transition disabled:opacity-40"
+                    >
+                      {busy === "manual" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                      Token speichern
+                    </button>
+                  </div>
+                )}
+              </details>
             </div>
           )}
         </>
