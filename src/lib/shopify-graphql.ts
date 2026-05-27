@@ -384,7 +384,7 @@ const ORDER_CREATE_MUTATION = `
         name
         sourceName
         sourceIdentifier
-        app { id title }
+        app { id name }
       }
       userErrors { field message }
     }
@@ -398,7 +398,7 @@ interface OrderCreateData {
       name: string;
       sourceName?: string | null;
       sourceIdentifier?: string | null;
-      app?: { id?: string; title?: string } | null;
+      app?: { id?: string; name?: string } | null;
     } | null;
     userErrors: { field: string[] | null; message: string }[];
   };
@@ -469,7 +469,7 @@ export async function fireSingleOrder(input: FireOrderInput): Promise<FireOrderR
       diagnostics: order ? {
         storedSourceName: order.sourceName ?? null,
         storedSourceIdentifier: order.sourceIdentifier ?? null,
-        appTitle: order.app?.title ?? null,
+        appTitle: order.app?.name ?? null,
       } : undefined,
     };
   } catch (err) {
