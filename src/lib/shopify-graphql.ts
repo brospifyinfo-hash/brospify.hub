@@ -180,6 +180,71 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ─── Dev-store verification ────────────────────────────────────
+// The `*.myshopify.com` regex blocks custom domains but a production
+// shop with a stock subdomain (e.g. `brospify.myshopify.com`) would
+// still pass — that's the difference between syntactic and semantic
+// guards. Shopify exposes the real signal on `shop.plan.partnerDevelopment`:
+// it returns true only for stores created as Development stores in
+// the Partner Dashboard. We call this once on config save so a stray
+// production credential is rejected before any orderCreate can fire.
+
+const SHOP_INFO_QUERY = `
+  query {
+    shop {
+      name
+      myshopifyDomain
+      plan { partnerDevelopment shopifyPlus displayName }
+    }
+  }
+`;
+
+interface ShopInfoData {
+  shop: {
+    name: string;
+    myshopifyDomain: string;
+    plan: { partnerDevelopment: boolean; shopifyPlus: boolean; displayName: string };
+  };
+}
+
+export interface VerifyDevStoreResult {
+  ok: boolean;
+  shopName?: string;
+  planName?: string;
+  isDevStore?: boolean;
+  error?: string;
+}
+
+export async function verifyDevStore(domain: string, token: string): Promise<VerifyDevStoreResult> {
+  try {
+    const res = await callGraphQL<ShopInfoData>({
+      domain,
+      token,
+      query: SHOP_INFO_QUERY,
+    });
+    if (res.errors?.length) {
+      return { ok: false, error: res.errors[0].message };
+    }
+    const shop = res.data?.shop;
+    if (!shop) {
+      return { ok: false, error: "Konnte Shop-Info nicht laden — Token ungültig oder fehlende Scopes?" };
+    }
+    const isDev = !!shop.plan?.partnerDevelopment;
+    if (!isDev) {
+      return {
+        ok: false,
+        shopName: shop.name,
+        planName: shop.plan?.displayName,
+        isDevStore: false,
+        error: `"${shop.name}" (Plan: ${shop.plan?.displayName || "unknown"}) ist KEIN Development-Store. Der Load-Tester verweigert Tokens zu Produktiv-Shops, damit Bestseller-Ranking, Conversion und Analytics nicht durch synthetische Orders verfälscht werden.`,
+      };
+    }
+    return { ok: true, shopName: shop.name, planName: shop.plan.displayName, isDevStore: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "unknown" };
+  }
+}
+
 // ─── Products list ─────────────────────────────────────────────
 // Used by the "New Run" form's dropdown. Returns a flat list of
 // (productId, variantId, title, price) so the dashboard can show

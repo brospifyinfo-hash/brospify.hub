@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAdminSetting, setAdminSetting } from "@/lib/sheets";
-import { assertDevStoreDomain } from "@/lib/shopify-graphql";
+import { assertDevStoreDomain, verifyDevStore } from "@/lib/shopify-graphql";
 import { LOADTEST_KEY_DOMAIN as KEY_DOMAIN, LOADTEST_KEY_TOKEN as KEY_TOKEN } from "@/lib/loadtest-creds";
 
 export const dynamic = "force-dynamic";
@@ -46,9 +46,30 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
+    // Semantic guard: call Shopify and confirm the shop is flagged as
+    // a Partner Development store. Without this a stock-subdomain
+    // production shop would slip past the regex above.
+    const verdict = await verifyDevStore(clean, token);
+    if (!verdict.ok) {
+      return NextResponse.json(
+        {
+          error: verdict.error || "Shop-Verifikation fehlgeschlagen.",
+          shopName: verdict.shopName,
+          planName: verdict.planName,
+          isDevStore: verdict.isDevStore,
+        },
+        { status: 403 },
+      );
+    }
     await setAdminSetting(KEY_DOMAIN, clean);
     await setAdminSetting(KEY_TOKEN, token);
-    return NextResponse.json({ ok: true, domain: clean, tokenSuffix: token.slice(-4) });
+    return NextResponse.json({
+      ok: true,
+      domain: clean,
+      tokenSuffix: token.slice(-4),
+      shopName: verdict.shopName,
+      planName: verdict.planName,
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Speichern fehlgeschlagen" },
