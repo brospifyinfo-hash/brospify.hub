@@ -66,9 +66,7 @@ interface ThemesResponse {
 }
 
 const TIER_LABEL: Record<TierKey, string> = {
-  starter: "Starter",
-  pro: "Pro",
-  business: "Business",
+  pro: "Membership",
 };
 
 function youtubeEmbed(url: string): string | null {
@@ -88,10 +86,9 @@ function youtubeEmbed(url: string): string | null {
 }
 
 function suggestedTierLabel(tierAccess: TierKey[]): string {
-  // Prefer the cheapest tier that grants access — if the admin granted
-  // access to "pro" and "business", suggest pro.
+  // Single membership: just return its label if the theme is gated.
   for (const k of TIER_KEYS) if (tierAccess.includes(k)) return TIER_LABEL[k];
-  return "Pro";
+  return "Membership";
 }
 
 export default function ThemesPage() {
@@ -279,16 +276,16 @@ export default function ThemesPage() {
             <div className="flex items-center gap-2.5">
               <Crown className="w-5 h-5 text-amber-400 shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="text-xs font-bold mb-0.5">Aktives Abo nötig</h3>
+                <h3 className="text-xs font-bold mb-0.5">Aktive Membership nötig</h3>
                 <p className="text-[10px] text-zinc-400 leading-snug">
-                  Theme-Push erfordert ein aktives Abo. Auch einmalig gekaufte Themes sind nur mit aktivem Abo nutzbar.
+                  Theme-Push erfordert eine aktive Membership. Auch einmalig gekaufte Themes sind nur damit nutzbar.
                 </p>
               </div>
               <button
-                onClick={() => router.push("/credits")}
+                onClick={() => router.push("/tiers")}
                 className="btn-accent px-3 py-1.5 rounded-lg text-[11px] font-semibold shrink-0 flex items-center gap-1"
               >
-                Plan wählen
+                Membership buchen
                 <ArrowRight className="w-3 h-3" />
               </button>
             </div>

@@ -161,7 +161,7 @@ export default function CodeBlocksPage() {
     );
   }
 
-  // ── Locked state — Bronze users / no sub ──
+  // ── Locked state — users ohne aktive Membership ──
   if (locked) {
     return (
       <div className="min-h-screen bg-mesh">
@@ -172,24 +172,24 @@ export default function CodeBlocksPage() {
             animate={{ opacity: 1, y: 0 }}
             className="glass-strong rounded-2xl border border-white/10 p-8 text-center"
           >
-            <div className="w-14 h-14 rounded-2xl bg-slate-300/10 border border-slate-300/20 flex items-center justify-center mx-auto mb-4">
-              <Lock className="w-7 h-7 text-slate-300" />
+            <div className="w-14 h-14 rounded-2xl bg-amber-400/10 border border-amber-400/20 flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-7 h-7 text-amber-300" />
             </div>
-            <h1 className="text-lg font-bold">Code-Blöcke sind ab Silber verfügbar</h1>
+            <h1 className="text-lg font-bold">Code-Blöcke setzen eine aktive Membership voraus</h1>
             <p className="text-[12px] text-zinc-400 mt-2 leading-relaxed">
               Eine wachsende Bibliothek fertiger Shopify-Bausteine — Texte & Farben
-              anpassen, kopieren, einfügen. {lockTier ? `Dein aktueller Plan (${lockTier}) enthält das noch nicht.` : ""}
+              anpassen, kopieren, einfügen. Schalte sie mit der Brospify Membership frei.
             </p>
             <button
               onClick={() => router.push("/tiers")}
               className="mt-5 inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-[13px] font-bold"
               style={{
-                background: "linear-gradient(135deg, #cbd5e1 0%, #64748b 100%)",
-                color: "#0f172a",
+                background: "linear-gradient(135deg, #fde047 0%, #ca8a04 100%)",
+                color: "#422006",
               }}
             >
               <Crown className="w-4 h-4" />
-              Auf Silber upgraden
+              Membership buchen
               <ArrowRight className="w-4 h-4" />
             </button>
           </motion.div>

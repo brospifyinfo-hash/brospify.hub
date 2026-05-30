@@ -105,7 +105,7 @@ const SHOP_SETTINGS_ITEMS: ShopSettingsItem[] = [
     icon: Scale,
     color: "text-blue-400",
     // Kein feature-flag — Rechtstexte sind ein Pflichttool fuer
-    // jeden Shop, deshalb auch fuer Bronze freigeschaltet.
+    // jeden Shop, immer freigeschaltet.
   },
 ];
 
@@ -336,7 +336,7 @@ export default function Navigation() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
+                    title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
                     className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
                       isActive
                         ? "text-[#95BF47]"
@@ -441,7 +441,7 @@ export default function Navigation() {
                               key={tool.href}
                               href={tool.href}
                               onClick={() => setAiOpen(false)}
-                              title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
+                              title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
                               className={`nav-lift group flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-200 ${
                                 isActive
                                   ? "border-[#95BF47]/25 bg-[#95BF47]/8"
@@ -749,7 +749,7 @@ export default function Navigation() {
                 <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub="Sofort-Antwort vom KI-Bot" />
                 <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
                 <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
-                <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team (Gold-only)" />
+                <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team" />
               </MobileSection>
 
               {/* Admin */}
@@ -1087,7 +1087,7 @@ function ShopSettingsDropdown({
                     key={item.href}
                     href={item.href}
                     onClick={() => setShopSettingsOpen(false)}
-                    title={locked ? `Nicht in deinem ${tierState.tier?.label || "Tier"}-Abo` : undefined}
+                    title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
                     className={`group flex items-center gap-3 p-2.5 rounded-xl border transition ${
                       isActive
                         ? "border-[#95BF47]/25 bg-[#95BF47]/8"
@@ -1191,9 +1191,7 @@ function CreditsPill({ balance, loading }: { balance: number; loading: boolean }
 // the user instantly sees which plan they're on.
 
 const TIER_CHIP_STYLES: Record<string, { bg: string; text: string; border: string }> = {
-  starter:  { bg: "bg-cyan-500/15",   text: "text-cyan-300",   border: "border-cyan-500/25" },
-  pro:      { bg: "bg-purple-500/15", text: "text-purple-300", border: "border-purple-500/30" },
-  business: { bg: "bg-amber-500/15",  text: "text-amber-300",  border: "border-amber-500/30" },
+  pro: { bg: "bg-amber-500/15", text: "text-amber-300", border: "border-amber-500/30" },
 };
 
 const NEUTRAL_CHIP_STYLE = { bg: "bg-zinc-500/15", text: "text-zinc-300", border: "border-zinc-500/25" };
@@ -1204,7 +1202,7 @@ function TierBadge({ tier, kind, compact }: { tier: string; kind: string; compac
     <span
       className={`hidden lg:inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider rounded border ${style.bg} ${style.text} ${style.border} ${compact ? "px-1.5 py-0.5" : "px-2 py-1"}`}
     >
-      {kind === "business" && <Crown className="w-2.5 h-2.5" />}
+      <Crown className="w-2.5 h-2.5" />
       {tier}
     </span>
   );
@@ -1249,14 +1247,9 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
         <div
           className="absolute inset-0 opacity-30 pointer-events-none"
           style={{
-            background:
-              tierKey === "business"
-                ? "radial-gradient(circle at top right, rgba(251,191,36,0.16), transparent 65%)"
-                : tierKey === "pro"
-                ? "radial-gradient(circle at top right, rgba(168,85,247,0.16), transparent 65%)"
-                : tierKey === "starter"
-                ? "radial-gradient(circle at top right, rgba(6,182,212,0.14), transparent 65%)"
-                : "radial-gradient(circle at top right, rgba(149,191,71,0.12), transparent 65%)",
+            background: tierKey === "pro"
+              ? "radial-gradient(circle at top right, rgba(251,191,36,0.16), transparent 65%)"
+              : "radial-gradient(circle at top right, rgba(149,191,71,0.12), transparent 65%)",
           }}
         />
         <div className="relative flex items-start gap-3">
@@ -1296,7 +1289,7 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
                 <span
                   className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${chipStyle.bg} ${chipStyle.text} ${chipStyle.border}`}
                 >
-                  {tierKey === "business" && <Crown className="w-2.5 h-2.5" />}
+                  <Crown className="w-2.5 h-2.5" />
                   {tier.label}
                 </span>
               ) : (
@@ -1411,7 +1404,7 @@ const SUPPORT_ITEMS: SupportItem[] = [
   { href: "/ai-support", label: "AI Support", sub: "Sofort-Antworten vom KI-Bot", icon: Bot, color: "text-cyan-400" },
   { href: "/ai-support?view=tickets", label: "Meine Tickets", sub: "Vergangene Anfragen & Verlauf", icon: Inbox, color: "text-amber-400" },
   { href: "/email-support", label: "E-Mail Support", sub: "Direkt an unser Team schreiben", icon: Mail, color: "text-rose-400" },
-  { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team (Gold)", icon: GraduationCap, color: "text-purple-400" },
+  { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team", icon: GraduationCap, color: "text-purple-400" },
 ];
 
 function SupportDropdown({

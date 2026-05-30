@@ -147,7 +147,9 @@ function appendLog(
 }
 
 export type UserRole = "admin" | "user";
-export type TierKey = "starter" | "pro" | "business";
+// TierKey lives in tiers-shared.ts as the single source of truth.
+export type { TierKey } from "./tiers-shared";
+import type { TierKey } from "./tiers-shared";
 
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
@@ -1873,9 +1875,9 @@ export async function deleteCodeBlock(rowIndex: number): Promise<void> {
 }
 
 // ─── COACHING TIPS (Tab "CoachingTips") ──────────────────────────
-// Gold-only knowledge feed. Admin (or AI) drops in tips the customer
-// reads on /coaching. The WhatsApp contact number lives in the
-// Settings sheet under key `coaching_whatsapp`.
+// Membership-only knowledge feed. Admin (or AI) drops in tips the
+// customer reads on /coaching. The WhatsApp contact number lives in
+// the Settings sheet under key `coaching_whatsapp`.
 //
 // Columns: A=ID, B=Title, C=Body, D=MediaUrl, E=Author, F=Active,
 //          G=CreatedAt

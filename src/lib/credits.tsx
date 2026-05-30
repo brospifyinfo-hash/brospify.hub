@@ -95,7 +95,7 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
   // sein dass der Session-Cookie auf dem ersten /api/profile call noch
   // nicht propagiert ist und der Server 401 wirft. Vorher hatten wir
   // dann loading: false + balance: 0 gesetzt — das hat dem User
-  // "0 Credits" angezeigt obwohl er gerade Bronze gekauft hat.
+  // "0 Credits" angezeigt obwohl er gerade die Membership gekauft hat.
   // Jetzt: bis zu RETRY_MAX Versuche mit zunehmenden Delays, und
   // loading bleibt true solange keine erfolgreiche Antwort kam.
   //

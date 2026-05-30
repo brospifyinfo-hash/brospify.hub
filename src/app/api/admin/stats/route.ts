@@ -170,7 +170,7 @@ export async function GET() {
     const monthlyToolMap = new Map<string, { calls: number; costEur: number; creditsCharged: number }>();
 
     // ── Subscription rollups ──
-    const subsByTier: Record<TierKey, number> = { starter: 0, pro: 0, business: 0 };
+    const subsByTier: Record<TierKey, number> = { pro: 0 };
     let mrrEur = 0;
     let newPaid30d = 0;
     let churn30d = 0;
@@ -222,8 +222,8 @@ export async function GET() {
       if (k.profile.role === "admin") admins++;
 
       // ── Subscription / tier roll-up ──
-      // Sheets SKU column ("Bronze"/"Silber"/"Gold") is authoritative;
-      // profile.tier is only a fallback override.
+      // Sheets SKU column is authoritative (all aliases collapse to the
+      // one membership tier); profile.tier is only a fallback override.
       const tier = tierFromSku(k.sku) || resolveTier(k.profile.tier);
       if (tier) subsByTier[tier]++;
       if (isActiveSubFromKunde(k) && tier) {
@@ -387,8 +387,7 @@ export async function GET() {
       ...v,
     }));
 
-    const activeSubsTotal =
-      subsByTier.starter + subsByTier.pro + subsByTier.business;
+    const activeSubsTotal = Object.values(subsByTier).reduce((a, b) => a + b, 0);
     const churnRatePct =
       activeSubsTotal + churn30d > 0
         ? +((churn30d / (activeSubsTotal + churn30d)) * 100).toFixed(1)

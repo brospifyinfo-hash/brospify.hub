@@ -214,14 +214,14 @@ export default function AccountSubscriptionPage() {
                 Credits aufladen
               </Link>
 
-              {/* Upgrade */}
-              {tierKey !== "business" && (
+              {/* Abo abschliessen */}
+              {!tierKey && (
                 <Link
                   href="/tiers"
                   className="flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-semibold bg-gradient-to-r from-[#95BF47]/15 to-emerald-500/15 hover:from-[#95BF47]/25 hover:to-emerald-500/25 text-[#95BF47] border border-[#95BF47]/25 transition"
                 >
                   <Crown className="w-4 h-4" />
-                  {tierKey ? "Abo upgraden" : "Abo abschliessen"}
+                  Membership abschliessen
                 </Link>
               )}
 
@@ -281,14 +281,9 @@ function PlanHero({
   isExpired: boolean;
   tier: typeof DEFAULT_TIERS[number] | null;
 }) {
-  const gradient =
-    tierKey === "business"
-      ? "from-amber-500/15 via-amber-500/8 to-transparent"
-      : tierKey === "pro"
-      ? "from-purple-500/15 via-purple-500/8 to-transparent"
-      : tierKey === "starter"
-      ? "from-cyan-500/15 via-cyan-500/8 to-transparent"
-      : "from-zinc-500/8 to-transparent";
+  const gradient = tierKey
+    ? "from-amber-500/15 via-amber-500/8 to-transparent"
+    : "from-zinc-500/8 to-transparent";
   const statusIcon = isExpired ? XCircle : isCanceled ? ShieldOff : tierKey ? CheckCircle2 : XCircle;
   const StatusIcon = statusIcon;
   const statusColor = isExpired ? "text-red-400" : isCanceled ? "text-amber-400" : tierKey ? "text-green-400" : "text-zinc-500";
@@ -306,7 +301,7 @@ function PlanHero({
           <div>
             <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Aktueller Plan</div>
             <div className="text-3xl sm:text-4xl font-black tracking-tight flex items-center gap-2">
-              {tierKey === "business" && <Crown className="w-6 h-6 text-amber-300" />}
+              {tierKey && <Crown className="w-6 h-6 text-amber-300" />}
               {tierLabel}
             </div>
             {tier && (

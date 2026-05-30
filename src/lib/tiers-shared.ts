@@ -1,8 +1,13 @@
 // ─── Tier shared types / constants (client-safe) ─────────────────
 // No server imports. Use this from client components and React UIs.
 // The server-side getter/setter live in `./tiers.ts`.
+//
+// One-plan world: we used to ship Bronze/Silber/Gold but consolidated
+// to a single membership. The type signature still uses `TierKey` so
+// the rest of the codebase (gating, profile, admin) keeps its shape —
+// `TIER_KEYS` is just a one-element tuple now.
 
-export const TIER_KEYS = ["starter", "pro", "business"] as const;
+export const TIER_KEYS = ["pro"] as const;
 export type TierKey = (typeof TIER_KEYS)[number];
 
 export const FEATURE_FLAGS = [
@@ -104,15 +109,21 @@ export interface TierDefinition {
 
 // ─── SKU → tier mapping ─────────────────────────────────────────
 // The customer's SKU column in the Kunden sheet is the source of
-// truth for their plan. Admin enters "Bronze", "Silber" or "Gold"
-// (case-insensitive) and we resolve it to one of the internal tier
-// keys. Older "SPORT"/"TREND"-style categories don't map and resolve
-// to null (= no plan).
+// truth for "is this customer subscribed". With a single membership
+// every historical Bronze/Silber/Gold SKU plus the new neutral aliases
+// resolve to the same single tier — that way legacy customers keep
+// access without us having to migrate the sheet.
 export const SKU_TO_TIER: Record<string, TierKey> = {
-  bronze: "starter",
+  bronze: "pro",
   silber: "pro",
   silver: "pro",
-  gold: "business",
+  gold: "pro",
+  pro: "pro",
+  abo: "pro",
+  member: "pro",
+  membership: "pro",
+  mitglied: "pro",
+  mitgliedschaft: "pro",
 };
 
 export function tierFromSku(sku: string | null | undefined): TierKey | null {
@@ -122,16 +133,8 @@ export function tierFromSku(sku: string | null | undefined): TierKey | null {
 
 /** Public German tier names used for display + admin defaults. */
 export const TIER_DISPLAY_LABEL: Record<TierKey, string> = {
-  starter: "Bronze",
-  pro: "Silber",
-  business: "Gold",
+  pro: "Brospify Membership",
 };
-
-function emptyFeatures(): TierFeatures {
-  const out = {} as TierFeatures;
-  for (const f of FEATURE_FLAGS) out[f] = false;
-  return out;
-}
 
 function allFeatures(): TierFeatures {
   const out = {} as TierFeatures;
@@ -141,111 +144,22 @@ function allFeatures(): TierFeatures {
 
 export const DEFAULT_TIERS: TierDefinition[] = [
   {
-    key: "starter",
-    label: "Bronze",
-    hidden: false,
-    highlighted: false,
-    tagline: "Für Solo-Founder",
-    description: "Alle wichtigen Tools für deinen ersten Shop.",
-    ctaLabel: "Bronze buchen",
-    ctaUrl: "https://brospify.com/cart/52979130204507:1",
-    priceMonthlyEur: 19,
-    priceYearlyEur: 190,
-    trialDays: 7,
-    // 500 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
-    // (orders/paid webhook). startingCredits = erste Zahlung,
-    // monthlyCreditAllowance = jedes Renewal danach. Beide gleich.
-    startingCredits: 500,
-    monthlyCreditAllowance: 500,
-    limits: {
-      maxProducts: 50,
-      maxBlogsPerMonth: 10,
-      maxEmailsPerMonth: 20,
-      maxAiChatsPerMonth: 200,
-      maxAiStudioJobsPerMonth: 30,
-      maxBgRemovesPerMonth: 50,
-      maxUpscalesPerMonth: 50,
-      maxStores: 1,
-      maxThemesInstall: 5,
-      maxTeamMembers: 1,
-    },
-    // Bronze: NUR Upscaler + Background-Remover als AI-Tool. Browse-
-    // Features (Charts, Library, Themes-Galerie) bleiben aktiv damit
-    // der User die Plattform ueberhaupt benutzen kann. Generative
-    // Tools (SEO/Blog/Email/Studio/Chat) + Code-Blöcke + Coaching
-    // bleiben Silber/Gold vorbehalten.
-    features: {
-      ...emptyFeatures(),
-      bgRemove: true,
-      upscale: true,
-      themesGallery: true,
-      chartsAnalytics: true,
-      library: true,
-      productImports: true,
-    },
-    bullets: [
-      "500 Credits / Monat",
-      "1 Shop, 50 Produkte",
-      "AI-Tools: NUR Upscaler + Background-Remover",
-      "Trend-Charts & Theme-Galerie",
-      "Generative Tools & Code-Blöcke ab Silber",
-    ],
-  },
-  {
     key: "pro",
-    label: "Silber",
+    label: "Brospify Membership",
     hidden: false,
     highlighted: true,
-    tagline: "Für ambitionierte Stores",
-    description: "Skalier deinen Store mit höheren Limits & Priority-Support.",
-    ctaLabel: "Silber buchen",
+    tagline: "Alles inklusive — ein Preis, ein Plan.",
+    description: "Voller Zugriff auf alle Tools, Themes und Coaching — ohne Stufen-Spielereien.",
+    ctaLabel: "Membership buchen",
     ctaUrl: "https://brospify.com/cart/52979364069723:1",
     priceMonthlyEur: 49,
     priceYearlyEur: 490,
     trialDays: 7,
+    // 2000 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
+    // (orders/paid webhook). startingCredits = erste Zahlung,
+    // monthlyCreditAllowance = jedes Renewal danach.
     startingCredits: 2000,
     monthlyCreditAllowance: 2000,
-    limits: {
-      maxProducts: 250,
-      maxBlogsPerMonth: 50,
-      maxEmailsPerMonth: 100,
-      maxAiChatsPerMonth: 1000,
-      maxAiStudioJobsPerMonth: 150,
-      maxBgRemovesPerMonth: 250,
-      maxUpscalesPerMonth: 250,
-      maxStores: 3,
-      maxThemesInstall: -1,
-      maxTeamMembers: 3,
-    },
-    // Silber: alle aktuell verfügbaren Tools + Code-Blöcke.
-    // Coaching bleibt Gold vorbehalten.
-    features: {
-      ...allFeatures(),
-      coaching: false,
-      apiAccess: false,
-      customBranding: false,
-    },
-    bullets: [
-      "2.000 Credits / Monat",
-      "3 Shops, 250 Produkte",
-      "Alle AI-Tools + Code-Blöcke",
-      "Priority-Support",
-    ],
-  },
-  {
-    key: "business",
-    label: "Gold",
-    hidden: false,
-    highlighted: false,
-    tagline: "Für Profis und Agenturen",
-    description: "Unbegrenzte Limits, API-Zugang und White-Label.",
-    ctaLabel: "Gold buchen",
-    ctaUrl: "https://brospify.com/cart/52979364692315:1",
-    priceMonthlyEur: 99,
-    priceYearlyEur: 990,
-    trialDays: 14,
-    startingCredits: 10000,
-    monthlyCreditAllowance: 10000,
     limits: {
       maxProducts: -1,
       maxBlogsPerMonth: -1,
@@ -256,15 +170,14 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       maxUpscalesPerMonth: -1,
       maxStores: -1,
       maxThemesInstall: -1,
-      maxTeamMembers: 10,
+      maxTeamMembers: -1,
     },
-    // Gold: alles inkl. Code-Blöcke + privates Coaching + WhatsApp-Support.
     features: allFeatures(),
     bullets: [
-      "10.000 Credits / Monat",
-      "Alle Tools + Code-Blöcke",
-      "Privates Coaching + WhatsApp-Support",
-      "API-Zugang & White-Label",
+      "2.000 Credits / Monat — automatisch nachgeladen",
+      "Alle AI-Tools, Themes & Code-Blöcke",
+      "Privates Coaching & Priority-Support",
+      "Keine künstlichen Limits",
     ],
   },
 ];
@@ -289,9 +202,9 @@ export function isActiveSub(profile: { tier?: TierKey | string; tierSince?: stri
 }
 
 /** SKU-aware variant: a customer counts as actively subscribed when the
- *  Kunden-sheet SKU column maps to a tier (Bronze/Silber/Gold), even if
- *  the profile JSON has nothing — the admin entering "Gold" into SKU
- *  is the authoritative grant. Profile-level cancellation still applies. */
+ *  Kunden-sheet SKU column maps to the tier, even if the profile JSON
+ *  has nothing — the admin entering an SKU is the authoritative grant.
+ *  Profile-level cancellation still applies. */
 export function isActiveSubFromKunde(k: {
   sku?: string | null;
   profile?: { tier?: TierKey | string; tierSince?: string; tierCanceledAt?: string };

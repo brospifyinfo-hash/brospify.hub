@@ -41,11 +41,11 @@ export type TierGuardResult = TierGuardOk | TierGuardFail;
 
 /**
  * Resolve the current customer's tier definition. Admins always
- * resolve to the highest paid tier (`business`) so they can test
- * everything; regular users resolve from their Kunden row.
+ * resolve to the membership tier so they can test everything;
+ * regular users resolve from their Kunden row.
  *
- * Free tier was removed — users without an active paid subscription
- * resolve to `null`, which is treated as "no plan" by every guard.
+ * Users without an active paid subscription resolve to `null`, which
+ * is treated as "no plan" by every guard.
  */
 export async function getCurrentTier(session: SessionLike): Promise<TierDefinition | null> {
   if (!session.isLoggedIn) return null;
@@ -54,7 +54,7 @@ export async function getCurrentTier(session: SessionLike): Promise<TierDefiniti
   const findByKey = (key: TierKey) => all.find((t) => t.key === key);
 
   if (session.isAdmin) {
-    return findByKey("business") || all[all.length - 1] || null;
+    return all[0] || null;
   }
 
   const lk = session.lizenzschluessel;
@@ -63,8 +63,8 @@ export async function getCurrentTier(session: SessionLike): Promise<TierDefiniti
   try {
     const kunde = await findKundeByKey(lk);
     if (!kunde) return null;
-    // SKU column is the source of truth (Bronze / Silber / Gold).
-    // Fall back to the profile.tier override only if SKU doesn't map.
+    // SKU column is the source of truth. Any legacy Bronze/Silber/Gold
+    // SKU still maps to the single membership.
     const fromSku = tierFromSku(kunde.sku);
     if (fromSku) return findByKey(fromSku) || null;
     const raw = kunde.profile?.tier;
@@ -105,7 +105,7 @@ export async function requireFeature(
       response: NextResponse.json(
         {
           error: "FEATURE_LOCKED",
-          message: "Dieses Feature setzt ein aktives Abo voraus. Bitte wähle einen Plan.",
+          message: "Dieses Feature setzt eine aktive Brospify Membership voraus.",
           tier: null,
           requiredFeature: flag,
         },
@@ -122,7 +122,7 @@ export async function requireFeature(
       response: NextResponse.json(
         {
           error: "FEATURE_LOCKED",
-          message: `Dieses Feature ist in deinem Abo (${tier.label}) nicht enthalten.`,
+          message: `Dieses Feature ist in deiner Membership (${tier.label}) nicht enthalten.`,
           tier: tier.key,
           requiredFeature: flag,
         },

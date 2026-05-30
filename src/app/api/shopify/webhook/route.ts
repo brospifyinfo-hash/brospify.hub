@@ -215,8 +215,9 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
       shopifyCustomerId: existing.profile.shopifyCustomerId || customerId || undefined,
     });
     // ── Monthly credits refill ──────────────────────────────────
-    // Bronze = 500, Silber = 2000, Gold = 10000. Idempotent via orderId,
-    // so a Shopify retry never double-credits the customer.
+    // Allowance read from the live tier config (DEFAULT_TIERS or admin
+    // override). Idempotent via orderId, so a Shopify retry never
+    // double-credits the customer.
     const tierKey = tierFromSku(sku);
     const tierDef = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
     let refillAmount = 0;

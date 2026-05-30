@@ -161,7 +161,7 @@ const KATEGORIE_OPTIONS = [
 
 // ─── Admin module-level types ───────────────────────────────────
 
-type AdminTierKey = "starter" | "pro" | "business";
+type AdminTierKey = "pro";
 type AdminUserRole = "admin" | "user";
 
 interface TierPricing { key: AdminTierKey; label: string; priceEur: number }
@@ -1429,7 +1429,7 @@ export default function AdminPage() {
       changelog: "",
       priceEur: 0,
       active: true,
-      tierAccess: ["business"],
+      tierAccess: ["pro"],
       createdAt: new Date().toISOString(),
     };
     setSettingsData(prev => ({ ...prev, themes: [...prev.themes, next] }));
@@ -2898,7 +2898,7 @@ export default function AdminPage() {
                       Zugriff über Abo
                     </label>
                     <div className="flex gap-1.5 flex-wrap">
-                      {(["starter", "pro", "business"] as const).map((k) => {
+                      {(["pro"] as const).map((k) => {
                         const on = tierAccess.includes(k);
                         return (
                           <button
@@ -2912,7 +2912,7 @@ export default function AdminPage() {
                             }`}
                             style={on ? { boxShadow: `0 0 0 1px ${TIER_COLORS[k]}30` } : undefined}
                           >
-                            {k}
+                            Membership
                           </button>
                         );
                       })}
@@ -5271,7 +5271,7 @@ function GodModeKpis({ stats, onJumpTab }: {
   // Don't crash, just fall back to neutral zeros.
   const subs = stats.subscriptions ?? {
     activeTotal: 0,
-    byTier: { starter: 0, pro: 0, business: 0 },
+    byTier: { pro: 0 },
     mrrEur: 0,
     pricing: [],
     newPaid30d: 0,
@@ -5279,7 +5279,7 @@ function GodModeKpis({ stats, onJumpTab }: {
     churnRatePct: 0,
   };
   const signups = stats.signups ?? { last7d: 0, last30d: 0, daily30d: [] };
-  const byTier = subs.byTier ?? { free: 0, starter: 0, pro: 0, business: 0 };
+  const byTier = (subs.byTier ?? { pro: 0 }) as Record<string, number>;
   const pricing = Array.isArray(subs.pricing) ? subs.pricing : [];
   const tierLabelMap = new Map(pricing.map((p) => [p.key, p.label]));
 
@@ -5341,7 +5341,7 @@ function GodModeKpis({ stats, onJumpTab }: {
           {subs.activeTotal}
         </div>
         <div className="text-[10px] text-zinc-500 mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
-          {(["starter", "pro", "business"] as const).map((k) => (
+          {(["pro"] as const).map((k) => (
             <span key={k} className="tabular-nums">
               {tierLabelMap.get(k) || k}: <span className="text-zinc-300 font-semibold">{byTier[k] ?? 0}</span>
             </span>
@@ -5568,10 +5568,9 @@ function UsersView({
                   {/* Tier */}
                   <div>
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      u.tier === "business" ? "bg-purple-500/15 border border-purple-500/30 text-purple-200"
-                      : u.tier === "pro" ? "bg-[#95BF47]/15 border border-[#95BF47]/30 text-[#95BF47]"
-                      : u.tier === "starter" ? "bg-blue-500/15 border border-blue-500/30 text-blue-200"
-                      : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
+                      u.tier === "pro"
+                        ? "bg-amber-500/15 border border-amber-500/30 text-amber-200"
+                        : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
                     }`}>
                       {u.tier ? tierLabel : "Kein Plan"}
                     </span>
@@ -5786,9 +5785,7 @@ function LogsView({
 // ─── Tier-Settings editor — full schema (Tiers tab) ───────────────
 
 const TIER_COLORS: Record<AdminTierKey, string> = {
-  starter: "#06B6D4",
-  pro: "#A855F7",
-  business: "#F59E0B",
+  pro: "#F59E0B",
 };
 
 function TiersFullEditor({
@@ -5974,7 +5971,7 @@ function TiersFullEditor({
                     type="text"
                     value={t.label}
                     onChange={(e) => patch(idx, { label: e.target.value })}
-                    placeholder="Bronze / Silber / Gold"
+                    placeholder="Brospify Membership"
                     maxLength={40}
                     className="input-glass w-full text-sm"
                   />
@@ -6000,7 +5997,7 @@ function TiersFullEditor({
                   type="text"
                   value={t.ctaUrl || ""}
                   onChange={(e) => patch(idx, { ctaUrl: e.target.value })}
-                  placeholder="https://shop.beispiel.de/checkout/abo-silber  ODER  /credits?plan=pro"
+                  placeholder="https://shop.beispiel.de/checkout/abo  ODER  /credits?plan=pro"
                   maxLength={600}
                   className="input-glass w-full text-xs font-mono"
                 />
@@ -7670,7 +7667,7 @@ function CodeBlocksAdminView({ blocks, loading, onRefresh, onNotify }: {
             Code-Blöcke
           </h2>
           <p className="text-zinc-400 text-xs mt-1 max-w-2xl leading-relaxed">
-            Shopify-Custom-Liquid-Snippets für Silber- &amp; Gold-Kunden. Code einfügen →
+            Shopify-Custom-Liquid-Snippets für Membership-Kunden. Code einfügen →
             KI findet anpassbare Texte &amp; Farben → du bestätigst sie → Kunden passen an &amp; kopieren mit einem Klick.
           </p>
         </div>
@@ -8041,18 +8038,18 @@ function CoachingAdminView({ tips, whatsapp, loading, onRefresh, onNotify }: {
       <div>
         <h2 className="text-sm font-bold flex items-center gap-2">
           <GraduationCap className="w-4 h-4 text-yellow-400" />
-          Privates Coaching <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-yellow-400/15 border border-yellow-400/35 text-yellow-300">Gold</span>
+          Privates Coaching <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-yellow-400/15 border border-yellow-400/35 text-yellow-300">Membership</span>
         </h2>
         <p className="text-zinc-400 text-xs mt-1 max-w-2xl leading-relaxed">
-          Tipps für Gold-Kunden — selbst schreiben oder von der KI entwerfen lassen. Plus die WhatsApp-Nummer,
-          über die Gold-Kunden dich direkt erreichen.
+          Tipps für Membership-Kunden — selbst schreiben oder von der KI entwerfen lassen. Plus die WhatsApp-Nummer,
+          über die Membership-Kunden dich direkt erreichen.
         </p>
       </div>
 
       {/* WhatsApp setting */}
       <div className="glass-strong rounded-2xl border border-emerald-500/20 p-4 space-y-2">
         <h3 className="text-xs font-bold flex items-center gap-1.5"><MessageCircle className="w-4 h-4 text-emerald-400" />WhatsApp-Kontaktnummer</h3>
-        <p className="text-[10px] text-zinc-500">Gold-Kunden sehen einen „WhatsApp schreiben"-Button, der hierher führt. Mit Ländervorwahl, z.B. +49170…</p>
+        <p className="text-[10px] text-zinc-500">Membership-Kunden sehen einen „WhatsApp schreiben"-Button, der hierher führt. Mit Ländervorwahl, z.B. +49170…</p>
         <div className="flex items-center gap-2">
           <input
             type="text" value={waInput}
@@ -8193,7 +8190,7 @@ function CoachingAdminView({ tips, whatsapp, loading, onRefresh, onNotify }: {
                   </div>
                   <label className="flex items-center gap-2 text-xs mt-4">
                     <input type="checkbox" checked={editor.active} onChange={(e) => setEditor({ ...editor, active: e.target.checked })} className="accent-yellow-500" />
-                    Für Gold-Kunden sichtbar
+                    Für Membership-Kunden sichtbar
                   </label>
                 </div>
               </div>

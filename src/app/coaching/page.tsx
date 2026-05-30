@@ -1,8 +1,8 @@
 "use client";
 
 // ─── /coaching ───────────────────────────────────────────────────
-// Gold-only area: a curated feed of coaching tips (written by the
-// admin or drafted by AI) plus a direct WhatsApp line to the admin.
+// Membership-only area: a curated feed of coaching tips (written by
+// the admin or drafted by AI) plus a direct WhatsApp line.
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -82,7 +82,7 @@ export default function CoachingPage() {
     );
   }
 
-  // ── Locked — not Gold ──
+  // ── Locked — keine aktive Membership ──
   if (locked) {
     return (
       <div className="min-h-screen bg-mesh">
@@ -99,10 +99,10 @@ export default function CoachingPage() {
             >
               <Lock className="w-7 h-7 text-yellow-300" />
             </div>
-            <h1 className="text-lg font-bold">Privates Coaching ist Gold-exklusiv</h1>
+            <h1 className="text-lg font-bold">Privates Coaching ist Membership-exklusiv</h1>
             <p className="text-[12px] text-zinc-400 mt-2 leading-relaxed">
-              Persönliche Tipps vom Brospify-Team und ein direkter WhatsApp-Draht zum
-              Support. {lockTier ? `Dein aktueller Plan (${lockTier}) enthält das nicht.` : ""}
+              Persönliche Tipps vom Brospify-Team und ein direkter WhatsApp-Draht zum Support.
+              Mit aktiver Brospify Membership freigeschaltet.
             </p>
             <button
               onClick={() => router.push("/tiers")}
@@ -113,7 +113,7 @@ export default function CoachingPage() {
               }}
             >
               <Crown className="w-4 h-4" />
-              Auf Gold upgraden
+              Membership buchen
               <ArrowRight className="w-4 h-4" />
             </button>
           </motion.div>
@@ -142,7 +142,7 @@ export default function CoachingPage() {
                 color: "#fde047",
               }}
             >
-              Gold
+              Membership
             </span>
           </h1>
           <p className="text-[11px] text-zinc-500 mt-0.5">
@@ -164,7 +164,7 @@ export default function CoachingPage() {
             <div className="flex-1 min-w-0">
               <h2 className="text-sm font-bold">Direkter WhatsApp-Support</h2>
               <p className="text-[11px] text-zinc-400 leading-snug">
-                Als Gold-Mitglied erreichst du uns direkt — Fragen zu Shop, Strategie oder Tools.
+                Als Membership-Mitglied erreichst du uns direkt — Fragen zu Shop, Strategie oder Tools.
               </p>
             </div>
             {waLink ? (

@@ -39,7 +39,7 @@ async function resolveTheme(themeId?: string): Promise<ThemeEntry | null> {
           name: data.themeFileName || "Brospify Premium Theme",
           fileUrl: data.themeFileUrl,
           fileName: data.themeFileName,
-          tierAccess: ["starter", "pro", "business"],
+          tierAccess: ["pro"],
           active: true,
           priceEur: 0,
         };
@@ -54,7 +54,7 @@ async function resolveTheme(themeId?: string): Promise<ThemeEntry | null> {
         name: data.themeFileName || "Brospify Premium Theme",
         fileUrl: data.themeFileUrl,
         fileName: data.themeFileName,
-        tierAccess: ["starter", "pro", "business"],
+        tierAccess: ["pro"],
         active: true,
         priceEur: 0,
       };
@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
           {
             error: "FEATURE_LOCKED",
             message:
-              "Theme-Push setzt ein aktives Abo voraus. Bitte wähle einen Plan.",
+              "Theme-Push setzt eine aktive Brospify Membership voraus.",
           },
           { status: 403 },
         );

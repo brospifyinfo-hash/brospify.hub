@@ -1,7 +1,7 @@
 // ─── /api/code-blocks ────────────────────────────────────────────
 // Customer-facing list of active code blocks. Gated by the
-// `codeBlocks` feature flag (Silber + Gold). Returns everything the
-// /code-blocks customiser needs: code, preview image, and the
+// `codeBlocks` feature flag (active Membership). Returns everything
+// the /code-blocks customiser needs: code, preview image, and the
 // admin-confirmed option list.
 
 import { NextResponse } from "next/server";
