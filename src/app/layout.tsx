@@ -40,6 +40,14 @@ export default function RootLayout({
         />
       </head>
       <body className={`${outfit.className} bg-zinc-950 text-white antialiased`}>
+        {/* Light-Mode Switch: erkennt ?theme=light (für Embed im Shopify-Theme)
+            und setzt die `theme-light` Klasse vor First Paint. Verhindert
+            Flash-of-Dark-Mode in der iframe-Integration. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var p=new URLSearchParams(window.location.search);var t=p.get('theme');if(t==='light'){try{sessionStorage.setItem('hub-theme','light');}catch(e){}}if(t==='light'||(function(){try{return sessionStorage.getItem('hub-theme')==='light';}catch(e){return false;}})()){document.documentElement.classList.add('theme-light');document.body.classList.add('theme-light');document.body.classList.remove('bg-zinc-950','text-white');document.body.classList.add('bg-white','text-zinc-900');}}catch(e){}})();`,
+          }}
+        />
         <I18nProvider>
           <CreditsProvider>{children}</CreditsProvider>
         </I18nProvider>

@@ -53,3 +53,8 @@ ids.txt
 
 # Claude Code session/worktree state
 .claude/
+
+# Shopify theme working dir (extracted zips + Liquid sources)
+# Theme lebt nicht im Hub-Git, sondern in Documents\Geschäfte\…\website (brospify.com)\
+.theme-work/
+shopify/

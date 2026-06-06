@@ -521,3 +521,222 @@ textarea.input-glass {
           mask-composite: exclude;
   pointer-events: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   LIGHT MODE – Shopify-Theme Embed
+   Aktiviert durch ?theme=light in der URL (siehe layout.tsx Bootstrapper)
+   oder durch html.theme-light vom Parent-Window via postMessage.
+   Komplettes Override der Dark-Mode-Palette in Theme-Style
+   (Savor-Variablen, weiße Backgrounds, schwarze Foreground,
+    minimaler Schatten, Brospify-Grün als Accent).
+═══════════════════════════════════════════════════════════════════ */
+html.theme-light {
+  color-scheme: light;
+}
+html.theme-light body,
+body.theme-light {
+  background: #ffffff !important;
+  color: #111111 !important;
+}
+html.theme-light .bg-mesh,
+body.theme-light .bg-mesh {
+  background:
+    radial-gradient(ellipse at 15% 50%, rgba(149, 191, 71, 0.10) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 15%, rgba(149, 191, 71, 0.08) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 85%, rgba(99, 102, 241, 0.04) 0%, transparent 50%),
+    #ffffff !important;
+}
+
+/* Glass-Cards → Light-Mode-Karten */
+html.theme-light .glass,
+html.theme-light .glass-strong,
+body.theme-light .glass,
+body.theme-light .glass-strong {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  border: 1px solid #e6e6e6 !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04) !important;
+  color: #111111 !important;
+}
+
+/* Tailwind-Backgrounds invertieren */
+html.theme-light .bg-zinc-950,
+html.theme-light .bg-zinc-900,
+html.theme-light .bg-neutral-950,
+html.theme-light .bg-neutral-900,
+html.theme-light .bg-black,
+html.theme-light .bg-slate-950,
+html.theme-light .bg-slate-900 { background-color: #ffffff !important; }
+
+html.theme-light .bg-zinc-800,
+html.theme-light .bg-neutral-800,
+html.theme-light .bg-slate-800 { background-color: #f5f5f5 !important; }
+
+html.theme-light .bg-zinc-700,
+html.theme-light .bg-neutral-700,
+html.theme-light .bg-slate-700 { background-color: #ececec !important; }
+
+html.theme-light .bg-white\/5,
+html.theme-light .bg-white\/10,
+html.theme-light .bg-white\/15,
+html.theme-light .bg-white\/20 { background-color: rgba(0,0,0,0.04) !important; }
+
+html.theme-light .bg-black\/10,
+html.theme-light .bg-black\/20,
+html.theme-light .bg-black\/30,
+html.theme-light .bg-black\/40,
+html.theme-light .bg-black\/50,
+html.theme-light .bg-black\/60 { background-color: rgba(0,0,0,0.03) !important; }
+
+/* Tailwind-Text invertieren */
+html.theme-light .text-white,
+html.theme-light .text-zinc-50,
+html.theme-light .text-zinc-100,
+html.theme-light .text-neutral-50,
+html.theme-light .text-neutral-100,
+html.theme-light .text-slate-50,
+html.theme-light .text-slate-100 { color: #111111 !important; }
+
+html.theme-light .text-zinc-200,
+html.theme-light .text-zinc-300,
+html.theme-light .text-neutral-200,
+html.theme-light .text-neutral-300,
+html.theme-light .text-slate-200,
+html.theme-light .text-slate-300 { color: #2a2a2a !important; }
+
+html.theme-light .text-zinc-400,
+html.theme-light .text-zinc-500,
+html.theme-light .text-neutral-400,
+html.theme-light .text-neutral-500,
+html.theme-light .text-slate-400,
+html.theme-light .text-slate-500,
+html.theme-light .text-gray-400,
+html.theme-light .text-gray-500 { color: #6b6b6b !important; }
+
+html.theme-light .text-zinc-600,
+html.theme-light .text-neutral-600,
+html.theme-light .text-slate-600 { color: #4a4a4a !important; }
+
+/* Borders */
+html.theme-light .border-zinc-800,
+html.theme-light .border-zinc-900,
+html.theme-light .border-neutral-800,
+html.theme-light .border-neutral-900,
+html.theme-light .border-slate-800,
+html.theme-light .border-slate-900,
+html.theme-light .border-white\/5,
+html.theme-light .border-white\/10,
+html.theme-light .border-white\/15,
+html.theme-light .border-white\/20 { border-color: #e6e6e6 !important; }
+
+html.theme-light .border-zinc-700,
+html.theme-light .border-neutral-700,
+html.theme-light .border-slate-700 { border-color: #d4d4d4 !important; }
+
+/* Divider-Linien */
+html.theme-light .divide-zinc-800 > * + *,
+html.theme-light .divide-neutral-800 > * + *,
+html.theme-light .divide-white\/10 > * + * { border-color: #e6e6e6 !important; }
+
+/* Ring-Outlines (Focus / Active) */
+html.theme-light .ring-white\/10,
+html.theme-light .ring-white\/20,
+html.theme-light .ring-zinc-800,
+html.theme-light .ring-neutral-800 { --tw-ring-color: #d4d4d4 !important; }
+
+/* Hover-States: Dark→Light Inversion */
+html.theme-light .hover\:bg-zinc-800:hover,
+html.theme-light .hover\:bg-zinc-900:hover,
+html.theme-light .hover\:bg-neutral-800:hover,
+html.theme-light .hover\:bg-white\/5:hover,
+html.theme-light .hover\:bg-white\/10:hover { background-color: #f5f5f5 !important; }
+
+html.theme-light .hover\:text-white:hover,
+html.theme-light .hover\:text-zinc-50:hover { color: #111111 !important; }
+
+html.theme-light .hover\:border-white\/20:hover,
+html.theme-light .hover\:border-zinc-700:hover { border-color: #b4b4b4 !important; }
+
+/* Inputs / Textareas / Selects */
+html.theme-light input,
+html.theme-light textarea,
+html.theme-light select {
+  background-color: #ffffff !important;
+  color: #111111 !important;
+  border-color: #d4d4d4 !important;
+}
+html.theme-light input::placeholder,
+html.theme-light textarea::placeholder { color: #9a9a9a !important; }
+
+html.theme-light input:focus,
+html.theme-light textarea:focus,
+html.theme-light select:focus { border-color: #95BF47 !important; outline-color: #95BF47 !important; }
+
+/* Buttons primary bleibt Brospify-Grün, secondary wird Light */
+html.theme-light button.bg-white\/5,
+html.theme-light button.bg-white\/10,
+html.theme-light button.bg-zinc-800,
+html.theme-light button.bg-zinc-900 {
+  background-color: #f5f5f5 !important;
+  color: #111111 !important;
+  border-color: #e6e6e6 !important;
+}
+
+/* Tabellen-Zeilen / Stripe */
+html.theme-light tr:hover,
+html.theme-light .hover\:bg-zinc-900\/50:hover { background-color: #f9f9f9 !important; }
+
+/* Scrollbar-Tint im Light-Mode */
+html.theme-light ::-webkit-scrollbar { background: transparent; }
+html.theme-light ::-webkit-scrollbar-thumb { background-color: #d4d4d4; border-radius: 8px; }
+
+/* Sub-Komponenten: Subtle Backdrops für Modals / Dropdowns */
+html.theme-light .bg-zinc-950\/80,
+html.theme-light .bg-zinc-900\/80,
+html.theme-light .bg-black\/80 { background-color: rgba(255,255,255,0.92) !important; }
+
+/* Gradient-Backgrounds (Hero-Bereiche) auf Light umstellen */
+html.theme-light .bg-gradient-to-b,
+html.theme-light .bg-gradient-to-t,
+html.theme-light .bg-gradient-to-r,
+html.theme-light .bg-gradient-to-l { background-image: none !important; background-color: #ffffff !important; }
+
+/* Code-Blöcke bleiben kontrastreich aber im Light-Mode-Stil */
+html.theme-light pre,
+html.theme-light code {
+  background-color: #f5f5f5 !important;
+  color: #111111 !important;
+  border: 1px solid #e6e6e6 !important;
+}
+
+/* Mobile Bottom-Tab-Bar (Navigation) Light-Mode */
+html.theme-light nav.fixed,
+html.theme-light .nav-bottom { background-color: #ffffff !important; border-top: 1px solid #e6e6e6 !important; }
+
+/* Brospify-Grün-Akzente bleiben unverändert sichtbar */
+html.theme-light .text-green-400,
+html.theme-light .text-green-500,
+html.theme-light .text-lime-400,
+html.theme-light .text-lime-500 { color: #6f9a30 !important; }
+
+html.theme-light .bg-green-500,
+html.theme-light .bg-green-600,
+html.theme-light .bg-lime-500 { background-color: #95BF47 !important; color: #ffffff !important; }
+
+html.theme-light .border-green-500\/30,
+html.theme-light .border-lime-500\/30 { border-color: rgba(149,191,71,0.5) !important; }
+
+/* Schatten weicher im Light */
+html.theme-light .shadow-2xl,
+html.theme-light .shadow-xl {
+  box-shadow: 0 4px 18px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
+}
+
+/* Admin-Bereich bleibt explizit Dark — Ausnahme laut Vorgabe */
+html.theme-light [data-section="admin"],
+html.theme-light [data-section="admin"] * {
+  /* Reset alles, was wir oben überschrieben haben */
+  background-color: revert !important;
+  color: revert !important;
+  border-color: revert !important;
+}
