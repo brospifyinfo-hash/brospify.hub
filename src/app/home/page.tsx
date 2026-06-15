@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Store,
-  Package,
   Check,
-  ChevronRight,
   Sparkles,
   Plus,
   Loader2,
@@ -16,16 +14,11 @@ import {
   Trash2,
   Newspaper,
   FileText,
-  ImageUp,
-  Scissors,
-  Camera,
-  Mail,
   Play,
   Pencil,
   Eye,
   EyeOff,
   Megaphone,
-  Zap,
   ListChecks,
   Link2,
   ArrowRight,
@@ -35,6 +28,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useTier } from "@/lib/use-tier";
+import { useCredits } from "@/lib/credits";
 import Link from "next/link";
 import { Crown, Lock } from "lucide-react";
 
@@ -90,20 +84,12 @@ const SETUP_STEPS: { key: keyof Checklist; label: string }[] = [
   { key: "theme_pushed", label: "Theme aktiv" },
 ];
 
-const QUICK_TILES = [
-  { title: "Setup", desc: "Shop verbinden", href: "/setup", icon: Store, color: "#10B981" },
-  { title: "Produkte", desc: "Charts", href: "/charts", icon: Package, color: "#8B5CF6" },
-  { title: "Studio", desc: "Fotos", href: "/ai-tools/ai-studio", icon: Camera, color: "#F59E0B" },
-  { title: "Freistellen", desc: "BG weg", href: "/ai-tools/background-remover", icon: Scissors, color: "#F43F5E" },
-  { title: "Upscale", desc: "4× HD", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#95BF47" },
-  { title: "Mails", desc: "Templates", href: "/email-templates", icon: Mail, color: "#F43F5E" },
-];
-
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const router = useRouter();
   const tierState = useTier();
+  const credits = useCredits();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
   const [tasksDone, setTasksDone] = useState<Record<string, boolean>>({});
@@ -172,9 +158,9 @@ export default function HomePage() {
   }
 
   const completed = SETUP_STEPS.filter((s) => checklist[s.key]).length;
-  const progress = (completed / SETUP_STEPS.length) * 100;
   const allDone = completed === SETUP_STEPS.length;
   const firstName = (session.googleName || "").split(" ")[0] || "";
+  const drawsLeft = Math.floor((credits.balance || 0) / 50);
 
   async function toggleTaskDone(id: string, nextDone: boolean) {
     setTasksDone((prev) => {
@@ -224,15 +210,44 @@ export default function HomePage() {
         {/* ─── Abo-Status Banner ─────────────────────── */}
         <AboStatusBanner tierState={tierState} isAdmin={!!session.isAdmin} />
 
-        {/* ─── Compact setup progress ─────────────────── */}
-        <CompactProgress
-          completed={completed}
-          total={SETUP_STEPS.length}
-          progress={progress}
-          allDone={allDone}
-          steps={SETUP_STEPS.map((s) => ({ label: s.label, done: !!checklist[s.key] }))}
-          onClick={() => router.push("/setup")}
-        />
+        {/* ─── Produkt-Generator Hero (Haupt-CTA) ─────── */}
+        <motion.button
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          onClick={() => router.push("/charts")}
+          className="group relative w-full text-left rounded-2xl border border-white/[0.08] overflow-hidden p-4 sm:p-5"
+          style={{
+            background:
+              "linear-gradient(120deg, rgba(149,191,71,0.14), rgba(168,85,247,0.10) 60%, rgba(96,165,250,0.08))",
+          }}
+        >
+          <div className="absolute -top-10 -right-8 w-40 h-40 rounded-full bg-[#95BF47]/15 blur-3xl pointer-events-none group-hover:bg-[#95BF47]/25 transition" />
+          <div className="relative flex items-center gap-3 sm:gap-4">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-[#95BF47]/30 to-purple-500/25 border border-white/15 flex items-center justify-center shrink-0">
+              <Sparkles className="w-6 h-6 text-white" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-[#95BF47] mb-0.5">
+                Produkt-Generator
+              </div>
+              <h2 className="text-[15px] sm:text-[17px] font-bold text-white leading-tight">
+                Zieh dein nächstes Winning-Produkt
+              </h2>
+              <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5">
+                Ein Klick = ein zufälliges, voll analysiertes Produkt · 50 Credits
+                {drawsLeft > 0 && (
+                  <span className="text-zinc-300">
+                    {" "}· Guthaben reicht für {drawsLeft} {drawsLeft === 1 ? "Drop" : "Drops"}
+                  </span>
+                )}
+              </p>
+            </div>
+            <div className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#95BF47] text-black font-bold text-[13px] shrink-0 group-hover:translate-x-0.5 transition">
+              Ziehen <ArrowRight className="w-4 h-4" />
+            </div>
+            <ArrowRight className="sm:hidden w-5 h-5 text-white/70 shrink-0" />
+          </div>
+        </motion.button>
 
         {/* ─── Start-Tasks (Bis du verkaufst) ──────────── */}
         <section>
@@ -259,38 +274,6 @@ export default function HomePage() {
             adminEmpty={tasks.length === 0 && session.isAdmin}
             onOpenAdmin={() => setTasksAdminOpen(true)}
           />
-        </section>
-
-        {/* ─── Quick Tiles ───────────────────────────── */}
-        <section>
-          <SectionHeader icon={Zap} title="Schnellzugriff" />
-          <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
-            {QUICK_TILES.map((tile, i) => (
-              <motion.button
-                key={tile.title}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.02 * i }}
-                whileTap={{ scale: 0.93 }}
-                onClick={() => router.push(tile.href)}
-                className="group relative flex flex-col items-center gap-1.5 px-1 py-2.5 rounded-xl border border-white/[0.06] bg-white/[0.02] hover:bg-white/[0.04] hover:border-white/15 transition-all overflow-hidden"
-              >
-                <div
-                  className="absolute -top-6 -right-6 w-12 h-12 rounded-full opacity-20 blur-xl group-hover:opacity-35 transition"
-                  style={{ background: tile.color }}
-                />
-                <div
-                  className="relative w-8 h-8 rounded-lg flex items-center justify-center border shrink-0"
-                  style={{ backgroundColor: `${tile.color}15`, borderColor: `${tile.color}30` }}
-                >
-                  <tile.icon className="w-4 h-4" style={{ color: tile.color, width: 16, height: 16 }} />
-                </div>
-                <div className="relative text-center">
-                  <div className="text-[10px] font-semibold text-white leading-tight">{tile.title}</div>
-                </div>
-              </motion.button>
-            ))}
-          </div>
         </section>
 
         {/* ─── News Section ──────────────────────── */}
@@ -365,61 +348,6 @@ function SectionHeader({ icon: Icon, title, sub, inline }: {
 
 // ─── Compact progress ─────────────────────────────────────────
 
-function CompactProgress({ completed, total, progress, allDone, steps, onClick }: {
-  completed: number;
-  total: number;
-  progress: number;
-  allDone: boolean;
-  steps: { label: string; done: boolean }[];
-  onClick: () => void;
-}) {
-  return (
-    <motion.button
-      onClick={onClick}
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileTap={{ scale: 0.99 }}
-      className="w-full glass-strong rounded-xl border border-white/10 p-2.5 sm:p-3 text-left group"
-    >
-      <div className="flex items-center justify-between mb-2 gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Sparkles className="w-3.5 h-3.5 text-[#95BF47] shrink-0" />
-          <span className="text-[12px] font-semibold truncate">
-            {allDone ? "Setup abgeschlossen" : "Setup-Fortschritt"}
-          </span>
-          <span className="text-[10px] text-zinc-500">·</span>
-          <span className="text-[11px] font-bold text-[#95BF47] tabular-nums shrink-0">{completed}/{total}</span>
-        </div>
-        <ChevronRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-white transition shrink-0" />
-      </div>
-
-      <div className="h-1.5 bg-white/5 rounded-full overflow-hidden mb-2">
-        <motion.div
-          className="h-full rounded-full bg-gradient-to-r from-[#95BF47] to-[#B8D96E]"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress}%` }}
-          transition={{ duration: 0.8, ease: "easeOut", delay: 0.1 }}
-        />
-      </div>
-
-      <div className="flex gap-1 overflow-x-auto -mx-1 px-1 sm:flex-wrap sm:overflow-visible">
-        {steps.map((s) => (
-          <span
-            key={s.label}
-            className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-medium border whitespace-nowrap shrink-0 ${
-              s.done
-                ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
-                : "border-white/10 bg-white/[0.03] text-zinc-500"
-            }`}
-          >
-            {s.done && <Check className="w-2 h-2" />}
-            {s.label}
-          </span>
-        ))}
-      </div>
-    </motion.button>
-  );
-}
 
 // ─── Start-tasks list (user view) ────────────────────────────
 
