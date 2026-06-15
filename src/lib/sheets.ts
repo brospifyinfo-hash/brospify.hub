@@ -211,6 +211,10 @@ export interface KundeProfile {
   /** Per-User Voting-Tracking: produktId -> "up" | "down". Verhindert
    *  Doppelvotes pro Account und erlaubt Toggle-Verhalten. */
   votedProducts?: Record<string, "up" | "down">;
+  /** Zufalls-Generator ("Produkt-Drop"): IDs aller Produkte die dieser
+   *  Account jemals gezogen hat. Append-only — garantiert, dass kein
+   *  Produkt zweimal gezogen werden kann. */
+  drawnProducts?: string[];
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────

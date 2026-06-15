@@ -5,7 +5,7 @@ import { createContext, useContext, ReactNode } from "react";
 const de = {
   nav: {
     home: "Home",
-    charts: "Winning Charts",
+    charts: "Produkt-Drop",
     chats: "Community",
     library: "Mediathek",
     seo: "SEO Audit",
@@ -75,8 +75,8 @@ const de = {
     welcomeDesc: "Dein Managed Dropshipping Dashboard. Lass uns einen kurzen Rundgang machen.",
     stepNav: "Navigation",
     stepNavDesc: "Hier findest du alle wichtigen Bereiche deines Dashboards.",
-    stepCharts: "Winning Charts",
-    stepChartsDesc: "Entdecke die besten Dropshipping-Produkte mit Analysen, Audience-Insights & AliExpress-Quellen.",
+    stepCharts: "Produkt-Drop",
+    stepChartsDesc: "Zieh per Zufalls-Generator ein Winning-Produkt — 50 Credits pro Zug, kein Produkt doppelt.",
     stepThemes: "Themes",
     stepThemesDesc: "Lade das optimierte Shopify-Theme herunter oder pushe es direkt.",
     stepProfile: "Profil",

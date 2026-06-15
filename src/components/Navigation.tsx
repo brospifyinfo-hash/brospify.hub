@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
-  BarChart3,
   Palette,
   Settings,
   Settings as SettingsIcon,
@@ -43,6 +42,7 @@ import {
   GraduationCap,
   Coins,
   Gauge,
+  Gift,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo } from "@/lib/branding";
@@ -64,7 +64,7 @@ interface SessionInfo {
 // Dropdown, deshalb hier raus.
 const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home, feature: undefined },
-  { href: "/charts", labelKey: "charts" as const, icon: BarChart3, feature: "chartsAnalytics" as const },
+  { href: "/charts", labelKey: "charts" as const, icon: Gift, feature: "chartsAnalytics" as const },
   { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
 ];
 
@@ -189,7 +189,7 @@ interface BottomTab {
 
 const BOTTOM_TABS: readonly BottomTab[] = [
   { key: "home", label: "Home", href: "/home", icon: Home },
-  { key: "charts", label: "Charts", href: "/charts", icon: BarChart3 },
+  { key: "charts", label: "Drop", href: "/charts", icon: Gift },
   { key: "ai", label: "AI", action: "ai", icon: Sparkles },
   { key: "library", label: "Mediathek", href: "/library", icon: FolderHeart },
   { key: "more", label: "Mehr", action: "more", icon: Menu },

@@ -14,6 +14,9 @@ export const CREDIT_COSTS = {
   SEO_AUDIT: 0,
   BG_REMOVE: 5,
   AI_STUDIO: 15,
+  // Zufalls-Generator ("Produkt-Drop"): jeder Zug zieht EIN zufälliges
+  // Produkt, das der Account noch nie gezogen hat. Kein Doppel-Ziehen.
+  CHARTS_DRAW: 50,
 } as const;
 
 // Welcome grant — every customer gets this once, automatically, the
