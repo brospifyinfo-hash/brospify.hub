@@ -19,7 +19,6 @@ import {
   ExternalLink,
   Link2,
   BarChart3,
-  Sparkles,
   X,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -411,31 +410,6 @@ export default function SEOPage() {
                   </div>
                 )}
 
-                {/* Keyword Booster */}
-                {audit.metrics.lowKeywordDensity > 0 && (
-                  <div className="rounded-2xl border border-cyan-500/12 bg-cyan-500/[0.04] p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-cyan-500/15 border border-cyan-500/20 flex items-center justify-center shrink-0">
-                        <Sparkles className="w-5 h-5 text-cyan-400" />
-                      </div>
-                      <div className="flex-1">
-                        <h3 className="text-sm font-bold mb-0.5">Keyword-Dichte verbessern</h3>
-                        <p className="text-[11px] text-zinc-500 mb-3">
-                          {audit.metrics.lowKeywordDensity} Produkte mit zu niedriger Keyword-Dichte. Nutze den Blog-Generator.
-                        </p>
-                        <motion.button
-                          whileHover={{ scale: 1.02 }}
-                          whileTap={{ scale: 0.97 }}
-                          onClick={() => router.push("/blog")}
-                          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-cyan-500 text-black font-bold text-xs transition shadow-md shadow-cyan-500/15"
-                        >
-                          <Sparkles className="w-3.5 h-3.5" />
-                          Zum Blog-Generator
-                        </motion.button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
