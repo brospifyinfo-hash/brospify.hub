@@ -419,7 +419,7 @@ export default function ChartsPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="max-w-3xl mx-auto px-3 sm:px-5 py-4 sm:py-7">
+        <div className="max-w-3xl lg:max-w-4xl mx-auto px-3 sm:px-5 py-4 sm:py-7 lg:py-9">
           {/* Header */}
           <header className="mb-5 sm:mb-7 text-center">
             <div
@@ -526,7 +526,7 @@ export default function ChartsPage() {
                     <h2 className="text-sm font-semibold text-white">Meine Drops</h2>
                     <span className="text-[11px] text-zinc-500">({drawn.length})</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 lg:gap-3">
                     {drawn.map((p) => (
                       <HistoryCard key={p.id} produkt={p} onOpen={openInfo} />
                     ))}

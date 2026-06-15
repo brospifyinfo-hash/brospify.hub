@@ -249,7 +249,7 @@ export default function LibraryPage() {
 
         {/* Body */}
         {loading ? (
-          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
+          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-1.5 lg:gap-2">
             {[...Array(12)].map((_, i) => (
               <div key={i} className="aspect-square rounded-lg bg-white/[0.03] border border-white/[0.06] animate-pulse" />
             ))}
@@ -262,7 +262,7 @@ export default function LibraryPage() {
         ) : filtered.length === 0 ? (
           <EmptyState hasItems={items.length > 0} />
         ) : (
-          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-1.5">
+          <div className="grid grid-cols-3 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 gap-1.5 lg:gap-2">
             {filtered.map((it) => (
               <LibraryGridCard key={it.id} item={it} onOpen={() => setActive(it)} />
             ))}

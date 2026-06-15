@@ -199,7 +199,7 @@ export default function HomePage() {
       <div className="fixed top-20 right-6 w-56 h-56 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-6 w-48 h-48 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <div className="max-w-5xl mx-auto px-3 sm:px-5 py-3 sm:py-4 space-y-3 sm:space-y-4">
+      <div className="max-w-5xl xl:max-w-6xl mx-auto px-3 sm:px-5 py-3 sm:py-4 lg:py-7 space-y-3 sm:space-y-4 lg:space-y-5">
 
         {/* ─── Greeting ───────────────────────────────── */}
         <motion.div
