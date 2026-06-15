@@ -215,6 +215,11 @@ export interface KundeProfile {
    *  Account jemals gezogen hat. Append-only — garantiert, dass kein
    *  Produkt zweimal gezogen werden kann. */
   drawnProducts?: string[];
+  /** ISO-Timestamp wann wir den Admin zuletzt benachrichtigt haben, dass
+   *  dieser Account ziehen wollte aber schon ALLE Produkte hatte. Dient
+   *  als Debounce gegen Mail-Spam; wird beim nächsten erfolgreichen Zug
+   *  (also sobald wieder neue Produkte da sind) wieder geleert. */
+  drawnAllNotifiedAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────

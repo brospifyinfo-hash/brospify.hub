@@ -239,6 +239,8 @@ export default function ChartsPage() {
 
   const [drawing, setDrawing] = useState(false);
   const [revealed, setRevealed] = useState<Produkt | null>(null);
+  // True sobald ein Zug-Versuch zurückkommt, dass schon alles gezogen ist.
+  const [unavailable, setUnavailable] = useState(false);
   const [infoModal, setInfoModal] = useState<{ open: boolean; produkt: Produkt | null }>({
     open: false,
     produkt: null,
@@ -291,14 +293,14 @@ export default function ChartsPage() {
     };
   }, [router]);
 
-  const allDrawn = totalCount > 0 && remainingCount <= 0;
   const cannotAfford = !credits.loading && credits.balance < cost;
 
   // ── Zug machen ──
   const handleDraw = useCallback(async () => {
-    if (drawing || allDrawn) return;
+    if (drawing) return;
     setError("");
     setNotEnough(false);
+    setUnavailable(false);
     setRevealed(null);
     setDrawing(true);
     const startedAt = Date.now();
@@ -318,6 +320,9 @@ export default function ChartsPage() {
         return;
       }
       if (res.status === 409) {
+        // Alles gezogen — neutrale Meldung zeigen (Server hat den Admin
+        // benachrichtigt). Es wurden keine Credits abgezogen.
+        setUnavailable(true);
         setRemainingCount(0);
         if (typeof data.totalCount === "number") setTotalCount(data.totalCount);
         if (typeof data.drawnCount === "number") setDrawnCount(data.drawnCount);
@@ -344,7 +349,7 @@ export default function ChartsPage() {
     } finally {
       setDrawing(false);
     }
-  }, [drawing, allDrawn, credits]);
+  }, [drawing, credits]);
 
   // ── Vote-Handler (optimistic + Server) ──
   const getProduktVotes = useCallback(
@@ -485,63 +490,61 @@ export default function ChartsPage() {
 
                   {/* Aktion */}
                   <div className="mt-6 w-full max-w-sm">
-                    {allDrawn ? (
-                      <div className="text-center rounded-2xl border border-[#95BF47]/25 bg-[#95BF47]/10 py-4 px-4">
-                        <div className="text-2xl mb-1">🎉</div>
-                        <p className="text-sm font-semibold text-white">Du hast jedes Produkt gezogen!</p>
-                        <p className="text-[11px] text-zinc-400 mt-1">
-                          Sobald neue Produkte erscheinen, kannst du wieder ziehen.
-                        </p>
-                      </div>
-                    ) : (
-                      <>
-                        <button
-                          onClick={handleDraw}
-                          disabled={drawing || loading || cannotAfford}
-                          className="btn-deploy w-full flex items-center justify-center gap-2 py-3.5 text-[15px] disabled:cursor-not-allowed"
-                        >
-                          {drawing ? (
-                            <>
-                              <motion.span
-                                animate={{ rotate: 360 }}
-                                transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
-                                className="inline-flex"
-                              >
-                                <Sparkles className="w-4 h-4" />
-                              </motion.span>
-                              Ziehe…
-                            </>
-                          ) : (
-                            <>
-                              <Zap className="w-4 h-4" />
-                              {revealed ? "Nochmal ziehen" : "Produkt ziehen"}
-                              <span className="font-mono opacity-80">· {cost} 🪙</span>
-                            </>
-                          )}
-                        </button>
+                    <button
+                      onClick={handleDraw}
+                      disabled={drawing || loading || cannotAfford}
+                      className="btn-deploy w-full flex items-center justify-center gap-2 py-3.5 text-[15px] disabled:cursor-not-allowed"
+                    >
+                      {drawing ? (
+                        <>
+                          <motion.span
+                            animate={{ rotate: 360 }}
+                            transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+                            className="inline-flex"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </motion.span>
+                          Ziehe…
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4" />
+                          {revealed ? "Nochmal ziehen" : "Produkt ziehen"}
+                          <span className="font-mono opacity-80">· {cost} 🪙</span>
+                        </>
+                      )}
+                    </button>
 
-                        {cannotAfford && (
-                          <p className="mt-2.5 text-center text-[11px] text-amber-300/90">
-                            Nicht genug Credits ({credits.balance}/{cost}).{" "}
-                            <Link href="/credits" className="underline font-semibold hover:text-amber-200">
-                              Credits aufladen
-                            </Link>
-                          </p>
-                        )}
-                        {notEnough && !cannotAfford && (
-                          <p className="mt-2.5 text-center text-[11px] text-amber-300/90">
-                            Dein Saldo reicht nicht.{" "}
-                            <Link href="/credits" className="underline font-semibold hover:text-amber-200">
-                              Credits aufladen
-                            </Link>
-                          </p>
-                        )}
-                        {error && (
-                          <p className="mt-2.5 text-center text-[11px] text-red-400 flex items-center justify-center gap-1">
-                            <AlertCircle className="w-3 h-3" /> {error}
-                          </p>
-                        )}
-                      </>
+                    {unavailable && (
+                      <div className="mt-3 text-center rounded-2xl border border-white/[0.08] bg-white/[0.03] py-4 px-4">
+                        <Info className="w-5 h-5 mx-auto mb-1.5 text-zinc-400" />
+                        <p className="text-sm font-semibold text-white">
+                          Das ist aktuell leider nicht möglich, schau später wieder vorbei.
+                        </p>
+                        <p className="text-[11px] text-zinc-500 mt-1">Es wurden keine Credits abgezogen.</p>
+                      </div>
+                    )}
+
+                    {cannotAfford && (
+                      <p className="mt-2.5 text-center text-[11px] text-amber-300/90">
+                        Nicht genug Credits ({credits.balance}/{cost}).{" "}
+                        <Link href="/credits" className="underline font-semibold hover:text-amber-200">
+                          Credits aufladen
+                        </Link>
+                      </p>
+                    )}
+                    {notEnough && !cannotAfford && (
+                      <p className="mt-2.5 text-center text-[11px] text-amber-300/90">
+                        Dein Saldo reicht nicht.{" "}
+                        <Link href="/credits" className="underline font-semibold hover:text-amber-200">
+                          Credits aufladen
+                        </Link>
+                      </p>
+                    )}
+                    {error && (
+                      <p className="mt-2.5 text-center text-[11px] text-red-400 flex items-center justify-center gap-1">
+                        <AlertCircle className="w-3 h-3" /> {error}
+                      </p>
                     )}
                   </div>
                 </div>

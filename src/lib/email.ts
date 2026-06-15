@@ -265,6 +265,48 @@ export async function sendAdminLowCreditsAlert(args: AdminLowCreditsAlertArgs): 
   });
 }
 
+// ─── Admin-Notification: Kunde will ziehen, hat aber schon ALLE ──
+// Produkte. Signalisiert Nachfrage nach neuen Produkten. Geht an die
+// zentrale Support-Adresse (brospify.info@gmail.com).
+
+export interface AdminAllDrawnAlertArgs {
+  customerName: string;
+  customerEmail?: string;
+  customerKey: string;
+  totalProducts: number;
+}
+
+export async function sendAdminAllDrawnAlert(args: AdminAllDrawnAlertArgs): Promise<SendResult> {
+  const html = `
+    <div style="font-family:-apple-system,sans-serif;color:#1f2937;line-height:1.5;">
+      <div style="background:#ecfccb;padding:16px;border-radius:8px;margin-bottom:16px;font-size:13px;border-left:4px solid #95BF47;">
+        <strong style="color:#3f6212;">🎲 Kunde wollte ziehen — alle Produkte bereits gezogen</strong><br/>
+        <hr style="border:none;border-top:1px solid #d9f99d;margin:8px 0;"/>
+        <strong>Kunde:</strong> ${escapeHtml(args.customerName)}<br/>
+        ${args.customerEmail ? `<strong>E-Mail:</strong> <a href="mailto:${escapeHtml(args.customerEmail)}">${escapeHtml(args.customerEmail)}</a><br/>` : ""}
+        <strong>Lizenz:</strong> <code>${escapeHtml(args.customerKey)}</code><br/>
+        <strong>Gezogene Produkte gesamt:</strong> ${args.totalProducts.toLocaleString("de-DE")}
+      </div>
+      <p style="font-size:13px;color:#374151;">
+        Dieser Kunde wollte im Zufalls-Generator ein weiteres Produkt ziehen, hat aber bereits
+        <strong>jedes verfügbare Produkt</strong> gezogen. Das ist ein Signal für Nachfrage —
+        sobald du neue Produkte einpflegst, kann er wieder ziehen.
+      </p>
+      <p style="margin-top:20px;font-size:11px;color:#6b7280;">
+        Hub-Link: <a href="https://brospifyhub.com/admin">brospifyhub.com/admin</a> &rarr; Produkte
+      </p>
+    </div>
+  `.trim();
+  return sendViaResend({
+    to: ADMIN_SUPPORT_EMAIL,
+    from: adminFromAddress(),
+    subject: `[Brospify Hub] 🎲 Kunde will ziehen — hat aber schon alle Produkte (${args.customerName})`,
+    html,
+    text: `Kunde wollte ziehen, hat aber bereits alle Produkte.\nKunde: ${args.customerName} (${args.customerEmail || "—"})\nLizenz: ${args.customerKey}\nGezogene Produkte gesamt: ${args.totalProducts}`,
+    replyTo: args.customerEmail || undefined,
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

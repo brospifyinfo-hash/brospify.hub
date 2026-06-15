@@ -22,6 +22,7 @@ import {
   findKundeByKey,
   getAllProdukte,
   getCreditsState,
+  updateKundeProfile,
   type Produkt,
 } from "@/lib/sheets";
 
@@ -160,9 +161,34 @@ export async function POST() {
   const drawnSet = new Set(drawnIds);
   const available = all.filter((p) => !drawnSet.has(p.id));
   if (available.length === 0) {
+    // Der Kunde wollte ziehen, hat aber bereits ALLE Produkte. Admin
+    // EINMAL pro Erschöpfungs-Episode benachrichtigen (Debounce über
+    // drawnAllNotifiedAt → kein Mail-Spam bei wiederholten Klicks).
+    if (!profile.drawnAllNotifiedAt) {
+      try {
+        await updateKundeProfile(kunde.rowIndex, {
+          ...profile,
+          drawnAllNotifiedAt: new Date().toISOString(),
+        });
+        const { sendAdminAllDrawnAlert } = await import("@/lib/email");
+        await sendAdminAllDrawnAlert({
+          customerName:
+            profile?.legal_data?.firmenname ||
+            profile?.legal_data?.inhaber ||
+            kunde.kundenEmail ||
+            kunde.lizenzschluessel,
+          customerEmail: kunde.kundenEmail,
+          customerKey: kunde.lizenzschluessel,
+          totalProducts: totalCount,
+        });
+      } catch (e) {
+        console.warn("[charts/draw] all-drawn alert failed:", e);
+      }
+    }
     return NextResponse.json(
       {
-        error: "Du hast bereits jedes verfügbare Produkt gezogen. 🎉",
+        error: "Das ist aktuell leider nicht möglich, schau später wieder vorbei.",
+        allDrawn: true,
         drawnCount: drawnIds.length,
         totalCount,
         remainingCount: 0,
@@ -179,7 +205,13 @@ export async function POST() {
   //    unsere drawnProducts-Erweiterung mit. Schlägt der Abzug fehl
   //    (z.B. Race auf den Saldo), wird NICHTS geschrieben → kein Zug
   //    verbraucht.
-  const updatedProfile = { ...profile, drawnProducts: [...drawnIds, pick.id] };
+  // drawnAllNotifiedAt zurücksetzen: sobald wieder ein Zug klappt (also
+  // neue Produkte da sind), darf eine spätere Erschöpfung erneut mailen.
+  const updatedProfile = {
+    ...profile,
+    drawnProducts: [...drawnIds, pick.id],
+    drawnAllNotifiedAt: undefined,
+  };
   let creditsRemaining: number;
   try {
     const result = await deductCredits(kunde.rowIndex, updatedProfile, DRAW_COST, "charts-draw");
