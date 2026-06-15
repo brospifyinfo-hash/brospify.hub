@@ -13,6 +13,7 @@
 
 import { Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bot,
@@ -647,10 +648,10 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
           </p>
           <div className="grid grid-cols-2 gap-1.5 max-w-md mx-auto">
             {[
-              "Wie importiere ich ein Produkt?",
-              "Was kostet der Service?",
+              "Wo finde ich das Theme?",
+              "Wie funktioniert der Produkt-Generator?",
               "Wie verbinde ich Shopify?",
-              "Hilfe bei SEO",
+              "Wie kaufe ich Credits?",
             ].map((q) => (
               <button
                 key={q}
@@ -687,7 +688,11 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
                   ? "bg-blue-500/10 border border-blue-500/15"
                   : "bg-white/[0.04] border border-white/[0.06]"
               }`}>
-                <p className="text-[12px] text-zinc-200 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === "assistant" ? (
+                  <MessageContent text={msg.content} />
+                ) : (
+                  <p className="text-[12px] text-zinc-200 leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                )}
               </div>
             </motion.div>
           ))}
@@ -776,6 +781,46 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Assistant message renderer ─────────────────────────────────
+// Wandelt Markdown-Links [Label](/pfad) bzw. [Label](https://…) in
+// klickbare Links um (interne Pfade via Next-Link für SPA-Navigation,
+// externe in neuem Tab). So kann der Bot direkt auf Funktionen
+// verlinken (z. B. „[Themes](/themes)"). Rest bleibt Klartext.
+function MessageContent({ text }: { text: string }) {
+  const re = /\[([^\]]+)\]\(([^)\s]+)\)/g;
+  const nodes: React.ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  let m: RegExpExecArray | null;
+  const cls =
+    "text-purple-300 underline underline-offset-2 hover:text-purple-200 font-medium break-words";
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) nodes.push(text.slice(last, m.index));
+    const label = m[1];
+    const href = m[2].trim();
+    if (href.startsWith("/")) {
+      nodes.push(
+        <Link key={key++} href={href} className={cls}>
+          {label}
+        </Link>,
+      );
+    } else if (/^https?:\/\//.test(href)) {
+      nodes.push(
+        <a key={key++} href={href} target="_blank" rel="noopener noreferrer" className={cls}>
+          {label}
+        </a>,
+      );
+    } else {
+      nodes.push(m[0]);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) nodes.push(text.slice(last));
+  return (
+    <p className="text-[12px] text-zinc-200 leading-relaxed whitespace-pre-wrap">{nodes}</p>
   );
 }
 

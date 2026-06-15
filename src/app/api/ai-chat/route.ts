@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAdminSetting } from "@/lib/sheets";
 import { requireFeature } from "@/lib/tier-guard";
+import { APP_KNOWLEDGE } from "@/lib/app-knowledge";
 
 export const dynamic = "force-dynamic";
 
@@ -33,47 +34,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Load knowledge base from Google Sheet (Settings tab, key: "ai_knowledge_base")
-    let knowledgeBase = "";
+    // Optionales, vom Admin im Sheet gepflegtes Zusatzwissen. Kommt
+    // OBEN DRAUF auf das fest eingebaute APP_KNOWLEDGE (Single Source
+    // of Truth). Fehlt es, ist das App-Wissen allein vollständig.
+    let adminKnowledge = "";
     try {
-      knowledgeBase = await getAdminSetting("ai_knowledge_base");
-      console.log("[AI Chat] Knowledge base loaded, length:", knowledgeBase.length);
+      adminKnowledge = await getAdminSetting("ai_knowledge_base");
     } catch (kbErr) {
-      console.error("[AI Chat] Failed to load knowledge base:", kbErr);
+      console.error("[AI Chat] Failed to load admin knowledge base:", kbErr);
     }
 
-    // Fallback knowledge if sheet is empty or failed
-    if (!knowledgeBase || knowledgeBase.trim().length === 0) {
-      console.log("[AI Chat] Knowledge base empty, using fallback");
-      knowledgeBase = `BrospifyHub ist ein Managed Dropshipping Service. Kernfunktionen:
-- PRODUKT-IMPORT: Kunden können Winning Products mit einem Klick in ihren Shopify-Shop importieren.
-- SEO-SUITE: Integrierte SEO-Analyse und KI-gestützter Blogbeitrag-Generator für bessere Sichtbarkeit.
-- THEME-PUSH: Optimiertes Shopify-Theme kann direkt in den Shop installiert werden.
-- COMMUNITY: Discord-ähnliche Chat-Channels für den Austausch zwischen Kunden.
-- AI-SUPPORT: KI-gestützter Kundensupport mit Eskalation zu Live-Tickets.
-- RECHTSTEXTE: Automatische Generierung von Impressum, Datenschutz und AGB.
-Bei technischen Problemen oder spezifischen Fragen zu Preisen/Paketen bitte ein Live-Ticket eröffnen.`;
-    }
-
-    // Build the hardened system prompt
-    const systemPrompt = `Du bist der offizielle KI-Support-Agent von BrospifyHub, einem Managed Dropshipping Service.
-
-STRICT INSTRUCTION: Du darfst AUSSCHLIESSLICH Informationen aus diesem System-Prompt verwenden. Wenn eine Frage nicht durch dieses Wissen beantwortet werden kann, ERFINDE NICHTS. Antworte exakt mit: "Dazu habe ich leider keine Informationen. Bitte eröffne ein Live-Ticket, damit ein Admin dir persönlich helfen kann."
+    // Build the system prompt
+    const systemPrompt = `Du bist der offizielle KI-Support-Agent von Brospify Hub, einem Managed-Dropshipping-Service mit KI-Tools.
 
 REGELN:
-- Antworte IMMER auf Deutsch.
-- Antworte kurz und präzise (max 3-4 Sätze).
-- Erfinde NIEMALS Produkte, Apps, Preise, URLs oder Funktionen die nicht im Firmenwissen stehen.
-- Wenn du dir nicht 100% sicher bist, sage dass du keine Information dazu hast.
-- Empfehle KEINE externen Apps oder Tools die nicht explizit im Firmenwissen genannt werden.
-- Verweise bei Unsicherheit IMMER auf das Live-Ticket-System.
+- Antworte IMMER auf Deutsch, freundlich, konkret und auf den Punkt: 1-5 Sätze oder eine kurze Schritt-Liste, keine Romane.
+- Stütze dich AUSSCHLIESSLICH auf das Wissen unten (App-Wissen + ggf. Admin-Zusatzwissen). Erfinde KEINE Funktionen, Preise oder Pfade.
+- Wenn jemand fragt, WO etwas ist oder WIE etwas geht: nenne die Funktion kurz UND hänge den passenden Link als Markdown-Link in der Form [Name](/pfad) an (Pfade nur aus dem Wissen). Beispiel: "Das Theme findest du unter [Themes](/themes)."
+- Nenne die Credit-Kosten, wenn nach einer kostenpflichtigen Funktion gefragt wird.
+- Ist eine Funktion unten als "aktuell nicht verfügbar" markiert, sage genau das (nicht so tun, als gäbe es sie).
+- Geht die Antwort NICHT aus dem Wissen hervor, antworte exakt: "Dazu habe ich leider keine Informationen. Bitte eröffne ein Live-Ticket, damit ein Admin dir persönlich helfen kann." — und erfinde nichts.
 
-WICHTIG ZUM SHOPIFY SETUP:
-Der Kunde muss KEINE eigene App programmieren. Er muss im Shopify Admin-Bereich unter "Einstellungen" → "Apps und Vertriebskanäle" → "Apps entwickeln" → "Benutzerdefinierte App erstellen" (Custom App) eine App anlegen. Dort erhält er die API-Zugangsdaten (Admin API Access Token), die er dann im BrospifyHub unter "Profil" → "Shopify API" einträgt. Das ist ein reiner Klick-Prozess, kein Programmieren.
+${APP_KNOWLEDGE}
 
-${knowledgeBase ? `FIRMENWISSEN (NUR diese Informationen als Grundlage verwenden):\n---\n${knowledgeBase}\n---` : "HINWEIS: Es wurde noch kein Firmenwissen vom Admin hinterlegt. Antworte auf alle inhaltlichen Fragen mit dem Hinweis, ein Live-Ticket zu eröffnen."}`;
-
-    console.log("[AI Chat] System Prompt:", systemPrompt);
+${adminKnowledge && adminKnowledge.trim().length > 0 ? `ZUSÄTZLICHES ADMIN-WISSEN (ergänzt das obige, hat bei Konflikt Vorrang):\n---\n${adminKnowledge}\n---` : ""}`;
 
     const deepseekMessages = [
       { role: "system", content: systemPrompt },
@@ -91,8 +75,8 @@ ${knowledgeBase ? `FIRMENWISSEN (NUR diese Informationen als Grundlage verwenden
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: deepseekMessages,
-        max_tokens: 500,
-        temperature: 0.1,
+        max_tokens: 700,
+        temperature: 0.2,
       }),
     });
 
