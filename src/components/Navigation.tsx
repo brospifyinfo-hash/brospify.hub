@@ -27,7 +27,6 @@ import {
   User as UserIcon,
   FileText,
   Shield,
-  Scale,
   Receipt,
   Undo2,
   ExternalLink,
@@ -36,7 +35,6 @@ import {
   Lock,
   Crown,
   Check,
-  Code2,
   GraduationCap,
   Coins,
   Gauge,
@@ -66,46 +64,9 @@ const NAV_ITEMS = [
   { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
 ];
 
-// ─── Shop-Einstellungen Dropdown ─────────────────────────────────
-// Tools die DIREKT ans Shopify-Theme gehen: Themes-Galerie zum Pushen,
-// Code-Blocks fuer Liquid-Snippets. NICHT die Connection-Verwaltung —
-// die liegt im Profil-Dropdown unter "Shopify-Verbindung".
-interface ShopSettingsItem {
-  href: string;
-  label: string;
-  sub: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  feature?: "themesGallery" | "codeBlocks";
-}
-
-const SHOP_SETTINGS_ITEMS: ShopSettingsItem[] = [
-  {
-    href: "/themes",
-    label: "Themes",
-    sub: "Theme-Galerie + Push",
-    icon: Palette,
-    color: "text-fuchsia-400",
-    feature: "themesGallery",
-  },
-  {
-    href: "/code-blocks",
-    label: "Liquid-Blöcke",
-    sub: "Code-Snippets für dein Theme",
-    icon: Code2,
-    color: "text-emerald-400",
-    feature: "codeBlocks",
-  },
-  {
-    href: "/legal",
-    label: "Rechtstexte generieren",
-    sub: "Impressum, AGB, DSGVO für deinen Shop",
-    icon: Scale,
-    color: "text-blue-400",
-    // Kein feature-flag — Rechtstexte sind ein Pflichttool fuer
-    // jeden Shop, immer freigeschaltet.
-  },
-];
+// Hinweis: Das frühere "Shop-Einstellungen"-Dropdown (Themes, Liquid-
+// Blöcke, Rechtstexte) wurde entfernt. Liquid-Blöcke + Rechtstexte
+// gibt es nicht mehr; "Themes" liegt jetzt im Avatar-Menü (AccountMenu).
 
 const AI_TOOLS = [
   {
@@ -465,25 +426,9 @@ export default function Navigation() {
                   )}
                 </AnimatePresence>
               </div>
-
-              {/* Shop-Einstellungen Dropdown: Themes + Liquid-Blöcke.
-                  Nur Shopify-spezifische Theme/Code-Tools. */}
-              <ShopSettingsDropdown
-                shopSettingsRef={shopSettingsRef}
-                shopSettingsOpen={shopSettingsOpen}
-                setShopSettingsOpen={setShopSettingsOpen}
-                pathname={pathname}
-                tierState={tierState}
-              />
-
-              {/* Support-Dropdown: AI Support, Tickets, E-Mail Support,
-                  Privates Coaching. */}
-              <SupportDropdown
-                supportRef={supportRef}
-                supportOpen={supportOpen}
-                setSupportOpen={setSupportOpen}
-                pathname={pathname}
-              />
+              {/* Theme- und Support-Zugänge liegen auf dem Desktop jetzt
+                  im rechten Avatar-Menü (AccountMenu), nicht mehr als
+                  eigene Top-Bar-Dropdowns. */}
             </div>
 
             {/* Right Side */}
@@ -715,11 +660,9 @@ export default function Navigation() {
                 <SheetItem href="/setup" icon={Zap} label="Setup einrichten" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Verbindungs-Wizard" />
               </MobileSection>
 
-              {/* ═══ SHOP-EINSTELLUNGEN — Section mit Pfeil, DEFAULT ZU ═══ */}
-              <MobileSection title="Shop-Einstellungen" icon={Store} defaultOpen={false}>
+              {/* ═══ THEME — Section mit Pfeil, DEFAULT ZU ═══ */}
+              <MobileSection title="Theme" icon={Palette} defaultOpen={false}>
                 <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-Galerie + Push" />
-                <SheetItem href="/code-blocks" icon={Code2} label="Liquid-Blöcke" active={pathname === "/code-blocks"} onClick={() => setMoreSheetOpen(false)} sub="Code-Snippets für dein Theme" />
-                <SheetItem href="/legal" icon={Scale} label="Rechtstexte generieren" active={pathname === "/legal"} onClick={() => setMoreSheetOpen(false)} sub="Impressum, AGB, DSGVO" />
               </MobileSection>
 
               {/* ═══ SUPPORT — Section mit Pfeil, DEFAULT ZU ═══ */}
@@ -1003,103 +946,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // Rechtstexte (für Shop), Impressum / Datenschutz / AGB / Widerruf
 // (links to brospify.com/policies for the platform-level pages).
 
-// ─── Shop-Einstellungen Dropdown (Desktop Top-Bar) ──────────────
-// Themes-Galerie + Liquid-Blöcke. Beide tier-gated.
-
-function ShopSettingsDropdown({
-  shopSettingsRef, shopSettingsOpen, setShopSettingsOpen, pathname, tierState,
-}: {
-  shopSettingsRef: React.RefObject<HTMLDivElement | null>;
-  shopSettingsOpen: boolean;
-  setShopSettingsOpen: (v: boolean) => void;
-  pathname: string;
-  tierState: ReturnType<typeof useTier>;
-}) {
-  const isAnyActive = SHOP_SETTINGS_ITEMS.some((it) => pathname === it.href || pathname.startsWith(it.href + "/"));
-  return (
-    <div ref={shopSettingsRef} className="relative">
-      <button
-        onClick={() => setShopSettingsOpen(!shopSettingsOpen)}
-        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
-          isAnyActive ? "" : "hover:bg-white/[0.04]"
-        }`}
-      >
-        <Store className="w-3.5 h-3.5 text-zinc-400" />
-        <span className="text-zinc-300">Shop-Einstellungen</span>
-        <ChevronDown className={`w-2.5 h-2.5 text-zinc-400 transition-transform duration-200 ${shopSettingsOpen ? "rotate-180" : ""}`} />
-        {isAnyActive && (
-          <motion.div
-            layoutId="nav-indicator"
-            className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-lg"
-            style={{ zIndex: -1 }}
-            transition={{ type: "spring", stiffness: 350, damping: 30 }}
-          />
-        )}
-      </button>
-
-      <AnimatePresence>
-        {shopSettingsOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ duration: 0.16 }}
-            className="absolute top-full mt-2 right-0 w-[300px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
-            style={{
-              background: "rgba(12,12,14,0.97)",
-              backdropFilter: "blur(48px) saturate(180%)",
-              WebkitBackdropFilter: "blur(48px) saturate(180%)",
-            }}
-          >
-            <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
-              <div className="text-[11px] font-bold text-white">Shop-Einstellungen</div>
-              <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">Theme & Liquid</div>
-            </div>
-            <div className="p-2 space-y-1">
-              {SHOP_SETTINGS_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                const locked = !!item.feature && !tierState.loading && !tierState.has(item.feature);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setShopSettingsOpen(false)}
-                    title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
-                    className={`group flex items-center gap-3 p-2.5 rounded-xl border transition ${
-                      isActive
-                        ? "border-[#95BF47]/25 bg-[#95BF47]/8"
-                        : locked
-                        ? "border-white/[0.03] bg-white/[0.01] opacity-60"
-                        : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.05]"
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
-                      {locked ? <Lock className="w-3.5 h-3.5 text-amber-400" /> : <Icon className={`w-4 h-4 ${item.color}`} />}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-[13px] text-white truncate flex items-center gap-1.5">
-                        {item.label}
-                        {locked && (
-                          <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0 border border-amber-500/20">
-                            Upgrade
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">{item.sub}</div>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
-                  </Link>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 // ProfileAccountGroup + SubItem entfernt — durch direkte SheetItems
 // im Mobile-More-Sheet ersetzt, die identisch zur Desktop-Avatar-
 // Menue-Struktur sind. Keine Doppelung mehr.
@@ -1327,6 +1173,33 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           />
         </div>
 
+        {/* Theme — auf dem Desktop hier statt eigenem Top-Bar-Dropdown. */}
+        <MenuGroup label="Theme">
+          <MenuItem
+            href="/themes"
+            icon={Palette}
+            label="Themes"
+            active={pathname === "/themes"}
+            onClick={onClose}
+            sub="Theme-Galerie + Push"
+          />
+        </MenuGroup>
+
+        {/* Support — auf dem Desktop hier statt eigenem Top-Bar-Dropdown. */}
+        <MenuGroup label="Support">
+          {SUPPORT_ITEMS.map((it) => (
+            <MenuItem
+              key={it.href}
+              href={it.href}
+              icon={it.icon}
+              label={it.label}
+              active={pathname === it.href.split("?")[0]}
+              onClick={onClose}
+              sub={it.sub}
+            />
+          ))}
+        </MenuGroup>
+
         {session.isAdmin && (
           <MenuGroup label="Verwaltung">
             <MenuItem
@@ -1366,9 +1239,9 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
   );
 }
 
-// ─── Support-Dropdown (Desktop Top-Bar) ─────────────────────────
-// Drei Support-Wege als direkter Dropdown statt einzelnen Links/
-// Subroutes. Visuell wie AI Tools (Icon links, Titel + Subtext rechts).
+// ─── Support-Items ──────────────────────────────────────────────
+// Die vier Support-Wege. Werden auf dem Desktop im Avatar-Menü
+// (AccountMenu) und mobil im "Mehr"-Sheet gerendert.
 
 interface SupportItem {
   href: string;
@@ -1385,89 +1258,6 @@ const SUPPORT_ITEMS: SupportItem[] = [
   { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team", icon: GraduationCap, color: "text-purple-400" },
 ];
 
-function SupportDropdown({
-  supportRef, supportOpen, setSupportOpen, pathname,
-}: {
-  supportRef: React.RefObject<HTMLDivElement | null>;
-  supportOpen: boolean;
-  setSupportOpen: (v: boolean) => void;
-  pathname: string;
-}) {
-  const isAnyActive = SUPPORT_ITEMS.some((it) => pathname === it.href.split("?")[0]);
-  return (
-    <div ref={supportRef} className="relative">
-      <button
-        onClick={() => setSupportOpen(!supportOpen)}
-        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
-          isAnyActive ? "" : "hover:bg-white/[0.04]"
-        }`}
-      >
-        <Bot className="w-3.5 h-3.5 text-zinc-400" />
-        <span className="text-zinc-300">Support</span>
-        <ChevronDown
-          className={`w-2.5 h-2.5 text-zinc-400 transition-transform duration-200 ${supportOpen ? "rotate-180" : ""}`}
-        />
-        {isAnyActive && (
-          <motion.div
-            layoutId="nav-indicator"
-            className="absolute inset-0 bg-white/[0.06] border border-white/[0.10] rounded-lg"
-            style={{ zIndex: -1 }}
-            transition={{ type: "spring", stiffness: 350, damping: 30 }}
-          />
-        )}
-      </button>
-
-      <AnimatePresence>
-        {supportOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -8, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ duration: 0.16 }}
-            className="absolute top-full mt-2 right-0 w-[300px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
-            style={{
-              background: "rgba(12,12,14,0.97)",
-              backdropFilter: "blur(48px) saturate(180%)",
-              WebkitBackdropFilter: "blur(48px) saturate(180%)",
-            }}
-          >
-            <div className="px-4 pt-3 pb-2 border-b border-white/[0.06]">
-              <div className="text-[11px] font-bold text-white">Brospify Support</div>
-              <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">3 Wege</div>
-            </div>
-            <div className="p-2 space-y-1">
-              {SUPPORT_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const isActive = pathname === item.href.split("?")[0];
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={() => setSupportOpen(false)}
-                    className={`group flex items-center gap-3 p-2.5 rounded-xl border transition ${
-                      isActive
-                        ? "border-[#95BF47]/25 bg-[#95BF47]/8"
-                        : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.05]"
-                    }`}
-                  >
-                    <div className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center shrink-0">
-                      <Icon className={`w-4 h-4 ${item.color}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-[13px] text-white truncate">{item.label}</div>
-                      <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">{item.sub}</div>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
-                  </Link>
-                );
-              })}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
 
 function MenuGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (

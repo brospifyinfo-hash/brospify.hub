@@ -152,8 +152,8 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     description: "Voller Zugriff auf alle Tools, Themes und Coaching — ohne Stufen-Spielereien.",
     ctaLabel: "Membership buchen",
     ctaUrl: "https://brospify.com/cart/52979364069723:1",
-    priceMonthlyEur: 49,
-    priceYearlyEur: 490,
+    priceMonthlyEur: 21,
+    priceYearlyEur: 0,
     trialDays: 7,
     // 2000 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
     // (orders/paid webhook). startingCredits = erste Zahlung,
@@ -175,7 +175,7 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     features: allFeatures(),
     bullets: [
       "2.000 Credits / Monat — automatisch nachgeladen",
-      "Alle AI-Tools, Themes & Code-Blöcke",
+      "Alle AI-Tools & optimierte Themes",
       "Privates Coaching & Priority-Support",
       "Keine künstlichen Limits",
     ],
