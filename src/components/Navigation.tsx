@@ -257,17 +257,17 @@ export default function Navigation() {
         className="fixed left-0 right-0 z-50 glass-header"
         style={{ top: isImpersonating ? "28px" : "0" }}
       >
-        <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-6">
-          <div className="flex items-center justify-between h-12 gap-2">
+        <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
+          <div className="flex items-center justify-between h-12 md:h-14 gap-2">
             {/* Logo */}
-            <Link href="/home" className="flex items-center group shrink-0">
+            <Link href="/home" className="flex items-center group shrink-0 md:pr-3 md:mr-1 md:border-r md:border-white/[0.07]">
               <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-lg">
                 <BrandLogo size="md" />
               </div>
             </Link>
 
             {/* Desktop Links */}
-            <div className="hidden md:flex items-center gap-0.5">
+            <div className="hidden md:flex items-center gap-0.5 lg:gap-1 mr-auto ml-1">
               {NAV_ITEMS.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 const locked = !!item.feature && !tierState.loading && !tierState.has(item.feature);
@@ -276,12 +276,12 @@ export default function Navigation() {
                     key={item.href}
                     href={item.href}
                     title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
-                    className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all duration-200 ${
+                    className={`relative flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-[12px] md:text-[13px] font-medium transition-all duration-200 ${
                       isActive
                         ? "text-[#95BF47]"
                         : locked
                         ? "text-zinc-600 hover:text-zinc-400"
-                        : "text-zinc-400 hover:text-white hover:bg-white/[0.04]"
+                        : "text-zinc-400 hover:text-white hover:bg-white/[0.05]"
                     }`}
                   >
                     {locked ? <Lock className="w-3 h-3" /> : <item.icon className="w-3.5 h-3.5" />}
@@ -301,8 +301,8 @@ export default function Navigation() {
               <div ref={aiRef} className="relative">
                 <button
                   onClick={() => setAiOpen(!aiOpen)}
-                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all duration-200 ${
-                    isAiActive ? "" : "hover:bg-white/[0.04]"
+                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-[12px] md:text-[13px] font-semibold transition-all duration-200 ${
+                    isAiActive ? "" : "hover:bg-white/[0.05]"
                   }`}
                 >
                   <Sparkles className="w-3.5 h-3.5 text-purple-400" />
@@ -702,8 +702,9 @@ export default function Navigation() {
         )}
       </AnimatePresence>
 
-      {/* Spacer for fixed nav (top) — extra 28px when impersonation banner is on */}
-      <div style={{ height: isImpersonating ? "76px" : "48px" }} />
+      {/* Spacer for fixed nav (top) — Bar ist mobil 48px, Desktop 56px;
+          +28px wenn das Impersonation-Banner sichtbar ist. */}
+      <div className={isImpersonating ? "h-[76px] md:h-[84px]" : "h-12 md:h-14"} />
     </>
   );
 }
