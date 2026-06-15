@@ -22,6 +22,7 @@ import {
   ListChecks,
   Link2,
   ArrowRight,
+  ExternalLink,
   ArrowUp,
   ArrowDown,
   GripVertical,
@@ -162,6 +163,26 @@ export default function HomePage() {
   const firstName = (session.googleName || "").split(" ")[0] || "";
   const drawsLeft = Math.floor((credits.balance || 0) / 50);
 
+  // Schnellstart-Checkliste (selbst abhakbar, persistiert via
+  // onboarding_tasks_done über /api/start-tasks/done mit eigenen IDs).
+  const publishHref = session.shopDomain ? `https://${session.shopDomain}/admin/products` : "";
+  const quickSteps: {
+    id: string; n: number; title: string; desc: string; href: string; cta: string; external: boolean;
+  }[] = [
+    { id: "qs_produkt", n: 1, title: "Produkt finden", desc: "Zieh ein Winning-Produkt im Generator.", href: "/charts", cta: "Generator öffnen", external: false },
+    { id: "qs_theme", n: 2, title: "Theme hinzufügen", desc: "Installier dein optimiertes Brospify-Theme.", href: "/themes", cta: "Zu den Themes", external: false },
+    { id: "qs_dsers", n: 3, title: "DSERS installieren", desc: "Die AliExpress-Dropshipping-App für Shopify.", href: "https://apps.shopify.com/dsers", cta: "DSERS installieren", external: true },
+    { id: "qs_alilink", n: 4, title: "AliExpress-Link einfügen", desc: "Verknüpfe dein Produkt in DSERS mit dem AliExpress-Link.", href: "", cta: "", external: false },
+    { id: "qs_publish", n: 5, title: "Veröffentlichen", desc: "Schalte dein Produkt live in deinem Shop.", href: publishHref, cta: "In Shopify öffnen", external: true },
+  ];
+  const quickDone = quickSteps.filter((s) => tasksDone[s.id]).length;
+  const extraTools: { label: string; href: string }[] = [
+    { label: "AI Email Generator", href: "/email-templates" },
+    { label: "Produktfotos (AI Studio)", href: "/ai-tools/ai-studio" },
+    { label: "Bild freistellen", href: "/ai-tools/background-remover" },
+    { label: "Bild vergrößern", href: "/ai-tools/hybrid-upscaler" },
+  ];
+
   async function toggleTaskDone(id: string, nextDone: boolean) {
     setTasksDone((prev) => {
       const next = { ...prev };
@@ -248,6 +269,90 @@ export default function HomePage() {
             <ArrowRight className="sm:hidden w-5 h-5 text-white/70 shrink-0" />
           </div>
         </motion.button>
+
+        {/* ─── Schnellstart-Checkliste (selbst abhakbar) ── */}
+        <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 sm:p-5">
+          <div className="flex items-center justify-between mb-3">
+            <SectionHeader icon={ListChecks} title="Schnellstart — in 5 Schritten online" inline />
+            <span className="text-[11px] font-mono text-zinc-500 tabular-nums shrink-0">
+              {quickDone}/{quickSteps.length}
+            </span>
+          </div>
+          <ol className="space-y-1.5">
+            {quickSteps.map((step) => {
+              const done = !!tasksDone[step.id];
+              return (
+                <li
+                  key={step.id}
+                  className="flex items-center gap-3 p-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02]"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleTaskDone(step.id, !done)}
+                    aria-pressed={done}
+                    className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-[11px] font-bold transition ${
+                      done
+                        ? "bg-[#95BF47] border-[#95BF47] text-black"
+                        : "border-white/15 bg-white/[0.03] text-zinc-400 hover:border-[#95BF47]/40"
+                    }`}
+                  >
+                    {done ? <Check className="w-3.5 h-3.5" /> : step.n}
+                  </button>
+                  <div className="min-w-0 flex-1">
+                    <div
+                      className={`text-[13px] font-semibold leading-tight ${
+                        done ? "text-zinc-500 line-through" : "text-white"
+                      }`}
+                    >
+                      {step.title}
+                    </div>
+                    <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{step.desc}</div>
+                  </div>
+                  {step.href && step.cta ? (
+                    step.external ? (
+                      <a
+                        href={step.href}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-zinc-200 hover:bg-white/[0.09] transition"
+                      >
+                        {step.cta}
+                        <ExternalLink className="w-3 h-3 opacity-70" />
+                      </a>
+                    ) : (
+                      <Link
+                        href={step.href}
+                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/25 text-[11px] font-semibold text-[#95BF47] hover:bg-[#95BF47]/15 transition"
+                      >
+                        {step.cta}
+                        <ArrowRight className="w-3 h-3" />
+                      </Link>
+                    )
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+
+          {/* Optional: weitere Tools */}
+          <div className="mt-3 pt-3 border-t border-white/[0.06]">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500 font-semibold mb-2">
+              Außerdem nützlich
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {extraTools.map((t) => (
+                <Link
+                  key={t.href}
+                  href={t.href}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.07] text-[11px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition"
+                >
+                  {t.label}
+                  <ArrowRight className="w-2.5 h-2.5 opacity-60" />
+                </Link>
+              ))}
+            </div>
+          </div>
+        </section>
 
         {/* ─── Start-Tasks (Bis du verkaufst) ──────────── */}
         <section>
