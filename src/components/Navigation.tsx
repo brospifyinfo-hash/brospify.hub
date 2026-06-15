@@ -260,16 +260,16 @@ export default function Navigation() {
         style={{ top: isImpersonating ? "28px" : "0" }}
       >
         <div className="max-w-7xl mx-auto px-3 sm:px-5 lg:px-8">
-          <div className="flex items-center justify-between h-12 md:h-14 gap-2">
+          <div className="relative flex items-center justify-between h-12 md:h-14 gap-2">
             {/* Logo */}
-            <Link href="/home" className="flex items-center group shrink-0 md:pr-3 md:mr-1 md:border-r md:border-white/[0.07]">
+            <Link href="/home" className="flex items-center group shrink-0">
               <div className="transition-all duration-300 group-hover:shadow-[0_0_16px_rgba(149,191,71,0.2)] rounded-lg">
                 <BrandLogo size="md" />
               </div>
             </Link>
 
-            {/* Desktop Links */}
-            <div className="hidden md:flex items-center gap-0.5 lg:gap-1 mr-auto ml-1">
+            {/* Desktop Links — zentriert in der Leiste */}
+            <div className="hidden md:flex items-center gap-1.5 absolute left-1/2 top-0 h-full -translate-x-1/2">
               {NAV_ITEMS.map((item) => {
                 const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
                 const locked = !!item.feature && !tierState.loading && !tierState.has(item.feature);
@@ -376,8 +376,8 @@ export default function Navigation() {
                       </div>
 
                       <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        {/* Featured: Produkt Search (Zufalls-Generator /charts) —
-                            bewusst größer & auffälliger als die übrigen Tools. */}
+                        {/* Produkt Search — gleiche Zeilenform wie die Tools,
+                            nur grün akzentuiert + "Top"-Badge. */}
                         {(() => {
                           const fLocked = !tierState.loading && !tierState.has("chartsAnalytics");
                           const fActive = pathname === "/charts" || pathname.startsWith("/charts/");
@@ -386,38 +386,32 @@ export default function Navigation() {
                               href="/charts"
                               onClick={() => setAiOpen(false)}
                               title={fLocked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
-                              className={`group relative flex items-center gap-3 p-3.5 mb-2 rounded-2xl border overflow-hidden transition-all duration-200 ${
-                                fActive ? "border-[#95BF47]/45" : "border-white/[0.10] hover:border-[#95BF47]/45"
+                              className={`nav-lift group flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-200 ${
+                                fActive
+                                  ? "border-[#95BF47]/35 bg-[#95BF47]/12"
+                                  : "border-[#95BF47]/20 bg-[#95BF47]/[0.06] hover:border-[#95BF47]/35 hover:bg-[#95BF47]/12"
                               }`}
-                              style={{
-                                background:
-                                  "linear-gradient(120deg, rgba(149,191,71,0.18), rgba(168,85,247,0.14) 55%, rgba(96,165,250,0.10))",
-                              }}
                             >
-                              <div
-                                className="absolute inset-0 opacity-70 pointer-events-none"
-                                style={{ background: "radial-gradient(circle at 16% 50%, rgba(149,191,71,0.28), transparent 60%)" }}
-                              />
-                              <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-[#95BF47]/35 to-purple-500/30 border border-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
-                                <Search className="w-5 h-5 text-white" />
+                              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-[#95BF47]/25 to-emerald-500/20 border border-[#95BF47]/25 flex items-center justify-center shrink-0 transition group-hover:scale-105">
+                                <Search className="w-4.5 h-4.5 text-[#95BF47]" />
                                 {fLocked && (
                                   <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
                                     <Lock className="w-2.5 h-2.5 text-amber-400" />
                                   </div>
                                 )}
                               </div>
-                              <div className="relative min-w-0 flex-1">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="font-bold text-[14px] text-white truncate">Produkt Search</span>
-                                  <span className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47] text-black font-extrabold shrink-0">
+                              <div className="min-w-0 flex-1">
+                                <div className="font-semibold text-[13px] text-white truncate flex items-center gap-1.5">
+                                  Produkt Search
+                                  <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47] text-black font-bold shrink-0">
                                     Top
                                   </span>
                                 </div>
-                                <div className="text-[11px] text-zinc-200/90 mt-0.5 truncate">
-                                  Zufalls-Generator — zieh ein Winning-Produkt · 50 🪙
+                                <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">
+                                  Zufalls-Generator · 50 Credits
                                 </div>
                               </div>
-                              <ChevronRight className="relative w-4 h-4 text-white/70 shrink-0 group-hover:translate-x-0.5 transition" />
+                              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
                             </Link>
                           );
                         })()}
