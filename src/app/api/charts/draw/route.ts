@@ -30,40 +30,22 @@ export const dynamic = "force-dynamic";
 
 const DRAW_COST = CREDIT_LIMITS.CHARTS_DRAW;
 
-// Schlanke Projektion fürs Frontend — nur was die Karte rendert.
+// Volle Projektion fürs Frontend — exakt die Felder, die die alte
+// Charts-Detailansicht gerendert hat (Stats, Finanzen, Ads, Links,
+// LinkStatus, DeepStats, Audience, AdStrategy, Votes, Bilder). So
+// zeigt das Detail-Modal im Generator wieder ALLE Produktinhalte.
 function project(p: Produkt) {
-  const stats = p.extra?.stats;
-  const finances = p.extra?.finances;
   return {
     id: p.id,
     sku: p.sku,
+    monat: p.monat || "",
     titel: p.titel,
     preis: p.preis,
     bildUrl: p.bildUrl,
     beschreibung: p.beschreibung,
     aliExpressLink: p.aliExpressLink,
-    extraImages: Array.isArray(p.extra?.images) ? p.extra.images.slice(0, 6) : [],
-    stats: stats
-      ? {
-          trendScore: clamp(stats.trendScore),
-          viralScore: clamp(stats.viralScore),
-          impulseBuyFactor: clamp(stats.impulseBuyFactor),
-          problemSolverIndex: clamp(stats.problemSolverIndex),
-          marketSaturation: clamp(stats.marketSaturation),
-        }
-      : null,
-    finances: finances
-      ? {
-          buyPrice: Number(finances.buyPrice) || 0,
-          recommendedSellPrice: Number(finances.recommendedSellPrice) || 0,
-          profitMargin: Number(finances.profitMargin) || 0,
-        }
-      : null,
+    extra: p.extra || {},
   };
-}
-
-function clamp(n: unknown): number {
-  return Math.max(0, Math.min(100, Number(n) || 0));
 }
 
 // ─── GET: aktueller Stand ─────────────────────────────────────────
