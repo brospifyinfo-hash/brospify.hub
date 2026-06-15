@@ -39,6 +39,7 @@ import {
   Coins,
   Gauge,
   Gift,
+  Search,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo } from "@/lib/branding";
@@ -58,10 +59,11 @@ interface SessionInfo {
 // Top-Bar: NUR Daily-Browsing Seiten. Tools/Support/Shop-Einstellungen
 // sind eigene Dropdowns. Themes ist jetzt unter Shop-Einstellungen-
 // Dropdown, deshalb hier raus.
+// Desktop-Top-Bar: bewusst schlank. "Produkt Search" (/charts) ist jetzt
+// das hervorgehobene Tool im AI-Tools-Dropdown, "Mediathek" liegt im
+// Avatar-Menü. (Die mobile Bottom-Bar behält Drop + Mediathek.)
 const NAV_ITEMS = [
   { href: "/home", labelKey: "home" as const, icon: Home, feature: undefined },
-  { href: "/charts", labelKey: "charts" as const, icon: Gift, feature: "chartsAnalytics" as const },
-  { href: "/library", labelKey: "library" as const, icon: FolderHeart, feature: "library" as const },
 ];
 
 // Hinweis: Das frühere "Shop-Einstellungen"-Dropdown (Themes, Liquid-
@@ -301,14 +303,19 @@ export default function Navigation() {
               <div ref={aiRef} className="relative">
                 <button
                   onClick={() => setAiOpen(!aiOpen)}
-                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-[12px] md:text-[13px] font-semibold transition-all duration-200 ${
-                    isAiActive ? "" : "hover:bg-white/[0.05]"
+                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg md:rounded-xl text-[12px] md:text-[13px] font-semibold border transition-all duration-200 ${
+                    isAiActive || aiOpen
+                      ? "border-purple-400/40 bg-gradient-to-r from-purple-500/20 to-blue-500/15 shadow-[0_0_18px_-6px_rgba(168,85,247,0.5)]"
+                      : "border-purple-400/20 bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/15 hover:border-purple-400/35"
                   }`}
                 >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  <Sparkles className="w-3.5 h-3.5 text-purple-300" />
                   <span className="ai-gradient-text">AI Tools</span>
+                  <span className="hidden lg:inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-purple-400/20 border border-purple-400/30 text-[9px] font-bold text-purple-200 tabular-nums">
+                    {AI_TOOLS.length + 1}
+                  </span>
                   <ChevronDown
-                    className={`w-2.5 h-2.5 text-zinc-400 transition-transform duration-200 ${
+                    className={`w-2.5 h-2.5 text-purple-200/70 transition-transform duration-200 ${
                       aiOpen ? "rotate-180" : ""
                     }`}
                   />
@@ -353,7 +360,7 @@ export default function Navigation() {
                             <div>
                               <div className="text-[11px] font-bold text-white">AI Suite</div>
                               <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">
-                                {AI_TOOLS.length} Tools
+                                {AI_TOOLS.length + 1} Tools
                               </div>
                             </div>
                           </div>
@@ -369,6 +376,51 @@ export default function Navigation() {
                       </div>
 
                       <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                        {/* Featured: Produkt Search (Zufalls-Generator /charts) —
+                            bewusst größer & auffälliger als die übrigen Tools. */}
+                        {(() => {
+                          const fLocked = !tierState.loading && !tierState.has("chartsAnalytics");
+                          const fActive = pathname === "/charts" || pathname.startsWith("/charts/");
+                          return (
+                            <Link
+                              href="/charts"
+                              onClick={() => setAiOpen(false)}
+                              title={fLocked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
+                              className={`group relative flex items-center gap-3 p-3.5 mb-2 rounded-2xl border overflow-hidden transition-all duration-200 ${
+                                fActive ? "border-[#95BF47]/45" : "border-white/[0.10] hover:border-[#95BF47]/45"
+                              }`}
+                              style={{
+                                background:
+                                  "linear-gradient(120deg, rgba(149,191,71,0.18), rgba(168,85,247,0.14) 55%, rgba(96,165,250,0.10))",
+                              }}
+                            >
+                              <div
+                                className="absolute inset-0 opacity-70 pointer-events-none"
+                                style={{ background: "radial-gradient(circle at 16% 50%, rgba(149,191,71,0.28), transparent 60%)" }}
+                              />
+                              <div className="relative w-12 h-12 rounded-2xl bg-gradient-to-br from-[#95BF47]/35 to-purple-500/30 border border-white/15 flex items-center justify-center shrink-0 group-hover:scale-105 transition">
+                                <Search className="w-5 h-5 text-white" />
+                                {fLocked && (
+                                  <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
+                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
+                                  </div>
+                                )}
+                              </div>
+                              <div className="relative min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-bold text-[14px] text-white truncate">Produkt Search</span>
+                                  <span className="text-[8px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47] text-black font-extrabold shrink-0">
+                                    Top
+                                  </span>
+                                </div>
+                                <div className="text-[11px] text-zinc-200/90 mt-0.5 truncate">
+                                  Zufalls-Generator — zieh ein Winning-Produkt · 50 🪙
+                                </div>
+                              </div>
+                              <ChevronRight className="relative w-4 h-4 text-white/70 shrink-0 group-hover:translate-x-0.5 transition" />
+                            </Link>
+                          );
+                        })()}
                         {AI_TOOLS.map((tool) => {
                           const isActive =
                             pathname === tool.href ||
@@ -1174,8 +1226,16 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           />
         </div>
 
-        {/* Theme — auf dem Desktop hier statt eigenem Top-Bar-Dropdown. */}
-        <MenuGroup label="Theme">
+        {/* Mediathek + Theme — auf dem Desktop hier statt in der Top-Bar. */}
+        <MenuGroup label="Mediathek & Theme">
+          <MenuItem
+            href="/library"
+            icon={FolderHeart}
+            label="Mediathek"
+            active={pathname === "/library"}
+            onClick={onClose}
+            sub="Deine gespeicherten Assets"
+          />
           <MenuItem
             href="/themes"
             icon={Palette}
