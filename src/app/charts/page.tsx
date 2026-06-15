@@ -232,9 +232,6 @@ export default function ChartsPage() {
   const [notEnough, setNotEnough] = useState(false);
 
   const [drawn, setDrawn] = useState<Produkt[]>([]);
-  const [drawnCount, setDrawnCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
-  const [remainingCount, setRemainingCount] = useState(0);
   const [cost, setCost] = useState(50);
 
   const [drawing, setDrawing] = useState(false);
@@ -271,9 +268,6 @@ export default function ChartsPage() {
           return;
         }
         setDrawn(data.drawn ?? []);
-        setDrawnCount(data.drawnCount ?? 0);
-        setTotalCount(data.totalCount ?? 0);
-        setRemainingCount(data.remainingCount ?? 0);
         if (typeof data.cost === "number") setCost(data.cost);
       } catch {
         if (!cancelled) setError("Verbindungsfehler.");
@@ -323,9 +317,6 @@ export default function ChartsPage() {
         // Alles gezogen — neutrale Meldung zeigen (Server hat den Admin
         // benachrichtigt). Es wurden keine Credits abgezogen.
         setUnavailable(true);
-        setRemainingCount(0);
-        if (typeof data.totalCount === "number") setTotalCount(data.totalCount);
-        if (typeof data.drawnCount === "number") setDrawnCount(data.drawnCount);
         return;
       }
       if (res.status === 403) {
@@ -341,9 +332,6 @@ export default function ChartsPage() {
       const produkt: Produkt = data.produkt;
       setRevealed(produkt);
       setDrawn((prev) => [produkt, ...prev.filter((p) => p.id !== produkt.id)]);
-      if (typeof data.drawnCount === "number") setDrawnCount(data.drawnCount);
-      if (typeof data.totalCount === "number") setTotalCount(data.totalCount);
-      if (typeof data.remainingCount === "number") setRemainingCount(data.remainingCount);
     } catch {
       setError("Verbindungsfehler. Bitte erneut versuchen.");
     } finally {
@@ -425,7 +413,6 @@ export default function ChartsPage() {
     [userVotes, drawn, revealed, voteOverrides],
   );
 
-  const progress = totalCount > 0 ? Math.round((drawnCount / totalCount) * 100) : 0;
   const openInfo = useCallback((p: Produkt) => setInfoModal({ open: true, produkt: p }), []);
 
   return (
@@ -468,25 +455,6 @@ export default function ChartsPage() {
 
                 <div className="relative flex flex-col items-center">
                   <DropStage drawing={drawing} revealed={revealed} onOpen={openInfo} />
-
-                  {/* Fortschritt */}
-                  {!loading && totalCount > 0 && (
-                    <div className="w-full max-w-sm mt-6">
-                      <div className="flex items-center justify-between text-[11px] text-zinc-400 mb-1.5">
-                        <span>{drawnCount} von {totalCount} gezogen</span>
-                        <span className="font-mono" style={{ color: ACCENT }}>{remainingCount} übrig</span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
-                        <motion.div
-                          className="h-full rounded-full"
-                          style={{ background: ACCENT }}
-                          initial={false}
-                          animate={{ width: `${progress}%` }}
-                          transition={{ type: "spring", stiffness: 120, damping: 20 }}
-                        />
-                      </div>
-                    </div>
-                  )}
 
                   {/* Aktion */}
                   <div className="mt-6 w-full max-w-sm">
