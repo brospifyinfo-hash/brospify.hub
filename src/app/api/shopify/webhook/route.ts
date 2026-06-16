@@ -45,10 +45,9 @@ import { tierFromSku, DEFAULT_TIERS, TIER_DISPLAY_LABEL } from "@/lib/tiers-shar
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Rolling window applied on each paid order when we don't have an
-// exact next-billing date. Monthly interval (~30d) + 5d grace so a
-// brief billing delay never locks a paying customer out.
-const SUBSCRIPTION_WINDOW_DAYS = 35;
+// Laufzeit, die jede bezahlte Bestellung setzt: exakt 31 Tage ab
+// Bestelldatum (subscriptionEndsAt = jetzt + 31 Tage).
+const SUBSCRIPTION_WINDOW_DAYS = 31;
 // Grace added on top of an exact next_billing_date from a contract.
 const BILLING_GRACE_DAYS = 3;
 const DAY_MS = 24 * 60 * 60 * 1000;

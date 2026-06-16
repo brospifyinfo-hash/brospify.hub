@@ -17,7 +17,7 @@ import { sendLicenseEmail } from "@/lib/email";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SUBSCRIPTION_WINDOW_DAYS = 35;
+const SUBSCRIPTION_WINDOW_DAYS = 31;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
