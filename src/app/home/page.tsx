@@ -173,6 +173,7 @@ export default function HomePage() {
   ];
   const quickDone = quickSteps.filter((s) => tasksDone[s.id]).length;
   const extraTools: { label: string; href: string }[] = [
+    { label: "AI Email Generator", href: "/email-templates" },
     { label: "Produktfotos (AI Studio)", href: "/ai-tools/ai-studio" },
     { label: "Bild freistellen", href: "/ai-tools/background-remover" },
     { label: "Bild vergrößern", href: "/ai-tools/hybrid-upscaler" },

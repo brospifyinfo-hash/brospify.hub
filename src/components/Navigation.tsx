@@ -69,6 +69,16 @@ const NAV_ITEMS = [
 
 const AI_TOOLS = [
   {
+    href: "/email-templates",
+    title: "AI Email Generator",
+    desc: "Shopify-Mails per KI · Code zum Einfügen · 20 Credits",
+    icon: Mail,
+    color: "from-rose-500/15 to-pink-500/15",
+    border: "border-rose-500/15",
+    iconColor: "text-rose-400",
+    feature: "emailTemplates" as const,
+  },
+  {
     href: "/ai-tools/hybrid-upscaler",
     title: "Image Upscaler",
     desc: "Bilder 4× hochskalieren · 5 Credits",
