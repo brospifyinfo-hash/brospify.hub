@@ -185,6 +185,8 @@ export interface KundeProfile {
   tierSince?: string;
   /** Set when the user (or admin) cancels the tier. Empty when active. */
   tierCanceledAt?: string;
+  /** Vom Kunden bei der Kündigung gewählter Grund (aus der Liste). */
+  tierCancelReason?: string;
   /** ISO timestamp of the last successful subscription credit refill.
    *  Updated by applySubscriptionRefill() on every paid renewal. Used
    *  by the settings UI to display "Letzte Aufladung: X Tage her". */

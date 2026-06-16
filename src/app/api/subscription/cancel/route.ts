@@ -29,10 +29,18 @@ import { cancelShopifySubscription } from "@/lib/shopify";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
-  void req;
   const session = await getSession();
   if (!session.isLoggedIn || !session.lizenzschluessel) {
     return NextResponse.json({ error: "Nicht eingeloggt." }, { status: 401 });
+  }
+
+  // Kündigungsgrund aus dem Body (Pflicht-Auswahl im UI vor der Weiterleitung).
+  let reason = "";
+  try {
+    const body = (await req.json()) as { reason?: string };
+    reason = String(body?.reason || "").trim().slice(0, 300);
+  } catch {
+    /* kein Body — kein harter Fehler */
   }
 
   const kunde = await findKundeByKey(session.lizenzschluessel);
@@ -59,6 +67,7 @@ export async function POST(req: NextRequest) {
   await updateKundeProfile(kunde.rowIndex, {
     ...kunde.profile,
     tierCanceledAt: now,
+    ...(reason ? { tierCancelReason: reason } : {}),
   });
 
   // Step 2: Shopify-side cancel. Soft-fails — never block the user
@@ -82,6 +91,7 @@ export async function POST(req: NextRequest) {
     details: {
       tierCanceledAt: now,
       subscriptionEndsAt: kunde.profile.subscriptionEndsAt,
+      reason: reason || null,
       shopifyCanceled,
       shopifyError,
       contractId: contractId || null,

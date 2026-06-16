@@ -156,11 +156,11 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     priceMonthlyEur: 21,
     priceYearlyEur: 0,
     trialDays: 7,
-    // 2000 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
+    // 500 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
     // (orders/paid webhook). startingCredits = erste Zahlung,
-    // monthlyCreditAllowance = jedes Renewal danach.
-    startingCredits: 2000,
-    monthlyCreditAllowance: 2000,
+    // monthlyCreditAllowance = jedes Renewal danach (gleicher Key bleibt).
+    startingCredits: 500,
+    monthlyCreditAllowance: 500,
     limits: {
       maxProducts: -1,
       maxBlogsPerMonth: -1,
@@ -175,8 +175,8 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     },
     features: allFeatures(),
     bullets: [
-      "2.000 Credits / Monat — automatisch nachgeladen",
-      "Alle AI-Tools & optimierte Themes",
+      "500 Credits / Monat — automatisch nachgeladen",
+      "Alle AI-Tools (Produkt-Generator, AI Studio, u. a.)",
       "Privates Coaching & Priority-Support",
       "Keine künstlichen Limits",
     ],
