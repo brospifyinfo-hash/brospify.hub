@@ -120,6 +120,7 @@ export const SKU_TO_TIER: Record<string, TierKey> = {
   gold: "pro",
   pro: "pro",
   abo: "pro",
+  kauf: "pro",
   member: "pro",
   membership: "pro",
   mitglied: "pro",

@@ -96,14 +96,22 @@ function customerName(c: ShopifyCustomer | undefined, order?: ShopifyOrder): str
 
 const STATUS_DEAD = new Set(["cancelled", "canceled", "expired", "failed"]);
 
-// A line item belongs to one of the 3 subscription tiers if its SKU
-// contains bronze / silber / gold (case-insensitive substring, so
-// "BRONZE", "abo-gold", "BROSPIFY-SILBER" all match). Everything else
-// the shop sells — credits, one-off products — does NOT mint a licence.
-const SUBSCRIPTION_SKU_KEYS = ["bronze", "silber", "silver", "gold"];
+// Welche SKU mintet eine Lizenz?
+//  • Legacy-Tiers (bronze/silber/gold) per Substring — "BRONZE",
+//    "abo-gold", "BROSPIFY-SILBER" matchen alle.
+//  • Aktuelle Membership-SKUs (pro/abo/member/membership/mitglied/
+//    mitgliedschaft) exakt über tierFromSku (SKU_TO_TIER) — so mintet
+//    auch die neue 21-€-Membership eine Lizenz, ohne dass Credit-Packs
+//    oder Einmalprodukte fälschlich eine bekommen.
+// WICHTIG: Wenn das 21-€-Produkt eine eigene SKU hat (z. B.
+// "brospify-membership"), diese in SKU_TO_TIER (tiers-shared.ts)
+// ergänzen, dann greift es hier automatisch.
+const LEGACY_SUBSCRIPTION_SKU_KEYS = ["bronze", "silber", "silver", "gold"];
 function isSubscriptionSku(sku: string | undefined): boolean {
-  const s = (sku || "").toLowerCase();
-  return s !== "" && SUBSCRIPTION_SKU_KEYS.some((k) => s.includes(k));
+  const s = (sku || "").trim().toLowerCase();
+  if (s === "") return false;
+  if (LEGACY_SUBSCRIPTION_SKU_KEYS.some((k) => s.includes(k))) return true;
+  return tierFromSku(s) !== null;
 }
 
 export async function POST(req: NextRequest) {
@@ -330,16 +338,16 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     metafieldError = mf.error;
   }
 
-  // Fallback delivery: Resend, only when the metafield path is off.
-  const mailResult = metafieldWritten
-    ? { sent: false, error: undefined as string | undefined }
-    : await sendLicenseEmail({
-        to: email,
-        customerName: customerName(payload.customer, payload) || undefined,
-        licenseKey,
-        orderNumber: orderName,
-        sku,
-      });
+  // Lizenz-Mail IMMER per Resend schicken — zuverlässig und unabhängig
+  // davon, ob das Shopify-Confirmation-Template das license_key-Metafeld
+  // rendert. Das Metafeld wird zusätzlich gesetzt (oben), schadet nicht.
+  const mailResult = await sendLicenseEmail({
+    to: email,
+    customerName: customerName(payload.customer, payload) || undefined,
+    licenseKey,
+    orderNumber: orderName,
+    sku,
+  });
 
   void logSystemEvent({
     level: "audit",
@@ -348,7 +356,7 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     target: licenseKey,
     details: {
       shopDomain, orderName, email, sku, charge,
-      deliveryPath: metafieldWritten ? "shopify-metafield" : "resend",
+      deliveryPath: metafieldWritten ? "resend+metafield" : "resend",
       metafieldError,
       emailSent: mailResult.sent,
       emailError: mailResult.error,
@@ -360,7 +368,7 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     ok: true,
     action: "created",
     key: licenseKey,
-    deliveryPath: metafieldWritten ? "shopify-metafield" : "resend",
+    deliveryPath: metafieldWritten ? "resend+metafield" : "resend",
     refillAmount,
     refillStatus,
   });
