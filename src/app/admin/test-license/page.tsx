@@ -27,6 +27,8 @@ export default function TestLicensePage() {
   const [sku, setSku] = useState("abo");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanupMsg, setCleanupMsg] = useState("");
 
   useEffect(() => {
     fetch("/api/auth/session")
@@ -57,6 +59,24 @@ export default function TestLicensePage() {
       setResult({ error: "Verbindungsfehler." });
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function cleanup() {
+    if (cleaning) return;
+    if (!window.confirm("Alle Test-Lizenzen (Bestellnummer TEST-…) endgültig aus dem Sheet löschen? Echte Kunden bleiben unberührt.")) {
+      return;
+    }
+    setCleaning(true);
+    setCleanupMsg("");
+    try {
+      const res = await fetch("/api/admin/license/cleanup-test", { method: "POST" });
+      const d = await res.json();
+      setCleanupMsg(res.ok ? `${d.deletedCount} Test-Lizenz(en) gelöscht.` : d.error || "Fehler.");
+    } catch {
+      setCleanupMsg("Verbindungsfehler.");
+    } finally {
+      setCleaning(false);
     }
   }
 
@@ -149,6 +169,24 @@ export default function TestLicensePage() {
               )}
             </div>
           )}
+
+          {/* Aufräumen: vom Testen erzeugte Lizenz-Zeilen löschen */}
+          <div className="mt-6 border-t border-white/[0.06] pt-5">
+            <div className="text-[11px] uppercase tracking-wider text-zinc-500 font-semibold mb-2">
+              Aufräumen
+            </div>
+            <button
+              onClick={cleanup}
+              disabled={cleaning}
+              className="w-full py-2.5 rounded-xl text-[12px] font-semibold bg-red-500/10 border border-red-500/25 text-red-300 hover:bg-red-500/20 transition disabled:opacity-50"
+            >
+              {cleaning ? "Lösche…" : "Alle Test-Lizenzen löschen (TEST-…)"}
+            </button>
+            {cleanupMsg && <p className="mt-2 text-[12px] text-zinc-300">{cleanupMsg}</p>}
+            <p className="mt-1 text-[10px] text-zinc-600">
+              Löscht nur Zeilen mit Bestellnummer „TEST-…" (aus diesem Test-Tool). Echte Kunden bleiben unberührt.
+            </p>
+          </div>
         </div>
       </main>
     </>

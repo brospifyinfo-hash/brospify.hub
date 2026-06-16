@@ -717,6 +717,19 @@ export async function updateKundeProfile(rowIndex: number, profile: KundeProfile
   });
 }
 
+// "Löscht" eine Kunden-/Lizenz-Zeile, indem die Zellen A:J geleert
+// werden (gleiche Strategie wie deleteProdukt — kein Row-Shift). Die
+// leere Zeile matched danach keinen Lizenzschlüssel/keine Order mehr.
+export async function deleteKunde(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Kunden!A${rowIndex}:J${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", "", "", "", ""]] },
+  });
+}
+
 export async function findKundeByKey(key: string): Promise<Kunde | null> {
   const kunden = await getAllKunden();
   return kunden.find((k) => k.lizenzschluessel === key) || null;
