@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Store,
   Check,
   Sparkles,
   Plus,
@@ -137,9 +136,6 @@ export default function HomePage() {
 
         const profile = profileData?.profile || {};
         const cl = profile.onboarding_checklist || {};
-        if (sess.hasShopifyToken || sess.hasShopifyConnection) {
-          cl.setup_complete = true;
-        }
         setChecklist(cl);
         setTasksDone(profile.onboarding_tasks_done || {});
         setLoading(false);
@@ -170,14 +166,13 @@ export default function HomePage() {
     id: string; n: number; title: string; desc: string; href: string; cta: string; external: boolean;
   }[] = [
     { id: "qs_produkt", n: 1, title: "Produkt finden", desc: "Zieh ein Winning-Produkt im Generator.", href: "/charts", cta: "Generator öffnen", external: false },
-    { id: "qs_theme", n: 2, title: "Theme hinzufügen", desc: "Installier dein optimiertes Brospify-Theme.", href: "/themes", cta: "Zu den Themes", external: false },
+    { id: "qs_theme", n: 2, title: "Theme hinzufügen", desc: "Füge ein Theme in deinem Shopify-Shop hinzu.", href: "", cta: "", external: false },
     { id: "qs_dsers", n: 3, title: "DSERS installieren", desc: "Die AliExpress-Dropshipping-App für Shopify.", href: "https://apps.shopify.com/dsers", cta: "DSERS installieren", external: true },
     { id: "qs_alilink", n: 4, title: "AliExpress-Link einfügen", desc: "Verknüpfe dein Produkt in DSERS mit dem AliExpress-Link.", href: "", cta: "", external: false },
     { id: "qs_publish", n: 5, title: "Veröffentlichen", desc: "Schalte dein Produkt live in deinem Shop.", href: publishHref, cta: "In Shopify öffnen", external: true },
   ];
   const quickDone = quickSteps.filter((s) => tasksDone[s.id]).length;
   const extraTools: { label: string; href: string }[] = [
-    { label: "AI Email Generator", href: "/email-templates" },
     { label: "Produktfotos (AI Studio)", href: "/ai-tools/ai-studio" },
     { label: "Bild freistellen", href: "/ai-tools/background-remover" },
     { label: "Bild vergrößern", href: "/ai-tools/hybrid-upscaler" },
@@ -219,12 +214,6 @@ export default function HomePage() {
               {firstName ? `Hi ${firstName} ` : "Willkommen "}
               <span className="text-[#95BF47]">{allDone ? "\u{1F389}" : "\u{1F44B}"}</span>
             </h1>
-            {session.shopDomain && (
-              <p className="text-[10px] sm:text-[11px] text-zinc-500 mt-0.5 flex items-center gap-1 truncate">
-                <Store className="w-2.5 h-2.5 shrink-0" />
-                <span className="truncate">{session.shopDomain}</span>
-              </p>
-            )}
           </div>
         </motion.div>
 

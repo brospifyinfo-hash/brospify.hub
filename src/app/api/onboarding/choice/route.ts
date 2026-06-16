@@ -18,11 +18,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ redirect: "/home" });
     }
 
+    // "full" (Shop verbinden) gibt es nicht mehr — Setup wurde entfernt.
+    // Wir leiten jeden gültigen Modus zur Home.
     if (mode === "full") {
-      session.hasShopifyConnection = false; // will be set to true after OAuth
       session.onboardingDone = true;
       await session.save();
-      return NextResponse.json({ redirect: "/setup" });
+      return NextResponse.json({ redirect: "/home" });
     }
 
     return NextResponse.json({ error: "Ungültiger Modus" }, { status: 400 });

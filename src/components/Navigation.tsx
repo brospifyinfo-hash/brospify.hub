@@ -6,10 +6,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Home,
-  Palette,
   Settings,
   Settings as SettingsIcon,
-  Zap,
   LogOut,
   Menu,
   X,
@@ -23,7 +21,6 @@ import {
   Camera,
   Plus,
   FolderHeart,
-  Store,
   User as UserIcon,
   FileText,
   Shield,
@@ -71,16 +68,6 @@ const NAV_ITEMS = [
 // gibt es nicht mehr; "Themes" liegt jetzt im Avatar-Menü (AccountMenu).
 
 const AI_TOOLS = [
-  {
-    href: "/email-templates",
-    title: "AI Email Generator",
-    desc: "10 Shopify-Mails per KI · 20 Credits",
-    icon: Mail,
-    color: "from-rose-500/15 to-pink-500/15",
-    border: "border-rose-500/15",
-    iconColor: "text-rose-400",
-    feature: "emailTemplates" as const,
-  },
   {
     href: "/ai-tools/hybrid-upscaler",
     title: "Image Upscaler",
@@ -702,13 +689,6 @@ export default function Navigation() {
               >
                 <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login & Google-Verknüpfung" />
                 <SheetItem href="/account/subscription" icon={Coins} label="Abo verwalten" active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub="Status, Credits, Verlängerung" />
-                <SheetItem href="/account/shopify" icon={Store} label="Shopify-Verbindung" active={pathname === "/account/shopify"} onClick={() => setMoreSheetOpen(false)} sub="API-Credentials" />
-                <SheetItem href="/setup" icon={Zap} label="Setup einrichten" active={pathname === "/setup"} onClick={() => setMoreSheetOpen(false)} sub="Verbindungs-Wizard" />
-              </MobileSection>
-
-              {/* ═══ THEME — Section mit Pfeil, DEFAULT ZU ═══ */}
-              <MobileSection title="Theme" icon={Palette} defaultOpen={false}>
-                <SheetItem href="/themes" icon={Palette} label="Themes" active={pathname === "/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-Galerie + Push" />
               </MobileSection>
 
               {/* ═══ SUPPORT — Section mit Pfeil, DEFAULT ZU ═══ */}
@@ -1202,26 +1182,10 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             onClick={onClose}
             sub={tier ? `${tier.label} · Status & Credits` : "Status & Credits"}
           />
-          <MenuItem
-            href="/account/shopify"
-            icon={Store}
-            label="Shopify-Verbindung"
-            active={pathname === "/account/shopify"}
-            onClick={onClose}
-            sub="API-Credentials"
-          />
-          <MenuItem
-            href="/setup"
-            icon={Zap}
-            label="Setup einrichten"
-            active={pathname === "/setup"}
-            onClick={onClose}
-            sub="Verbindungs-Wizard"
-          />
         </div>
 
-        {/* Mediathek + Theme — auf dem Desktop hier statt in der Top-Bar. */}
-        <MenuGroup label="Mediathek & Theme">
+        {/* Mediathek — auf dem Desktop hier statt in der Top-Bar. */}
+        <MenuGroup label="Mediathek">
           <MenuItem
             href="/library"
             icon={FolderHeart}
@@ -1229,14 +1193,6 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             active={pathname === "/library"}
             onClick={onClose}
             sub="Deine gespeicherten Assets"
-          />
-          <MenuItem
-            href="/themes"
-            icon={Palette}
-            label="Themes"
-            active={pathname === "/themes"}
-            onClick={onClose}
-            sub="Theme-Galerie + Push"
           />
         </MenuGroup>
 
