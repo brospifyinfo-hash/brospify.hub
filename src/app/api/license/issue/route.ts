@@ -22,6 +22,7 @@ import {
   logSystemEvent,
   upsertKundeByKey,
 } from "@/lib/sheets";
+import { sendLicenseEmail } from "@/lib/email";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -113,6 +114,27 @@ export async function POST(req: NextRequest) {
       subscriptionEndsAt: endsAtIso,
     });
 
+    // Lizenz-Mail serverseitig per Resend schicken — NICHT auf den
+    // Shopify-Flow-"Send email"-Schritt verlassen. Fail-open: ein
+    // Mail-Fehler darf die Key-Ausstellung nie blockieren.
+    let emailSent = false;
+    let emailError: string | undefined;
+    const toEmail = (payload.kundenEmail || "").trim();
+    if (toEmail.includes("@")) {
+      try {
+        const m = await sendLicenseEmail({
+          to: toEmail,
+          licenseKey: key,
+          orderNumber: bestellnummer || undefined,
+          sku: payload.sku,
+        });
+        emailSent = m.sent;
+        emailError = m.error;
+      } catch (e) {
+        emailError = e instanceof Error ? e.message : "unknown";
+      }
+    }
+
     await logSystemEvent({
       level: "audit",
       actor: "shopify.flow",
@@ -124,6 +146,8 @@ export async function POST(req: NextRequest) {
         kundenEmail: payload.kundenEmail,
         sku: payload.sku,
         subscriptionEndsAt: endsAtIso,
+        emailSent,
+        emailError,
       },
     });
 
@@ -133,6 +157,8 @@ export async function POST(req: NextRequest) {
       key,
       lizenzschluessel: key,
       rowIndex: result.rowIndex,
+      emailSent,
+      emailError,
     });
   } catch (err) {
     console.error("[license/issue]", err);
