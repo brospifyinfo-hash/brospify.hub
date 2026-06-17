@@ -38,7 +38,6 @@ import {
   Gift,
   Search,
 } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
 import { BrandLogo } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
 import { useTier } from "@/lib/use-tier";
@@ -53,15 +52,9 @@ interface SessionInfo {
   impersonatedBy?: string | null;
 }
 
-// Top-Bar: NUR Daily-Browsing Seiten. Tools/Support/Shop-Einstellungen
-// sind eigene Dropdowns. Themes ist jetzt unter Shop-Einstellungen-
-// Dropdown, deshalb hier raus.
-// Desktop-Top-Bar: bewusst schlank. "Produkt Search" (/charts) ist jetzt
-// das hervorgehobene Tool im AI-Tools-Dropdown, "Mediathek" liegt im
-// Avatar-Menü. (Die mobile Bottom-Bar behält Drop + Mediathek.)
-const NAV_ITEMS = [
-  { href: "/home", labelKey: "home" as const, icon: Home, feature: undefined },
-];
+// Desktop-Top-Bar ist bewusst minimal: nur Logo + Credits + das rechte
+// Avatar-Menü. ALLES (Home, AI Tools, Mediathek, Support, Konto) liegt
+// im rechten Menü (AccountMenu). Die mobile Bottom-Bar bleibt unberührt.
 
 // Hinweis: Das frühere "Shop-Einstellungen"-Dropdown (Themes, Liquid-
 // Blöcke, Rechtstexte) wurde entfernt. Liquid-Blöcke + Rechtstexte
@@ -136,7 +129,6 @@ const BOTTOM_TABS: readonly BottomTab[] = [
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
-  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -265,214 +257,6 @@ export default function Navigation() {
               </div>
             </Link>
 
-            {/* Desktop Links — zentriert in der Leiste */}
-            <div className="hidden md:flex items-center gap-1.5 absolute left-1/2 top-0 h-full -translate-x-1/2">
-              {NAV_ITEMS.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-                const locked = !!item.feature && !tierState.loading && !tierState.has(item.feature);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
-                    className={`relative flex items-center gap-1.5 px-2.5 py-1.5 md:px-3 md:py-2 rounded-lg text-[12px] md:text-[13px] font-medium transition-all duration-200 ${
-                      isActive
-                        ? "text-[#95BF47]"
-                        : locked
-                        ? "text-zinc-600 hover:text-zinc-400"
-                        : "text-zinc-400 hover:text-white hover:bg-white/[0.05]"
-                    }`}
-                  >
-                    {locked ? <Lock className="w-3 h-3" /> : <item.icon className="w-3.5 h-3.5" />}
-                    <span>{t.nav[item.labelKey]}</span>
-                    {isActive && (
-                      <motion.div
-                        layoutId="nav-indicator"
-                        className="absolute inset-0 bg-[#95BF47]/8 border border-[#95BF47]/15 rounded-lg"
-                        style={{ zIndex: -1 }}
-                        transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                      />
-                    )}
-                  </Link>
-                );
-              })}
-
-              <div ref={aiRef} className="relative">
-                <button
-                  onClick={() => setAiOpen(!aiOpen)}
-                  className={`relative flex items-center gap-1.5 px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-lg md:rounded-xl text-[12px] md:text-[13px] font-semibold border transition-all duration-200 ${
-                    isAiActive || aiOpen
-                      ? "border-purple-400/40 bg-gradient-to-r from-purple-500/20 to-blue-500/15 shadow-[0_0_18px_-6px_rgba(168,85,247,0.5)]"
-                      : "border-purple-400/20 bg-gradient-to-r from-purple-500/10 to-blue-500/10 hover:from-purple-500/20 hover:to-blue-500/15 hover:border-purple-400/35"
-                  }`}
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                  <span className="ai-gradient-text">AI Tools</span>
-                  <span className="hidden lg:inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-purple-400/20 border border-purple-400/30 text-[9px] font-bold text-purple-200 tabular-nums">
-                    {AI_TOOLS.length + 1}
-                  </span>
-                  <ChevronDown
-                    className={`w-2.5 h-2.5 text-purple-200/70 transition-transform duration-200 ${
-                      aiOpen ? "rotate-180" : ""
-                    }`}
-                  />
-                  {isAiActive && (
-                    <motion.div
-                      layoutId="nav-indicator"
-                      className="absolute inset-0 bg-purple-500/8 border border-purple-500/15 rounded-lg"
-                      style={{ zIndex: -1 }}
-                      transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                    />
-                  )}
-                </button>
-
-                <AnimatePresence>
-                  {aiOpen && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -8, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: -8, scale: 0.96 }}
-                      transition={{ duration: 0.16 }}
-                      className="absolute top-full mt-2 right-0 w-[400px] rounded-2xl border border-white/[0.08] shadow-2xl shadow-black/60 overflow-hidden"
-                      style={{
-                        background: "rgba(12,12,14,0.97)",
-                        backdropFilter: "blur(48px) saturate(180%)",
-                        WebkitBackdropFilter: "blur(48px) saturate(180%)",
-                      }}
-                    >
-                      {/* Gradient header */}
-                      <div className="relative px-4 pt-3 pb-2 border-b border-white/[0.06] overflow-hidden">
-                        <div
-                          className="absolute inset-0 opacity-50 pointer-events-none"
-                          style={{
-                            background:
-                              "radial-gradient(circle at 20% 50%, rgba(168,85,247,0.16), transparent 60%), radial-gradient(circle at 90% 50%, rgba(96,165,250,0.12), transparent 60%)",
-                          }}
-                        />
-                        <div className="relative flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-purple-500/30 to-blue-500/30 border border-white/10 flex items-center justify-center">
-                              <Sparkles className="w-3.5 h-3.5 text-purple-300" />
-                            </div>
-                            <div>
-                              <div className="text-[11px] font-bold text-white">AI Suite</div>
-                              <div className="text-[9px] text-zinc-500 uppercase tracking-[0.12em]">
-                                {AI_TOOLS.length + 1} Tools
-                              </div>
-                            </div>
-                          </div>
-                          <Link
-                            href="/credits"
-                            onClick={() => setAiOpen(false)}
-                            className="flex items-center gap-1 text-[10px] font-mono text-[#95BF47] hover:text-white transition px-2 py-1 rounded-md border border-[#95BF47]/15 hover:border-[#95BF47]/30 hover:bg-[#95BF47]/[0.08]"
-                          >
-                            🪙 {credits.loading ? "···" : credits.balance.toLocaleString("de-DE")}
-                            <Plus className="w-2.5 h-2.5" />
-                          </Link>
-                        </div>
-                      </div>
-
-                      <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto custom-scrollbar">
-                        {/* Produkt Search — gleiche Zeilenform wie die Tools,
-                            nur grün akzentuiert + "Top"-Badge. */}
-                        {(() => {
-                          const fLocked = !tierState.loading && !tierState.has("chartsAnalytics");
-                          const fActive = pathname === "/charts" || pathname.startsWith("/charts/");
-                          return (
-                            <Link
-                              href="/charts"
-                              onClick={() => setAiOpen(false)}
-                              title={fLocked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
-                              className={`nav-lift group flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-200 ${
-                                fActive
-                                  ? "border-[#95BF47]/35 bg-[#95BF47]/12"
-                                  : "border-[#95BF47]/20 bg-[#95BF47]/[0.06] hover:border-[#95BF47]/35 hover:bg-[#95BF47]/12"
-                              }`}
-                            >
-                              <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-[#95BF47]/25 to-emerald-500/20 border border-[#95BF47]/25 flex items-center justify-center shrink-0 transition group-hover:scale-105">
-                                <Search className="w-4.5 h-4.5 text-[#95BF47]" />
-                                {fLocked && (
-                                  <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
-                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-[13px] text-white truncate flex items-center gap-1.5">
-                                  Produkt Search
-                                  <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47] text-black font-bold shrink-0">
-                                    Top
-                                  </span>
-                                </div>
-                                <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">
-                                  Zufalls-Generator · 50 Credits
-                                </div>
-                              </div>
-                              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
-                            </Link>
-                          );
-                        })()}
-                        {AI_TOOLS.map((tool) => {
-                          const isActive =
-                            pathname === tool.href ||
-                            pathname.startsWith(tool.href + "/");
-                          const Icon = tool.icon;
-                          const locked = !tierState.loading && !tierState.has(tool.feature);
-                          return (
-                            <Link
-                              key={tool.href}
-                              href={tool.href}
-                              onClick={() => setAiOpen(false)}
-                              title={locked ? "Diese Funktion setzt eine aktive Brospify Membership voraus" : undefined}
-                              className={`nav-lift group flex items-center gap-3 p-2.5 rounded-xl border transition-all duration-200 ${
-                                isActive
-                                  ? "border-[#95BF47]/25 bg-[#95BF47]/8"
-                                  : locked
-                                  ? "border-white/[0.03] bg-white/[0.01] opacity-55 hover:opacity-80"
-                                  : "border-white/[0.04] bg-white/[0.02] hover:border-white/[0.12] hover:bg-white/[0.05]"
-                              }`}
-                            >
-                              <div
-                                className={`relative w-10 h-10 rounded-xl bg-gradient-to-br ${tool.color} border ${tool.border} flex items-center justify-center shrink-0 transition group-hover:scale-105`}
-                              >
-                                <Icon className={`w-4.5 h-4.5 ${tool.iconColor}`} />
-                                {locked && (
-                                  <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-zinc-900 border border-white/15 flex items-center justify-center">
-                                    <Lock className="w-2.5 h-2.5 text-amber-400" />
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="font-semibold text-[13px] text-white truncate flex items-center gap-1.5">
-                                  {tool.title}
-                                  {locked && (
-                                    <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 font-bold shrink-0 border border-amber-500/20">
-                                      Upgrade
-                                    </span>
-                                  )}
-                                  {isActive && !locked && (
-                                    <span className="text-[8.5px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47]/15 text-[#95BF47] font-bold shrink-0 border border-[#95BF47]/20">
-                                      Aktiv
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-[10.5px] text-zinc-500 mt-0.5 truncate">
-                                  {tool.desc}
-                                </div>
-                              </div>
-                              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 shrink-0 opacity-0 group-hover:opacity-100 transition" />
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-              {/* Theme- und Support-Zugänge liegen auf dem Desktop jetzt
-                  im rechten Avatar-Menü (AccountMenu), nicht mehr als
-                  eigene Top-Bar-Dropdowns. */}
-            </div>
 
             {/* Right Side */}
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1175,7 +959,43 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           als prominente Action-Buttons erreichbar. Rechtstexte ist in
           Shop-Einstellungen Dropdown. */}
       <div className="p-2 max-h-[60vh] overflow-y-auto custom-scrollbar">
+        {/* Home — Standardseite */}
         <div className="space-y-0.5">
+          <MenuItem
+            href="/home"
+            icon={Home}
+            label="Home"
+            active={pathname === "/home"}
+            onClick={onClose}
+            sub="Startseite"
+          />
+        </div>
+
+        {/* AI Tools — komplettes Dropdown im rechten Menü */}
+        <MenuGroup label="AI Tools">
+          <MenuItem
+            href="/charts"
+            icon={Search}
+            label="Produkt Search"
+            active={pathname === "/charts" || pathname.startsWith("/charts/")}
+            onClick={onClose}
+            sub="Zufalls-Generator · 50 Credits"
+          />
+          {AI_TOOLS.map((tool) => (
+            <MenuItem
+              key={tool.href}
+              href={tool.href}
+              icon={tool.icon}
+              label={tool.title}
+              active={pathname === tool.href || pathname.startsWith(tool.href + "/")}
+              onClick={onClose}
+              sub={tool.desc}
+            />
+          ))}
+        </MenuGroup>
+
+        {/* Konto */}
+        <MenuGroup label="Konto">
           <MenuItem
             href="/account/settings"
             icon={SettingsIcon}
@@ -1192,7 +1012,7 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             onClick={onClose}
             sub={tier ? `${tier.label} · Status & Credits` : "Status & Credits"}
           />
-        </div>
+        </MenuGroup>
 
         {/* Mediathek — auf dem Desktop hier statt in der Top-Bar. */}
         <MenuGroup label="Mediathek">

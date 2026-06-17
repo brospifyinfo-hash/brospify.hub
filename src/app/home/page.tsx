@@ -25,6 +25,11 @@ import {
   ArrowUp,
   ArrowDown,
   GripVertical,
+  Search,
+  Mail,
+  Camera,
+  Scissors,
+  ImageUp,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useTier } from "@/lib/use-tier";
@@ -82,6 +87,15 @@ const SETUP_STEPS: { key: keyof Checklist; label: string }[] = [
   { key: "aliexpress_link", label: "AliExpress-Link" },
   { key: "legal_texts_generated", label: "Rechtstexte" },
   { key: "theme_pushed", label: "Theme aktiv" },
+];
+
+// AI-Tools-Kacheln für die Home-Seite (auch im rechten Avatar-Menü verlinkt).
+const HOME_AI_TOOLS: { title: string; desc: string; href: string; icon: typeof Search; color: string }[] = [
+  { title: "Produkt Search", desc: "Zufalls-Generator · 50 Credits", href: "/charts", icon: Search, color: "#95BF47" },
+  { title: "AI Email Generator", desc: "Shopify-Mails per KI · 20 Credits", href: "/email-templates", icon: Mail, color: "#F43F5E" },
+  { title: "AI Studio", desc: "Produktfotos · 15 Credits", href: "/ai-tools/ai-studio", icon: Camera, color: "#A855F7" },
+  { title: "Background Remover", desc: "Freistellen · 5 Credits", href: "/ai-tools/background-remover", icon: Scissors, color: "#F59E0B" },
+  { title: "Image Upscaler", desc: "4× HD · 5 Credits", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#06B6D4" },
 ];
 
 // ─── Page ─────────────────────────────────────────────────────────
@@ -172,12 +186,6 @@ export default function HomePage() {
     { id: "qs_publish", n: 5, title: "Veröffentlichen", desc: "Schalte dein Produkt live in deinem Shop.", href: publishHref, cta: "In Shopify öffnen", external: true },
   ];
   const quickDone = quickSteps.filter((s) => tasksDone[s.id]).length;
-  const extraTools: { label: string; href: string }[] = [
-    { label: "AI Email Generator", href: "/email-templates" },
-    { label: "Produktfotos (AI Studio)", href: "/ai-tools/ai-studio" },
-    { label: "Bild freistellen", href: "/ai-tools/background-remover" },
-    { label: "Bild vergrößern", href: "/ai-tools/hybrid-upscaler" },
-  ];
 
   async function toggleTaskDone(id: string, nextDone: boolean) {
     setTasksDone((prev) => {
@@ -260,14 +268,59 @@ export default function HomePage() {
           </div>
         </motion.button>
 
-        {/* ─── Schnellstart-Checkliste (selbst abhakbar) ── */}
-        <section className="rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 sm:p-5">
-          <div className="flex items-center justify-between mb-3">
-            <SectionHeader icon={ListChecks} title="Schnellstart — in 5 Schritten online" inline />
-            <span className="text-[11px] font-mono text-zinc-500 tabular-nums shrink-0">
-              {quickDone}/{quickSteps.length}
-            </span>
+
+        {/* ─── AI Tools ─────────────────────────────────── */}
+        <section>
+          <SectionHeader icon={Sparkles} title="AI Tools" sub="Deine KI-Werkzeuge für Produkte, Bilder & Mails." />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 mt-2.5">
+            {HOME_AI_TOOLS.map((tool) => {
+              const Icon = tool.icon;
+              return (
+                <Link
+                  key={tool.href}
+                  href={tool.href}
+                  className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 hover:bg-white/[0.05] hover:border-white/15 transition"
+                >
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center border mb-2.5"
+                    style={{ backgroundColor: `${tool.color}1a`, borderColor: `${tool.color}33` }}
+                  >
+                    <Icon className="w-[18px] h-[18px]" style={{ color: tool.color }} />
+                  </div>
+                  <div className="text-[12.5px] font-semibold text-white leading-tight">{tool.title}</div>
+                  <div className="text-[10.5px] text-zinc-500 mt-0.5 leading-snug">{tool.desc}</div>
+                </Link>
+              );
+            })}
           </div>
+        </section>
+
+
+        {/* ─── Bis du verkaufst (Schritte + Tasks) ─────── */}
+        <section>
+          <div className="flex items-center justify-between mb-2">
+            <SectionHeader
+              icon={ListChecks}
+              title="Bis du verkaufst"
+              sub="Hak die Schritte ab, sobald du sie erledigt hast."
+              inline
+            />
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-[11px] font-mono text-zinc-500 tabular-nums">
+                {quickDone}/{quickSteps.length}
+              </span>
+              {session.isAdmin && (
+                <button
+                  onClick={() => setTasksAdminOpen(true)}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition"
+                >
+                  <Plus className="w-3 h-3" /> Verwalten
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Feste Schnellstart-Schritte */}
           <ol className="space-y-1.5">
             {quickSteps.map((step) => {
               const done = !!tasksDone[step.id];
@@ -324,44 +377,8 @@ export default function HomePage() {
             })}
           </ol>
 
-          {/* Optional: weitere Tools */}
-          <div className="mt-3 pt-3 border-t border-white/[0.06]">
-            <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500 font-semibold mb-2">
-              Außerdem nützlich
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {extraTools.map((t) => (
-                <Link
-                  key={t.href}
-                  href={t.href}
-                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.07] text-[11px] text-zinc-300 hover:bg-white/[0.06] hover:text-white transition"
-                >
-                  {t.label}
-                  <ArrowRight className="w-2.5 h-2.5 opacity-60" />
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ─── Start-Tasks (Bis du verkaufst) ──────────── */}
-        <section>
-          <div className="flex items-center justify-between mb-2">
-            <SectionHeader
-              icon={ListChecks}
-              title="Bis du verkaufst"
-              sub="Hak die Schritte ab, sobald du sie erledigt hast."
-              inline
-            />
-            {session.isAdmin && (
-              <button
-                onClick={() => setTasksAdminOpen(true)}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition shrink-0"
-              >
-                <Plus className="w-3 h-3" /> Verwalten
-              </button>
-            )}
-          </div>
+          {/* Admin-kuratierte Zusatz-Tasks (falls vorhanden) */}
+          <div className="mt-1.5">
           <StartTasksList
             tasks={tasks.filter((t) => t.active || session.isAdmin)}
             doneMap={tasksDone}
@@ -369,6 +386,7 @@ export default function HomePage() {
             adminEmpty={tasks.length === 0 && session.isAdmin}
             onOpenAdmin={() => setTasksAdminOpen(true)}
           />
+          </div>
         </section>
 
         {/* ─── News Section ──────────────────────── */}
