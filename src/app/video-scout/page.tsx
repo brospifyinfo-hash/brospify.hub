@@ -1,17 +1,18 @@
 "use client";
 
 // ─── /video-scout — Viral Video Scout ("Premium Search") ─────────
-// Produkt + Anzahl (3/6/9) eingeben → die viralsten echten TikTok-
-// Videos dazu. Echte View-Counts vom Apify-Scraper, Relevanz per KI
-// gefiltert, Sortierung nach echten Views. Preis: 40/70/90 Credits.
+// Eines der bereits im Produkt-Drop gezogenen Produkte auswählen +
+// Anzahl (3/6/9) → die viralsten echten TikTok-Videos dazu. Echte
+// View-Counts vom Apify-Scraper, Relevanz per KI gefiltert, Sortierung
+// nach echten Views. Preis: 40/70/90 Credits. KEIN Freitext mehr —
+// gesucht wird ausschliesslich zu einem gezogenen Produkt.
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Flame,
-  Search,
   Lock,
   Sparkles,
   AlertCircle,
@@ -20,6 +21,9 @@ import {
   Heart,
   Music2,
   Play,
+  Gift,
+  Check,
+  ShoppingBag,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
@@ -28,6 +32,7 @@ import {
   formatViews,
   type VideoCount,
   type ScoutVideo,
+  type ScoutProduct,
 } from "@/lib/video-scout";
 
 const ACCENT = "#95BF47";
@@ -36,7 +41,9 @@ export default function VideoScoutPage() {
   const router = useRouter();
   const credits = useCredits();
 
-  const [product, setProduct] = useState("");
+  const [products, setProducts] = useState<ScoutProduct[] | null>(null);
+  const [productsError, setProductsError] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [count, setCount] = useState<VideoCount>(3);
   const [running, setRunning] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -46,19 +53,52 @@ export default function VideoScoutPage() {
 
   const cost = VIDEO_SCOUT_TIERS.find((t) => t.count === count)!.cost;
   const cannotAfford = !credits.loading && credits.balance < cost;
-  const canRun = product.trim().length >= 2 && !running && !cannotAfford;
+  const canRun = !!selectedId && !running && !cannotAfford;
+
+  // ── Gezogene Produkte laden ──
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/video-scout", { cache: "no-store" });
+        if (res.status === 401) {
+          router.push("/");
+          return;
+        }
+        if (res.status === 403) {
+          if (!cancelled) setLocked(true);
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          setProductsError(data?.error || "Produkte konnten nicht geladen werden.");
+          setProducts([]);
+          return;
+        }
+        setProducts(Array.isArray(data.products) ? data.products : []);
+      } catch {
+        if (!cancelled) {
+          setProductsError("Verbindungsfehler.");
+          setProducts([]);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const run = useCallback(async () => {
-    if (product.trim().length < 2 || running || cannotAfford) return;
+    if (!selectedId || running || cannotAfford) return;
     setError("");
     setVideos(null);
     setRunning(true);
-    const q = product.trim();
     try {
       const res = await fetch("/api/video-scout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product: q, count }),
+        body: JSON.stringify({ productId: selectedId, count }),
       });
       const data = await res.json().catch(() => ({}));
 
@@ -82,14 +122,14 @@ export default function VideoScoutPage() {
       }
 
       setVideos(Array.isArray(data.videos_found) ? data.videos_found : []);
-      setLastProduct(q);
+      setLastProduct(typeof data.product === "string" ? data.product : "");
       if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
     } catch {
       setError("Verbindungsfehler. Bitte erneut versuchen.");
     } finally {
       setRunning(false);
     }
-  }, [product, count, running, cannotAfford, credits, router]);
+  }, [selectedId, count, running, cannotAfford, credits, router]);
 
   return (
     <>
@@ -109,14 +149,18 @@ export default function VideoScoutPage() {
               Viral Video Scout
             </h1>
             <p className="mt-2 text-[12px] sm:text-sm text-zinc-400 leading-snug max-w-md mx-auto">
-              Finde die viralsten <span className="font-semibold text-white">echten TikTok-Videos</span> zu
-              einem Produkt — sortiert nach echten View-Counts. Perfekt für Ad-Inspiration &amp;
-              Creative-Research.
+              Wähle eines deiner gezogenen Produkte und finde die viralsten{" "}
+              <span className="font-semibold text-white">echten TikTok-Videos</span> dazu — sortiert nach
+              echten View-Counts. Perfekt für Ad-Inspiration &amp; Creative-Research.
             </p>
           </header>
 
           {locked ? (
             <LockedCard />
+          ) : products === null ? (
+            <LoadingCard />
+          ) : products.length === 0 ? (
+            <EmptyProductsCard error={productsError} />
           ) : (
             <>
               <section className="glass-strong rounded-3xl border border-white/[0.08] p-5 sm:p-7 relative overflow-hidden accent-ring">
@@ -124,24 +168,24 @@ export default function VideoScoutPage() {
                   className="absolute inset-0 opacity-60 pointer-events-none"
                   style={{ background: "radial-gradient(circle at 50% 0%, rgba(149,191,71,0.12), transparent 60%)" }}
                 />
-                <div className="relative space-y-4">
-                  {/* Produkt */}
+                <div className="relative space-y-5">
+                  {/* Produkt-Auswahl */}
                   <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-                      Produkt
+                    <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-2">
+                      Produkt wählen
+                      <span className="ml-1.5 normal-case font-normal text-zinc-600">
+                        ({products.length} gezogen)
+                      </span>
                     </label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-                      <input
-                        value={product}
-                        onChange={(e) => setProduct(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") run();
-                        }}
-                        placeholder="z. B. LED Hundehalsband, Mini-Drucker…"
-                        maxLength={120}
-                        className="w-full pl-9 pr-3 py-3 rounded-xl bg-white/[0.04] border border-white/[0.10] text-[14px] text-white placeholder:text-zinc-600 focus:outline-none focus:border-[#95BF47]/40 transition"
-                      />
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 max-h-[320px] overflow-y-auto custom-scrollbar pr-1">
+                      {products.map((p) => (
+                        <ProductTile
+                          key={p.id}
+                          product={p}
+                          selected={selectedId === p.id}
+                          onSelect={() => setSelectedId(p.id)}
+                        />
+                      ))}
                     </div>
                   </div>
 
@@ -197,7 +241,7 @@ export default function VideoScoutPage() {
                     ) : (
                       <>
                         <Flame className="w-4 h-4" />
-                        Videos finden
+                        {selectedId ? "Videos finden" : "Erst Produkt wählen"}
                         <span className="font-mono opacity-80">· {cost} 🪙</span>
                       </>
                     )}
@@ -260,6 +304,63 @@ export default function VideoScoutPage() {
   );
 }
 
+// ─── Produkt-Kachel (auswählbar) ─────────────────────────────────
+
+function ProductTile({
+  product,
+  selected,
+  onSelect,
+}: {
+  product: ScoutProduct;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <button
+      onClick={onSelect}
+      className={`group relative text-left rounded-2xl border overflow-hidden transition ${
+        selected
+          ? "border-[#95BF47]/50 bg-[#95BF47]/8 ring-1 ring-[#95BF47]/30"
+          : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.16]"
+      }`}
+    >
+      <div className="aspect-square w-full bg-white/[0.03] overflow-hidden">
+        {product.bildUrl && !broken ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.bildUrl}
+            alt={product.titel}
+            referrerPolicy="no-referrer"
+            loading="lazy"
+            onError={() => setBroken(true)}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <ShoppingBag className="w-6 h-6 text-zinc-700" />
+          </div>
+        )}
+      </div>
+      {selected && (
+        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#95BF47] flex items-center justify-center shadow">
+          <Check className="w-3 h-3 text-black" strokeWidth={3} />
+        </div>
+      )}
+      <div className="p-2">
+        <p
+          className={`text-[11.5px] font-medium leading-tight line-clamp-2 ${
+            selected ? "text-white" : "text-zinc-300"
+          }`}
+        >
+          {product.titel || "Produkt"}
+        </p>
+        {product.sku && <p className="mt-0.5 text-[9.5px] text-zinc-600 truncate">{product.sku}</p>}
+      </div>
+    </button>
+  );
+}
+
 // ─── Video-Karte ─────────────────────────────────────────────────
 
 function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
@@ -288,21 +389,17 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
           </div>
         )}
 
-        {/* Rang */}
         <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-[11px] font-bold text-white">
           {rank}
         </div>
-        {/* Plattform */}
         <div className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur text-[10px] font-semibold text-white">
           <Music2 className="w-2.5 h-2.5 text-pink-300" /> TikTok
         </div>
-        {/* Play-Overlay */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
           <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur flex items-center justify-center">
             <Play className="w-5 h-5 text-white fill-white" />
           </div>
         </div>
-        {/* Metriken */}
         <div className="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/85 to-transparent flex items-center gap-3 text-[11px] text-white font-semibold">
           <span className="inline-flex items-center gap-1">
             <Eye className="w-3 h-3" /> {video.formatted_views}
@@ -328,7 +425,7 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
   );
 }
 
-// ─── Lade-Skelett ────────────────────────────────────────────────
+// ─── Lade-Skelett (Ergebnisse) ───────────────────────────────────
 
 function ScoutSkeleton({ count }: { count: number }) {
   return (
@@ -347,6 +444,45 @@ function ScoutSkeleton({ count }: { count: number }) {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+// ─── Lade-Karte (Produkte werden geholt) ─────────────────────────
+
+function LoadingCard() {
+  return (
+    <section className="glass-strong rounded-3xl border border-white/[0.08] p-8 text-center">
+      <motion.span
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
+        className="inline-flex mb-3"
+      >
+        <Sparkles className="w-6 h-6" style={{ color: ACCENT }} />
+      </motion.span>
+      <p className="text-sm text-zinc-400">Lade deine gezogenen Produkte…</p>
+    </section>
+  );
+}
+
+// ─── Keine gezogenen Produkte ────────────────────────────────────
+
+function EmptyProductsCard({ error }: { error?: string }) {
+  return (
+    <section className="glass-strong rounded-3xl border border-white/[0.08] p-8 text-center">
+      <div className="w-14 h-14 rounded-2xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mx-auto mb-4">
+        <Gift className="w-6 h-6" style={{ color: ACCENT }} />
+      </div>
+      <h2 className="text-lg font-semibold text-white">Noch keine Produkte gezogen</h2>
+      <p className="mt-2 text-sm text-zinc-400 max-w-sm mx-auto">
+        {error
+          ? error
+          : "Der Video Scout sucht Videos zu deinen gezogenen Produkten. Zieh zuerst ein Winning-Produkt im Produkt-Drop, dann findest du hier virale Videos dazu."}
+      </p>
+      <Link href="/charts" className="btn-deploy inline-flex items-center gap-2 mt-5 px-5 py-2.5 text-sm">
+        <Gift className="w-4 h-4" />
+        Zum Produkt-Drop
+      </Link>
     </section>
   );
 }

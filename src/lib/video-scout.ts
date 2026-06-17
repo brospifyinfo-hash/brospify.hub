@@ -52,6 +52,16 @@ export interface ScoutResult {
   videos_found: ScoutVideo[];
 }
 
+/** Schlanke Produkt-Projektion für die Auswahl-Liste im Scout. Quelle
+ *  sind die vom Account im Produkt-Drop gezogenen Produkte (bzw. der
+ *  gesamte Katalog für Admins). */
+export interface ScoutProduct {
+  id: string;
+  titel: string;
+  bildUrl: string;
+  sku: string;
+}
+
 /** Kompakte View-Formatierung: 1500000 → "1.5M", 23400 → "23.4K". */
 export function formatViews(n: number): string {
   if (!Number.isFinite(n) || n <= 0) return "0";

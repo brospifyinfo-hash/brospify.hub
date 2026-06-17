@@ -1,10 +1,18 @@
-// ─── POST /api/video-scout ───────────────────────────────────────
+// ─── /api/video-scout ────────────────────────────────────────────
 // "Brospify Viral Video Scout": findet zu einem Produkt die viralsten
 // echten TikTok-Videos.
 //
+//   GET  → liefert die Produkte, die der Account auswählen darf: die im
+//          Produkt-Drop bereits gezogenen Produkte (Admins bekommen den
+//          ganzen Katalog zum Testen). Kein Credit-Abzug.
+//   POST → scrapet zum gewählten Produkt virale Videos. Eingabe ist NUR
+//          eine productId aus der erlaubten Liste (kein Freitext) — so
+//          kann niemand beliebige/teure Suchen auslösen.
+//
 // Architektur (bewusst so, damit nie Zahlen halluziniert werden):
-//   1) Tier-Gate (videoScout) + Credit-Vorabprüfung
-//   2) Apify-TikTok-Scraper: Suche nach dem Produktnamen → echte
+//   1) Tier-Gate (videoScout) + productId gegen die erlaubte Liste
+//      prüfen + Credit-Vorabprüfung
+//   2) Apify-TikTok-Scraper: Suche nach dem Produkttitel → echte
 //      Videos mit echten playCount/Views
 //   3) Claude filtert NUR die Relevanz (structured JSON: welche
 //      Kandidaten zeigen zweifelsfrei das Produkt?)
@@ -13,8 +21,6 @@
 //   5) Credits erst JETZT abziehen (nur wenn ≥1 Video) + JSON zurück
 //
 // Voraussetzung: APIFY_API_TOKEN (TikTok-Scraper) + ANTHROPIC_API_KEY.
-// Fehlt einer der Keys, degradiert die Route mit klarer Meldung und
-// zieht keine Credits ab.
 
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
@@ -23,13 +29,15 @@ import { requireFeature } from "@/lib/tier-guard";
 import {
   deductCredits,
   findKundeByKey,
+  getAllProdukte,
   getCreditsState,
-  getKundeProfile,
+  type Produkt,
 } from "@/lib/sheets";
 import {
   costForCount,
   formatViews,
   isVideoCount,
+  type ScoutProduct,
   type ScoutVideo,
 } from "@/lib/video-scout";
 
@@ -38,6 +46,8 @@ export const dynamic = "force-dynamic";
 // Vercel Hobby kappt bei 60s. Apify-Run + Claude-Call müssen zusammen
 // darunter bleiben — die Result-Caps unten halten den Scrape kurz.
 export const maxDuration = 60;
+
+type Session = Awaited<ReturnType<typeof getSession>>;
 
 const MODEL = "claude-sonnet-4-6";
 // clockworks/tiktok-scraper — in der Apify-API ersetzt "~" das "/".
@@ -57,6 +67,32 @@ function num(v: unknown): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+function projectProduct(p: Produkt): ScoutProduct {
+  return { id: p.id, titel: p.titel, bildUrl: p.bildUrl, sku: p.sku };
+}
+
+/** Die Produkte, die dieser Account im Scout auswählen darf:
+ *  - Admin / ohne Lizenz → der gesamte Katalog (zum Testen)
+ *  - regulärer Kunde     → seine im Produkt-Drop gezogenen Produkte
+ *                          (neueste zuerst). */
+async function getDrawableProducts(session: Session): Promise<ScoutProduct[]> {
+  const all = (await getAllProdukte()).filter((p) => p.id);
+  if (session.isAdmin || !session.lizenzschluessel) {
+    return all.map(projectProduct);
+  }
+  const kunde = await findKundeByKey(session.lizenzschluessel);
+  if (!kunde) return [];
+  const drawnIds = Array.isArray(kunde.profile.drawnProducts)
+    ? kunde.profile.drawnProducts
+    : [];
+  const byId = new Map(all.map((p) => [p.id, p]));
+  return drawnIds
+    .map((id) => byId.get(id))
+    .filter((p): p is Produkt => !!p)
+    .reverse()
+    .map(projectProduct);
+}
+
 interface Candidate {
   url: string;
   views: number;
@@ -66,8 +102,9 @@ interface Candidate {
   thumbnail: string;
 }
 
-// Robuste Feld-Extraktion: TikTok-Scraper-Outputs variieren je nach
-// Actor-Version, daher mehrere Pfade abklopfen.
+// Robuste Feld-Extraktion (gegen echte Apify-Ausgabe verifiziert:
+// playCount/webVideoUrl/text/authorMeta.name/videoMeta.coverUrl sind
+// Top-Level). Mehrere Pfade als Sicherheit gegen Actor-Versionen.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 function normalize(raw: any): Candidate | null {
   const url =
@@ -209,7 +246,28 @@ Antworte ausschliesslich als JSON: {"relevant_indices": [0, 2, ...]}.`;
   }
 }
 
-// ─── Route ───────────────────────────────────────────────────────
+// ─── GET: erlaubte Produkte (gezogene Produkte / Katalog) ────────
+
+export async function GET() {
+  const session = await getSession();
+  const guard = await requireFeature(session, "videoScout");
+  if (!guard.ok) return guard.response;
+  try {
+    const products = await getDrawableProducts(session);
+    return NextResponse.json(
+      { ok: true, products },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  } catch (e) {
+    console.error("[video-scout] GET products failed:", e);
+    return NextResponse.json(
+      { error: "Produkte konnten nicht geladen werden." },
+      { status: 500 },
+    );
+  }
+}
+
+// ─── POST: Videos zum gewählten Produkt scrapen ──────────────────
 
 export async function POST(req: Request) {
   const session = await getSession();
@@ -217,17 +275,16 @@ export async function POST(req: Request) {
   if (!guard.ok) return guard.response;
 
   // ── Input ──
-  let body: { product?: unknown; count?: unknown };
+  let body: { productId?: unknown; count?: unknown };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Ungültiger Request-Body." }, { status: 400 });
   }
-  const product = str(body.product).slice(0, 120);
-  const count =
-    typeof body.count === "number" ? body.count : Number(body.count);
-  if (!product || product.length < 2) {
-    return NextResponse.json({ error: "Bitte gib ein Produkt an." }, { status: 400 });
+  const productId = str(body.productId);
+  const count = typeof body.count === "number" ? body.count : Number(body.count);
+  if (!productId) {
+    return NextResponse.json({ error: "Bitte wähle ein Produkt aus." }, { status: 400 });
   }
   if (!isVideoCount(count)) {
     return NextResponse.json({ error: "Anzahl muss 3, 6 oder 9 sein." }, { status: 400 });
@@ -253,17 +310,53 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── Credit-Vorabprüfung (Admin umgeht den Zähler) ──
-  let kundeRowIndex: number | null = null;
-  let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;
-  if (!session.isAdmin && session.lizenzschluessel) {
-    const kunde = await findKundeByKey(session.lizenzschluessel);
+  // ── Katalog laden + erlaubte Produkte bestimmen ──
+  let allProds: Produkt[];
+  try {
+    allProds = (await getAllProdukte()).filter((p) => p.id);
+  } catch (e) {
+    console.error("[video-scout] getAllProdukte failed:", e);
+    return NextResponse.json(
+      { error: "Produkte konnten nicht geladen werden." },
+      { status: 500 },
+    );
+  }
+
+  // Kunde nur für reguläre Accounts (für drawn-Set + Credits). Admins
+  // dürfen jedes Produkt zum Testen wählen und umgehen den Zähler.
+  let kunde: Awaited<ReturnType<typeof findKundeByKey>> | null = null;
+  let allowedIds: Set<string>;
+  if (session.isAdmin || !session.lizenzschluessel) {
+    allowedIds = new Set(allProds.map((p) => p.id));
+  } else {
+    kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde) {
       return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
     }
-    kundeRowIndex = kunde.rowIndex;
-    kundeProfile = await getKundeProfile(kunde.rowIndex);
-    const credits = getCreditsState(kundeProfile);
+    const drawnIds = Array.isArray(kunde.profile.drawnProducts)
+      ? kunde.profile.drawnProducts
+      : [];
+    allowedIds = new Set(drawnIds);
+  }
+
+  if (!allowedIds.has(productId)) {
+    return NextResponse.json(
+      { error: "Bitte wähle eines deiner gezogenen Produkte." },
+      { status: 400 },
+    );
+  }
+  const picked = allProds.find((p) => p.id === productId);
+  const product = str(picked?.titel).slice(0, 120);
+  if (!picked || !product) {
+    return NextResponse.json(
+      { error: "Dieses Produkt hat noch keinen Titel für die Suche." },
+      { status: 400 },
+    );
+  }
+
+  // ── Credit-Vorabprüfung (Admin umgeht den Zähler) ──
+  if (kunde) {
+    const credits = getCreditsState(kunde.profile);
     if (credits.balance < cost) {
       return NextResponse.json(
         {
@@ -285,7 +378,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: timedOut
-          ? "Die Suche hat zu lange gedauert. Versuche es mit einem genaueren Produktnamen erneut."
+          ? "Die Suche hat zu lange gedauert. Bitte versuche es gleich erneut."
           : "Video-Suche fehlgeschlagen. Versuche es in einem Moment erneut.",
       },
       { status: 502 },
@@ -334,9 +427,9 @@ export async function POST(req: Request) {
 
   // ── 4) Credits abziehen (erst jetzt, wo wir ≥1 Video liefern) ──
   let creditsRemaining: number | undefined;
-  if (kundeRowIndex !== null && kundeProfile !== null) {
+  if (kunde) {
     try {
-      const result = await deductCredits(kundeRowIndex, kundeProfile, cost, "video-scout");
+      const result = await deductCredits(kunde.rowIndex, kunde.profile, cost, "video-scout");
       if (!result.success) {
         return NextResponse.json(
           {
