@@ -37,6 +37,7 @@ import {
   Gauge,
   Gift,
   Search,
+  Flame,
 } from "lucide-react";
 import { BrandLogo } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
@@ -61,6 +62,16 @@ interface SessionInfo {
 // gibt es nicht mehr; "Themes" liegt jetzt im Avatar-Menü (AccountMenu).
 
 const AI_TOOLS = [
+  {
+    href: "/video-scout",
+    title: "Viral Video Scout",
+    desc: "Virale TikTok-Videos zum Produkt · ab 40 Credits",
+    icon: Flame,
+    color: "from-pink-500/15 to-rose-500/15",
+    border: "border-pink-500/15",
+    iconColor: "text-pink-400",
+    feature: "videoScout" as const,
+  },
   {
     href: "/email-templates",
     title: "AI Email Generator",

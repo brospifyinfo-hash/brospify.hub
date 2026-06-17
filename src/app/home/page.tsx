@@ -30,6 +30,7 @@ import {
   Camera,
   Scissors,
   ImageUp,
+  Flame,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useTier } from "@/lib/use-tier";
@@ -92,6 +93,7 @@ const SETUP_STEPS: { key: keyof Checklist; label: string }[] = [
 // AI-Tools-Kacheln für die Home-Seite (auch im rechten Avatar-Menü verlinkt).
 const HOME_AI_TOOLS: { title: string; desc: string; href: string; icon: typeof Search; color: string }[] = [
   { title: "Produkt Search", desc: "Zufalls-Generator · 50 Credits", href: "/charts", icon: Search, color: "#95BF47" },
+  { title: "Viral Video Scout", desc: "Virale TikTok-Videos · ab 40 Credits", href: "/video-scout", icon: Flame, color: "#EC4899" },
   { title: "AI Email Generator", desc: "Shopify-Mails per KI · 20 Credits", href: "/email-templates", icon: Mail, color: "#F43F5E" },
   { title: "AI Studio", desc: "Produktfotos · 15 Credits", href: "/ai-tools/ai-studio", icon: Camera, color: "#A855F7" },
   { title: "Background Remover", desc: "Freistellen · 5 Credits", href: "/ai-tools/background-remover", icon: Scissors, color: "#F59E0B" },

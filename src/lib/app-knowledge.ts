@@ -19,7 +19,7 @@ VERLINKEN: Wenn jemand fragt, wo etwas ist oder wie etwas geht, nenne die Funkti
 
 NAVIGATION (wo finde ich was?)
 - Obere Leiste (Desktop): [Home](/home) + das "AI Tools"-Menü.
-- Menü "AI Tools" (oben): ganz oben hervorgehoben "Produkt Search" (= der Produkt-Generator, [/charts](/charts)), darunter AI Email Generator, Image Upscaler, Background Remover, AI Studio.
+- Menü "AI Tools" (oben): ganz oben hervorgehoben "Produkt Search" (= der Produkt-Generator, [/charts](/charts)), darunter Viral Video Scout, AI Email Generator, Image Upscaler, Background Remover, AI Studio.
 - Profil-Menü (oben rechts, Avatar): Mediathek, Support, Konto-Einstellungen, Abo verwalten, Abmelden.
 - Credits-Anzeige oben rechts (Münz-Symbol) ist anklickbar und führt zu [Credits aufladen](/credits).
 - Auf dem Handy: untere Leiste mit Home, Drop, AI, Mediathek, Mehr.
@@ -28,7 +28,7 @@ CREDITS
 - Credits werden für KI-Aktionen verbraucht. Guthaben & Pakete: [Credits](/credits).
 - Jeder neue Account erhält einmalig 500 Start-Credits geschenkt.
 - Credit-Pakete (Kauf im Brospify-Shop, Aufladung erfolgt automatisch): Starter 500 Credits = 9,95 €, Pro 2.000 Credits = 24,95 €, Max 5.000 Credits = 39,95 €.
-- Kosten pro Aktion: Produkt-Drop 50 · AI Email Generator 20 · AI Studio 15 · Image Upscaler 5 · Background Remover 5.
+- Kosten pro Aktion: Produkt-Drop 50 · Viral Video Scout 40 (3 Videos) / 70 (6) / 90 (9) · AI Email Generator 20 · AI Studio 15 · Image Upscaler 5 · Background Remover 5.
 - Mitgliedschaft: es gibt genau EINEN Plan, die Brospify Membership für 21 €/Monat (alle Tools, Coaching, Priority-Support, 2.000 Credits/Monat). Buchen/verwalten unter [Abo verwalten](/account/subscription).
 
 PRODUKT-DROP / ZUFALLS-GENERATOR ("Produkt Search") — [Produkt Search](/charts)
@@ -44,6 +44,7 @@ AI TOOLS (im "AI Tools"-Menü oben)
 - Image Upscaler — [Image Upscaler](/ai-tools/hybrid-upscaler): skaliert Bilder 4x hoch (HD). Kosten: 5 Credits.
 - Magic Background Remover — [Background Remover](/ai-tools/background-remover): stellt Produkte frei (sauberer transparenter PNG-Cutout) und kann den Hintergrund ersetzen. Hintergrund lokal ersetzen ist kostenlos; das KI-Freistellen kostet 5 Credits.
 - AI Studio (Produktfotos) — [AI Studio](/ai-tools/ai-studio): erzeugt professionelle Produktfoto-Szenen inkl. Schatten. Kosten: 15 Credits.
+- Viral Video Scout — [Viral Video Scout](/video-scout): findet zu einem Produkt die viralsten echten TikTok-Videos (echte View-Counts, sortiert nach Klicks). Man gibt das Produkt + die gewünschte Anzahl (3, 6 oder 9 Videos) ein. Kosten: 40 (3 Videos) / 70 (6) / 90 (9) Credits. Nur eindeutig zum Produkt passende Videos werden gezeigt; gibt es weniger passende, kommen entsprechend weniger zurück (es wird nicht mit irrelevanten aufgefüllt). Wurden keine passenden gefunden, werden KEINE Credits abgezogen. Gut für Ad-Inspiration und Creative-Research.
 
 MEDIATHEK — [Mediathek](/library)
 - Sammelt deine generierten/bearbeiteten Bilder (z. B. aus Upscaler, Background Remover, AI Studio) zum Wiederfinden und Download.
