@@ -50,11 +50,18 @@ export const maxDuration = 60;
 type Session = Awaited<ReturnType<typeof getSession>>;
 
 const MODEL = "claude-sonnet-4-6";
+// Harte Viralitäts-Schwelle: Videos unter so vielen Views gelten NICHT
+// als viral und werden gar nicht erst betrachtet. Zentraler Justier-Knopf
+// — höher = strenger (weniger, dafür klar viralere Treffer).
+const MIN_VIRAL_VIEWS = 50_000;
+// Max. Kandidaten (nach Views sortiert), die an die Relevanz-KI gehen —
+// begrenzt Tokens/Latenz.
+const RELEVANCE_CANDIDATE_CAP = 25;
 // clockworks/tiktok-scraper — in der Apify-API ersetzt "~" das "/".
 const APIFY_ACTOR = "clockworks~tiktok-scraper";
 const apifyRunUrl = (token: string) =>
   `https://api.apify.com/v2/acts/${APIFY_ACTOR}/run-sync-get-dataset-items` +
-  `?token=${encodeURIComponent(token)}&timeout=55`;
+  `?token=${encodeURIComponent(token)}&timeout=50`;
 
 // ─── Helpers ─────────────────────────────────────────────────────
 
@@ -138,9 +145,12 @@ async function scrapeTikTok(
   product: string,
   want: number,
 ): Promise<Candidate[]> {
-  // Genug Kandidaten holen, damit nach dem Relevanzfilter noch genug
-  // übrig bleiben — aber eng genug, dass der Run unter 60s bleibt.
-  const resultsPerPage = Math.min(40, Math.max(12, want * 4));
+  // Pool gross genug für genug virale Treffer nach den Filtern, aber
+  // bewusst KLEIN gedeckelt: an echten Daten getestet liefern 12–18
+  // Treffer zuverlässig 6–10 Videos ≥50k Views in 7–20s; bei ~30 lief
+  // der Actor teils in den 50s-Timeout (run-failed). Reliabilität >
+  // Pool-Grösse.
+  const resultsPerPage = Math.min(18, Math.max(12, want * 3));
   const input = {
     searchQueries: [product],
     resultsPerPage,
@@ -153,7 +163,7 @@ async function scrapeTikTok(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
-    signal: AbortSignal.timeout(57000),
+    signal: AbortSignal.timeout(52000),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
@@ -188,6 +198,49 @@ function extractJson(text: string): string {
   if (fence) return fence[1].trim();
   const brace = text.match(/\{[\s\S]*\}/);
   return brace ? brace[0] : text.trim();
+}
+
+// ─── Such-Begriff aus dem Produkttitel ableiten ──────────────────
+// Lange deutsche Marketing-Titel ("LED-Hundehalsband – Sicherheit bei
+// Nacht für deinen Hund") finden auf TikTok kaum virale Videos. Ein
+// knapper, generischer Begriff (bevorzugt Englisch) trifft die virale
+// Dropshipping-Welt viel besser. Fällt der Call aus, nehmen wir den
+// Titel als Fallback.
+
+const QUERY_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: { query: { type: "string" } },
+  required: ["query"],
+  additionalProperties: false,
+};
+
+async function generateSearchQuery(client: Anthropic, title: string): Promise<string> {
+  const system = `Du wandelst einen deutschen Produkt-Titel in EINEN kurzen TikTok-Suchbegriff um.
+REGELN:
+- 2 bis 4 Wörter, bevorzugt ENGLISCH (so taggen die meisten viralen Dropshipping-Creator).
+- Nur der Produkt-Typ / Kern-Gegenstand. KEINE Marketing-Wörter (Premium, Set, Deluxe, 2024, "für deinen Hund", Adjektive wie "innovativ").
+- Keine Sonderzeichen, keine Anführungszeichen, kein Hashtag.
+Antworte ausschliesslich als JSON: {"query":"..."}.`;
+  try {
+    const msg = await client.messages.create({
+      model: MODEL,
+      max_tokens: 100,
+      thinking: { type: "disabled" },
+      output_config: { format: { type: "json_schema", schema: QUERY_SCHEMA } },
+      system,
+      messages: [{ role: "user", content: `Produkt-Titel: ${title}` }],
+    });
+    const text = msg.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n");
+    const parsed = JSON.parse(extractJson(text)) as { query?: unknown };
+    const q = typeof parsed?.query === "string" ? parsed.query.trim().slice(0, 60) : "";
+    return q || title;
+  } catch (e) {
+    console.warn("[video-scout] query-gen failed, using title:", e);
+    return title;
+  }
 }
 
 async function filterRelevant(
@@ -368,10 +421,16 @@ export async function POST(req: Request) {
     }
   }
 
-  // ── 1) Scrapen ──
+  // ── KI-Client (für Query-Gen + Relevanzfilter) ──
+  const client = new Anthropic({ apiKey: anthropicKey });
+
+  // ── 1) Besten Suchbegriff aus dem Titel ableiten ──
+  const searchQuery = await generateSearchQuery(client, product);
+
+  // ── 2) Scrapen ──
   let candidates: Candidate[];
   try {
-    candidates = await scrapeTikTok(apifyToken, product, count);
+    candidates = await scrapeTikTok(apifyToken, searchQuery, count);
   } catch (e) {
     console.error("[video-scout] scrape failed:", e);
     const timedOut = e instanceof Error && /timeout|abort/i.test(e.message);
@@ -394,21 +453,37 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── 2) Relevanz filtern (KI entscheidet nur, WAS passt) ──
-  const client = new Anthropic({ apiKey: anthropicKey });
-  const relevantIdx = await filterRelevant(client, product, candidates);
-  const relevant = relevantIdx.map((i) => candidates[i]).filter(Boolean);
-  if (relevant.length === 0) {
+  // ── 3) Auf VIRALE Videos eingrenzen (harte View-Schwelle) ──
+  // Nur Videos ab MIN_VIRAL_VIEWS kommen überhaupt in Frage; nach Views
+  // sortiert und auf RELEVANCE_CANDIDATE_CAP gedeckelt (Tokens/Latenz).
+  const viral = candidates
+    .filter((c) => c.views >= MIN_VIRAL_VIEWS)
+    .sort((a, b) => b.views - a.views)
+    .slice(0, RELEVANCE_CANDIDATE_CAP);
+  if (viral.length === 0) {
     return NextResponse.json(
       {
-        error: "Keine eindeutig passenden Videos gefunden. Es wurden keine Credits abgezogen.",
+        error: `Keine viralen Videos (ab ${formatViews(MIN_VIRAL_VIEWS)} Views) zu diesem Produkt gefunden. Es wurden keine Credits abgezogen.`,
         videos_found: [],
       },
       { status: 404 },
     );
   }
 
-  // ── 3) Nach ECHTEN Views sortieren + auf gewünschte Menge kürzen ──
+  // ── 4) Relevanz filtern — NUR unter den viralen Kandidaten ──
+  const relevantIdx = await filterRelevant(client, product, viral);
+  const relevant = relevantIdx.map((i) => viral[i]).filter(Boolean);
+  if (relevant.length === 0) {
+    return NextResponse.json(
+      {
+        error: "Keine eindeutig passenden viralen Videos gefunden. Es wurden keine Credits abgezogen.",
+        videos_found: [],
+      },
+      { status: 404 },
+    );
+  }
+
+  // ── 5) Nach ECHTEN Views sortieren + auf gewünschte Menge kürzen ──
   const top = relevant
     .slice()
     .sort((a, b) => b.views - a.views)
@@ -425,7 +500,7 @@ export async function POST(req: Request) {
     likes: c.likes || undefined,
   }));
 
-  // ── 4) Credits abziehen (erst jetzt, wo wir ≥1 Video liefern) ──
+  // ── 6) Credits abziehen (erst jetzt, wo wir ≥1 Video liefern) ──
   let creditsRemaining: number | undefined;
   if (kunde) {
     try {
