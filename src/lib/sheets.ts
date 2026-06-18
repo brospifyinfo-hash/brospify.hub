@@ -150,6 +150,7 @@ export type UserRole = "admin" | "user";
 // TierKey lives in tiers-shared.ts as the single source of truth.
 export type { TierKey } from "./tiers-shared";
 import type { TierKey } from "./tiers-shared";
+import type { SavedScoutVideo } from "./video-scout";
 
 export interface KundeProfile {
   shopify_credentials?: { clientId?: string; clientSecret?: string };
@@ -222,6 +223,10 @@ export interface KundeProfile {
    *  als Debounce gegen Mail-Spam; wird beim nächsten erfolgreichen Zug
    *  (also sobald wieder neue Produkte da sind) wieder geleert. */
   drawnAllNotifiedAt?: string;
+  /** Viral Video Scout: alle vom Account gefundenen/gespeicherten Videos
+   *  (neueste zuerst, dedupliziert per url). Dient als Historie UND als
+   *  Garantie, dass kein Video zweimal gezogen werden kann. */
+  scoutVideos?: SavedScoutVideo[];
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────

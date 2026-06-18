@@ -30,6 +30,20 @@ export function costForCount(count: VideoCount): number {
   );
 }
 
+/** Credits, die ein einzelnes Video kostet — Basis für die Gutschrift,
+ *  wenn ein Video unter der Viral-Schwelle bleibt. */
+export function perVideoCost(count: VideoCount): number {
+  return Math.round(costForCount(count) / count);
+}
+
+// ─── Viralitäts-Schwellen ────────────────────────────────────────
+// Unter VIDEO_VIRAL_MIN gilt ein Video als "nicht viral genug": es wird
+// dem Kunden gutgeschrieben. Findet sich GAR kein Video ≥ dieser Grenze,
+// sucht das System erst gar nicht weiter ("Produkt geht aktuell nicht
+// viral"). VIDEO_INCLUDE_MIN hält offensichtlichen Müll komplett raus.
+export const VIDEO_VIRAL_MIN = 10_000;
+export const VIDEO_INCLUDE_MIN = 1_000;
+
 /** Ein gefundenes Video im finalen Ausgabe-Schema. Die ersten fünf
  *  Felder entsprechen 1:1 dem Agent-Output-Format; thumbnail/author/
  *  likes sind App-Extras fürs UI. */
@@ -42,6 +56,17 @@ export interface ScoutVideo {
   thumbnail?: string;
   author?: string;
   likes?: number;
+  /** True, wenn das Video unter der Viral-Schwelle lag und dem Kunden
+   *  dafür Credits gutgeschrieben wurden. */
+  refunded?: boolean;
+  /** Wie viele Credits für dieses Video gutgeschrieben wurden. */
+  refundAmount?: number;
+}
+
+/** Ein beim Kunden gespeichertes Video (Historie + Dedupe-Quelle). */
+export interface SavedScoutVideo extends ScoutVideo {
+  productId: string;
+  savedAt: string;
 }
 
 export interface ScoutResult {

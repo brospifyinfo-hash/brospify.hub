@@ -31,12 +31,17 @@ import {
   findKundeByKey,
   getAllProdukte,
   getCreditsState,
+  updateKundeProfile,
   type Produkt,
 } from "@/lib/sheets";
 import {
   costForCount,
   formatViews,
   isVideoCount,
+  perVideoCost,
+  VIDEO_INCLUDE_MIN,
+  VIDEO_VIRAL_MIN,
+  type SavedScoutVideo,
   type ScoutProduct,
   type ScoutVideo,
 } from "@/lib/video-scout";
@@ -50,12 +55,8 @@ export const maxDuration = 60;
 type Session = Awaited<ReturnType<typeof getSession>>;
 
 const MODEL = "claude-sonnet-4-6";
-// Harte Viralitäts-Schwelle: Videos unter so vielen Views gelten NICHT
-// als viral und werden gar nicht erst betrachtet. Zentraler Justier-Knopf
-// — höher = strenger (weniger, dafür klar viralere Treffer).
-const MIN_VIRAL_VIEWS = 50_000;
 // Max. Kandidaten (nach Views sortiert), die an die Relevanz-KI gehen —
-// begrenzt Tokens/Latenz.
+// begrenzt Tokens/Latenz. Viralitäts-Schwellen liegen in lib/video-scout.
 const RELEVANCE_CANDIDATE_CAP = 25;
 // clockworks/tiktok-scraper — in der Apify-API ersetzt "~" das "/".
 const APIFY_ACTOR = "clockworks~tiktok-scraper";
@@ -78,26 +79,32 @@ function projectProduct(p: Produkt): ScoutProduct {
   return { id: p.id, titel: p.titel, bildUrl: p.bildUrl, sku: p.sku };
 }
 
-/** Die Produkte, die dieser Account im Scout auswählen darf:
- *  - Admin / ohne Lizenz → der gesamte Katalog (zum Testen)
+/** Auswählbare Produkte + bereits gespeicherte Videos dieses Accounts:
+ *  - Admin / ohne Lizenz → der gesamte Katalog, keine Historie
  *  - regulärer Kunde     → seine im Produkt-Drop gezogenen Produkte
- *                          (neueste zuerst). */
-async function getDrawableProducts(session: Session): Promise<ScoutProduct[]> {
+ *                          (neueste zuerst) + seine gespeicherten Videos. */
+async function getScoutState(
+  session: Session,
+): Promise<{ products: ScoutProduct[]; savedVideos: SavedScoutVideo[] }> {
   const all = (await getAllProdukte()).filter((p) => p.id);
   if (session.isAdmin || !session.lizenzschluessel) {
-    return all.map(projectProduct);
+    return { products: all.map(projectProduct), savedVideos: [] };
   }
   const kunde = await findKundeByKey(session.lizenzschluessel);
-  if (!kunde) return [];
+  if (!kunde) return { products: [], savedVideos: [] };
   const drawnIds = Array.isArray(kunde.profile.drawnProducts)
     ? kunde.profile.drawnProducts
     : [];
   const byId = new Map(all.map((p) => [p.id, p]));
-  return drawnIds
+  const products = drawnIds
     .map((id) => byId.get(id))
     .filter((p): p is Produkt => !!p)
     .reverse()
     .map(projectProduct);
+  const savedVideos = Array.isArray(kunde.profile.scoutVideos)
+    ? kunde.profile.scoutVideos
+    : [];
+  return { products, savedVideos };
 }
 
 interface Candidate {
@@ -306,9 +313,9 @@ export async function GET() {
   const guard = await requireFeature(session, "videoScout");
   if (!guard.ok) return guard.response;
   try {
-    const products = await getDrawableProducts(session);
+    const { products, savedVideos } = await getScoutState(session);
     return NextResponse.json(
-      { ok: true, products },
+      { ok: true, products, savedVideos },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (e) {
@@ -453,82 +460,127 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── 3) Auf VIRALE Videos eingrenzen (harte View-Schwelle) ──
-  // Nur Videos ab MIN_VIRAL_VIEWS kommen überhaupt in Frage; nach Views
-  // sortiert und auf RELEVANCE_CANDIDATE_CAP gedeckelt (Tokens/Latenz).
-  const viral = candidates
-    .filter((c) => c.views >= MIN_VIRAL_VIEWS)
+  // ── 3) Müll raus + bereits gezogene Videos ausschliessen ──
+  // Kein Video kann zweimal gezogen werden: gegen die gespeicherten URLs
+  // dieses Kunden deduplizieren. Offensichtlichen Müll (< INCLUDE_MIN)
+  // ganz raus. Nach echten Views sortieren, Pool deckeln.
+  const savedUrls = new Set(
+    (kunde && Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : []).map(
+      (v) => v.url,
+    ),
+  );
+  const pool = candidates
+    .filter((c) => c.views >= VIDEO_INCLUDE_MIN && !savedUrls.has(c.url))
     .sort((a, b) => b.views - a.views)
     .slice(0, RELEVANCE_CANDIDATE_CAP);
-  if (viral.length === 0) {
-    return NextResponse.json(
-      {
-        error: `Keine viralen Videos (ab ${formatViews(MIN_VIRAL_VIEWS)} Views) zu diesem Produkt gefunden. Es wurden keine Credits abgezogen.`,
-        videos_found: [],
-      },
-      { status: 404 },
-    );
+
+  // ── Dud-Gate (vor der KI): kein einziges Video ≥ Viral-Schwelle →
+  // Produkt geht aktuell nicht viral. Erst gar nicht weitersuchen. ──
+  const notViralResponse = NextResponse.json(
+    {
+      notViral: true,
+      error:
+        "Aktuell konnten leider keine viralen Videos zu diesem Produkt gefunden werden. Es wurden keine Credits abgezogen.",
+      videos_found: [],
+    },
+    { status: 404 },
+  );
+  if (!pool.some((c) => c.views >= VIDEO_VIRAL_MIN)) {
+    return notViralResponse;
   }
 
-  // ── 4) Relevanz filtern — NUR unter den viralen Kandidaten ──
-  const relevantIdx = await filterRelevant(client, product, viral);
-  const relevant = relevantIdx.map((i) => viral[i]).filter(Boolean);
+  // ── 4) Relevanz filtern (KI entscheidet nur, WAS passt) ──
+  const relevantIdx = await filterRelevant(client, product, pool);
+  let relevant = relevantIdx.map((i) => pool[i]).filter(Boolean);
+  // Geht der Filter leer aus, es gibt aber klar virale Treffer, nimm die
+  // viralen — besser als eine bezahlte Leersuche.
   if (relevant.length === 0) {
-    return NextResponse.json(
-      {
-        error: "Keine eindeutig passenden viralen Videos gefunden. Es wurden keine Credits abgezogen.",
-        videos_found: [],
-      },
-      { status: 404 },
-    );
+    relevant = pool.filter((c) => c.views >= VIDEO_VIRAL_MIN);
+  }
+  // Erneutes Dud-Gate auf den relevanten Treffern.
+  if (!relevant.some((c) => c.views >= VIDEO_VIRAL_MIN)) {
+    return notViralResponse;
   }
 
-  // ── 5) Nach ECHTEN Views sortieren + auf gewünschte Menge kürzen ──
+  // ── 5) Nach echten Views sortieren + auf gewünschte Menge kürzen ──
   const top = relevant
     .slice()
     .sort((a, b) => b.views - a.views)
     .slice(0, count);
 
-  const videos_found: ScoutVideo[] = top.map((c) => ({
-    url: c.url,
-    platform: "TikTok",
-    view_count: c.views,
-    formatted_views: formatViews(c.views),
-    title_snippet: c.caption.slice(0, 50),
-    thumbnail: c.thumbnail || undefined,
-    author: c.author || undefined,
-    likes: c.likes || undefined,
-  }));
+  // ── 6) Refund: Videos unter der Viral-Schwelle werden gutgeschrieben ──
+  const perVideo = perVideoCost(count);
+  let refundTotal = 0;
+  const videos_found: ScoutVideo[] = top.map((c) => {
+    const refunded = c.views < VIDEO_VIRAL_MIN;
+    if (refunded) refundTotal += perVideo;
+    return {
+      url: c.url,
+      platform: "TikTok",
+      view_count: c.views,
+      formatted_views: formatViews(c.views),
+      title_snippet: c.caption.slice(0, 50),
+      thumbnail: c.thumbnail || undefined,
+      author: c.author || undefined,
+      likes: c.likes || undefined,
+      refunded,
+      refundAmount: refunded ? perVideo : undefined,
+    };
+  });
+  const netCost = Math.max(0, cost - refundTotal);
 
-  // ── 6) Credits abziehen (erst jetzt, wo wir ≥1 Video liefern) ──
+  // ── 7) Videos beim Kunden speichern + Netto-Credits abziehen (atomar) ──
+  // deductCredits schreibt `{ ...profile, credits }`, nimmt also unser
+  // erweitertes scoutVideos mit — ein einziger Write, keine halben Zustände.
   let creditsRemaining: number | undefined;
   if (kunde) {
+    const nowIso = new Date().toISOString();
+    const newRecords: SavedScoutVideo[] = videos_found.map((v) => ({
+      ...v,
+      // TikTok-Cover-URLs sind signiert + laufen nach ~1 Tag ab → NICHT
+      // persistieren (spart massiv Platz in der einen Profil-Zelle, die
+      // als JSON max. 50k Zeichen halten darf). In-Session zeigt die UI
+      // die Thumbnails noch aus dem Speicher.
+      thumbnail: undefined,
+      productId,
+      savedAt: nowIso,
+    }));
+    const existing = Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : [];
+    // Neueste zuerst, global auf 80 begrenzt (Profil-Zelle nicht sprengen).
+    const merged = [...newRecords, ...existing].slice(0, 80);
+    const updatedProfile = { ...kunde.profile, scoutVideos: merged };
     try {
-      const result = await deductCredits(kunde.rowIndex, kunde.profile, cost, "video-scout");
-      if (!result.success) {
-        return NextResponse.json(
-          {
-            error: `Nicht genug Credits — die Suche kostet ${cost}.`,
-            creditsRemaining: result.remaining,
-          },
-          { status: 402 },
-        );
+      if (netCost > 0) {
+        const result = await deductCredits(kunde.rowIndex, updatedProfile, netCost, "video-scout");
+        if (!result.success) {
+          return NextResponse.json(
+            { error: `Nicht genug Credits — die Suche kostet ${cost}.`, creditsRemaining: result.remaining },
+            { status: 402 },
+          );
+        }
+        creditsRemaining = result.remaining;
+      } else {
+        // Alles gutgeschrieben (theoretisch) — nur speichern, nichts abziehen.
+        await updateKundeProfile(kunde.rowIndex, updatedProfile);
+        creditsRemaining = getCreditsState(updatedProfile).balance;
       }
-      creditsRemaining = result.remaining;
     } catch (e) {
-      console.error("[video-scout] deduct failed:", e);
+      console.error("[video-scout] save+deduct failed:", e);
       return NextResponse.json({ error: "Abrechnung fehlgeschlagen." }, { status: 500 });
     }
   }
 
-  // Antwort hält das Agent-Schema (product/requested_videos/credits_used/
-  // tier_status/videos_found) ein; creditsRemaining ist ein App-Extra,
-  // damit die Credits-Pille sofort aktualisiert.
+  // Antwort: videos_found hält das Agent-Schema ein; productId, die
+  // Refund-Infos und creditsRemaining sind App-Extras fürs UI.
   return NextResponse.json(
     {
       product,
+      productId,
       requested_videos: count,
-      credits_used: cost,
+      credits_used: netCost,
+      credits_refunded: refundTotal,
+      refunded_count: videos_found.filter((v) => v.refunded).length,
+      per_video_refund: perVideo,
       tier_status: "Premium Search",
       videos_found,
       creditsRemaining,
