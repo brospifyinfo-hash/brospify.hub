@@ -1651,6 +1651,80 @@ export async function deleteNewsPost(rowIndex: number): Promise<void> {
   });
 }
 
+// ─── THEMES (Tab "Themes") ────────────────────────────────────────
+// Admin lädt Shopify-Themes als ZIP hoch (via /api/upload → Vercel Blob,
+// Ordner themes/). Die Metadaten liegen hier; Kunden laden per Klick die
+// Blob-URL. Es werden immer nur die 10 neuesten Versionen behalten (der
+// Prune passiert beim Anlegen in /api/admin/themes).
+//   A=ID, B=Name, C=Version, D=Url, E=FileName, F=SizeBytes, G=CreatedAt
+
+const THEMES_HEADERS = ["ID", "Name", "Version", "Url", "FileName", "SizeBytes", "CreatedAt"];
+
+export interface Theme {
+  rowIndex: number;
+  id: string;
+  name: string;
+  version: string;
+  url: string;
+  fileName: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+function rowToTheme(row: string[], i: number): Theme {
+  return {
+    rowIndex: i + 2,
+    id: row[0] || "",
+    name: row[1] || "",
+    version: row[2] || "",
+    url: row[3] || "",
+    fileName: row[4] || "",
+    sizeBytes: Number.parseInt(row[5] || "0", 10) || 0,
+    createdAt: row[6] || "",
+  };
+}
+
+export async function getAllThemes(): Promise<Theme[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("Themes", THEMES_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Themes!A2:G",
+    });
+    const rows = res.data.values || [];
+    return rows.map((row, i) => rowToTheme(row, i)).filter((t) => t.id && t.url);
+  } catch {
+    return [];
+  }
+}
+
+export async function addTheme(theme: Omit<Theme, "rowIndex">): Promise<void> {
+  const sheets = getSheets();
+  await ensureSheet("Themes", THEMES_HEADERS);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Themes!A:G",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[
+        theme.id, theme.name, theme.version, theme.url,
+        theme.fileName, String(theme.sizeBytes), theme.createdAt,
+      ]],
+    },
+  });
+}
+
+export async function deleteTheme(rowIndex: number): Promise<void> {
+  const sheets = getSheets();
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `Themes!A${rowIndex}:G${rowIndex}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", "", ""]] },
+  });
+}
+
 // ─── START TASKS (Tab "StartTasks") ───────────────────────────────
 // Admin-curated checklist that replaces the old Shopify-app-only
 // insights on the home page. Each task is a short title plus optional

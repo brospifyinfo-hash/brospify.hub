@@ -1,12 +1,10 @@
 "use client";
 
 // ─── /video-scout — Viral Video Scout ("Premium Search") ─────────
-// Ablauf: gezogenes Produkt wählen → Anzahl (3/6/9) → echte virale
-// TikTok-Videos. Echte View-Counts (Apify), Relevanz per KI, Sortierung
-// nach Views. Gefundene Videos werden beim Kunden GESPEICHERT (Historie
-// + kein Video doppelt). Videos unter der Viral-Schwelle werden dem
-// Kunden gutgeschrieben. Erkennt das System, dass das Produkt aktuell
-// nicht viral geht, sucht es erst gar nicht weiter.
+// Produkt wählen (klappt nach Wahl ein) → Anzahl → echte virale TikTok-
+// Videos. Echte View-Counts (Apify), Relevanz per KI, Sortierung nach
+// Views. Funde werden beim Kunden gespeichert (Historie, kein Doppel-
+// Ziehen). Videos < Viral-Schwelle werden gutgeschrieben.
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -28,6 +26,7 @@ import {
   Coins,
   Info,
   SearchX,
+  Pencil,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
@@ -52,6 +51,7 @@ export default function VideoScoutPage() {
   const [savedByProduct, setSavedByProduct] = useState<Record<string, SavedScoutVideo[]>>({});
   const [productsError, setProductsError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [count, setCount] = useState<VideoCount>(3);
   const [running, setRunning] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -68,6 +68,7 @@ export default function VideoScoutPage() {
     [products, selectedId],
   );
   const selectedVideos = selectedId ? savedByProduct[selectedId] ?? [] : [];
+  const showPicker = pickerOpen || !selectedId;
 
   // ── Gezogene Produkte + gespeicherte Videos laden ──
   useEffect(() => {
@@ -91,7 +92,6 @@ export default function VideoScoutPage() {
           return;
         }
         setProducts(Array.isArray(data.products) ? data.products : []);
-        // Videos nach productId gruppieren (Historie pro Produkt).
         const grouped: Record<string, SavedScoutVideo[]> = {};
         for (const v of (Array.isArray(data.savedVideos) ? data.savedVideos : []) as SavedScoutVideo[]) {
           (grouped[v.productId] ??= []).push(v);
@@ -111,6 +111,7 @@ export default function VideoScoutPage() {
 
   function selectProduct(id: string) {
     setSelectedId(id);
+    setPickerOpen(false);
     setError("");
     setNotViral(false);
     setLastRefund(null);
@@ -153,7 +154,6 @@ export default function VideoScoutPage() {
         return;
       }
 
-      // Neue Videos in die (persistierte) Historie des Produkts mergen.
       const now = new Date().toISOString();
       const fresh: SavedScoutVideo[] = (Array.isArray(data.videos_found) ? data.videos_found : []).map(
         (v: ScoutVideo) => ({ ...v, productId: pid, savedAt: now }),
@@ -178,22 +178,21 @@ export default function VideoScoutPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="max-w-5xl mx-auto px-3 sm:px-5 py-4 sm:py-7 lg:py-9">
+        <div className="max-w-4xl mx-auto px-3 sm:px-5 py-4 sm:py-7 lg:py-9">
           {/* Header */}
-          <header className="mb-6 sm:mb-8 text-center">
+          <header className="mb-4 sm:mb-6 text-center">
             <div
-              className="inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] font-semibold mb-2"
+              className="inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] font-semibold mb-1.5"
               style={{ color: ACCENT }}
             >
               <Flame className="w-3 h-3" />
               Premium Search
             </div>
-            <h1 className="text-[26px] sm:text-[34px] font-bold tracking-tight text-white leading-tight font-sf-display">
+            <h1 className="text-[22px] sm:text-[32px] font-bold tracking-tight text-white leading-tight font-sf-display">
               Viral Video Scout
             </h1>
-            <p className="mt-2.5 text-[12.5px] sm:text-[15px] text-zinc-400 leading-relaxed max-w-xl mx-auto">
-              Wähle eines deiner gezogenen Produkte — der Scout findet dir die viralsten echten
-              TikTok-Videos dazu, sortiert nach echten View-Counts. Deine Funde werden gespeichert.
+            <p className="mt-1.5 sm:mt-2.5 text-[12px] sm:text-[14px] text-zinc-400 leading-relaxed max-w-md mx-auto">
+              Wähle ein gezogenes Produkt — der Scout findet die viralsten echten TikTok-Videos dazu.
             </p>
           </header>
 
@@ -204,93 +203,94 @@ export default function VideoScoutPage() {
           ) : products.length === 0 ? (
             <EmptyProductsCard error={productsError} />
           ) : (
-            <div className="space-y-5 sm:space-y-6">
-              {/* ── Schritt 1: Produkt wählen ── */}
-              <section className="glass-strong rounded-3xl border border-white/[0.08] p-5 sm:p-6">
-                <StepHeader n={1} label="Produkt wählen" hint={`${products.length} gezogen`} />
-                <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2.5 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
-                  {products.map((p) => (
-                    <ProductTile
-                      key={p.id}
-                      product={p}
-                      selected={selectedId === p.id}
-                      savedCount={(savedByProduct[p.id] ?? []).length}
-                      onSelect={() => selectProduct(p.id)}
-                    />
-                  ))}
-                </div>
-              </section>
-
-              {/* ── Schritt 2: Suche starten ── */}
-              <AnimatePresence mode="wait">
-                {selectedProduct && (
-                  <motion.section
-                    key={selectedProduct.id}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -8 }}
-                    transition={{ duration: 0.2 }}
-                    className="glass-strong rounded-3xl border border-white/[0.08] p-5 sm:p-6 relative overflow-hidden accent-ring"
-                  >
-                    <div
-                      className="absolute inset-0 opacity-50 pointer-events-none"
-                      style={{ background: "radial-gradient(circle at 50% 0%, rgba(149,191,71,0.10), transparent 60%)" }}
-                    />
-                    <div className="relative">
-                      <StepHeader n={2} label="Videos finden" />
-
-                      {/* Gewähltes Produkt */}
-                      <div className="mt-4 flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-2.5">
+            <div className="space-y-4">
+              {/* ── Steuerung ── */}
+              <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-4 sm:p-6 relative overflow-hidden accent-ring">
+                <div
+                  className="absolute inset-0 opacity-50 pointer-events-none"
+                  style={{ background: "radial-gradient(circle at 50% 0%, rgba(149,191,71,0.10), transparent 60%)" }}
+                />
+                <div className="relative">
+                  {/* Produkt: Auswahl-Grid ODER kompakte „ausgewählt"-Leiste */}
+                  {showPicker ? (
+                    <div>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+                          Produkt wählen
+                        </label>
+                        <span className="text-[10.5px] text-zinc-600">{products.length} gezogen</span>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[268px] overflow-y-auto custom-scrollbar pr-0.5">
+                        {products.map((p) => (
+                          <ProductTile
+                            key={p.id}
+                            product={p}
+                            selected={selectedId === p.id}
+                            savedCount={(savedByProduct[p.id] ?? []).length}
+                            onSelect={() => selectProduct(p.id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    selectedProduct && (
+                      <button
+                        onClick={() => setPickerOpen(true)}
+                        className="w-full flex items-center gap-3 rounded-2xl border border-white/[0.08] bg-white/[0.02] p-2.5 text-left hover:bg-white/[0.04] transition"
+                      >
                         <ProductThumb src={selectedProduct.bildUrl} alt={selectedProduct.titel} />
                         <div className="min-w-0 flex-1">
-                          <div className="text-[13.5px] font-semibold text-white leading-tight line-clamp-2">
+                          <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">
+                            Gewähltes Produkt
+                          </div>
+                          <div className="text-[13.5px] font-semibold text-white leading-tight line-clamp-1">
                             {selectedProduct.titel || "Produkt"}
                           </div>
-                          {selectedVideos.length > 0 && (
-                            <div className="mt-0.5 text-[11px] text-zinc-500">
-                              {selectedVideos.length} gespeicherte{selectedVideos.length === 1 ? "s Video" : " Videos"}
-                            </div>
-                          )}
                         </div>
-                      </div>
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400 px-2 py-1 rounded-lg border border-white/[0.08]">
+                          <Pencil className="w-3 h-3" /> Ändern
+                        </span>
+                      </button>
+                    )
+                  )}
 
-                      {/* Anzahl */}
-                      <div className="mt-4">
-                        <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-                          Anzahl Videos
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {VIDEO_SCOUT_TIERS.map((t) => {
-                            const active = count === t.count;
-                            return (
-                              <button
-                                key={t.count}
-                                onClick={() => setCount(t.count)}
-                                className={`rounded-xl border px-3 py-3 text-center transition ${
-                                  active
-                                    ? "border-[#95BF47]/40 bg-[#95BF47]/10"
-                                    : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]"
-                                }`}
+                  {/* Anzahl + Start — sobald ein Produkt gewählt ist */}
+                  {selectedProduct && (
+                    <div className="mt-4">
+                      <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
+                        Anzahl Videos
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {VIDEO_SCOUT_TIERS.map((t) => {
+                          const active = count === t.count;
+                          return (
+                            <button
+                              key={t.count}
+                              onClick={() => setCount(t.count)}
+                              className={`rounded-xl border px-2 py-2.5 text-center transition ${
+                                active
+                                  ? "border-[#95BF47]/40 bg-[#95BF47]/10"
+                                  : "border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.04]"
+                              }`}
+                            >
+                              <div className={`text-[17px] font-bold ${active ? "text-white" : "text-zinc-300"}`}>
+                                {t.count}
+                              </div>
+                              <div
+                                className="text-[10px] font-mono mt-0.5"
+                                style={{ color: active ? ACCENT : "#71717a" }}
                               >
-                                <div className={`text-[18px] font-bold ${active ? "text-white" : "text-zinc-300"}`}>
-                                  {t.count}
-                                </div>
-                                <div
-                                  className="text-[10.5px] font-mono mt-0.5"
-                                  style={{ color: active ? ACCENT : "#71717a" }}
-                                >
-                                  {t.cost} 🪙
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
+                                {t.cost} 🪙
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
 
                       <button
                         onClick={run}
                         disabled={!canRun}
-                        className="btn-deploy w-full flex items-center justify-center gap-2 py-3.5 text-[15px] mt-4 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="btn-deploy w-full flex items-center justify-center gap-2 py-3.5 text-[15px] mt-3 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {running ? (
                           <>
@@ -301,26 +301,25 @@ export default function VideoScoutPage() {
                             >
                               <Sparkles className="w-4 h-4" />
                             </motion.span>
-                            Scoute virale Videos… (~30–60 s)
+                            Scoute… (~30–60 s)
                           </>
                         ) : (
                           <>
                             <Flame className="w-4 h-4" />
-                            {selectedVideos.length > 0 ? "Weitere Videos finden" : "Videos finden"}
+                            {selectedVideos.length > 0 ? "Weitere finden" : "Videos finden"}
                             <span className="font-mono opacity-80">· {cost} 🪙</span>
                           </>
                         )}
                       </button>
-                      <p className="mt-2 text-center text-[10.5px] text-zinc-600 leading-snug">
-                        Videos unter {VIRAL_LABEL} Views gelten als nicht viral genug und werden dir
-                        automatisch gutgeschrieben. Kein Video wird doppelt gezogen.
+                      <p className="mt-2 text-center text-[10px] text-zinc-600 leading-snug">
+                        Videos unter {VIRAL_LABEL} Views werden dir gutgeschrieben · kein Video doppelt
                       </p>
 
                       {cannotAfford && (
                         <p className="mt-2 text-center text-[11px] text-amber-300/90">
                           Nicht genug Credits ({credits.balance}/{cost}).{" "}
                           <Link href="/credits" className="underline font-semibold hover:text-amber-200">
-                            Credits aufladen
+                            Aufladen
                           </Link>
                         </p>
                       )}
@@ -330,45 +329,43 @@ export default function VideoScoutPage() {
                         </p>
                       )}
                     </div>
-                  </motion.section>
-                )}
-              </AnimatePresence>
+                  )}
+                </div>
+              </section>
 
               {/* ── Ergebnisse / Historie ── */}
               {selectedProduct && (
                 <section>
-                  {/* Refund-Banner */}
                   <AnimatePresence>
                     {lastRefund && lastRefund.total > 0 && (
                       <motion.div
                         initial={{ opacity: 0, y: -6 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
-                        className="mb-4 flex items-start gap-2.5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] px-4 py-3"
+                        className="mb-3 flex items-start gap-2.5 rounded-2xl border border-amber-500/20 bg-amber-500/[0.07] px-3.5 py-3"
                       >
                         <Coins className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
-                        <p className="text-[12.5px] text-amber-100/90 leading-snug">
+                        <p className="text-[12px] text-amber-100/90 leading-snug">
                           <span className="font-semibold">{lastRefund.total} Credits gutgeschrieben.</span>{" "}
                           {lastRefund.count} {lastRefund.count === 1 ? "Video war" : "Videos waren"} nicht
-                          viral genug (unter {VIRAL_LABEL} Views) — du zahlst nur für die wirklich viralen.
+                          viral genug (unter {VIRAL_LABEL} Views) — du zahlst nur für die viralen.
                         </p>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {/* notViral-Zustand */}
                   {notViral && !running && (
-                    <div className="rounded-3xl border border-white/[0.08] bg-white/[0.02] px-6 py-8 text-center">
+                    <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-white/[0.02] px-5 py-7 text-center">
                       <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-3">
                         <SearchX className="w-5 h-5 text-zinc-400" />
                       </div>
                       <p className="text-[14px] font-semibold text-white">
                         Aktuell keine viralen Videos gefunden
                       </p>
-                      <p className="mt-1.5 text-[12px] text-zinc-500 max-w-sm mx-auto leading-snug">
+                      <p className="mt-1.5 text-[12px] text-zinc-500 max-w-xs mx-auto leading-snug">
                         Dieses Produkt scheint gerade nicht viral zu gehen. Es wurden{" "}
                         <span className="text-zinc-300 font-medium">keine Credits abgezogen</span>. Versuch
-                        es später noch einmal oder wähle ein anderes Produkt.
+                        es später noch einmal.
                       </p>
                     </div>
                   )}
@@ -377,26 +374,25 @@ export default function VideoScoutPage() {
 
                   {selectedVideos.length > 0 && (
                     <>
-                      <div className="flex items-center gap-2 mb-3">
+                      <div className="flex items-center gap-2 mb-2.5">
                         <Flame className="w-4 h-4" style={{ color: ACCENT }} />
-                        <h2 className="text-sm font-semibold text-white">
+                        <h2 className="text-[13px] font-semibold text-white">
                           Gefundene Videos
                           <span className="text-zinc-500 font-normal"> · {selectedVideos.length}</span>
                         </h2>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
                         {selectedVideos.map((v, i) => (
                           <VideoCard key={v.url} video={v} rank={i + 1} />
                         ))}
                       </div>
 
-                      {/* Disclaimer */}
-                      <p className="mt-4 text-[10.5px] text-zinc-600 leading-snug flex items-start gap-1.5">
+                      <p className="mt-3.5 text-[10px] text-zinc-600 leading-snug flex items-start gap-1.5">
                         <Info className="w-3 h-3 shrink-0 mt-0.5" />
                         <span>
-                          Hinweis: Das in den Videos gezeigte Produkt kann leicht abweichen — manche Clips
-                          zeigen ähnliche oder verwandte Varianten. View-Counts sind die echten, vom Scraper
-                          gemeldeten Werte zum Abrufzeitpunkt und können sich ändern.
+                          Das in den Videos gezeigte Produkt kann leicht abweichen — manche Clips zeigen
+                          ähnliche oder verwandte Varianten. View-Counts sind echte Werte zum Abrufzeitpunkt
+                          und können sich ändern.
                         </span>
                       </p>
                     </>
@@ -408,23 +404,6 @@ export default function VideoScoutPage() {
         </div>
       </main>
     </>
-  );
-}
-
-// ─── Schritt-Header ──────────────────────────────────────────────
-
-function StepHeader({ n, label, hint }: { n: number; label: string; hint?: string }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <span
-        className="w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-bold shrink-0"
-        style={{ background: "var(--accent-light)", color: ACCENT }}
-      >
-        {n}
-      </span>
-      <h2 className="text-[14px] font-semibold text-white">{label}</h2>
-      {hint && <span className="text-[11px] text-zinc-600">· {hint}</span>}
-    </div>
   );
 }
 
@@ -445,7 +424,7 @@ function ProductTile({
   return (
     <button
       onClick={onSelect}
-      className={`group relative text-left rounded-2xl border overflow-hidden transition ${
+      className={`group relative text-left rounded-xl border overflow-hidden transition ${
         selected
           ? "border-[#95BF47]/50 bg-[#95BF47]/8 ring-1 ring-[#95BF47]/30"
           : "border-white/[0.07] bg-white/[0.02] hover:border-white/[0.16]"
@@ -464,24 +443,24 @@ function ProductTile({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <ShoppingBag className="w-6 h-6 text-zinc-700" />
+            <ShoppingBag className="w-5 h-5 text-zinc-700" />
           </div>
         )}
       </div>
       {selected && (
-        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-[#95BF47] flex items-center justify-center shadow">
-          <Check className="w-3 h-3 text-black" strokeWidth={3} />
+        <div className="absolute top-1 right-1 w-4 h-4 rounded-full bg-[#95BF47] flex items-center justify-center shadow">
+          <Check className="w-2.5 h-2.5 text-black" strokeWidth={3} />
         </div>
       )}
       {savedCount > 0 && (
-        <div className="absolute top-1.5 left-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/70 backdrop-blur text-[9px] font-semibold text-white">
+        <div className="absolute top-1 left-1 inline-flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-black/70 backdrop-blur text-[8.5px] font-semibold text-white">
           <Flame className="w-2 h-2 text-pink-300" />
           {savedCount}
         </div>
       )}
-      <div className="p-2">
+      <div className="px-1.5 py-1.5">
         <p
-          className={`text-[11px] font-medium leading-tight line-clamp-2 ${
+          className={`text-[10.5px] font-medium leading-tight line-clamp-1 ${
             selected ? "text-white" : "text-zinc-300"
           }`}
         >
@@ -495,7 +474,7 @@ function ProductTile({
 function ProductThumb({ src, alt }: { src: string; alt: string }) {
   const [broken, setBroken] = useState(false);
   return (
-    <div className="w-12 h-12 rounded-xl overflow-hidden bg-white/[0.04] shrink-0">
+    <div className="w-11 h-11 rounded-xl overflow-hidden bg-white/[0.04] shrink-0">
       {src && !broken ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -538,22 +517,22 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Music2 className="w-8 h-8 text-zinc-700" />
+            <Music2 className="w-7 h-7 text-zinc-700" />
           </div>
         )}
 
-        <div className="absolute top-2 left-2 w-6 h-6 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-[11px] font-bold text-white">
+        <div className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/70 backdrop-blur flex items-center justify-center text-[10px] font-bold text-white">
           {rank}
         </div>
-        <div className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur text-[10px] font-semibold text-white">
-          <Music2 className="w-2.5 h-2.5 text-pink-300" /> TikTok
+        <div className="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/70 backdrop-blur text-[9px] font-semibold text-white">
+          <Music2 className="w-2 h-2 text-pink-300" /> TikTok
         </div>
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
-          <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur flex items-center justify-center">
+          <div className="w-11 h-11 rounded-full bg-black/50 backdrop-blur flex items-center justify-center">
             <Play className="w-5 h-5 text-white fill-white" />
           </div>
         </div>
-        <div className="absolute bottom-0 inset-x-0 p-2 bg-gradient-to-t from-black/85 to-transparent flex items-center gap-3 text-[11px] text-white font-semibold">
+        <div className="absolute bottom-0 inset-x-0 px-2 py-1.5 bg-gradient-to-t from-black/85 to-transparent flex items-center gap-2.5 text-[10.5px] text-white font-semibold">
           <span className="inline-flex items-center gap-1">
             <Eye className="w-3 h-3" /> {video.formatted_views}
           </span>
@@ -565,19 +544,19 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
         </div>
       </div>
 
-      <div className="p-2.5 flex-1 flex flex-col">
-        {video.author && <div className="text-[10.5px] text-zinc-500 mb-0.5 truncate">@{video.author}</div>}
-        <p className="text-[12px] text-zinc-200 leading-snug line-clamp-2 flex-1">
+      <div className="p-2 sm:p-2.5 flex-1 flex flex-col">
+        {video.author && <div className="text-[10px] text-zinc-500 mb-0.5 truncate">@{video.author}</div>}
+        <p className="text-[11.5px] text-zinc-200 leading-snug line-clamp-2 flex-1">
           {video.title_snippet || "—"}
         </p>
         {video.refunded ? (
-          <span className="mt-2 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md bg-amber-500/12 border border-amber-500/25 text-[9.5px] font-semibold text-amber-200">
+          <span className="mt-1.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md bg-amber-500/12 border border-amber-500/25 text-[9px] font-semibold text-amber-200">
             <Coins className="w-2.5 h-2.5" />
-            {video.refundAmount ? `${video.refundAmount} 🪙 gutgeschrieben` : "gutgeschrieben"} · nicht viral genug
+            {video.refundAmount ? `${video.refundAmount} 🪙 zurück` : "gutgeschrieben"}
           </span>
         ) : (
-          <span className="mt-2 inline-flex items-center gap-1 text-[10.5px] font-medium text-zinc-400 group-hover:text-[#95BF47] transition">
-            Video ansehen <ExternalLink className="w-3 h-3" />
+          <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-zinc-400 group-hover:text-[#95BF47] transition">
+            Ansehen <ExternalLink className="w-2.5 h-2.5" />
           </span>
         )}
       </div>
@@ -589,7 +568,7 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
 
 function ScoutSkeleton({ count }: { count: number }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
@@ -597,8 +576,8 @@ function ScoutSkeleton({ count }: { count: number }) {
         >
           <div className="aspect-[9/13] bg-white/[0.04]" />
           <div className="p-2.5 space-y-2">
-            <div className="h-3 bg-white/[0.05] rounded w-2/3" />
-            <div className="h-3 bg-white/[0.05] rounded w-full" />
+            <div className="h-2.5 bg-white/[0.05] rounded w-2/3" />
+            <div className="h-2.5 bg-white/[0.05] rounded w-full" />
           </div>
         </div>
       ))}
@@ -610,7 +589,7 @@ function ScoutSkeleton({ count }: { count: number }) {
 
 function LoadingCard() {
   return (
-    <section className="glass-strong rounded-3xl border border-white/[0.08] p-8 text-center">
+    <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-8 text-center">
       <motion.span
         animate={{ rotate: 360 }}
         transition={{ repeat: Infinity, duration: 0.9, ease: "linear" }}
@@ -627,7 +606,7 @@ function LoadingCard() {
 
 function EmptyProductsCard({ error }: { error?: string }) {
   return (
-    <section className="glass-strong rounded-3xl border border-white/[0.08] p-8 text-center">
+    <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mx-auto mb-4">
         <Gift className="w-6 h-6" style={{ color: ACCENT }} />
       </div>
@@ -649,7 +628,7 @@ function EmptyProductsCard({ error }: { error?: string }) {
 
 function LockedCard() {
   return (
-    <section className="glass-strong rounded-3xl border border-white/[0.08] p-8 text-center">
+    <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
         <Lock className="w-6 h-6 text-amber-400" />
       </div>

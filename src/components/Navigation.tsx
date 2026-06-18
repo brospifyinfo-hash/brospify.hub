@@ -35,9 +35,10 @@ import {
   GraduationCap,
   Coins,
   Gauge,
-  Gift,
   Search,
   Flame,
+  LayoutTemplate,
+  Scale,
 } from "lucide-react";
 import { BrandLogo } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
@@ -62,6 +63,16 @@ interface SessionInfo {
 // gibt es nicht mehr; "Themes" liegt jetzt im Avatar-Menü (AccountMenu).
 
 const AI_TOOLS = [
+  {
+    href: "/charts",
+    title: "Produkt Search",
+    desc: "Zufalls-Generator · 50 Credits",
+    icon: Search,
+    color: "from-[#95BF47]/15 to-emerald-500/15",
+    border: "border-[#95BF47]/15",
+    iconColor: "text-[#95BF47]",
+    feature: "chartsAnalytics" as const,
+  },
   {
     href: "/video-scout",
     title: "Viral Video Scout",
@@ -131,7 +142,7 @@ interface BottomTab {
 
 const BOTTOM_TABS: readonly BottomTab[] = [
   { key: "home", label: "Home", href: "/home", icon: Home },
-  { key: "charts", label: "Drop", href: "/charts", icon: Gift },
+  { key: "themes", label: "Theme", href: "/themes", icon: LayoutTemplate },
   { key: "ai", label: "AI", action: "ai", icon: Sparkles },
   { key: "library", label: "Mediathek", href: "/library", icon: FolderHeart },
   { key: "more", label: "Mehr", action: "more", icon: Menu },
@@ -509,6 +520,7 @@ export default function Navigation() {
                 <MobileSection title="Verwaltung" icon={Shield} defaultOpen={false}>
                   <SheetItem href="/admin" icon={Settings} label="Admin-Panel" active={pathname === "/admin"} onClick={() => setMoreSheetOpen(false)} sub="Voller Zugriff" />
                   <SheetItem href="/admin/loadtest" icon={Gauge} label="Load-Tester" active={pathname === "/admin/loadtest"} onClick={() => setMoreSheetOpen(false)} sub="Shopify Dev-Store Standhaftigkeit" />
+                  <SheetItem href="/admin/themes" icon={LayoutTemplate} label="Themes verwalten" active={pathname === "/admin/themes"} onClick={() => setMoreSheetOpen(false)} sub="Theme-ZIPs hochladen" />
                 </MobileSection>
               )}
 
@@ -982,16 +994,8 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           />
         </div>
 
-        {/* AI Tools — komplettes Dropdown im rechten Menü */}
+        {/* AI Tools — komplettes Dropdown im rechten Menü (inkl. Produkt Search) */}
         <MenuGroup label="AI Tools">
-          <MenuItem
-            href="/charts"
-            icon={Search}
-            label="Produkt Search"
-            active={pathname === "/charts" || pathname.startsWith("/charts/")}
-            onClick={onClose}
-            sub="Zufalls-Generator · 50 Credits"
-          />
           {AI_TOOLS.map((tool) => (
             <MenuItem
               key={tool.href}
@@ -1003,6 +1007,18 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
               sub={tool.desc}
             />
           ))}
+        </MenuGroup>
+
+        {/* Shop — Theme-Download */}
+        <MenuGroup label="Shop">
+          <MenuItem
+            href="/themes"
+            icon={LayoutTemplate}
+            label="Theme"
+            active={pathname === "/themes"}
+            onClick={onClose}
+            sub="Shopify-Theme herunterladen"
+          />
         </MenuGroup>
 
         {/* Konto */}
@@ -1052,6 +1068,14 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           ))}
         </MenuGroup>
 
+        {/* Rechtliches — externe Policy-Seiten auf brospify.com */}
+        <MenuGroup label="Rechtliches">
+          <MenuItem href="https://brospify.com/policies/legal-notice" icon={Scale} label="Impressum" external onClick={onClose} />
+          <MenuItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label="Datenschutz" external onClick={onClose} />
+          <MenuItem href="https://brospify.com/policies/terms-of-service" icon={FileText} label="AGB" external onClick={onClose} />
+          <MenuItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label="Widerruf" external onClick={onClose} />
+        </MenuGroup>
+
         {session.isAdmin && (
           <MenuGroup label="Verwaltung">
             <MenuItem
@@ -1067,6 +1091,14 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
               icon={Gauge}
               label="Load-Tester"
               active={pathname === "/admin/loadtest"}
+              onClick={onClose}
+              accent
+            />
+            <MenuItem
+              href="/admin/themes"
+              icon={LayoutTemplate}
+              label="Themes verwalten"
+              active={pathname === "/admin/themes"}
               onClick={onClose}
               accent
             />
