@@ -261,6 +261,8 @@ interface ApiBalance {
   raw?: string;
   error?: string;
   endpoint?: string;
+  billingUrl?: string;
+  hasBalanceApi?: boolean;
 }
 
 // ─── Code-Blöcke + Coaching admin types ─────────────────────────
@@ -5154,8 +5156,8 @@ function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loadin
       accent={lowOrEmpty.length > 0 ? "#EF4444" : "#10B981"}
     >
       <p className="text-[10px] text-zinc-500 mb-2 leading-snug">
-        Was du noch bei jedem Provider auf dem Konto hast. Wenn ein Konto leer ist, fallen die entsprechenden Tools aus —
-        rote Karten brauchen sofort Top-Up.
+        Was du noch bei jedem Provider auf dem Konto hast. Anbieter ohne öffentlichen Guthaben-Abruf
+        zeigen „nur im Dashboard" — dafür der direkte Auflade-Link. Rote/gelbe Karten brauchen Top-Up.
       </p>
       <div className="space-y-1.5">
         {balances.map((b) => {
@@ -5167,29 +5169,45 @@ function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loadin
             "not-configured": { color: "#71717A", label: "Nicht konfiguriert" },
           }[b.status];
 
+          // Anbieter ohne echten Balance-Endpoint: kein irreführendes "OK",
+          // sondern neutral auf das Dashboard verweisen.
+          const dashboardOnly = b.status === "ok" && !b.hasBalanceApi;
+          const color = dashboardOnly ? "#71717A" : meta.color;
+          const badge = dashboardOnly ? "Dashboard" : meta.label;
+          const detail = dashboardOnly
+            ? "Guthaben nur im Anbieter-Dashboard sichtbar →"
+            : b.raw
+              ? b.raw
+              : b.balanceEur !== undefined
+                ? `${b.balanceEur.toFixed(2)} € (${b.balanceUsd?.toFixed(2)} $) übrig`
+                : b.error || "—";
+
           return (
             <div
               key={b.provider}
               className="flex items-center gap-2 px-2.5 py-2 rounded-lg border"
-              style={{
-                background: `${meta.color}10`,
-                borderColor: `${meta.color}30`,
-              }}
+              style={{ background: `${color}10`, borderColor: `${color}30` }}
             >
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: meta.color }} />
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
               <div className="flex-1 min-w-0">
                 <div className="text-[12px] font-semibold truncate">{b.label}</div>
-                <div className="text-[9px] text-zinc-500 truncate">
-                  {b.balanceEur !== undefined
-                    ? `${b.balanceEur.toFixed(2)} € (${b.balanceUsd?.toFixed(2)} $)`
-                    : b.raw || b.error || "—"}
-                </div>
+                <div className="text-[9.5px] text-zinc-400 truncate">{detail}</div>
               </div>
+              {b.billingUrl && b.configured && (
+                <a
+                  href={b.billingUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/10 text-zinc-300 hover:bg-white/[0.10] hover:text-white transition"
+                >
+                  Aufladen ↗
+                </a>
+              )}
               <span
                 className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0"
-                style={{ background: `${meta.color}20`, color: meta.color }}
+                style={{ background: `${color}20`, color }}
               >
-                {meta.label}
+                {badge}
               </span>
             </div>
           );

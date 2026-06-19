@@ -30,7 +30,23 @@ export interface ProviderBalance {
   raw?: string;
   error?: string;
   endpoint?: string;
+  /** Direkter Link zur Billing-/Auflade-Seite des Anbieters. */
+  billingUrl?: string;
+  /** true = der Anbieter liefert einen echten Rest-Wert (Zahl); false =
+   *  kein öffentlicher Endpoint, Guthaben nur im Dashboard sichtbar. */
+  hasBalanceApi?: boolean;
 }
+
+// Billing-/Auflade-Seiten + ob der Anbieter einen echten Rest-Wert liefert.
+const PROVIDER_META: Record<ProviderKey, { billingUrl: string; hasBalanceApi: boolean }> = {
+  apify: { billingUrl: "https://console.apify.com/billing", hasBalanceApi: true },
+  deepseek: { billingUrl: "https://platform.deepseek.com/top_up", hasBalanceApi: true },
+  tavily: { billingUrl: "https://app.tavily.com/", hasBalanceApi: true },
+  anthropic: { billingUrl: "https://console.anthropic.com/settings/billing", hasBalanceApi: false },
+  fal: { billingUrl: "https://fal.ai/dashboard/billing", hasBalanceApi: false },
+  replicate: { billingUrl: "https://replicate.com/account/billing", hasBalanceApi: false },
+  resend: { billingUrl: "https://resend.com/settings/billing", hasBalanceApi: false },
+};
 
 const USD_TO_EUR = 0.93;
 const eur = (usd: number) => +(usd * USD_TO_EUR).toFixed(2);
@@ -239,5 +255,8 @@ export async function checkAllBalances(): Promise<ProviderBalance[]> {
     checkReplicate(),
     checkResend(),
   ]);
-  return [apify, deepseek, tavily, anthropic, fal, replicate, resend];
+  return [apify, deepseek, tavily, anthropic, fal, replicate, resend].map((p) => ({
+    ...p,
+    ...PROVIDER_META[p.provider],
+  }));
 }

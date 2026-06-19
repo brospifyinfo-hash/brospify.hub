@@ -31,6 +31,7 @@ export async function alertLowBalances(): Promise<AlertResult> {
       p.balanceEur !== undefined
         ? `${p.balanceEur.toFixed(2)} € übrig${p.balanceUsd !== undefined ? ` (${p.balanceUsd.toFixed(2)} $)` : ""}`
         : p.raw || p.error || "—",
+    url: p.billingUrl,
   }));
   const currentKeys = lowProviders
     .map((p) => p.provider)

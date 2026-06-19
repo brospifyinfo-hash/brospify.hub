@@ -270,7 +270,7 @@ export async function sendAdminLowCreditsAlert(args: AdminLowCreditsAlertArgs): 
 // niedrig oder leer ist — BEVOR die Tools ausfallen.
 
 export interface AdminApiBalanceAlertArgs {
-  lows: { label: string; status: "low" | "empty"; detail: string }[];
+  lows: { label: string; status: "low" | "empty"; detail: string; url?: string }[];
 }
 
 export async function sendAdminApiBalanceAlert(args: AdminApiBalanceAlertArgs): Promise<SendResult> {
@@ -282,6 +282,7 @@ export async function sendAdminApiBalanceAlert(args: AdminApiBalanceAlertArgs): 
           <td style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;">${escapeHtml(l.label)}</td>
           <td style="padding:8px 10px;border-bottom:1px solid #eee;color:${l.status === "empty" ? "#dc2626" : "#d97706"};font-weight:700;">${l.status === "empty" ? "LEER" : "NIEDRIG"}</td>
           <td style="padding:8px 10px;border-bottom:1px solid #eee;color:#374151;">${escapeHtml(l.detail)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #eee;">${l.url ? `<a href="${escapeHtml(l.url)}" style="color:#95BF47;font-weight:600;text-decoration:none;">Aufladen &rarr;</a>` : ""}</td>
         </tr>`,
     )
     .join("");
@@ -298,6 +299,7 @@ export async function sendAdminApiBalanceAlert(args: AdminApiBalanceAlertArgs): 
             <th style="padding:6px 10px;">Provider</th>
             <th style="padding:6px 10px;">Status</th>
             <th style="padding:6px 10px;">Rest</th>
+            <th style="padding:6px 10px;">Top-Up</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
