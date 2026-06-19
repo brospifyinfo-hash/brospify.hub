@@ -265,6 +265,57 @@ export async function sendAdminLowCreditsAlert(args: AdminLowCreditsAlertArgs): 
   });
 }
 
+// ─── API-Guthaben-Alert ─────────────────────────────────────────
+// Warnt den Admin, wenn das Guthaben/die Quota eines API-Providers
+// niedrig oder leer ist — BEVOR die Tools ausfallen.
+
+export interface AdminApiBalanceAlertArgs {
+  lows: { label: string; status: "low" | "empty"; detail: string }[];
+}
+
+export async function sendAdminApiBalanceAlert(args: AdminApiBalanceAlertArgs): Promise<SendResult> {
+  const anyEmpty = args.lows.some((l) => l.status === "empty");
+  const rows = args.lows
+    .map(
+      (l) => `
+        <tr>
+          <td style="padding:8px 10px;border-bottom:1px solid #eee;font-weight:600;">${escapeHtml(l.label)}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #eee;color:${l.status === "empty" ? "#dc2626" : "#d97706"};font-weight:700;">${l.status === "empty" ? "LEER" : "NIEDRIG"}</td>
+          <td style="padding:8px 10px;border-bottom:1px solid #eee;color:#374151;">${escapeHtml(l.detail)}</td>
+        </tr>`,
+    )
+    .join("");
+  const html = `
+    <div style="font-family:-apple-system,sans-serif;color:#1f2937;line-height:1.5;">
+      <div style="background:${anyEmpty ? "#fee2e2" : "#fef3c7"};padding:16px;border-radius:8px;margin-bottom:16px;font-size:13px;border-left:4px solid ${anyEmpty ? "#dc2626" : "#f59e0b"};">
+        <strong style="color:${anyEmpty ? "#991b1b" : "#92400e"};">⚠ API-Guthaben ${anyEmpty ? "LEER" : "läuft aus"}</strong><br/>
+        <hr style="border:none;border-top:1px solid ${anyEmpty ? "#fecaca" : "#fde68a"};margin:8px 0;"/>
+        ${args.lows.length} ${args.lows.length === 1 ? "Provider braucht" : "Provider brauchen"} bald ein Top-Up. Lade dort auf, bevor die entsprechenden Tools ausfallen.
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px;">
+        <thead>
+          <tr style="text-align:left;color:#6b7280;font-size:11px;text-transform:uppercase;letter-spacing:0.05em;">
+            <th style="padding:6px 10px;">Provider</th>
+            <th style="padding:6px 10px;">Status</th>
+            <th style="padding:6px 10px;">Rest</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <p style="margin-top:20px;font-size:11px;color:#6b7280;">
+        Live-Status: <a href="https://brospifyhub.com/admin">brospifyhub.com/admin</a> &rarr; System-Status &rarr; AI-API Balances
+      </p>
+    </div>
+  `.trim();
+  return sendViaResend({
+    to: ADMIN_SUPPORT_EMAIL,
+    from: adminFromAddress(),
+    subject: `[Brospify Hub] ⚠ API-Guthaben ${anyEmpty ? "LEER" : "niedrig"}: ${args.lows.map((l) => l.label.split(" (")[0]).join(", ")}`,
+    html,
+    text: `API-Guthaben-Warnung\n\n${args.lows.map((l) => `${l.label}: ${l.status === "empty" ? "LEER" : "NIEDRIG"} — ${l.detail}`).join("\n")}\n\nLive-Status: brospifyhub.com/admin → System-Status`,
+  });
+}
+
 // ─── Admin-Notification: Kunde will ziehen, hat aber schon ALLE ──
 // Produkte. Signalisiert Nachfrage nach neuen Produkten. Geht an die
 // zentrale Support-Adresse (brospify.info@gmail.com).

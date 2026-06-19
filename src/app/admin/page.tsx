@@ -252,7 +252,7 @@ interface ActivityEntry {
 }
 
 interface ApiBalance {
-  provider: "deepseek" | "fal" | "replicate";
+  provider: "apify" | "deepseek" | "fal" | "replicate" | "anthropic" | "tavily" | "resend";
   label: string;
   configured: boolean;
   status: "ok" | "low" | "empty" | "unknown" | "not-configured";
@@ -5114,6 +5114,31 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
 // ─── API Balances card (System tab) ────────────────────────────
 
 function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loading: boolean }) {
+  const [testing, setTesting] = useState(false);
+  const [testMsg, setTestMsg] = useState("");
+
+  async function runTest() {
+    setTesting(true);
+    setTestMsg("");
+    try {
+      const res = await fetch("/api/cron/check-api-balances", { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTestMsg(data?.error || "Fehler beim Prüfen.");
+      } else if (data.emailed) {
+        setTestMsg(`✓ ${data.lows} knapp — Alert-Mail an brospify.info@gmail.com gesendet.`);
+      } else if (data.lows > 0) {
+        setTestMsg(`${data.lows} knapp, aber keine Mail (${data.skipped || "kürzlich schon gewarnt"}).`);
+      } else {
+        setTestMsg("✓ Alles im grünen Bereich — keine Mail nötig.");
+      }
+    } catch {
+      setTestMsg("Verbindungsfehler.");
+    } finally {
+      setTesting(false);
+    }
+  }
+
   if (loading && balances.length === 0) {
     return <div className="h-32 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />;
   }
@@ -5175,6 +5200,21 @@ function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loadin
           ⚠️ {lowOrEmpty.length} Provider {lowOrEmpty.length === 1 ? "ist" : "sind"} im niedrigen / leeren Bereich. Lade dort sofort auf, sonst fallen Tool-Calls aus.
         </div>
       )}
+
+      <div className="mt-3 pt-2.5 border-t border-white/[0.06] flex items-center gap-2 flex-wrap">
+        <button
+          onClick={runTest}
+          disabled={testing}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-zinc-200 hover:bg-white/[0.09] transition disabled:opacity-50"
+        >
+          {testing ? "Prüfe…" : "Jetzt prüfen & Alert-Mail testen"}
+        </button>
+        {testMsg && <span className="text-[10px] text-zinc-400">{testMsg}</span>}
+      </div>
+      <p className="mt-1.5 text-[9px] text-zinc-600 leading-snug">
+        Automatisch: Wird ein Konto niedrig/leer, geht täglich eine Warn-Mail an brospify.info@gmail.com
+        (entprellt — max. 1×/Tag pro Provider-Stand).
+      </p>
     </DashboardCard>
   );
 }

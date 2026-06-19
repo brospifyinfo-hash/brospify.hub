@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { expireOverdueSubscriptions, logSystemEvent } from "@/lib/sheets";
 import { getSession } from "@/lib/session";
+import { alertLowBalances } from "@/lib/api-balance-alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +55,18 @@ async function run(req: NextRequest) {
       details: result,
     });
 
-    return NextResponse.json({ success: true, ...result });
+    // Piggyback: täglicher API-Guthaben-Check + Mail-Alert an den Admin,
+    // wenn ein Provider-Konto knapp wird. Bewusst hier angehängt, weil
+    // Vercel-Hobby keinen zusätzlichen Cron-Job zulässt. Niemals fatal.
+    let apiBalances: Awaited<ReturnType<typeof alertLowBalances>> | { error: string } | undefined;
+    try {
+      apiBalances = await alertLowBalances();
+    } catch (e) {
+      apiBalances = { error: e instanceof Error ? e.message : "balance check failed" };
+      console.warn("[expire-overdue] api-balance alert failed:", e);
+    }
+
+    return NextResponse.json({ success: true, ...result, apiBalances });
   } catch (err) {
     console.error("[license/expire-overdue] error:", err);
     void logSystemEvent({
