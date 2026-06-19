@@ -100,6 +100,12 @@ const HOME_AI_TOOLS: { title: string; desc: string; href: string; icon: typeof S
   { title: "Image Upscaler", desc: "4× HD · 5 Credits", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#06B6D4" },
 ];
 
+// localStorage-Spiegel für abgehakte Tasks. Wichtig: Admins haben keinen
+// Kundendatensatz → die Server-Persistenz (/api/start-tasks/done) ist für
+// sie ein No-op. Damit Haken trotzdem einen Reload überleben, spiegeln wir
+// sie zusätzlich lokal und mergen beim Laden.
+const TASKS_DONE_KEY = "brospify_tasks_done";
+
 // ─── Page ─────────────────────────────────────────────────────────
 
 export default function HomePage() {
@@ -153,7 +159,13 @@ export default function HomePage() {
         const profile = profileData?.profile || {};
         const cl = profile.onboarding_checklist || {};
         setChecklist(cl);
-        setTasksDone(profile.onboarding_tasks_done || {});
+        // Server-Stand + localStorage-Spiegel mergen (Server gewinnt) —
+        // so bleiben auch für Admins (ohne Server-Persistenz) die Haken.
+        let localMap: Record<string, boolean> = {};
+        try {
+          localMap = JSON.parse(localStorage.getItem(TASKS_DONE_KEY) || "{}");
+        } catch { /* ignore */ }
+        setTasksDone({ ...localMap, ...(profile.onboarding_tasks_done || {}) });
         setLoading(false);
       })
       .catch(() => router.push("/"));
@@ -196,6 +208,13 @@ export default function HomePage() {
       else delete next[id];
       return next;
     });
+    // localStorage-Spiegel (überlebt Reload auch ohne Server-Persistenz).
+    try {
+      const cur = JSON.parse(localStorage.getItem(TASKS_DONE_KEY) || "{}");
+      if (nextDone) cur[id] = true;
+      else delete cur[id];
+      localStorage.setItem(TASKS_DONE_KEY, JSON.stringify(cur));
+    } catch { /* ignore */ }
     try {
       await fetch("/api/start-tasks/done", {
         method: "POST",
@@ -211,6 +230,14 @@ export default function HomePage() {
 
       <div className="fixed top-20 right-6 w-56 h-56 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-6 w-48 h-48 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
+
+      {/* ─── News-Hero — full-bleed, ganz oben ─── */}
+      <NewsHero
+        posts={posts.filter((p) => p.active)}
+        onOpenText={(p) => setActivePost(p)}
+        isAdmin={!!session.isAdmin}
+        onManage={() => setNewsAdminOpen(true)}
+      />
 
       <div className="max-w-5xl xl:max-w-6xl mx-auto px-3 sm:px-5 py-3 sm:py-4 lg:py-7 space-y-3 sm:space-y-4 lg:space-y-5">
 
@@ -390,34 +417,6 @@ export default function HomePage() {
           />
           </div>
         </section>
-
-        {/* ─── News Section ──────────────────────── */}
-        {(posts.length > 0 || session.isAdmin) && (
-          <section>
-            <div className="flex items-center justify-between mb-2">
-              <SectionHeader icon={Newspaper} title="News & Updates" inline />
-              {session.isAdmin && (
-                <button
-                  onClick={() => setNewsAdminOpen(true)}
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/10 text-[11px] text-zinc-300 hover:bg-white/[0.08] transition"
-                >
-                  <Plus className="w-3 h-3" /> Verwalten
-                </button>
-              )}
-            </div>
-
-            {posts.length === 0 && session.isAdmin ? (
-              <button
-                onClick={() => setNewsAdminOpen(true)}
-                className="w-full p-4 rounded-xl border border-dashed border-white/10 text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition flex items-center justify-center gap-1.5 text-xs"
-              >
-                <Plus className="w-3.5 h-3.5" /> Erste News-Card erstellen
-              </button>
-            ) : (
-              <NewsRow posts={posts.filter((p) => p.active)} onOpenText={(p) => setActivePost(p)} />
-            )}
-          </section>
-        )}
 
       </div>
 
@@ -966,17 +965,203 @@ function ToolbarButton({ children, onClick, title }: {
 
 // ─── News row ────────────────────────────────────────────────
 
-function NewsRow({ posts, onOpenText }: {
+// ─── News Hero (full-bleed, ganz oben auf der Home) ──────────
+// Handy/Tablet: full-bleed Swipe-Karussell, jede News füllt den Screen.
+// Desktop: Magazin-Layout (eine grosse Feature-News + bis zu 2 kleinere
+// rechts daneben). Tippen öffnet die Detailansicht bzw. das Video.
+function NewsHero({ posts, onOpenText, isAdmin, onManage }: {
   posts: NewsPost[];
   onOpenText: (p: NewsPost) => void;
+  isAdmin: boolean;
+  onManage: () => void;
 }) {
-  if (posts.length === 0) return null;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+
+  if (posts.length === 0) {
+    if (!isAdmin) return null;
+    return (
+      <div className="px-3 sm:px-5 pt-2">
+        <button
+          onClick={onManage}
+          className="w-full p-4 rounded-xl border border-dashed border-white/10 text-zinc-500 hover:text-zinc-300 hover:border-white/20 transition flex items-center justify-center gap-1.5 text-xs"
+        >
+          <Plus className="w-3.5 h-3.5" /> Erste News-Card erstellen
+        </button>
+      </div>
+    );
+  }
+
+  function onScroll() {
+    const el = scrollRef.current;
+    if (!el || el.clientWidth === 0) return;
+    setActive(Math.round(el.scrollLeft / el.clientWidth));
+  }
+  function goTo(i: number) {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ left: i * el.clientWidth, behavior: "smooth" });
+  }
+
+  const featured = posts[0];
+  const side = posts.slice(1, 3);
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3">
-      {posts.map((p) => (
-        <NewsCard key={p.id} post={p} onOpenText={onOpenText} />
-      ))}
+    <div className="relative mb-1">
+      {isAdmin && (
+        <button
+          onClick={onManage}
+          className="absolute z-20 top-3 right-3 flex items-center gap-1 px-2.5 py-1 rounded-lg bg-black/50 backdrop-blur border border-white/15 text-[11px] text-zinc-200 hover:bg-black/70 transition"
+        >
+          <Plus className="w-3 h-3" /> Verwalten
+        </button>
+      )}
+
+      {/* Handy/Tablet: full-bleed Swipe-Karussell */}
+      <div className="lg:hidden">
+        <div
+          ref={scrollRef}
+          onScroll={onScroll}
+          className="flex overflow-x-auto snap-x snap-mandatory [&::-webkit-scrollbar]:hidden"
+          style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        >
+          {posts.map((p) => (
+            <div key={p.id} className="snap-center shrink-0 w-full h-[60vh] min-h-[360px] max-h-[600px]">
+              <HeroNewsCard post={p} onOpenText={onOpenText} large fullBleed />
+            </div>
+          ))}
+        </div>
+        {posts.length > 1 && (
+          <div className="flex justify-center gap-1.5 mt-2.5">
+            {posts.map((p, i) => (
+              <button
+                key={p.id}
+                onClick={() => goTo(i)}
+                aria-label={`News ${i + 1}`}
+                className={`h-1.5 rounded-full transition-all ${
+                  i === active ? "w-5 bg-[#95BF47]" : "w-1.5 bg-white/25"
+                }`}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Desktop: Magazin-Layout */}
+      <div className="hidden lg:block max-w-6xl mx-auto px-8 pt-3">
+        <div
+          className={`grid gap-3 ${side.length > 0 ? "grid-cols-3" : "grid-cols-1"}`}
+          style={{ height: "440px" }}
+        >
+          <div className={side.length > 0 ? "col-span-2" : "col-span-1"}>
+            <HeroNewsCard post={featured} onOpenText={onOpenText} large />
+          </div>
+          {side.length > 0 && (
+            <div className="col-span-1 grid grid-rows-2 gap-3">
+              {side.map((p) => (
+                <HeroNewsCard key={p.id} post={p} onOpenText={onOpenText} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+function HeroNewsCard({ post, onOpenText, large, fullBleed }: {
+  post: NewsPost;
+  onOpenText: (p: NewsPost) => void;
+  large?: boolean;
+  fullBleed?: boolean;
+}) {
+  const isVideo = post.type === "video" && !!post.youtubeUrl;
+  const cover = isVideo ? post.previewImageUrl || post.imageUrl : post.imageUrl;
+  const [open, setOpen] = useState(false);
+
+  function handleClick() {
+    if (isVideo) setOpen(true);
+    else onOpenText(post);
+  }
+
+  return (
+    <>
+      <button
+        onClick={handleClick}
+        className={`group relative w-full h-full overflow-hidden text-left bg-white/[0.03] border border-white/[0.08] ${
+          fullBleed ? "" : "rounded-2xl"
+        }`}
+      >
+        {cover ? (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={cover}
+              alt={post.title}
+              loading="lazy"
+              className="absolute inset-0 w-full h-full object-cover group-hover:scale-[1.04] transition duration-700"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+          </>
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ background: "linear-gradient(135deg, rgba(149,191,71,0.18), rgba(168,85,247,0.12) 70%, rgba(96,165,250,0.10))" }}
+          />
+        )}
+
+        {isVideo && (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div
+              className={`rounded-full bg-white/15 backdrop-blur-md border border-white/25 flex items-center justify-center group-hover:scale-110 transition ${
+                large ? "w-16 h-16" : "w-11 h-11"
+              }`}
+            >
+              <Play className={`text-white ml-0.5 ${large ? "w-7 h-7" : "w-5 h-5"}`} fill="currentColor" />
+            </div>
+          </div>
+        )}
+
+        <div className="absolute top-3 left-3">
+          <span
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${
+              isVideo
+                ? "bg-rose-500/25 border-rose-500/40 text-rose-200"
+                : "bg-[#95BF47]/25 border-[#95BF47]/40 text-[#cfe9a3]"
+            }`}
+          >
+            {isVideo ? <Play className="w-2.5 h-2.5" /> : <Newspaper className="w-2.5 h-2.5" />}
+            {isVideo ? "Video" : "News"}
+          </span>
+        </div>
+
+        <div className={`absolute bottom-0 left-0 right-0 ${large ? "p-4 sm:p-6" : "p-3"}`}>
+          <h3
+            className={`font-bold text-white leading-tight ${
+              large ? "text-xl sm:text-2xl line-clamp-3" : "text-sm line-clamp-2"
+            }`}
+          >
+            {post.title}
+          </h3>
+          {large && post.type === "text" && post.body && (
+            <p className="text-[12.5px] sm:text-sm text-zinc-300 mt-1.5 line-clamp-2 max-w-xl">
+              {post.body.slice(0, 160)}
+            </p>
+          )}
+          <span
+            className={`inline-flex items-center gap-1 mt-2 text-[11px] font-semibold ${
+              isVideo ? "text-rose-200" : "text-[#cfe9a3]"
+            }`}
+          >
+            {isVideo ? "Ansehen" : "Lesen"} <ArrowRight className="w-3 h-3" />
+          </span>
+        </div>
+      </button>
+
+      <AnimatePresence>
+        {open && isVideo && <VideoModal url={post.youtubeUrl} title={post.title} onClose={() => setOpen(false)} />}
+      </AnimatePresence>
+    </>
   );
 }
 
