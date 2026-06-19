@@ -75,8 +75,8 @@ const AI_TOOLS = [
   },
   {
     href: "/video-scout",
-    title: "Viral Video Scout",
-    desc: "Virale TikTok-Videos zum Produkt · ab 40 Credits",
+    title: "Video Scout",
+    desc: "TikTok-Videos zum Produkt · ab 40 Credits",
     icon: Flame,
     color: "from-pink-500/15 to-rose-500/15",
     border: "border-pink-500/15",

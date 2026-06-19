@@ -47,7 +47,7 @@ export const FEATURE_LABELS: Record<FeatureFlag, string> = {
   codeBlocks: "Code-Blöcke",
   coaching: "Privates Coaching",
   chartsAnalytics: "Trend-Charts",
-  videoScout: "Viral Video Scout",
+  videoScout: "Video Scout",
   library: "Bibliothek",
   prioritySupport: "Priority-Support",
   customBranding: "White-Label Branding",

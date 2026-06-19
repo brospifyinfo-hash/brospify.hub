@@ -223,7 +223,7 @@ export interface KundeProfile {
    *  als Debounce gegen Mail-Spam; wird beim nächsten erfolgreichen Zug
    *  (also sobald wieder neue Produkte da sind) wieder geleert. */
   drawnAllNotifiedAt?: string;
-  /** Viral Video Scout: alle vom Account gefundenen/gespeicherten Videos
+  /** Video Scout: alle vom Account gefundenen/gespeicherten Videos
    *  (neueste zuerst, dedupliziert per url). Dient als Historie UND als
    *  Garantie, dass kein Video zweimal gezogen werden kann. */
   scoutVideos?: SavedScoutVideo[];

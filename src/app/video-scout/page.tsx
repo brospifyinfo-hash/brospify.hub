@@ -1,6 +1,6 @@
 "use client";
 
-// ─── /video-scout — Viral Video Scout ("Premium Search") ─────────
+// ─── /video-scout — Video Scout ("Premium Search") ─────────
 // Produkt wählen (klappt nach Wahl ein) → Anzahl → echte virale TikTok-
 // Videos. Echte View-Counts (Apify), Relevanz per KI, Sortierung nach
 // Views. Funde werden beim Kunden gespeichert (Historie, kein Doppel-
@@ -189,7 +189,7 @@ export default function VideoScoutPage() {
               Premium Search
             </div>
             <h1 className="text-[22px] sm:text-[32px] font-bold tracking-tight text-white leading-tight font-sf-display">
-              Viral Video Scout
+              Video Scout
             </h1>
             <p className="mt-1.5 sm:mt-2.5 text-[12px] sm:text-[14px] text-zinc-400 leading-relaxed max-w-md mx-auto">
               Wähle ein gezogenes Produkt — der Scout findet dir TikTok-Videos dazu, die view-stärksten
@@ -612,7 +612,7 @@ function EmptyProductsCard({ error }: { error?: string }) {
       <p className="mt-2 text-sm text-zinc-400 max-w-sm mx-auto">
         {error
           ? error
-          : "Der Video Scout sucht Videos zu deinen gezogenen Produkten. Zieh zuerst ein Winning-Produkt im Produkt-Drop, dann findest du hier virale Videos dazu."}
+          : "Der Video Scout sucht Videos zu deinen gezogenen Produkten. Zieh zuerst ein Winning-Produkt im Produkt-Drop, dann findest du hier passende Videos dazu."}
       </p>
       <Link href="/charts" className="btn-deploy inline-flex items-center gap-2 mt-5 px-5 py-2.5 text-sm">
         <Gift className="w-4 h-4" />
@@ -632,7 +632,7 @@ function LockedCard() {
       </div>
       <h2 className="text-lg font-semibold text-white">Teil der Brospify Membership</h2>
       <p className="mt-2 text-sm text-zinc-400 max-w-sm mx-auto">
-        Der Viral Video Scout ist Teil deiner Membership. Aktiviere dein Abo, um virale Videos zu deinen
+        Der Video Scout ist Teil deiner Membership. Aktiviere dein Abo, um Videos zu deinen
         Produkten zu finden.
       </p>
       <Link

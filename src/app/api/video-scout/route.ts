@@ -1,5 +1,5 @@
 // ─── /api/video-scout ────────────────────────────────────────────
-// "Brospify Viral Video Scout": findet zu einem Produkt die viralsten
+// "Brospify Video Scout": findet zu einem Produkt die viralsten
 // echten TikTok-Videos.
 //
 //   GET  → liefert die Produkte, die der Account auswählen darf: die im
@@ -293,7 +293,7 @@ async function filterRelevant(
     )
     .join("\n");
 
-  const system = `Du bist der "Brospify Viral Video Scout", ein rein analytischer Filter für E-Commerce/Dropshipping.
+  const system = `Du bist der "Brospify Video Scout", ein rein analytischer Filter für E-Commerce/Dropshipping.
 Aufgabe: Entscheide, welche der gelisteten TikTok-Videos ZWEIFELSFREI das angefragte Produkt zeigen oder bewerben.
 REGELN:
 - RELEVANZ: Nur Videos, die klar dieses Produkt selbst zeigen. Ignoriere generische Compilations, Spam, falsche oder nur grob verwandte Produkte rigoros.

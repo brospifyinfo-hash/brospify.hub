@@ -1,4 +1,4 @@
-// ─── Viral Video Scout — shared types & helpers (client-safe) ────
+// ─── Video Scout — shared types & helpers (client-safe) ────
 // Kein Server-Import — wird von der API-Route UND der Client-Seite
 // genutzt.
 //
