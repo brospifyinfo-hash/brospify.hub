@@ -354,53 +354,67 @@ export default function HomePage() {
             {quickSteps.map((step) => {
               const done = !!tasksDone[step.id];
               return (
-                <li
-                  key={step.id}
-                  className="flex items-center gap-3 p-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02]"
-                >
-                  <button
-                    type="button"
-                    onClick={() => toggleTaskDone(step.id, !done)}
+                <li key={step.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
                     aria-pressed={done}
-                    className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-[11px] font-bold transition ${
+                    onClick={() => toggleTaskDone(step.id, !done)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleTaskDone(step.id, !done);
+                      }
+                    }}
+                    className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer select-none transition ${
                       done
-                        ? "bg-[#95BF47] border-[#95BF47] text-black"
-                        : "border-white/15 bg-white/[0.03] text-zinc-400 hover:border-[#95BF47]/40"
+                        ? "border-[#95BF47]/25 bg-[#95BF47]/[0.06]"
+                        : "border-white/[0.05] bg-white/[0.02] hover:bg-white/[0.04]"
                     }`}
                   >
-                    {done ? <Check className="w-3.5 h-3.5" /> : step.n}
-                  </button>
-                  <div className="min-w-0 flex-1">
                     <div
-                      className={`text-[13px] font-semibold leading-tight ${
-                        done ? "text-zinc-500 line-through" : "text-white"
+                      className={`shrink-0 w-7 h-7 rounded-full border flex items-center justify-center text-[11px] font-bold transition ${
+                        done
+                          ? "bg-[#95BF47] border-[#95BF47] text-black"
+                          : "border-white/20 bg-white/[0.03] text-zinc-400"
                       }`}
                     >
-                      {step.title}
+                      {done ? <Check className="w-3.5 h-3.5" /> : step.n}
                     </div>
-                    <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{step.desc}</div>
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className={`text-[13px] font-semibold leading-tight ${
+                          done ? "text-zinc-500 line-through" : "text-white"
+                        }`}
+                      >
+                        {step.title}
+                      </div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5 leading-snug">{step.desc}</div>
+                    </div>
+                    {step.href && step.cta ? (
+                      step.external ? (
+                        <a
+                          href={step.href}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-zinc-200 hover:bg-white/[0.09] transition"
+                        >
+                          {step.cta}
+                          <ExternalLink className="w-3 h-3 opacity-70" />
+                        </a>
+                      ) : (
+                        <Link
+                          href={step.href}
+                          onClick={(e) => e.stopPropagation()}
+                          className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/25 text-[11px] font-semibold text-[#95BF47] hover:bg-[#95BF47]/15 transition"
+                        >
+                          {step.cta}
+                          <ArrowRight className="w-3 h-3" />
+                        </Link>
+                      )
+                    ) : null}
                   </div>
-                  {step.href && step.cta ? (
-                    step.external ? (
-                      <a
-                        href={step.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white/[0.05] border border-white/10 text-[11px] font-semibold text-zinc-200 hover:bg-white/[0.09] transition"
-                      >
-                        {step.cta}
-                        <ExternalLink className="w-3 h-3 opacity-70" />
-                      </a>
-                    ) : (
-                      <Link
-                        href={step.href}
-                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/25 text-[11px] font-semibold text-[#95BF47] hover:bg-[#95BF47]/15 transition"
-                      >
-                        {step.cta}
-                        <ArrowRight className="w-3 h-3" />
-                      </Link>
-                    )
-                  ) : null}
                 </li>
               );
             })}
@@ -527,7 +541,17 @@ function StartTaskItem({ task, done, onToggle, index }: {
       initial={{ opacity: 0, y: 4 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.02 }}
-      className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 transition ${
+      role="button"
+      tabIndex={0}
+      aria-pressed={done}
+      onClick={() => onToggle(!done)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle(!done);
+        }
+      }}
+      className={`flex items-start gap-2.5 rounded-xl border px-3 py-2.5 transition cursor-pointer select-none ${
         done
           ? "border-emerald-500/25 bg-emerald-500/[0.06]"
           : task.active
@@ -535,18 +559,15 @@ function StartTaskItem({ task, done, onToggle, index }: {
             : "border-white/[0.04] bg-white/[0.01] opacity-60"
       }`}
     >
-      <button
-        type="button"
-        onClick={() => onToggle(!done)}
+      <div
         className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center shrink-0 transition ${
           done
             ? "bg-emerald-500 border-emerald-400 text-black"
-            : "bg-white/[0.02] border-white/15 text-transparent hover:border-white/35"
+            : "bg-white/[0.02] border-white/15 text-transparent"
         }`}
-        aria-label={done ? "Aufgabe entmarkieren" : "Aufgabe als erledigt markieren"}
       >
         <Check className="w-3.5 h-3.5" strokeWidth={3} />
-      </button>
+      </div>
       <div className="min-w-0 flex-1">
         <div className={`text-[13px] font-semibold leading-snug ${done ? "text-emerald-200 line-through decoration-emerald-400/50" : "text-zinc-100"}`}>
           {task.title}
