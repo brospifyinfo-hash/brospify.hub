@@ -165,6 +165,19 @@ export default function Navigation() {
   const credits = useCredits();
   const tierState = useTier();
 
+  // Keine Credits mehr → direkt zur Credits-Seite. Feuert NUR beim
+  // Übergang von >0 auf 0 (also wenn die letzte Aktion das Konto leert),
+  // nicht beim blossen Navigieren mit ohnehin leerem Konto.
+  const prevBalanceRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (credits.loading) return;
+    const prev = prevBalanceRef.current;
+    prevBalanceRef.current = credits.balance;
+    if (prev !== null && prev > 0 && credits.balance <= 0 && pathname !== "/credits") {
+      router.push("/credits");
+    }
+  }, [credits.balance, credits.loading, pathname, router]);
+
   useEffect(() => {
     fetch("/api/auth/session")
       .then((r) => r.json())

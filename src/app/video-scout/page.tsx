@@ -56,7 +56,7 @@ export default function VideoScoutPage() {
   const [running, setRunning] = useState(false);
   const [locked, setLocked] = useState(false);
   const [error, setError] = useState("");
-  const [notViral, setNotViral] = useState(false);
+  const [noResults, setNoResults] = useState(false);
   const [lastRefund, setLastRefund] = useState<{ count: number; total: number } | null>(null);
 
   const cost = VIDEO_SCOUT_TIERS.find((t) => t.count === count)!.cost;
@@ -113,14 +113,14 @@ export default function VideoScoutPage() {
     setSelectedId(id);
     setPickerOpen(false);
     setError("");
-    setNotViral(false);
+    setNoResults(false);
     setLastRefund(null);
   }
 
   const run = useCallback(async () => {
     if (!selectedId || running || cannotAfford) return;
     setError("");
-    setNotViral(false);
+    setNoResults(false);
     setLastRefund(null);
     setRunning(true);
     const pid = selectedId;
@@ -145,8 +145,8 @@ export default function VideoScoutPage() {
         if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
         return;
       }
-      if (data?.notViral) {
-        setNotViral(true);
+      if (data?.noResults) {
+        setNoResults(true);
         return;
       }
       if (!res.ok) {
@@ -192,7 +192,8 @@ export default function VideoScoutPage() {
               Viral Video Scout
             </h1>
             <p className="mt-1.5 sm:mt-2.5 text-[12px] sm:text-[14px] text-zinc-400 leading-relaxed max-w-md mx-auto">
-              Wähle ein gezogenes Produkt — der Scout findet die viralsten echten TikTok-Videos dazu.
+              Wähle ein gezogenes Produkt — der Scout findet dir TikTok-Videos dazu, die view-stärksten
+              (10k+) zuerst.
             </p>
           </header>
 
@@ -347,23 +348,21 @@ export default function VideoScoutPage() {
                         <Coins className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
                         <p className="text-[12px] text-amber-100/90 leading-snug">
                           <span className="font-semibold">{lastRefund.total} Credits gutgeschrieben.</span>{" "}
-                          {lastRefund.count} {lastRefund.count === 1 ? "Video war" : "Videos waren"} nicht
-                          viral genug (unter {VIRAL_LABEL} Views) — du zahlst nur für die viralen.
+                          {lastRefund.count} {lastRefund.count === 1 ? "Video hatte" : "Videos hatten"} unter{" "}
+                          {VIRAL_LABEL} Views — du zahlst nur für die view-stärkeren.
                         </p>
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {notViral && !running && (
+                  {noResults && !running && (
                     <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-white/[0.02] px-5 py-7 text-center">
                       <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-3">
                         <SearchX className="w-5 h-5 text-zinc-400" />
                       </div>
-                      <p className="text-[14px] font-semibold text-white">
-                        Aktuell keine viralen Videos gefunden
-                      </p>
+                      <p className="text-[14px] font-semibold text-white">Keine weiteren Videos gefunden</p>
                       <p className="mt-1.5 text-[12px] text-zinc-500 max-w-xs mx-auto leading-snug">
-                        Dieses Produkt scheint gerade nicht viral zu gehen. Es wurden{" "}
+                        Zu diesem Produkt konnten wir gerade keine weiteren Videos finden. Es wurden{" "}
                         <span className="text-zinc-300 font-medium">keine Credits abgezogen</span>. Versuch
                         es später noch einmal.
                       </p>
@@ -545,8 +544,7 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
       </div>
 
       <div className="p-2 sm:p-2.5 flex-1 flex flex-col">
-        {video.author && <div className="text-[10px] text-zinc-500 mb-0.5 truncate">@{video.author}</div>}
-        <p className="text-[11.5px] text-zinc-200 leading-snug line-clamp-2 flex-1">
+        <p className="text-[11.5px] text-zinc-300 leading-snug truncate flex-1">
           {video.title_snippet || "—"}
         </p>
         {video.refunded ? (

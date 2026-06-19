@@ -24,6 +24,7 @@
 
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { put } from "@vercel/blob";
 import { getSession } from "@/lib/session";
 import { requireFeature } from "@/lib/tier-guard";
 import {
@@ -187,6 +188,36 @@ async function scrapeTikTok(
     out.push(c);
   }
   return out;
+}
+
+// ─── Thumbnail dauerhaft machen ──────────────────────────────────
+// TikTok-Cover-URLs sind signiert und laufen nach ~1 Tag ab. Damit die
+// gespeicherte Galerie dauerhaft Vorschaubilder zeigt, laden wir das
+// Cover einmal herunter und legen es auf Vercel Blob ab (kurze, stabile
+// URL — gut auch fürs Profil-Zellen-Limit). Schlägt etwas fehl, geben
+// wir "" zurück → die UI zeigt dann einen Platzhalter.
+async function rehostThumbnail(srcUrl: string): Promise<string> {
+  if (!srcUrl) return "";
+  try {
+    const res = await fetch(srcUrl, {
+      signal: AbortSignal.timeout(8000),
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
+    });
+    if (!res.ok) return "";
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length === 0 || buf.length > 3 * 1024 * 1024) return "";
+    const blob = await put(
+      `scout-thumbs/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`,
+      buf,
+      { access: "public", contentType: "image/jpeg" },
+    );
+    return blob.url;
+  } catch {
+    return "";
+  }
 }
 
 // ─── Claude-Relevanzfilter (gibt nur Indizes zurück) ─────────────
@@ -474,44 +505,41 @@ export async function POST(req: Request) {
     .sort((a, b) => b.views - a.views)
     .slice(0, RELEVANCE_CANDIDATE_CAP);
 
-  // ── Dud-Gate (vor der KI): kein einziges Video ≥ Viral-Schwelle →
-  // Produkt geht aktuell nicht viral. Erst gar nicht weitersuchen. ──
-  const notViralResponse = NextResponse.json(
-    {
-      notViral: true,
-      error:
-        "Aktuell konnten leider keine viralen Videos zu diesem Produkt gefunden werden. Es wurden keine Credits abgezogen.",
-      videos_found: [],
-    },
-    { status: 404 },
-  );
-  if (!pool.some((c) => c.views >= VIDEO_VIRAL_MIN)) {
-    return notViralResponse;
+  // Nur wenn GAR nichts (mehr) da ist, geben wir auf — sonst liefern wir
+  // generell Videos zum Produkt (die view-stärksten zuerst, >10k oben).
+  if (pool.length === 0) {
+    return NextResponse.json(
+      {
+        noResults: true,
+        error:
+          "Aktuell konnten keine weiteren Videos zu diesem Produkt gefunden werden. Es wurden keine Credits abgezogen.",
+        videos_found: [],
+      },
+      { status: 404 },
+    );
   }
 
-  // ── 4) Relevanz filtern (KI entscheidet nur, WAS passt) ──
+  // ── 4) Relevanz filtern (hält das Produkt-Thema zusammen) ──
+  // Greift der Filter zu hart (leer), nehmen wir trotzdem den Pool — das
+  // Tool liefert generell Produkt-Videos, es refused nicht.
   const relevantIdx = await filterRelevant(client, product, pool);
-  let relevant = relevantIdx.map((i) => pool[i]).filter(Boolean);
-  // Geht der Filter leer aus, es gibt aber klar virale Treffer, nimm die
-  // viralen — besser als eine bezahlte Leersuche.
-  if (relevant.length === 0) {
-    relevant = pool.filter((c) => c.views >= VIDEO_VIRAL_MIN);
-  }
-  // Erneutes Dud-Gate auf den relevanten Treffern.
-  if (!relevant.some((c) => c.views >= VIDEO_VIRAL_MIN)) {
-    return notViralResponse;
-  }
-
-  // ── 5) Nach echten Views sortieren + auf gewünschte Menge kürzen ──
-  const top = relevant
+  const relevant = relevantIdx.map((i) => pool[i]).filter(Boolean);
+  const ranked = (relevant.length > 0 ? relevant : pool)
     .slice()
-    .sort((a, b) => b.views - a.views)
-    .slice(0, count);
+    .sort((a, b) => b.views - a.views);
 
-  // ── 6) Refund: Videos unter der Viral-Schwelle werden gutgeschrieben ──
+  // ── 5) Top-N: die view-stärksten Videos zuerst (>10k priorisiert) ──
+  const top = ranked.slice(0, count);
+
+  // ── 6) Refund: Videos unter VIDEO_VIRAL_MIN werden gutgeschrieben ──
+  // Thumbnails dauerhaft machen (nur wenn wir persistieren = kunde);
+  // für Admin reicht die Original-URL (nur in-Session sichtbar).
   const perVideo = perVideoCost(count);
   let refundTotal = 0;
-  const videos_found: ScoutVideo[] = top.map((c) => {
+  const thumbs: string[] = kunde
+    ? await Promise.all(top.map((c) => rehostThumbnail(c.thumbnail)))
+    : top.map((c) => c.thumbnail);
+  const videos_found: ScoutVideo[] = top.map((c, i) => {
     const refunded = c.views < VIDEO_VIRAL_MIN;
     if (refunded) refundTotal += perVideo;
     return {
@@ -519,9 +547,9 @@ export async function POST(req: Request) {
       platform: "TikTok",
       view_count: c.views,
       formatted_views: formatViews(c.views),
-      title_snippet: c.caption.slice(0, 50),
-      thumbnail: c.thumbnail || undefined,
-      author: c.author || undefined,
+      // Bewusst nur die ersten 15 Zeichen — keine volle Beschreibung.
+      title_snippet: c.caption.slice(0, 15),
+      thumbnail: thumbs[i] || c.thumbnail || undefined,
       likes: c.likes || undefined,
       refunded,
       refundAmount: refunded ? perVideo : undefined,
@@ -536,18 +564,21 @@ export async function POST(req: Request) {
   if (kunde) {
     const nowIso = new Date().toISOString();
     const newRecords: SavedScoutVideo[] = videos_found.map((v) => ({
-      ...v,
-      // TikTok-Cover-URLs sind signiert + laufen nach ~1 Tag ab → NICHT
-      // persistieren (spart massiv Platz in der einen Profil-Zelle, die
-      // als JSON max. 50k Zeichen halten darf). In-Session zeigt die UI
-      // die Thumbnails noch aus dem Speicher.
-      thumbnail: undefined,
+      url: v.url,
+      platform: v.platform,
+      view_count: v.view_count,
+      formatted_views: v.formatted_views,
+      title_snippet: v.title_snippet, // nur 15 Zeichen
+      thumbnail: v.thumbnail, // dauerhafte Blob-URL (oder leer)
+      likes: v.likes,
+      refunded: v.refunded,
+      refundAmount: v.refundAmount,
       productId,
       savedAt: nowIso,
     }));
     const existing = Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : [];
-    // Neueste zuerst, global auf 80 begrenzt (Profil-Zelle nicht sprengen).
-    const merged = [...newRecords, ...existing].slice(0, 80);
+    // Neueste zuerst, global auf 60 begrenzt (Profil-Zelle nicht sprengen).
+    const merged = [...newRecords, ...existing].slice(0, 60);
     const updatedProfile = { ...kunde.profile, scoutVideos: merged };
     try {
       if (netCost > 0) {
