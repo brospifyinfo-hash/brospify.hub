@@ -44,7 +44,6 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const PROCESS_MAX_DIM = 2400;
 const PROCESS_QUALITY = 0.92;
 const CUSTOM_PROMPT_MAX = 500;
-const IMAGE_COUNTS = [1, 2, 3] as const;
 
 type Stage = "upload" | "configure" | "processing" | "done" | "error";
 
@@ -68,7 +67,6 @@ export default function AiStudio() {
   const [sceneId, setSceneId] = useState<string>(AI_STUDIO_SCENES[0].id);
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
-  const [imageCount, setImageCount] = useState<number>(1);
 
   const [savedSet, setSavedSet] = useState<Set<number>>(() => new Set());
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
@@ -80,9 +78,8 @@ export default function AiStudio() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startedAtRef = useRef(0);
 
-  const perImage = credits.costOf("AI_STUDIO", CREDIT_COSTS.AI_STUDIO);
-  const totalCost = perImage * imageCount;
-  const insufficientCredits = !credits.loading && credits.balance < totalCost;
+  const cost = credits.costOf("AI_STUDIO", CREDIT_COSTS.AI_STUDIO);
+  const insufficientCredits = !credits.loading && credits.balance < cost;
 
   useEffect(() => {
     return () => {
@@ -119,7 +116,6 @@ export default function AiStudio() {
     setSceneId(AI_STUDIO_SCENES[0].id);
     setCustomPrompt("");
     setShowCustomPrompt(false);
-    setImageCount(1);
     setSavedSet(new Set());
     setSavingIdx(null);
     setElapsed(0);
@@ -220,22 +216,21 @@ export default function AiStudio() {
     if (!preparedFile) return;
     if (insufficientCredits) {
       setErrorMsg(
-        `Du brauchst ${totalCost} Credits — du hast ${credits.balance}.`,
+        `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
       );
       return;
     }
     const scene =
       AI_STUDIO_SCENES.find((s) => s.id === sceneId) || AI_STUDIO_SCENES[0];
-    const count = imageCount;
 
     setErrorMsg(null);
     setStage("processing");
     startTimer();
-    credits.optimisticDeduct(perImage * count);
+    credits.optimisticDeduct(cost);
 
     try {
       const data = await job.run({
-        hint: `Szene: ${scene.label} · ${count}×`,
+        hint: `Szene: ${scene.label}`,
         onAttemptStart: (n) => {
           if (n > 1) credits.refresh();
         },
@@ -243,7 +238,6 @@ export default function AiStudio() {
           const fd = new FormData();
           fd.append("file", preparedFile);
           fd.append("sceneId", scene.id);
-          fd.append("count", String(count));
           const trimmedPrompt = customPrompt.trim().slice(0, CUSTOM_PROMPT_MAX);
           if (trimmedPrompt) fd.append("customPrompt", trimmedPrompt);
           const res = await fetch("/api/ai-studio", { method: "POST", body: fd });
@@ -373,7 +367,7 @@ export default function AiStudio() {
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              ab {perImage} {credits.creditIcon} / Bild
+              {cost} {credits.creditIcon} / Bild
             </p>
           </div>
 
@@ -433,14 +427,6 @@ export default function AiStudio() {
           {/* Carousel of scene templates */}
           <SceneCarousel selected={sceneId} onSelect={setSceneId} />
 
-          {/* How many variations */}
-          <CountSelector
-            value={imageCount}
-            onChange={setImageCount}
-            perImage={perImage}
-            icon={credits.creditIcon}
-          />
-
           {/* Custom prompt — collapsible */}
           <CustomPromptBlock
             value={customPrompt}
@@ -462,7 +448,7 @@ export default function AiStudio() {
             }}
           >
             <SparklesIcon />
-            {imageCount === 1 ? "Generieren" : `${imageCount} Varianten generieren`} · {totalCost} {credits.creditIcon}
+            Generieren · {cost} {credits.creditIcon}
           </button>
 
           {insufficientCredits && (
@@ -480,7 +466,7 @@ export default function AiStudio() {
                     Nicht genug Credits
                   </div>
                   <div className="text-[11.5px] text-amber-100/70 mt-0.5">
-                    Für {imageCount} {imageCount === 1 ? "Bild" : "Bilder"} brauchst du {totalCost} Credits.
+                    Pro Generierung brauchst du {cost} Credits.
                     Aktuell: {credits.balance.toLocaleString("de-DE")}.
                   </div>
                 </div>
@@ -529,7 +515,7 @@ export default function AiStudio() {
                 className="mt-3 text-[16px] font-semibold tracking-tight text-white"
                 style={{ letterSpacing: "-0.022em" }}
               >
-                {imageCount === 1 ? "Szene wird erstellt" : `${imageCount} Varianten werden erstellt`}
+                Szene wird erstellt
               </h3>
               <p className="mt-1 text-[11px] text-zinc-400">
                 Verarbeitung läuft · {elapsedSec}s
@@ -715,71 +701,6 @@ function InlineError({ msg }: { msg: string }) {
     >
       <AlertIcon />
       <div className="text-[13px] text-red-200 break-words flex-1 min-w-0">{msg}</div>
-    </div>
-  );
-}
-
-// ─── Count selector (1–3 variations) ─────────────────────────────
-
-function CountSelector({
-  value,
-  onChange,
-  perImage,
-  icon,
-}: {
-  value: number;
-  onChange: (n: number) => void;
-  perImage: number;
-  icon: string;
-}) {
-  return (
-    <div className="mt-4">
-      <div className="flex items-center justify-between mb-2 px-1">
-        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">
-          Wie viele Bilder
-        </span>
-        <span className="text-[10.5px] text-zinc-600">
-          {perImage} {icon} pro Bild
-        </span>
-      </div>
-      <div
-        className="grid grid-cols-3 gap-1 p-1 rounded-2xl"
-        style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.08)",
-          backdropFilter: "blur(12px)",
-          WebkitBackdropFilter: "blur(12px)",
-        }}
-      >
-        {IMAGE_COUNTS.map((n) => {
-          const active = n === value;
-          return (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onChange(n)}
-              className="relative rounded-xl py-2.5 px-2.5 text-center transition-all active:scale-[0.99]"
-              style={{
-                background: active ? "rgba(149,191,71,0.12)" : "transparent",
-                border: active ? `1px solid ${ACCENT}55` : "1px solid transparent",
-                boxShadow: active
-                  ? `0 8px 22px -10px ${ACCENT}50, inset 0 1px 0 rgba(255,255,255,0.04)`
-                  : undefined,
-              }}
-            >
-              <div
-                className="text-[16px] font-bold tabular-nums"
-                style={{ color: active ? "#fff" : "#d4d4d8" }}
-              >
-                {n}
-              </div>
-              <div className="text-[9.5px] text-zinc-500 mt-0.5">
-                {n === 1 ? "Bild" : "Bilder"} · {perImage * n} {icon}
-              </div>
-            </button>
-          );
-        })}
-      </div>
     </div>
   );
 }
