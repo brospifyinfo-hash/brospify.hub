@@ -50,6 +50,35 @@ export default function CreditsPage() {
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState<string | null>(null);
 
+  // Effective packages = static (variantId + cartUrl) merged with the
+  // admin-editable overrides (credits / price / label) by id.
+  const [packages, setPackages] = useState<CreditPackage[]>(() => CREDIT_PACKAGES.slice());
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/credit-config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data?.packages?.length) return;
+        const byId = new Map<string, { credits?: number; priceCents?: number; priceLabel?: string }>(
+          data.packages.map((p: { id: string }) => [p.id, p]),
+        );
+        setPackages(
+          CREDIT_PACKAGES.map((base) => {
+            const o = byId.get(base.id);
+            if (!o) return base;
+            return {
+              ...base,
+              credits: typeof o.credits === "number" ? o.credits : base.credits,
+              priceCents: typeof o.priceCents === "number" ? o.priceCents : base.priceCents,
+              priceLabel: o.priceLabel || base.priceLabel,
+            };
+          }),
+        );
+      })
+      .catch(() => {/* keep static defaults */});
+    return () => { cancelled = true; };
+  }, []);
+
   // Voucher
   const [voucher, setVoucher] = useState("");
   const [voucherStatus, setVoucherStatus] = useState<
@@ -218,7 +247,7 @@ export default function CreditsPage() {
               </h2>
               <span className="text-[11px] text-white/30">Einmalzahlung · inkl. MwSt.</span>
             </div>
-            {CREDIT_PACKAGES.map((pkg, idx) => (
+            {packages.map((pkg, idx) => (
               <PackageRow
                 key={pkg.id}
                 pkg={pkg}

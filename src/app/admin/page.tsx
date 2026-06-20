@@ -11,7 +11,7 @@ import {
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
   Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
-  Link2,
+  Link2, AlertTriangle, Percent,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -27,6 +27,15 @@ import {
   LIMIT_KEYS,
   LIMIT_LABELS,
 } from "@/lib/tiers-shared";
+import {
+  type CreditConfig,
+  defaultCreditConfig,
+  mergeCreditConfig,
+  TOOL_PRICING_META,
+  pricePerCreditEur,
+  toolProfit,
+  formatEuro,
+} from "@/lib/credit-config";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -478,7 +487,7 @@ export default function AdminPage() {
   const [aiKategorie, setAiKategorie] = useState("");
   const [urlImportUrl, setUrlImportUrl] = useState("");
   const [urlImporting, setUrlImporting] = useState(false);
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -563,6 +572,42 @@ export default function AdminPage() {
       }
     } catch { /* ignore */ }
     finally { setApiBalancesLoading(false); }
+  }, []);
+
+  // ─── Credit config (Preise, Icon, Gewinn pro Nutzung) ──────────
+  const [creditConfig, setCreditConfig] = useState<CreditConfig>(() => defaultCreditConfig());
+  const [creditConfigLoading, setCreditConfigLoading] = useState(false);
+  const [creditConfigSaving, setCreditConfigSaving] = useState(false);
+  const loadCreditConfig = useCallback(async () => {
+    setCreditConfigLoading(true);
+    try {
+      const res = await fetch("/api/admin/credits/config");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.config) setCreditConfig(mergeCreditConfig(data.config));
+      }
+    } catch { /* ignore */ }
+    finally { setCreditConfigLoading(false); }
+  }, []);
+  const saveCreditConfig = useCallback(async (next: CreditConfig): Promise<boolean> => {
+    setCreditConfigSaving(true);
+    try {
+      const res = await fetch("/api/admin/credits/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.config) {
+        setCreditConfig(mergeCreditConfig(data.config));
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      setCreditConfigSaving(false);
+    }
   }, []);
 
   // ─── System status (health) ────────────────────────────────────
@@ -921,7 +966,13 @@ export default function AdminPage() {
       loadSystemStatus();
       loadApiBalances();
     }
+    // The Dashboard now shows the API-credit balances right at the top.
+    if (activeTab === "dashboard") loadApiBalances();
   }, [activeTab, loadSystemStatus, loadApiBalances]);
+
+  useEffect(() => {
+    if (activeTab === "credits") loadCreditConfig();
+  }, [activeTab, loadCreditConfig]);
 
   useEffect(() => {
     if (!dashAutoRefresh || activeTab !== "dashboard") return;
@@ -1889,7 +1940,10 @@ export default function AdminPage() {
                   autoRefresh={dashAutoRefresh}
                   setAutoRefresh={setDashAutoRefresh}
                   onJumpTab={(t) => setActiveTab(t)}
-                  onRefresh={loadStats}
+                  onRefresh={() => { loadStats(); loadApiBalances(); }}
+                  apiBalances={apiBalances}
+                  apiBalancesLoading={apiBalancesLoading}
+                  onRefreshBalances={loadApiBalances}
                 />
               </AdminErrorBoundary>
             )}
@@ -2129,6 +2183,19 @@ export default function AdminPage() {
               loading={customersLoading}
               onRefresh={loadCustomers}
               onOpenCustomer={(key) => setActiveCustomerKey(key)}
+            />
+          </AdminErrorBoundary>
+        )}
+
+        {/* ─── Credits Tab (Preise, Icon, Gewinn pro Nutzung) ──── */}
+        {activeTab === "credits" && (
+          <AdminErrorBoundary label="Credits">
+            <CreditsAdminView
+              config={creditConfig}
+              loading={creditConfigLoading}
+              saving={creditConfigSaving}
+              onSave={saveCreditConfig}
+              onRefresh={loadCreditConfig}
             />
           </AdminErrorBoundary>
         )}
@@ -4240,7 +4307,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -4260,6 +4327,7 @@ const SIDEBAR_GROUPS: {
       { key: "users", label: "User & Rollen", icon: UserCog, color: "#F472B6" },
       { key: "customers", label: "Kunden", icon: Users, color: "#3B82F6" },
       { key: "licenses", label: "Lizenzen", icon: Shield, color: "#06B6D4" },
+      { key: "credits", label: "Credits", icon: Coins, color: "#95BF47" },
       { key: "tiers", label: "Abo-Modelle", icon: Crown, color: "#F59E0B" },
       { key: "tickets", label: "Tickets", icon: Shield, color: "#F59E0B" },
       { key: "codes", label: "Voucher-Codes", icon: Ticket, color: "#A855F7" },
@@ -4349,7 +4417,7 @@ function AdminSidebarNav({ activeTab, setActiveTab, counters }: {
 
 // ─── Dashboard view ────────────────────────────────────────────
 
-function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoRefresh, onJumpTab, onRefresh }: {
+function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoRefresh, onJumpTab, onRefresh, apiBalances, apiBalancesLoading, onRefreshBalances }: {
   stats: AdminStats | null;
   loading: boolean;
   onJumpToCustomer: (key: string) => void;
@@ -4357,22 +4425,46 @@ function DashboardView({ stats, loading, onJumpToCustomer, autoRefresh, setAutoR
   setAutoRefresh: (v: boolean) => void;
   onJumpTab: (t: SidebarTab) => void;
   onRefresh: () => void;
+  apiBalances: ApiBalance[];
+  apiBalancesLoading: boolean;
+  onRefreshBalances: () => void;
 }) {
+  // The API-credit balances sit at the very top — even before stats
+  // have loaded — so an empty provider is impossible to miss.
+  const balancesTop = (
+    <ApiBalancesCard
+      balances={apiBalances}
+      loading={apiBalancesLoading}
+      onRefresh={onRefreshBalances}
+    />
+  );
+
   if (loading && !stats) {
     return (
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="h-20 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />
-        ))}
+      <div className="space-y-3">
+        {balancesTop}
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="h-20 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />
+          ))}
+        </div>
       </div>
     );
   }
   if (!stats) {
-    return <div className="text-center py-10 text-sm text-zinc-500">Keine Daten verfügbar.</div>;
+    return (
+      <div className="space-y-3">
+        {balancesTop}
+        <div className="text-center py-10 text-sm text-zinc-500">Keine Daten verfügbar.</div>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-3">
+      {/* API-Credit-Stände ganz oben */}
+      {balancesTop}
+
       {/* Quick actions row */}
       <div className="flex flex-wrap gap-1.5 items-center">
         <button
@@ -7217,6 +7309,396 @@ function licenseHealth(
   return "active";
 }
 
+// ─── Credits admin (Preise · Icon · Gewinn pro Nutzung) ─────────
+// One place to (1) set the credit packages sold in the shop, (2) set
+// the credit icon shown across the app, (3) re-price every AI/tool,
+// and see the profit per use (Credit-Umsatz − geschätzte API-Kosten).
+
+interface CreditForm {
+  icon: string;
+  costs: Record<string, string>;
+  apiCostsEur: Record<string, string>;
+  packages: { id: string; credits: string; priceEur: string; priceLabel: string }[];
+}
+
+function formFromConfig(cfg: CreditConfig): CreditForm {
+  const costs: Record<string, string> = {};
+  for (const [k, v] of Object.entries(cfg.costs)) costs[k] = String(v);
+  const apiCostsEur: Record<string, string> = {};
+  for (const [k, v] of Object.entries(cfg.apiCostsEur)) apiCostsEur[k] = String(v);
+  return {
+    icon: cfg.icon,
+    costs,
+    apiCostsEur,
+    packages: cfg.packages.map((p) => ({
+      id: p.id,
+      credits: String(p.credits),
+      priceEur: (p.priceCents / 100).toFixed(2),
+      priceLabel: p.priceLabel,
+    })),
+  };
+}
+
+function configFromForm(form: CreditForm): CreditConfig {
+  const costs: Record<string, number> = {};
+  for (const [k, v] of Object.entries(form.costs)) costs[k] = Math.max(0, Math.round(Number(v) || 0));
+  const apiCostsEur: Record<string, number> = {};
+  for (const [k, v] of Object.entries(form.apiCostsEur)) apiCostsEur[k] = Math.max(0, Number(v) || 0);
+  return mergeCreditConfig({
+    icon: form.icon,
+    costs,
+    apiCostsEur,
+    packages: form.packages.map((p) => {
+      const priceCents = Math.max(0, Math.round((Number(p.priceEur) || 0) * 100));
+      return {
+        id: p.id,
+        credits: Math.max(0, Math.round(Number(p.credits) || 0)),
+        priceCents,
+        priceLabel: p.priceLabel.trim() || formatEuro(priceCents),
+      };
+    }),
+  });
+}
+
+function CreditsAdminView({
+  config,
+  loading,
+  saving,
+  onSave,
+  onRefresh,
+}: {
+  config: CreditConfig;
+  loading: boolean;
+  saving: boolean;
+  onSave: (next: CreditConfig) => Promise<boolean>;
+  onRefresh: () => void;
+}) {
+  const [form, setForm] = useState<CreditForm>(() => formFromConfig(config));
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [errFlash, setErrFlash] = useState(false);
+
+  // Re-seed the form whenever a fresh config arrives from the server.
+  useEffect(() => {
+    setForm(formFromConfig(config));
+  }, [config]);
+
+  const draft = configFromForm(form);
+  const ppc = pricePerCreditEur(draft);
+
+  function setIcon(v: string) {
+    setForm((f) => ({ ...f, icon: v }));
+  }
+  function setCost(key: string, v: string) {
+    setForm((f) => ({ ...f, costs: { ...f.costs, [key]: v } }));
+  }
+  function setApiCost(key: string, v: string) {
+    setForm((f) => ({ ...f, apiCostsEur: { ...f.apiCostsEur, [key]: v } }));
+  }
+  function setPkg(idx: number, field: "credits" | "priceEur" | "priceLabel", v: string) {
+    setForm((f) => ({
+      ...f,
+      packages: f.packages.map((p, i) => (i === idx ? { ...p, [field]: v } : p)),
+    }));
+  }
+
+  async function handleSave() {
+    const ok = await onSave(configFromForm(form));
+    setSavedFlash(ok);
+    setErrFlash(!ok);
+    setTimeout(() => { setSavedFlash(false); setErrFlash(false); }, 2500);
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Header / actions */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-[180px]">
+          <h2 className="text-sm font-bold flex items-center gap-1.5">
+            <Coins className="w-4 h-4 text-[#95BF47]" /> Credits & Preise
+          </h2>
+          <p className="text-[11px] text-zinc-500 mt-0.5">
+            Shop-Preise, Credit-Icon und alle Tool-Preise — inkl. Gewinn pro Nutzung.
+          </p>
+        </div>
+        <button
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Repeat className="w-3.5 h-3.5" />}
+          Neu laden
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 disabled:opacity-50"
+          style={{ background: "#95BF47", color: "#0a1604" }}
+        >
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+          Speichern
+        </button>
+      </div>
+      {savedFlash && (
+        <div className="flex items-center gap-2 text-emerald-400 text-xs glass border border-emerald-500/20 px-3 py-2 rounded-lg">
+          <Check className="w-3.5 h-3.5" /> Gespeichert — wirkt sofort in Shop & allen Tools.
+        </div>
+      )}
+      {errFlash && (
+        <div className="flex items-center gap-2 text-red-400 text-xs glass border border-red-500/20 px-3 py-2 rounded-lg">
+          <AlertCircle className="w-3.5 h-3.5" /> Speichern fehlgeschlagen.
+        </div>
+      )}
+
+      {/* Credit icon */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <div className="flex items-center gap-1.5 mb-2.5">
+          <Coins className="w-3.5 h-3.5 text-amber-400" />
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">Credit-Icon</h3>
+        </div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            value={form.icon}
+            onChange={(e) => setIcon(e.target.value.slice(0, 8))}
+            className="w-24 bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-center text-lg outline-none focus:border-white/25 transition"
+            placeholder="🪙"
+          />
+          <div className="text-xs text-zinc-400">
+            Vorschau:{" "}
+            <span className="font-bold text-white tabular-nums">1.234 {form.icon || "🪙"}</span>
+          </div>
+          <div className="text-[10px] text-zinc-600">Emoji oder kurzer Text — erscheint überall neben dem Guthaben.</div>
+        </div>
+      </div>
+
+      {/* Shop packages */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Store className="w-3.5 h-3.5 text-purple-400" />
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">Credit-Pakete im Shop</h3>
+        </div>
+        <p className="text-[10px] text-zinc-600 mb-2.5">
+          Preis &amp; Credit-Menge je Paket. Die Shopify-Variant-IDs bleiben fix im Code — nur Anzeige &amp; Menge werden überschrieben.
+        </p>
+        <div className="space-y-2">
+          {form.packages.map((p, idx) => {
+            const perCredit = Number(p.credits) > 0 ? (Number(p.priceEur) || 0) / Number(p.credits) : 0;
+            return (
+              <div key={p.id} className="grid grid-cols-2 sm:grid-cols-[80px_1fr_1fr_1fr_auto] gap-2 items-center rounded-lg bg-white/[0.02] border border-white/[0.06] p-2">
+                <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">{p.id}</div>
+                <label className="block">
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-500">Credits</span>
+                  <input type="number" min={0} value={p.credits} onChange={(e) => setPkg(idx, "credits", e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs tabular-nums outline-none focus:border-white/25" />
+                </label>
+                <label className="block">
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-500">Preis €</span>
+                  <input type="number" min={0} step="0.01" value={p.priceEur} onChange={(e) => setPkg(idx, "priceEur", e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs tabular-nums outline-none focus:border-white/25" />
+                </label>
+                <label className="block">
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-500">Label</span>
+                  <input value={p.priceLabel} onChange={(e) => setPkg(idx, "priceLabel", e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs outline-none focus:border-white/25" />
+                </label>
+                <div className="text-[10px] text-zinc-500 tabular-nums text-right">
+                  {perCredit > 0 ? `${(perCredit * 100).toFixed(3)} ct/Credit` : "—"}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="mt-2 text-[10px] text-zinc-500">
+          Ø Preis pro Credit (für die Gewinn-Rechnung): <strong className="text-zinc-300 tabular-nums">{(ppc * 100).toFixed(3)} ct</strong>
+        </div>
+      </div>
+
+      {/* Tool prices + profit */}
+      <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Percent className="w-3.5 h-3.5 text-emerald-400" />
+          <h3 className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">Tool-Preise &amp; Gewinn pro Nutzung</h3>
+        </div>
+        <p className="text-[10px] text-zinc-600 mb-2.5">
+          Gewinn = Credit-Preis × Ø-Cent/Credit − geschätzte API-Kosten. API-Kosten frei justierbar.
+        </p>
+
+        {/* Header row (desktop) */}
+        <div className="hidden md:grid grid-cols-[1.6fr_0.8fr_1fr_0.9fr_0.9fr_0.7fr] gap-2 px-2 pb-1 text-[9px] uppercase tracking-widest text-zinc-600 font-semibold">
+          <span>Tool</span><span>Credits</span><span>API-Kosten €</span><span>Umsatz €</span><span>Gewinn €</span><span>Marge</span>
+        </div>
+        <div className="space-y-1.5">
+          {TOOL_PRICING_META.map((t) => {
+            const prof = toolProfit(draft, t.key);
+            const good = prof.profitEur >= 0;
+            return (
+              <div key={t.key} className="grid grid-cols-2 md:grid-cols-[1.6fr_0.8fr_1fr_0.9fr_0.9fr_0.7fr] gap-2 items-center rounded-lg bg-white/[0.02] border border-white/[0.06] p-2">
+                <div className="col-span-2 md:col-span-1 min-w-0">
+                  <div className="text-[12px] font-semibold text-zinc-200 truncate flex items-center gap-1.5">
+                    {t.label}
+                    {t.hidden && <span className="text-[8px] uppercase tracking-widest text-zinc-600 border border-white/10 rounded px-1">versteckt</span>}
+                  </div>
+                  <div className="text-[9.5px] text-zinc-600 truncate">{t.hint}</div>
+                </div>
+                <label className="block">
+                  <span className="md:hidden text-[9px] uppercase tracking-widest text-zinc-500">Credits</span>
+                  <input type="number" min={0} value={form.costs[t.key] ?? ""} onChange={(e) => setCost(t.key, e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs tabular-nums outline-none focus:border-white/25" />
+                </label>
+                <label className="block">
+                  <span className="md:hidden text-[9px] uppercase tracking-widest text-zinc-500">API €</span>
+                  <input type="number" min={0} step="0.001" value={form.apiCostsEur[t.key] ?? ""} onChange={(e) => setApiCost(t.key, e.target.value)}
+                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs tabular-nums outline-none focus:border-white/25" />
+                </label>
+                <div className="text-[11px] tabular-nums text-zinc-300">
+                  <span className="md:hidden text-[9px] uppercase tracking-widest text-zinc-500 mr-1">Umsatz</span>
+                  {prof.revenueEur.toFixed(3)}
+                </div>
+                <div className="text-[11px] font-bold tabular-nums" style={{ color: good ? "#95BF47" : "#fca5a5" }}>
+                  <span className="md:hidden text-[9px] uppercase tracking-widest text-zinc-500 mr-1 font-normal">Gewinn</span>
+                  {good && prof.profitEur > 0 ? "+" : ""}{prof.profitEur.toFixed(3)}
+                </div>
+                <div className="text-[10px] tabular-nums" style={{ color: good ? "#95BF47" : "#fca5a5" }}>
+                  {prof.marginPct}%
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="text-[9px] text-zinc-600 mt-2 leading-snug">
+          Beträge sind Schätzungen pro Einzelnutzung. Bei AI Studio gilt der Preis pro Bild (×1–3 bei Mehrfach-Generierung).
+        </p>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─── License cleanup (danger zone) ──────────────────────────────
+// Bulk-deletes every license whose key is NOT in the whitelist.
+// Two-step: „Vorschau" (dry-run count) → type LÖSCHEN → execute.
+function LicenseCleanupPanel({ onDone }: { onDone: () => void }) {
+  const [keep, setKeep] = useState("IBSAMK, ILDCÜA");
+  const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<{ wouldDelete: number; kept: number } | null>(null);
+  const [confirmText, setConfirmText] = useState("");
+  const [msg, setMsg] = useState("");
+  const [err, setErr] = useState(false);
+
+  function keepList(): string[] {
+    return keep
+      .split(/[,\n]/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  async function run(dryRun: boolean) {
+    const list = keepList();
+    if (list.length === 0) {
+      setErr(true);
+      setMsg("Die Whitelist darf nicht leer sein.");
+      return;
+    }
+    if (!dryRun && confirmText.trim().toUpperCase() !== "LÖSCHEN") {
+      setErr(true);
+      setMsg('Tippe „LÖSCHEN" zur Bestätigung.');
+      return;
+    }
+    setBusy(true);
+    setErr(false);
+    setMsg("");
+    try {
+      const res = await fetch("/api/admin/license/cleanup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keep: list, dryRun }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(true);
+        setMsg(data.error || "Fehler bei der Bereinigung.");
+      } else if (dryRun) {
+        setPreview({ wouldDelete: data.wouldDelete, kept: data.kept });
+        setMsg(
+          data.wouldDelete === 0
+            ? "Nichts zu löschen — alle vorhandenen Lizenzen stehen in der Whitelist."
+            : `Vorschau: ${data.wouldDelete} Lizenz(en) würden gelöscht, ${data.kept} behalten.`,
+        );
+      } else {
+        setPreview(null);
+        setConfirmText("");
+        setMsg(`✓ ${data.deleted} Lizenz(en) gelöscht, ${data.kept} behalten.`);
+        onDone();
+      }
+    } catch {
+      setErr(true);
+      setMsg("Verbindungsfehler.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="group rounded-xl border border-red-500/25 bg-red-500/[0.04] overflow-hidden">
+      <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden px-4 py-3 flex items-center gap-2 hover:bg-red-500/[0.06] transition">
+        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+        <span className="text-sm font-semibold text-red-200">Lizenzen-Bereinigung (Gefahrenzone)</span>
+        <ChevronDown className="ml-auto w-4 h-4 text-red-400/70 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div className="px-4 pb-4 pt-3 border-t border-red-500/10 space-y-3">
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
+          Löscht <strong className="text-red-200">ALLE</strong> Lizenzen/Kunden, deren Schlüssel NICHT in der
+          Whitelist steht (Kommaliste, Groß-/Kleinschreibung egal). Diese Aktion ist endgültig — erst „Vorschau",
+          dann „LÖSCHEN" tippen.
+        </p>
+        <div>
+          <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
+            Behalten (Whitelist)
+          </label>
+          <input
+            value={keep}
+            onChange={(e) => {
+              setKeep(e.target.value);
+              setPreview(null);
+            }}
+            className="mt-1 w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-white/25 transition"
+            placeholder="IBSAMK, ILDCÜA"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => run(true)}
+            disabled={busy}
+            className="px-3 py-2 rounded-lg bg-white/[0.05] border border-white/10 text-xs font-semibold text-zinc-200 hover:bg-white/[0.09] transition disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
+            Vorschau
+          </button>
+          {preview && preview.wouldDelete > 0 && (
+            <>
+              <input
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value)}
+                placeholder="LÖSCHEN"
+                className="bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-red-500/40 transition w-28"
+              />
+              <button
+                onClick={() => run(false)}
+                disabled={busy || confirmText.trim().toUpperCase() !== "LÖSCHEN"}
+                className="px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/35 text-xs font-semibold text-red-200 hover:bg-red-500/25 transition disabled:opacity-40 flex items-center gap-1.5"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                {busy ? "Lösche…" : `${preview.wouldDelete} löschen`}
+              </button>
+            </>
+          )}
+        </div>
+        {msg && (
+          <div className={`text-[11px] ${err ? "text-red-300" : "text-zinc-300"}`}>{msg}</div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function LicensesView({
   customers,
   loading,
@@ -7383,6 +7865,9 @@ function LicensesView({
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Danger zone: bulk cleanup keeping a whitelist */}
+      <LicenseCleanupPanel onDone={onRefresh} />
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">

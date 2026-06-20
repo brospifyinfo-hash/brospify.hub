@@ -295,7 +295,7 @@ export default function Navigation() {
 
             {/* Right Side */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <CreditsPill balance={credits.balance} loading={credits.loading} />
+              <CreditsPill balance={credits.balance} loading={credits.loading} icon={credits.creditIcon} />
 
               {/* Account mega-dropdown — desktop only */}
               <div ref={accountRef} className="relative hidden md:block">
@@ -811,7 +811,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // Always-visible balance display. Compact on mobile (icon + number),
 // full pill on tablet+. Pulses when value changes after a tool runs.
 
-function CreditsPill({ balance, loading }: { balance: number; loading: boolean }) {
+function CreditsPill({ balance, loading, icon = "🪙" }: { balance: number; loading: boolean; icon?: string }) {
   const [pulse, setPulse] = useState(false);
   const prev = useRef(balance);
 
@@ -850,7 +850,7 @@ function CreditsPill({ balance, loading }: { balance: number; loading: boolean }
       }}
     >
       <span className="text-[12px] sm:text-[14px]" style={{ filter: empty ? "saturate(0.6)" : "none" }}>
-        🪙
+        {icon}
       </span>
       <motion.span
         key={balance}
