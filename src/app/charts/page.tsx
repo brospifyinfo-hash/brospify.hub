@@ -29,6 +29,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Info,
   BarChart3,
   Target,
@@ -912,11 +913,7 @@ function DetailModal({
           </div>
 
           {p.extra?.stats && (
-            <div className="space-y-4">
-              <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                <BarChart3 className="w-4 h-4 text-[#95BF47]" />
-                Premium Analytics
-              </h4>
+            <CollapsibleSection title="Premium Analytics" icon={BarChart3} iconColor="text-[#95BF47]" defaultOpen>
               <div className="space-y-3">
                 <StatBar label="Trend-Score" value={p.extra.stats.trendScore} icon={TrendingUp} color="text-[#95BF47]" delay={50} />
                 <StatBar label="Viralitäts-Score" value={p.extra.stats.viralScore} icon={Zap} color="text-purple-400" delay={150} />
@@ -924,15 +921,11 @@ function DetailModal({
                 <StatBar label="Problemlöser-Index" value={p.extra.stats.problemSolverIndex} icon={Target} color="text-emerald-400" delay={450} />
                 <StatBar label="Marktsättigung" value={p.extra.stats.marketSaturation} icon={PieChart} color="text-red-400" delay={600} />
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
           {p.extra?.finances && (
-            <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-                <DollarSign className="w-4 h-4 text-emerald-400" />
-                Marge &amp; Finanzen
-              </h4>
+            <CollapsibleSection title="Marge & Finanzen" icon={DollarSign} iconColor="text-emerald-400">
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center">
                   <div className="text-xs text-zinc-500 mb-1">Einkauf</div>
@@ -954,7 +947,7 @@ function DetailModal({
                 <AlertCircle className="w-3 h-3 shrink-0" />
                 <span>Preise sind Richtwerte &mdash; der reale Preis kann schwanken. Marge-% = Aufschlag auf den Einkaufspreis.</span>
               </div>
-            </div>
+            </CollapsibleSection>
           )}
 
           {isLegacy ? (
@@ -1192,6 +1185,43 @@ function VoteButtons({
   );
 }
 
+// ─── Collapsible Section ─────────────────────────────────────────
+// Every detail block sits in its own dropdown: tap the header (e.g.
+// „Zielgruppe") and only that section's content expands. Native
+// <details> so it's robust and keyboard-accessible.
+function CollapsibleSection({
+  title,
+  icon: Icon,
+  iconColor = "text-zinc-300",
+  defaultOpen = false,
+  badge,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  iconColor?: string;
+  defaultOpen?: boolean;
+  badge?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <details
+      className="group rounded-xl border border-zinc-700/50 bg-zinc-800/40 overflow-hidden"
+      {...(defaultOpen ? { open: true } : {})}
+    >
+      <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden px-4 py-3 flex items-center gap-2 hover:bg-white/[0.03] transition">
+        <Icon className={`w-4 h-4 shrink-0 ${iconColor}`} />
+        <span className="text-sm font-semibold text-zinc-200">{title}</span>
+        {badge}
+        <ChevronDown className="ml-auto w-4 h-4 text-zinc-500 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div className="px-4 pb-4 pt-3 border-t border-white/5 space-y-3">
+        {children}
+      </div>
+    </details>
+  );
+}
+
 // ─── Ads Block ───────────────────────────────────────────────────
 function AdsBlock({ ads }: { ads?: ProduktAds }) {
   const present = AD_PLATFORMS.filter(
@@ -1199,11 +1229,7 @@ function AdsBlock({ ads }: { ads?: ProduktAds }) {
   );
   if (present.length === 0) return null;
   return (
-    <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-        <Megaphone className="w-4 h-4 text-purple-300" />
-        Beispiel-Ads
-      </h4>
+    <CollapsibleSection title="Beispiel-Ads" icon={Megaphone} iconColor="text-purple-300">
       <div className="space-y-2.5">
         {present.map((p) => {
           const Icon = p.icon;
@@ -1234,7 +1260,7 @@ function AdsBlock({ ads }: { ads?: ProduktAds }) {
           );
         })}
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -1252,11 +1278,7 @@ function DropshippingBlock({
   if (list.length === 0) return null;
   const broken = status === false;
   return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-        <Store className="w-4 h-4 text-indigo-300" />
-        Beispiel Dropshipping-Shops
-      </h4>
+    <CollapsibleSection title="Beispiel Dropshipping-Shops" icon={Store} iconColor="text-indigo-300">
       <div className="space-y-1.5">
         {list.map((ex) => {
           let host = ex.url;
@@ -1282,7 +1304,7 @@ function DropshippingBlock({
         })}
       </div>
       {broken && <BrokenLinkHint />}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -1300,11 +1322,7 @@ function AliLinksBlock({
 }) {
   if (!produktLink && !kategorieLink) return null;
   return (
-    <div className="space-y-2">
-      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-        <Link2 className="w-4 h-4 text-orange-300" />
-        AliExpress Supplier
-      </h4>
+    <CollapsibleSection title="AliExpress Supplier" icon={Link2} iconColor="text-orange-300">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {kategorieLink && (
           <div className="space-y-1">
@@ -1337,7 +1355,7 @@ function AliLinksBlock({
           </div>
         )}
       </div>
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -1353,11 +1371,7 @@ function DeepStatsBlock({ ds }: { ds?: ProduktDeepStats }) {
   if (!has) return null;
   const peakSet = new Set(ds.peakMonths || []);
   return (
-    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-4">
-      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-        <Activity className="w-4 h-4 text-purple-300" />
-        Markt &amp; Saison
-      </h4>
+    <CollapsibleSection title="Markt & Saison" icon={Activity} iconColor="text-purple-300">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {typeof ds.competition === "number" && (
           <MiniMeter label="Konkurrenz" value={ds.competition} invert icon={Crosshair} />
@@ -1406,7 +1420,7 @@ function DeepStatsBlock({ ds }: { ds?: ProduktDeepStats }) {
           </div>
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -1448,11 +1462,7 @@ function AudienceBlock({ a }: { a?: ProduktAudience }) {
   const genderLabel =
     a.genderSkew === "male" ? "Männlich" : a.genderSkew === "female" ? "Weiblich" : "Ausgeglichen";
   return (
-    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
-      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-        <Users className="w-4 h-4 text-blue-300" />
-        Zielgruppe &amp; Targeting
-      </h4>
+    <CollapsibleSection title="Zielgruppe & Targeting" icon={Users} iconColor="text-blue-300">
       {a.primary && <div className="text-sm text-zinc-200 font-medium">{a.primary}</div>}
       <div className="grid grid-cols-2 gap-2">
         {a.ageRange && (
@@ -1490,7 +1500,7 @@ function AudienceBlock({ a }: { a?: ProduktAudience }) {
           </div>
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -1501,11 +1511,7 @@ function AdStrategyBlock({ s }: { s?: ProduktAdStrategy }) {
     s.dailyMinEur || s.dailyRecommendedEur || s.estimatedCpmEur || s.bestFormat || (s.adHooks && s.adHooks.length > 0);
   if (!has) return null;
   return (
-    <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-xl p-4 space-y-3">
-      <h4 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
-        <Megaphone className="w-4 h-4 text-amber-300" />
-        Ad-Strategie
-      </h4>
+    <CollapsibleSection title="Ad-Strategie" icon={Megaphone} iconColor="text-amber-300">
       <div className="grid grid-cols-3 gap-2">
         <BudgetTile label="Min/Tag" value={`${s.dailyMinEur || 0}€`} sub="Validierung" color="#94A3B8" />
         <BudgetTile label="Empfohlen/Tag" value={`${s.dailyRecommendedEur || 0}€`} sub="Skalierung" color="#F59E0B" />
@@ -1534,7 +1540,7 @@ function AdStrategyBlock({ s }: { s?: ProduktAdStrategy }) {
           Empfohlene Testdauer: <strong className="text-zinc-300">{s.testDurationDays} Tage</strong>
         </div>
       )}
-    </div>
+    </CollapsibleSection>
   );
 }
 
@@ -1703,20 +1709,22 @@ function ComplianceBlock({ category }: { category: string }) {
         ? "Mittlere Compliance-Anforderung"
         : "Standard-Pflichten";
   return (
-    <details className="rounded-xl border border-amber-500/15 bg-amber-500/[0.04] overflow-hidden">
-      <summary className="cursor-pointer select-none px-4 py-3 flex items-center gap-2 hover:bg-amber-500/[0.06] transition">
-        <Scale className="w-4 h-4 text-amber-300 shrink-0" />
-        <span className="text-sm font-semibold text-amber-100">Rechtliche Hinweise &amp; Compliance</span>
-        {hint && (
+    <CollapsibleSection
+      title="Rechtliche Hinweise & Compliance"
+      icon={Scale}
+      iconColor="text-amber-300"
+      badge={
+        hint ? (
           <span
             className={`ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border ${sevColor}`}
           >
             <ShieldCheck className="w-2.5 h-2.5" />
             {sevLabel}
           </span>
-        )}
-      </summary>
-      <div className="px-4 pb-4 pt-1 space-y-4 border-t border-amber-500/10">
+        ) : undefined
+      }
+    >
+      <div className="space-y-4">
         {hint && (
           <div className="space-y-2">
             <div className="text-[10px] uppercase tracking-widest text-amber-300/80 font-semibold">
@@ -1749,6 +1757,6 @@ function ComplianceBlock({ category }: { category: string }) {
           Nicht-EU-Ländern bist du als Verkäufer faktisch Importeur und haftest für die Konformität.
         </p>
       </div>
-    </details>
+    </CollapsibleSection>
   );
 }
