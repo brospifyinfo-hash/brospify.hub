@@ -175,45 +175,32 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4) Relight — fire `count` IC-Light jobs in parallel. Each run uses
-  //    a fresh random seed, so we get genuinely DIFFERENT variations
-  //    (rather than relying on a `num_images` param the model build may
-  //    ignore). Partial success is fine: we deliver + bill only the
-  //    variations that actually came back.
-  const falInput = {
-    image_url: normalisedDataUri,
-    prompt: finalPrompt,
-    negative_prompt: buildNegativePrompt(scene),
-    image_size: "square_hd",
-    // Von 28 auf 40 hochgesetzt — deutlich saerfere Details +
-    // sauberere Schatten/Reflexionen ohne dass die Generierungszeit
-    // explodiert (~+5s pro Bild).
-    num_inference_steps: 40,
-    // guidance_scale: 4.5 ist der IC-Light v2 Default, etwas niedriger
-    // produziert natuerlichere Resultate. Wir lassen ihn explizit
-    // damit Fal nicht plotzlich was anderes einsetzt.
-    guidance_scale: 4.5,
-    enable_safety_checker: false,
-  };
+  // 4) Relight — ONE IC-Light job that returns `count` variations via
+  //    the model's native `num_images`. One queue job = reliable count
+  //    + predictable latency. (Firing N parallel jobs got throttled by
+  //    Fal, which is why "2 angefragt → nur 1, und 3 Min" passierte.)
   let relitUrls: string[];
   try {
-    const results = await Promise.allSettled(
-      Array.from({ length: count }, () =>
-        callFal<IcLightResponse>("fal-ai/iclight-v2", falInput),
-      ),
-    );
-    relitUrls = results
-      .filter((r): r is PromiseFulfilledResult<IcLightResponse> => r.status === "fulfilled")
-      .map((r) => r.value.images?.[0]?.url)
+    const iclight = await callFal<IcLightResponse>("fal-ai/iclight-v2", {
+      image_url: normalisedDataUri,
+      prompt: finalPrompt,
+      negative_prompt: buildNegativePrompt(scene),
+      image_size: "square_hd",
+      // Anzahl Varianten in EINEM Job (Fal IC-Light v2 unterstützt das).
+      num_images: count,
+      // 30 Steps: spürbar schneller als 40 und visuell quasi gleich gut.
+      num_inference_steps: 30,
+      // IC-Light v2 Default ist 5; 4.5 wirkt minimal natürlicher und das
+      // (verschärfte) Negative-Prompt greift bei diesem CFG zuverlässig.
+      guidance_scale: 4.5,
+      output_format: "jpeg",
+      enable_safety_checker: false,
+    });
+    relitUrls = (iclight.images || [])
+      .map((i) => i?.url)
       .filter((u): u is string => typeof u === "string" && u.length > 0);
     if (relitUrls.length === 0) {
-      // Everything failed — surface the first real error so the client
-      // sees the right message (and no credits are charged).
-      const firstReject = results.find((r) => r.status === "rejected") as
-        | PromiseRejectedResult
-        | undefined;
-      if (firstReject) throw firstReject.reason;
-      throw new FalError("iclight lieferte keine Bild-URL.", 502);
+      throw new FalError("iclight lieferte keine Bild-URL.", 502, iclight);
     }
   } catch (err) {
     return falErrorResponse(err, "Szenen-Generierung");
