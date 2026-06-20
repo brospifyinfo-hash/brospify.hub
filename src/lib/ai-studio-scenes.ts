@@ -296,11 +296,12 @@ export function findScene(id: string | null | undefined): AiStudioScene | null {
 }
 
 // ─── Background Remover precision tiers ─────────────────────────
-// Two precision levels exposed in the UI. Server-side maps them to
-// distinct Fal models — fast BRIA cutout vs slower BiRefNet for
-// clean edges on hair, fur, and fine product details.
+// The weakest BRIA "Schnell" cutout was removed — every cutout now
+// runs on BiRefNet v2 for clean edges. "Präzise" is the default; the
+// "Haar / Fell" variant uses the Portrait model for fine hair edges.
+// (The legacy "fast" id maps to "precise" so old links never break.)
 
-export type BgPrecision = "fast" | "precise" | "hair";
+export type BgPrecision = "precise" | "hair";
 
 export interface BgPrecisionOption {
   id: BgPrecision;
@@ -314,30 +315,28 @@ export interface BgPrecisionOption {
 
 export const BG_PRECISION_OPTIONS: readonly BgPrecisionOption[] = [
   {
-    id: "fast",
-    label: "Schnell",
-    hint: "BRIA RMBG-1.4 · 1–3 s, klare Produktkanten",
-    model: "fal-ai/imageutils/rembg",
-  },
-  {
     id: "precise",
     label: "Präzise",
-    hint: "BiRefNet v2 General Heavy · 5–10 s, knackige feine Details",
+    hint: "BiRefNet v2 General Heavy · knackige feine Details — Standard",
     model: "fal-ai/birefnet/v2",
     modelInputs: { model: "General Use (Heavy)" },
   },
   {
     id: "hair",
     label: "Haar / Fell",
-    hint: "BiRefNet v2 Portrait · 6–10 s, perfekte Härchen-Kanten",
+    hint: "BiRefNet v2 Portrait · perfekte Härchen-Kanten",
     model: "fal-ai/birefnet/v2",
     modelInputs: { model: "Portrait" },
   },
 ] as const;
 
+/** Default precision when none/legacy is supplied. */
+export const DEFAULT_BG_PRECISION: BgPrecision = "precise";
+
 export function findBgPrecision(
   id: string | null | undefined,
 ): BgPrecisionOption {
+  // Legacy "fast" requests transparently upgrade to the precise model.
   return (
     BG_PRECISION_OPTIONS.find((p) => p.id === id) ?? BG_PRECISION_OPTIONS[0]
   );

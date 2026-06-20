@@ -23,6 +23,7 @@ import { useCredits } from "@/lib/credits";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
 import {
   BG_PRECISION_OPTIONS,
+  DEFAULT_BG_PRECISION,
   type BgPrecision,
 } from "@/lib/ai-studio-scenes";
 import {
@@ -81,7 +82,7 @@ export default function MagicBackgroundRemover() {
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [cutoutUrl, setCutoutUrl] = useState<string | null>(null);
-  const [precision, setPrecision] = useState<BgPrecision>("fast");
+  const [precision, setPrecision] = useState<BgPrecision>(DEFAULT_BG_PRECISION);
 
   // Background composition state
   const [bgKind, setBgKind] = useState<BgKind>("transparent");
@@ -102,8 +103,8 @@ export default function MagicBackgroundRemover() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startedAtRef = useRef(0);
 
-  const insufficientCredits =
-    !credits.loading && credits.balance < CREDIT_COSTS.BG_REMOVE;
+  const cost = credits.costOf("BG_REMOVE", CREDIT_COSTS.BG_REMOVE);
+  const insufficientCredits = !credits.loading && credits.balance < cost;
 
   // ── Cleanup ──
   useEffect(() => {
@@ -195,7 +196,7 @@ export default function MagicBackgroundRemover() {
       }
       if (insufficientCredits) {
         setErrorMsg(
-          `Du brauchst ${CREDIT_COSTS.BG_REMOVE} Credits — du hast ${credits.balance}.`,
+          `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
         );
         return;
       }
@@ -441,7 +442,7 @@ export default function MagicBackgroundRemover() {
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              {CREDIT_COSTS.BG_REMOVE} Credits / Bild
+              {cost} {credits.creditIcon} / Bild
             </p>
 
             {insufficientCredits && (
@@ -461,13 +462,13 @@ export default function MagicBackgroundRemover() {
                     border: "1px solid rgba(245,158,11,0.35)",
                   }}
                 >
-                  <span className="text-[24px]">🪙</span>
+                  <span className="text-[24px]">{credits.creditIcon}</span>
                 </div>
                 <h3 className="text-[18px] font-semibold tracking-tight">
                   Nicht genug Credits
                 </h3>
                 <p className="text-[13px] text-zinc-400 mt-1.5 max-w-xs">
-                  Pro Bild brauchst du {CREDIT_COSTS.BG_REMOVE} Credits.
+                  Pro Bild brauchst du {cost} Credits.
                   Aktuell: {credits.balance.toLocaleString("de-DE")}.
                 </p>
                 <Link
@@ -531,11 +532,9 @@ export default function MagicBackgroundRemover() {
             </p>
             {stage === "processing" && (
               <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
-                {precision === "fast"
-                  ? "Schnell-Modus: meist unter 3 Sekunden."
-                  : precision === "hair"
-                    ? "Haar-Modus: 6–10 Sekunden für perfekte Härchen-Kanten."
-                    : "Präzise-Modus: 5–10 Sekunden für feine Details."}
+                {precision === "hair"
+                  ? "Haar-Modus: 6–10 Sekunden für perfekte Härchen-Kanten."
+                  : "Präzise-Modus: 5–10 Sekunden für feine Details."}
               </p>
             )}
           </div>
@@ -726,7 +725,7 @@ function PrecisionToggle({
         </span>
       </div>
       <div
-        className="relative grid grid-cols-3 gap-1 p-1 rounded-2xl"
+        className="relative grid grid-cols-2 gap-1 p-1 rounded-2xl"
         style={{
           background: "rgba(255,255,255,0.04)",
           border: "1px solid rgba(255,255,255,0.08)",

@@ -9,12 +9,12 @@ import { requireFeature } from "@/lib/tier-guard";
 import { generateEmailTemplate, type GenerateInput } from "@/lib/ai-email-generator";
 import { getTemplateById, type EmailTemplateDef } from "@/lib/email-templates";
 import {
-  CREDIT_LIMITS,
   deductCredits,
   findKundeByKey,
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
+import { getCreditCost } from "@/lib/credit-config-server";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -302,10 +302,11 @@ export async function POST(req: Request) {
     kundeRowIndex = kunde.rowIndex;
     kundeProfile = await getKundeProfile(kunde.rowIndex);
     const credits = getCreditsState(kundeProfile);
-    if (credits.balance < CREDIT_LIMITS.EMAIL_GENERATE) {
+    const cost = await getCreditCost("EMAIL_GENERATE");
+    if (credits.balance < cost) {
       return NextResponse.json(
         {
-          error: `Nicht genug Credits — du brauchst ${CREDIT_LIMITS.EMAIL_GENERATE}, hast aber nur ${credits.balance}. Lade dein Konto unter /credits auf.`,
+          error: `Nicht genug Credits — du brauchst ${cost}, hast aber nur ${credits.balance}. Lade dein Konto unter /credits auf.`,
           creditsRemaining: credits.balance,
         },
         { status: 402 },
@@ -418,7 +419,7 @@ async function chargeCredits(
   const result = await deductCredits(
     rowIndex,
     profile,
-    CREDIT_LIMITS.EMAIL_GENERATE,
+    await getCreditCost("EMAIL_GENERATE"),
   );
   return result.success ? result.remaining : undefined;
 }

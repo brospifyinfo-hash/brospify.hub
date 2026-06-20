@@ -17,7 +17,6 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { requireFeature } from "@/lib/tier-guard";
 import {
-  CREDIT_LIMITS,
   deductCredits,
   findKundeByKey,
   getAllProdukte,
@@ -25,11 +24,10 @@ import {
   updateKundeProfile,
   type Produkt,
 } from "@/lib/sheets";
+import { getCreditCost } from "@/lib/credit-config-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const DRAW_COST = CREDIT_LIMITS.CHARTS_DRAW;
 
 // Volle Projektion fürs Frontend — exakt die Felder, die die alte
 // Charts-Detailansicht gerendert hat (Stats, Finanzen, Ads, Links,
@@ -54,6 +52,8 @@ export async function GET() {
   const session = await getSession();
   const guard = await requireFeature(session, "chartsAnalytics");
   if (!guard.ok) return guard.response;
+
+  const DRAW_COST = await getCreditCost("CHARTS_DRAW");
 
   let all: Produkt[];
   try {
@@ -107,6 +107,8 @@ export async function POST() {
   const session = await getSession();
   const guard = await requireFeature(session, "chartsAnalytics");
   if (!guard.ok) return guard.response;
+
+  const DRAW_COST = await getCreditCost("CHARTS_DRAW");
 
   let all: Produkt[];
   try {

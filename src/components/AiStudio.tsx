@@ -1,19 +1,20 @@
 "use client";
 
 // ─── <AiStudio /> ────────────────────────────────────────────────
-// Three-step studio: 1) drop a product 2) pick a scene + tweak prompt
-// 3) generate. Result lands in a before/after reveal slider.
+// Three-step studio: 1) drop a product 2) pick a scene + how many
+// variations 3) generate. Results land in a clean gallery (1–3
+// breathtaking variations side by side), each downloadable / savable.
 //
-// Server-side: /api/ai-studio runs a single Fal IC-Light v2 call.
-// IC-Light is allowed to relight the product, adapt its position
-// and scale to the scene, and generate the new background +
-// realistic shadows. The carousel scenes are rendered with
-// layered CSS gradients (no image hosting needed) using the
-// `visual` props from the scene catalog.
+// Server-side: /api/ai-studio runs a single Fal IC-Light v2 call with
+// `num_images` = the chosen count. IC-Light relights the product,
+// adapts its position/scale to the scene, and generates the new
+// background + realistic shadows.
 //
-// Layout is mobile-first: the carousel snaps cleanly on touch,
-// the prompt area is collapsible, and the generate CTA is
-// full-width on small screens.
+// Scene previews are rich layered SVG illustrations (see <SceneArt/>)
+// so e.g. the "Natur" card actually shows leaves + dappled light, not
+// a flat colour. No image hosting / LCP cost.
+//
+// Layout is mobile-first; desktop only widens the gallery grid.
 
 import {
   useCallback,
@@ -22,7 +23,6 @@ import {
   useState,
   type ChangeEvent,
   type DragEvent,
-  type PointerEvent as ReactPointerEvent,
 } from "react";
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
@@ -44,11 +44,14 @@ const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const PROCESS_MAX_DIM = 2400;
 const PROCESS_QUALITY = 0.92;
 const CUSTOM_PROMPT_MAX = 500;
+const IMAGE_COUNTS = [1, 2, 3] as const;
 
 type Stage = "upload" | "configure" | "processing" | "done" | "error";
 
 interface AiStudioResponse {
-  url: string;
+  urls?: string[];
+  url?: string;
+  count?: number;
   creditsRemaining?: number;
 }
 
@@ -60,14 +63,15 @@ export default function AiStudio() {
 
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [preparedFile, setPreparedFile] = useState<File | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultUrls, setResultUrls] = useState<string[]>([]);
   const [resultScene, setResultScene] = useState<AiStudioScene | null>(null);
   const [sceneId, setSceneId] = useState<string>(AI_STUDIO_SCENES[0].id);
   const [customPrompt, setCustomPrompt] = useState("");
   const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+  const [imageCount, setImageCount] = useState<number>(1);
 
-  const [savedToLibrary, setSavedToLibrary] = useState(false);
-  const [savingToLibrary, setSavingToLibrary] = useState(false);
+  const [savedSet, setSavedSet] = useState<Set<number>>(() => new Set());
+  const [savingIdx, setSavingIdx] = useState<number | null>(null);
 
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
@@ -76,8 +80,9 @@ export default function AiStudio() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startedAtRef = useRef(0);
 
-  const insufficientCredits =
-    !credits.loading && credits.balance < CREDIT_COSTS.AI_STUDIO;
+  const perImage = credits.costOf("AI_STUDIO", CREDIT_COSTS.AI_STUDIO);
+  const totalCost = perImage * imageCount;
+  const insufficientCredits = !credits.loading && credits.balance < totalCost;
 
   useEffect(() => {
     return () => {
@@ -109,19 +114,20 @@ export default function AiStudio() {
     setErrorMsg(null);
     setOriginalUrl(null);
     setPreparedFile(null);
-    setResultUrl(null);
+    setResultUrls([]);
     setResultScene(null);
     setSceneId(AI_STUDIO_SCENES[0].id);
     setCustomPrompt("");
     setShowCustomPrompt(false);
-    setSavedToLibrary(false);
-    setSavingToLibrary(false);
+    setImageCount(1);
+    setSavedSet(new Set());
+    setSavingIdx(null);
     setElapsed(0);
   }
 
-  async function handleSaveToLibrary() {
-    if (!resultUrl || savingToLibrary || savedToLibrary) return;
-    setSavingToLibrary(true);
+  async function handleSaveToLibrary(url: string, idx: number) {
+    if (savingIdx !== null || savedSet.has(idx)) return;
+    setSavingIdx(idx);
     try {
       const r = await fetch("/api/library/items", {
         method: "POST",
@@ -129,7 +135,7 @@ export default function AiStudio() {
         body: JSON.stringify({
           mode: "image-url",
           source: "ai-studio",
-          remoteUrl: resultUrl,
+          remoteUrl: url,
           title: resultScene
             ? `AI Studio · ${resultScene.label}`
             : "AI Studio Szene",
@@ -137,14 +143,21 @@ export default function AiStudio() {
           meta: {
             sceneId: resultScene?.id,
             sceneLabel: resultScene?.label,
+            variation: idx + 1,
           },
         }),
       });
-      if (r.ok) setSavedToLibrary(true);
+      if (r.ok) {
+        setSavedSet((prev) => {
+          const next = new Set(prev);
+          next.add(idx);
+          return next;
+        });
+      }
     } catch {
       // ignore
     } finally {
-      setSavingToLibrary(false);
+      setSavingIdx(null);
     }
   }
 
@@ -164,7 +177,7 @@ export default function AiStudio() {
 
       if (originalUrl) URL.revokeObjectURL(originalUrl);
       setErrorMsg(null);
-      setResultUrl(null);
+      setResultUrls([]);
       setResultScene(null);
 
       const previewUrl = URL.createObjectURL(file);
@@ -207,21 +220,22 @@ export default function AiStudio() {
     if (!preparedFile) return;
     if (insufficientCredits) {
       setErrorMsg(
-        `Du brauchst ${CREDIT_COSTS.AI_STUDIO} Credits — du hast ${credits.balance}.`,
+        `Du brauchst ${totalCost} Credits — du hast ${credits.balance}.`,
       );
       return;
     }
     const scene =
       AI_STUDIO_SCENES.find((s) => s.id === sceneId) || AI_STUDIO_SCENES[0];
+    const count = imageCount;
 
     setErrorMsg(null);
     setStage("processing");
     startTimer();
-    credits.optimisticDeduct(CREDIT_COSTS.AI_STUDIO);
+    credits.optimisticDeduct(perImage * count);
 
     try {
       const data = await job.run({
-        hint: `Szene: ${scene.label}`,
+        hint: `Szene: ${scene.label} · ${count}×`,
         onAttemptStart: (n) => {
           if (n > 1) credits.refresh();
         },
@@ -229,21 +243,29 @@ export default function AiStudio() {
           const fd = new FormData();
           fd.append("file", preparedFile);
           fd.append("sceneId", scene.id);
+          fd.append("count", String(count));
           const trimmedPrompt = customPrompt.trim().slice(0, CUSTOM_PROMPT_MAX);
           if (trimmedPrompt) fd.append("customPrompt", trimmedPrompt);
           const res = await fetch("/api/ai-studio", { method: "POST", body: fd });
           return await readJobResponse<AiStudioResponse>(res);
         },
       });
+      const urls =
+        Array.isArray(data.urls) && data.urls.length > 0
+          ? data.urls
+          : data.url
+            ? [data.url]
+            : [];
+      if (urls.length === 0) throw new Error("Keine Bilder erhalten.");
       if (typeof data.creditsRemaining === "number") {
         credits.setBalance(data.creditsRemaining);
       } else {
         credits.refresh();
       }
       stopTimer();
-      setResultUrl(data.url);
+      setResultUrls(urls);
       setResultScene(scene);
-      setSavedToLibrary(false);
+      setSavedSet(new Set());
       setStage("done");
     } catch (err) {
       stopTimer();
@@ -258,14 +280,13 @@ export default function AiStudio() {
     }
   }
 
-  async function handleDownload() {
-    if (!resultUrl) return;
+  async function handleDownload(url: string, idx: number) {
     try {
-      const blob = await fetch(resultUrl).then((r) => r.blob());
+      const blob = await fetch(url).then((r) => r.blob());
       const objectUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = objectUrl;
-      a.download = `ai-studio-${resultScene?.id || "scene"}-${Date.now()}.jpg`;
+      a.download = `ai-studio-${resultScene?.id || "scene"}-${idx + 1}-${Date.now()}.jpg`;
       document.body.appendChild(a);
       a.click();
       a.remove();
@@ -352,7 +373,7 @@ export default function AiStudio() {
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              {CREDIT_COSTS.AI_STUDIO} Credits / Generierung
+              ab {perImage} {credits.creditIcon} / Bild
             </p>
           </div>
 
@@ -412,6 +433,14 @@ export default function AiStudio() {
           {/* Carousel of scene templates */}
           <SceneCarousel selected={sceneId} onSelect={setSceneId} />
 
+          {/* How many variations */}
+          <CountSelector
+            value={imageCount}
+            onChange={setImageCount}
+            perImage={perImage}
+            icon={credits.creditIcon}
+          />
+
           {/* Custom prompt — collapsible */}
           <CustomPromptBlock
             value={customPrompt}
@@ -433,7 +462,7 @@ export default function AiStudio() {
             }}
           >
             <SparklesIcon />
-            Generieren · {CREDIT_COSTS.AI_STUDIO} Credits
+            {imageCount === 1 ? "Generieren" : `${imageCount} Varianten generieren`} · {totalCost} {credits.creditIcon}
           </button>
 
           {insufficientCredits && (
@@ -445,13 +474,13 @@ export default function AiStudio() {
               }}
             >
               <div className="flex items-center gap-3 flex-1 min-w-0">
-                <span className="text-[20px]">🪙</span>
+                <span className="text-[20px]">{credits.creditIcon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold text-amber-200">
                     Nicht genug Credits
                   </div>
                   <div className="text-[11.5px] text-amber-100/70 mt-0.5">
-                    Pro Generierung brauchst du {CREDIT_COSTS.AI_STUDIO} Credits.
+                    Für {imageCount} {imageCount === 1 ? "Bild" : "Bilder"} brauchst du {totalCost} Credits.
                     Aktuell: {credits.balance.toLocaleString("de-DE")}.
                   </div>
                 </div>
@@ -487,6 +516,7 @@ export default function AiStudio() {
             }}
           >
             {originalUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={originalUrl}
                 alt=""
@@ -499,7 +529,7 @@ export default function AiStudio() {
                 className="mt-3 text-[16px] font-semibold tracking-tight text-white"
                 style={{ letterSpacing: "-0.022em" }}
               >
-                Szene wird erstellt
+                {imageCount === 1 ? "Szene wird erstellt" : `${imageCount} Varianten werden erstellt`}
               </h3>
               <p className="mt-1 text-[11px] text-zinc-400">
                 Verarbeitung läuft · {elapsedSec}s
@@ -528,13 +558,22 @@ export default function AiStudio() {
         </div>
       )}
 
-      {/* ── STAGE: done — before/after slider ────────────────── */}
-      {stage === "done" && resultUrl && originalUrl && (
+      {/* ── STAGE: done — results gallery ────────────────────── */}
+      {stage === "done" && resultUrls.length > 0 && (
         <div className="space-y-3">
-          <BeforeAfter beforeUrl={originalUrl} afterUrl={resultUrl} />
-
-          {resultScene && (
-            <div className="text-center">
+          {/* Scene + original reference */}
+          <div className="flex items-center gap-2">
+            {originalUrl && (
+              <div
+                className="w-10 h-10 rounded-lg overflow-hidden shrink-0"
+                style={{ background: "#0a0a0c", border: "1px solid rgba(255,255,255,0.08)" }}
+                title="Original"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={originalUrl} alt="Original" className="w-full h-full object-contain" />
+              </div>
+            )}
+            {resultScene && (
               <span
                 className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] uppercase tracking-[0.14em] font-semibold"
                 style={{
@@ -546,12 +585,28 @@ export default function AiStudio() {
                 <SparklesIcon small />
                 {resultScene.label}
               </span>
-            </div>
-          )}
+            )}
+            <span className="text-[11px] text-zinc-500 ml-auto">
+              {resultUrls.length === 1 ? "1 Ergebnis" : `${resultUrls.length} Varianten`}
+            </span>
+          </div>
+
+          <ResultGallery
+            urls={resultUrls}
+            savedSet={savedSet}
+            savingIdx={savingIdx}
+            onDownload={handleDownload}
+            onSave={handleSaveToLibrary}
+          />
 
           <div className="flex flex-col sm:flex-row gap-2.5">
             <button
-              onClick={handleDownload}
+              onClick={() => {
+                setResultUrls([]);
+                setResultScene(null);
+                setSavedSet(new Set());
+                setStage("configure");
+              }}
               className="flex-1 h-11 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99]"
               style={{
                 background: ACCENT,
@@ -559,46 +614,12 @@ export default function AiStudio() {
                 boxShadow: `0 12px 28px -10px ${ACCENT}80, inset 0 1px 0 rgba(255,255,255,0.25)`,
               }}
             >
-              <DownloadIcon />
-              Herunterladen
-            </button>
-            <button
-              onClick={handleSaveToLibrary}
-              disabled={savingToLibrary || savedToLibrary}
-              className="h-11 px-4 rounded-xl text-[12px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.99] disabled:opacity-60"
-              style={{
-                background: savedToLibrary ? "rgba(16,185,129,0.10)" : "rgba(255,255,255,0.04)",
-                border: `1px solid ${savedToLibrary ? "rgba(16,185,129,0.35)" : "rgba(255,255,255,0.10)"}`,
-                color: savedToLibrary ? "#10b981" : "#e4e4e7",
-              }}
-            >
-              {savingToLibrary ? (
-                <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-              ) : savedToLibrary ? (
-                <CheckSmallIcon />
-              ) : (
-                <FolderSmallIcon />
-              )}
-              {savedToLibrary ? "Gespeichert" : savingToLibrary ? "Speichere…" : "In Mediathek"}
-            </button>
-            <button
-              onClick={() => {
-                setResultUrl(null);
-                setResultScene(null);
-                setSavedToLibrary(false);
-                setStage("configure");
-              }}
-              className="px-3 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
-              style={{
-                background: "rgba(255,255,255,0.04)",
-                border: "1px solid rgba(255,255,255,0.10)",
-              }}
-            >
+              <SparklesIcon />
               Andere Szene
             </button>
             <button
               onClick={reset}
-              className="px-3 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
+              className="px-4 h-11 rounded-xl text-[12px] font-semibold text-zinc-300 transition-all active:scale-[0.99]"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.10)",
@@ -698,10 +719,72 @@ function InlineError({ msg }: { msg: string }) {
   );
 }
 
+// ─── Count selector (1–3 variations) ─────────────────────────────
+
+function CountSelector({
+  value,
+  onChange,
+  perImage,
+  icon,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  perImage: number;
+  icon: string;
+}) {
+  return (
+    <div className="mt-4">
+      <div className="flex items-center justify-between mb-2 px-1">
+        <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">
+          Wie viele Bilder
+        </span>
+        <span className="text-[10.5px] text-zinc-600">
+          {perImage} {icon} pro Bild
+        </span>
+      </div>
+      <div
+        className="grid grid-cols-3 gap-1 p-1 rounded-2xl"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.08)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+        }}
+      >
+        {IMAGE_COUNTS.map((n) => {
+          const active = n === value;
+          return (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange(n)}
+              className="relative rounded-xl py-2.5 px-2.5 text-center transition-all active:scale-[0.99]"
+              style={{
+                background: active ? "rgba(149,191,71,0.12)" : "transparent",
+                border: active ? `1px solid ${ACCENT}55` : "1px solid transparent",
+                boxShadow: active
+                  ? `0 8px 22px -10px ${ACCENT}50, inset 0 1px 0 rgba(255,255,255,0.04)`
+                  : undefined,
+              }}
+            >
+              <div
+                className="text-[16px] font-bold tabular-nums"
+                style={{ color: active ? "#fff" : "#d4d4d8" }}
+              >
+                {n}
+              </div>
+              <div className="text-[9.5px] text-zinc-500 mt-0.5">
+                {n === 1 ? "Bild" : "Bilder"} · {perImage * n} {icon}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Custom Prompt block ────────────────────────────────────────
-// Collapsible textarea so the configure view stays clean by default.
-// Power users can pop it open and add framing or mood notes that get
-// appended to the scene's curated prompt server-side.
 
 function CustomPromptBlock({
   value,
@@ -788,10 +871,90 @@ function CustomPromptBlock({
   );
 }
 
+// ─── Results gallery ─────────────────────────────────────────────
+// 1 image → big showcase. 2–3 → responsive grid. Each card has a
+// hover/tap toolbar to download or save to the Mediathek.
+
+function ResultGallery({
+  urls,
+  savedSet,
+  savingIdx,
+  onDownload,
+  onSave,
+}: {
+  urls: string[];
+  savedSet: Set<number>;
+  savingIdx: number | null;
+  onDownload: (url: string, idx: number) => void;
+  onSave: (url: string, idx: number) => void;
+}) {
+  const cols = urls.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
+  return (
+    <div className={`grid ${cols} gap-2.5`}>
+      {urls.map((url, idx) => (
+        <div
+          key={url}
+          className="group relative rounded-2xl overflow-hidden"
+          style={{
+            border: "1px solid rgba(255,255,255,0.08)",
+            boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
+            background: "#0a0a0c",
+          }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={url}
+            alt={`Ergebnis ${idx + 1}`}
+            crossOrigin="anonymous"
+            className="block w-full h-auto aspect-square object-cover"
+            draggable={false}
+          />
+          {urls.length > 1 && (
+            <span
+              className="absolute top-2.5 left-2.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+              style={{ background: "rgba(0,0,0,0.55)", color: "#fff", backdropFilter: "blur(8px)" }}
+            >
+              #{idx + 1}
+            </span>
+          )}
+          {/* Toolbar — always visible on touch, fade-in on hover for desktop */}
+          <div className="absolute inset-x-0 bottom-0 p-2 flex gap-2 bg-gradient-to-t from-black/70 to-transparent opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+            <button
+              onClick={() => onDownload(url, idx)}
+              className="flex-1 h-9 rounded-lg text-[12px] font-semibold flex items-center justify-center gap-1.5 transition active:scale-[0.98]"
+              style={{ background: ACCENT, color: "#0a1604" }}
+            >
+              <DownloadIcon />
+              Download
+            </button>
+            <button
+              onClick={() => onSave(url, idx)}
+              disabled={savingIdx !== null || savedSet.has(idx)}
+              className="h-9 px-3 rounded-lg text-[12px] font-semibold flex items-center justify-center gap-1.5 transition active:scale-[0.98] disabled:opacity-70"
+              style={{
+                background: savedSet.has(idx) ? "rgba(16,185,129,0.18)" : "rgba(255,255,255,0.10)",
+                border: `1px solid ${savedSet.has(idx) ? "rgba(16,185,129,0.45)" : "rgba(255,255,255,0.18)"}`,
+                color: savedSet.has(idx) ? "#34d399" : "#fff",
+                backdropFilter: "blur(8px)",
+              }}
+            >
+              {savingIdx === idx ? (
+                <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              ) : savedSet.has(idx) ? (
+                <CheckSmallIcon />
+              ) : (
+                <FolderSmallIcon />
+              )}
+              {savedSet.has(idx) ? "Gespeichert" : "Mediathek"}
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Scene Carousel ──────────────────────────────────────────────
-// Horizontal snap carousel. On mobile we hide the desktop arrow
-// buttons (touch swipe is the natural interaction) and use a
-// taller card so the scene visual is more legible.
 
 function SceneCarousel({
   selected,
@@ -863,9 +1026,8 @@ function SceneCarousel({
 }
 
 // ─── Single Scene Card ──────────────────────────────────────────
-// Layered CSS art: background gradient → optional radial light spot →
-// optional surface band → product silhouette → glass label. Selected
-// state adds a green ring and a checkmark; hover gently lifts.
+// Gradient base + a rich SVG scene illustration (<SceneArt/>) + glass
+// label. Selected state adds a green ring and a checkmark.
 
 function SceneCard({
   scene,
@@ -877,7 +1039,6 @@ function SceneCard({
   onClick: () => void;
 }) {
   const v = scene.visual;
-  const tint = v.product === "light" ? "light" : "dark";
 
   return (
     <button
@@ -892,33 +1053,12 @@ function SceneCard({
     >
       {/* Visual stage: aspect 4:5 portrait */}
       <div className="relative aspect-[4/5]" style={{ background: v.background }}>
-        {v.light && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: v.light, mixBlendMode: "screen" }}
-          />
-        )}
-        {v.accent && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: v.accent }}
-          />
-        )}
-        {v.surface && (
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{ background: v.surface }}
-          />
-        )}
-
-        {/* Product silhouette — universal-ish bottle/box shape with
-            a soft contact shadow so each card reads as a real scene. */}
-        <ProductSilhouette tint={tint} />
+        <SceneArt scene={scene} />
 
         {/* Selected check badge */}
         {active && (
           <div
-            className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full flex items-center justify-center"
+            className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full flex items-center justify-center z-10"
             style={{
               background: ACCENT,
               boxShadow: "0 6px 14px -2px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.4)",
@@ -957,194 +1097,156 @@ function SceneCard({
   );
 }
 
-// Universal product silhouette: rounded "bottle" body with a soft
-// contact shadow. Tint flips between light/dark depending on the
-// scene background so it stays visible on every theme.
-function ProductSilhouette({ tint }: { tint: "light" | "dark" }) {
-  const fill =
-    tint === "light"
-      ? "linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0.62) 60%, rgba(255,255,255,0.45) 100%)"
-      : "linear-gradient(180deg, rgba(40,40,46,0.92) 0%, rgba(20,20,24,0.7) 60%, rgba(12,12,16,0.55) 100%)";
-  const innerShine =
-    tint === "light"
-      ? "linear-gradient(85deg, transparent 65%, rgba(255,255,255,0.35) 78%, transparent 92%)"
-      : "linear-gradient(85deg, transparent 65%, rgba(255,255,255,0.10) 78%, transparent 92%)";
+// ─── Scene Art ──────────────────────────────────────────────────
+// A layered SVG illustration per scene so each preview reads as a
+// real photographed scene (leaves for Natur, veins for Marmor, grain
+// for Holz, waves for Strand, …) rather than a flat colour swatch.
+// Pure SVG — crisp at any size, zero hosted assets.
+
+function SceneArt({ scene }: { scene: AiStudioScene }) {
+  const light = scene.visual.product === "light";
+  // Product fill — bright bottle on dark scenes, soft on light ones.
+  const bodyTop = light ? "rgba(255,255,255,0.97)" : "rgba(36,36,42,0.96)";
+  const bodyBot = light ? "rgba(235,235,240,0.78)" : "rgba(14,14,18,0.7)";
+  const shine = light ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.22)";
+  const uid = `sa-${scene.id}`;
+
   return (
-    <div className="absolute inset-0 flex items-end justify-center pointer-events-none pb-[26%]">
-      <div className="relative w-[42%]">
-        {/* Contact shadow ellipse */}
-        <div
-          className="absolute -bottom-[14%] left-1/2 -translate-x-1/2 w-[120%] h-[14%] rounded-[50%]"
-          style={{
-            background:
-              "radial-gradient(closest-side, rgba(0,0,0,0.55), transparent 75%)",
-            filter: "blur(2px)",
-          }}
-        />
-        {/* Body */}
-        <div
-          className="relative aspect-[2/3] rounded-[22%_22%_18%_18%/14%_14%_10%_10%]"
-          style={{
-            background: fill,
-            boxShadow:
-              tint === "light"
-                ? "0 14px 18px -8px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.55)"
-                : "0 14px 18px -8px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.18)",
-          }}
-        >
-          {/* Subtle "neck" highlight */}
-          <div
-            className="absolute top-0 left-1/2 -translate-x-1/2 w-[35%] h-[18%] rounded-b-xl"
-            style={{
-              background:
-                tint === "light"
-                  ? "linear-gradient(180deg, rgba(255,255,255,0.7) 0%, transparent 100%)"
-                  : "linear-gradient(180deg, rgba(255,255,255,0.18) 0%, transparent 100%)",
-            }}
-          />
-          {/* Side shine */}
-          <div
-            className="absolute inset-0 rounded-[22%_22%_18%_18%/14%_14%_10%_10%]"
-            style={{ background: innerShine }}
-          />
-        </div>
-      </div>
-    </div>
+    <svg
+      viewBox="0 0 200 250"
+      preserveAspectRatio="xMidYMid slice"
+      className="absolute inset-0 w-full h-full pointer-events-none"
+    >
+      <defs>
+        <radialGradient id={`${uid}-glow`} cx="50%" cy="14%" r="60%">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.55)" />
+          <stop offset="60%" stopColor="rgba(255,255,255,0.08)" />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+        <linearGradient id={`${uid}-body`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={bodyTop} />
+          <stop offset="100%" stopColor={bodyBot} />
+        </linearGradient>
+        <linearGradient id={`${uid}-refl`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={light ? "rgba(255,255,255,0.32)" : "rgba(255,255,255,0.14)"} />
+          <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+        </linearGradient>
+      </defs>
+
+      {/* Soft key light from above */}
+      <rect x="0" y="0" width="200" height="250" fill={`url(#${uid}-glow)`} style={{ mixBlendMode: "screen" }} />
+
+      {/* Ground / surface band */}
+      <rect x="0" y="170" width="200" height="80" fill="rgba(0,0,0,0.18)" />
+      <rect x="0" y="168" width="200" height="3" fill="rgba(255,255,255,0.10)" />
+
+      {/* Scene-specific motif (behind the product) */}
+      <SceneMotif scene={scene} />
+
+      {/* Contact shadow */}
+      <ellipse cx="100" cy="196" rx="46" ry="9" fill="rgba(0,0,0,0.38)" />
+
+      {/* Product — rounded bottle with neck + cap */}
+      <g>
+        {/* reflection */}
+        <g transform="translate(0,392) scale(1,-1)" opacity="0.5">
+          <rect x="78" y="120" width="44" height="76" rx="16" fill={`url(#${uid}-refl)`} />
+        </g>
+        {/* body */}
+        <rect x="78" y="120" width="44" height="76" rx="16" fill={`url(#${uid}-body)`} />
+        {/* neck + cap */}
+        <rect x="92" y="104" width="16" height="18" rx="3" fill={`url(#${uid}-body)`} />
+        <rect x="89" y="98" width="22" height="10" rx="4" fill={light ? "rgba(210,210,216,0.95)" : "rgba(60,60,68,0.95)"} />
+        {/* side shine */}
+        <rect x="84" y="126" width="6" height="62" rx="3" fill={shine} opacity="0.6" />
+      </g>
+
+      {/* Gentle top sheen */}
+      <rect x="0" y="0" width="200" height="64" fill="rgba(255,255,255,0.05)" />
+    </svg>
   );
 }
 
-// ─── Before/After Reveal Slider ─────────────────────────────────
-
-function BeforeAfter({
-  beforeUrl,
-  afterUrl,
-}: {
-  beforeUrl: string;
-  afterUrl: string;
-}) {
-  const [pct, setPct] = useState(50);
-  const [containerWidth, setContainerWidth] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const draggingRef = useRef(false);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const update = () => setContainerWidth(el.clientWidth);
-    update();
-    if (typeof ResizeObserver === "undefined") return;
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, []);
-
-  function setFromClientX(clientX: number) {
-    const el = containerRef.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    const next = ((clientX - rect.left) / rect.width) * 100;
-    setPct(Math.max(0, Math.min(100, next)));
+// Per-scene decorative motif drawn behind the product.
+function SceneMotif({ scene }: { scene: AiStudioScene }) {
+  switch (scene.id) {
+    case "nature":
+    case "kitchen":
+      return (
+        <g opacity="0.9">
+          <Leaf x={26} y={150} rot={-35} c="#3c6b2e" />
+          <Leaf x={44} y={166} rot={-12} c="#4f8a3a" />
+          <Leaf x={150} y={158} rot={28} c="#3c6b2e" />
+          <Leaf x={168} y={150} rot={52} c="#5a9b44" />
+          <circle cx="150" cy="40" r="26" fill="rgba(255,248,200,0.30)" />
+        </g>
+      );
+    case "marble":
+      return (
+        <g stroke="rgba(120,120,130,0.35)" strokeWidth="1.4" fill="none">
+          <path d="M0 188 q40 -14 78 -4 t122 -6" />
+          <path d="M0 206 q60 10 110 0 t90 -8" opacity="0.6" />
+          <path d="M120 175 q14 18 30 22" opacity="0.5" />
+        </g>
+      );
+    case "wood":
+    case "autumn":
+      return (
+        <g stroke="rgba(0,0,0,0.22)" strokeWidth="2" fill="none">
+          <path d="M0 184 q100 -8 200 0" />
+          <path d="M0 198 q100 8 200 0" opacity="0.7" />
+          <path d="M0 212 q100 -6 200 0" opacity="0.5" />
+          {scene.id === "autumn" && <circle cx="150" cy="60" r="10" fill="rgba(255,170,70,0.5)" stroke="none" />}
+        </g>
+      );
+    case "beach":
+      return (
+        <g>
+          <circle cx="150" cy="44" r="22" fill="rgba(255,250,220,0.55)" />
+          <path d="M0 150 q50 -10 100 0 t100 0 v40 H0 Z" fill="rgba(90,160,180,0.30)" />
+          <path d="M0 200 q40 6 90 0 t110 -4" stroke="rgba(255,255,255,0.30)" strokeWidth="1.5" fill="none" />
+        </g>
+      );
+    case "concrete":
+    case "gym":
+      return (
+        <g>
+          <rect x="18" y="44" width="60" height="70" rx="4" fill="rgba(255,255,255,0.10)" />
+          <rect x="120" y="30" width="62" height="44" rx="4" fill="rgba(255,255,255,0.06)" />
+        </g>
+      );
+    case "midnight":
+      return (
+        <g>
+          <path d="M150 30 L185 120 L160 200 Z" fill="rgba(150,180,255,0.18)" />
+        </g>
+      );
+    case "linen":
+    case "bedroom":
+      return (
+        <g stroke="rgba(255,255,255,0.18)" strokeWidth="2" fill="none">
+          <path d="M0 176 q50 16 100 0 t100 0" />
+          <path d="M0 192 q50 16 100 0 t100 0" opacity="0.7" />
+        </g>
+      );
+    case "studio":
+    case "podium":
+    case "gradient-rose":
+    default:
+      return (
+        <g>
+          <ellipse cx="100" cy="60" rx="64" ry="40" fill="rgba(255,255,255,0.10)" />
+        </g>
+      );
   }
+}
 
-  function onPointerDown(e: ReactPointerEvent<HTMLDivElement>) {
-    draggingRef.current = true;
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
-    setFromClientX(e.clientX);
-  }
-  function onPointerMove(e: ReactPointerEvent<HTMLDivElement>) {
-    if (!draggingRef.current) return;
-    setFromClientX(e.clientX);
-  }
-  function onPointerUp() {
-    draggingRef.current = false;
-  }
-
+function Leaf({ x, y, rot, c }: { x: number; y: number; rot: number; c: string }) {
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full aspect-square rounded-2xl overflow-hidden select-none touch-none"
-      style={{
-        border: "1px solid rgba(255,255,255,0.08)",
-        boxShadow: "0 24px 60px -30px rgba(0,0,0,0.6)",
-        background: "#0a0a0c",
-      }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-    >
-      {/* AFTER — square output fills the canvas */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={afterUrl}
-        alt="Nachher"
-        crossOrigin="anonymous"
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        draggable={false}
-      />
-
-      {/* BEFORE — clipped from the left, contain to keep aspect honest */}
-      <div
-        className="absolute inset-0 overflow-hidden pointer-events-none"
-        style={{ width: `${pct}%` }}
-      >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={beforeUrl}
-          alt="Vorher"
-          className="absolute inset-0 h-full object-contain"
-          style={{
-            width: containerWidth ? `${containerWidth}px` : "100%",
-            background: "#111114",
-          }}
-          draggable={false}
-        />
-      </div>
-
-      {/* Divider + handle */}
-      <div
-        className="absolute top-0 bottom-0"
-        style={{
-          left: `${pct}%`,
-          transform: "translateX(-50%)",
-          width: "2px",
-          background: "rgba(255,255,255,0.95)",
-          boxShadow: "0 0 0 1px rgba(0,0,0,0.25), 0 0 20px rgba(0,0,0,0.4)",
-        }}
-      >
-        <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 sm:w-10 sm:h-10 rounded-full flex items-center justify-center"
-          style={{
-            background: "#fff",
-            boxShadow:
-              "0 8px 20px -4px rgba(0,0,0,0.45), 0 0 0 4px rgba(255,255,255,0.18)",
-          }}
-        >
-          <ArrowsIcon />
-        </div>
-      </div>
-
-      {/* Labels */}
-      <span
-        className="absolute top-3 left-3 text-[10px] uppercase tracking-[0.16em] font-semibold px-2 py-1 rounded-full"
-        style={{
-          background: "rgba(0,0,0,0.55)",
-          color: "#fff",
-          backdropFilter: "blur(8px)",
-        }}
-      >
-        Vorher
-      </span>
-      <span
-        className="absolute top-3 right-3 text-[10px] uppercase tracking-[0.16em] font-semibold px-2 py-1 rounded-full"
-        style={{
-          background: ACCENT,
-          color: "#0a1604",
-        }}
-      >
-        Nachher
-      </span>
-    </div>
+    <g transform={`translate(${x} ${y}) rotate(${rot})`}>
+      <ellipse cx="0" cy="0" rx="13" ry="6" fill={c} />
+      <line x1="-13" y1="0" x2="13" y2="0" stroke="rgba(255,255,255,0.25)" strokeWidth="0.8" />
+    </g>
   );
 }
 
@@ -1234,15 +1336,6 @@ function ChevronIcon({ dir }: { dir: "left" | "right" | "up" | "down" }) {
   );
 }
 
-function ArrowsIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#0a0a0c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="15 18 9 12 15 6" transform="translate(-3 0)" />
-      <polyline points="9 18 15 12 9 6" transform="translate(3 0)" />
-    </svg>
-  );
-}
-
 function PencilIcon({ color = "#fff" }: { color?: string }) {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -1254,7 +1347,7 @@ function PencilIcon({ color = "#fff" }: { color?: string }) {
 
 function DownloadIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
       <polyline points="7 10 12 15 17 10" />
       <line x1="12" y1="15" x2="12" y2="3" />
@@ -1264,7 +1357,7 @@ function DownloadIcon() {
 
 function FolderSmallIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6l2 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2z" />
     </svg>
   );
@@ -1272,7 +1365,7 @@ function FolderSmallIcon() {
 
 function CheckSmallIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
     </svg>
   );

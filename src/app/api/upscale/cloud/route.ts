@@ -26,13 +26,13 @@ import sharp from "sharp";
 import { getSession } from "@/lib/session";
 import { requireFeature } from "@/lib/tier-guard";
 import {
-  CREDIT_LIMITS,
   deductCredits,
   findKundeByKey,
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
 import { recordUsd, REPLICATE_UPSCALE_USD } from "@/lib/provider-usage";
+import { getCreditCost } from "@/lib/credit-config-server";
 
 // Erkennt Replicate/Real-ESRGAN-Fehler die auf Pixel-Overload zeigen.
 function isPixelOverloadError(msg: string): boolean {
@@ -79,6 +79,8 @@ export async function POST(req: Request) {
   const guard = await requireFeature(session, "upscale");
   if (!guard.ok) return guard.response;
 
+  const cost = await getCreditCost("UPSCALE_IMAGE");
+
   let kundeRowIndex: number | null = null;
   let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;
   if (!session.isAdmin && session.lizenzschluessel) {
@@ -89,10 +91,10 @@ export async function POST(req: Request) {
     kundeRowIndex = kunde.rowIndex;
     kundeProfile = await getKundeProfile(kunde.rowIndex);
     const credits = getCreditsState(kundeProfile);
-    if (credits.balance < CREDIT_LIMITS.UPSCALE_IMAGE) {
+    if (credits.balance < cost) {
       return NextResponse.json(
         {
-          error: `Nicht genug Credits — Cloud-Upscale kostet ${CREDIT_LIMITS.UPSCALE_IMAGE}. Du hast ${credits.balance}.`,
+          error: `Nicht genug Credits — Cloud-Upscale kostet ${cost}. Du hast ${credits.balance}.`,
           creditsRemaining: credits.balance,
         },
         { status: 402 },
@@ -344,7 +346,7 @@ export async function POST(req: Request) {
       const result = await deductCredits(
         kundeRowIndex,
         kundeProfile,
-        CREDIT_LIMITS.UPSCALE_IMAGE,
+        cost,
       );
       if (result.success) creditsRemaining = result.remaining;
     } catch (err) {

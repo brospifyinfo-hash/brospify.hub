@@ -36,10 +36,8 @@ import {
   type Produkt,
 } from "@/lib/sheets";
 import {
-  costForCount,
   formatViews,
   isVideoCount,
-  perVideoCost,
   VIDEO_INCLUDE_MIN,
   VIDEO_VIRAL_MIN,
   type SavedScoutVideo,
@@ -47,6 +45,7 @@ import {
   type ScoutVideo,
 } from "@/lib/video-scout";
 import { anthropicCostUsd, recordUsd } from "@/lib/provider-usage";
+import { getCreditCost } from "@/lib/credit-config-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -383,7 +382,8 @@ export async function POST(req: Request) {
   if (!isVideoCount(count)) {
     return NextResponse.json({ error: "Anzahl muss 3, 6 oder 9 sein." }, { status: 400 });
   }
-  const cost = costForCount(count);
+  // Admin-editable price (falls back to the bundled default).
+  const cost = await getCreditCost(`VIDEO_SCOUT_${count}`);
 
   // ── Keys ──
   const apifyToken = process.env.APIFY_API_TOKEN;
@@ -537,7 +537,7 @@ export async function POST(req: Request) {
   // ── 6) Refund: Videos unter VIDEO_VIRAL_MIN werden gutgeschrieben ──
   // Thumbnails dauerhaft machen (nur wenn wir persistieren = kunde);
   // für Admin reicht die Original-URL (nur in-Session sichtbar).
-  const perVideo = perVideoCost(count);
+  const perVideo = Math.round(cost / count);
   let refundTotal = 0;
   const thumbs: string[] = kunde
     ? await Promise.all(top.map((c) => rehostThumbnail(c.thumbnail)))

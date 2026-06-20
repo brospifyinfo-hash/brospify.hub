@@ -24,13 +24,13 @@ import sharp from "sharp";
 import { getSession } from "@/lib/session";
 import { requireFeature } from "@/lib/tier-guard";
 import {
-  CREDIT_LIMITS,
   deductCredits,
   findKundeByKey,
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
 import { recordUsd, FAL_AI_STUDIO_USD } from "@/lib/provider-usage";
+import { getCreditCost } from "@/lib/credit-config-server";
 import {
   AI_STUDIO_SCENES,
   buildNegativePrompt,
@@ -51,33 +51,14 @@ const STUDIO_DIM = 1024;
 // Free-form prompt cap — keeps payloads reasonable and stops users
 // from injecting massive blobs.
 const CUSTOM_PROMPT_MAX = 500;
+// How many variations a single request may generate (1–3).
+const MAX_IMAGES = 3;
 
 export async function POST(req: Request) {
   // 0) Auth + tier + credit gate
   const session = await getSession();
   const guard = await requireFeature(session, "aiStudio");
   if (!guard.ok) return guard.response;
-
-  let kundeRowIndex: number | null = null;
-  let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;
-  if (!session.isAdmin && session.lizenzschluessel) {
-    const kunde = await findKundeByKey(session.lizenzschluessel);
-    if (!kunde) {
-      return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
-    }
-    kundeRowIndex = kunde.rowIndex;
-    kundeProfile = await getKundeProfile(kunde.rowIndex);
-    const credits = getCreditsState(kundeProfile);
-    if (credits.balance < CREDIT_LIMITS.AI_STUDIO) {
-      return NextResponse.json(
-        {
-          error: `Nicht genug Credits — AI Studio kostet ${CREDIT_LIMITS.AI_STUDIO}. Du hast ${credits.balance}.`,
-          creditsRemaining: credits.balance,
-        },
-        { status: 402 },
-      );
-    }
-  }
 
   // 1) Token check
   if (!process.env.FAL_KEY) {
@@ -87,7 +68,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // 2) Parse multipart body
+  // 2) Parse multipart body FIRST — we need `count` to price the gate.
   let formData: FormData;
   try {
     formData = await req.formData();
@@ -100,6 +81,7 @@ export async function POST(req: Request) {
   const fileEntry = formData.get("file");
   const sceneIdRaw = formData.get("sceneId");
   const customPromptRaw = formData.get("customPrompt");
+  const countRaw = formData.get("count");
   if (!(fileEntry instanceof File)) {
     return NextResponse.json(
       { error: "Feld 'file' fehlt oder ist keine Datei." },
@@ -119,6 +101,37 @@ export async function POST(req: Request) {
       },
       { status: 413 },
     );
+  }
+
+  // How many variations to generate (1–3).
+  const count = Math.max(
+    1,
+    Math.min(MAX_IMAGES, Math.round(Number(countRaw) || 1)),
+  );
+
+  // 3) Credit gate (per image × count). Admins skip the meter.
+  const perImage = await getCreditCost("AI_STUDIO");
+  const totalCost = perImage * count;
+
+  let kundeRowIndex: number | null = null;
+  let kundeProfile: Awaited<ReturnType<typeof getKundeProfile>> | null = null;
+  if (!session.isAdmin && session.lizenzschluessel) {
+    const kunde = await findKundeByKey(session.lizenzschluessel);
+    if (!kunde) {
+      return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
+    }
+    kundeRowIndex = kunde.rowIndex;
+    kundeProfile = await getKundeProfile(kunde.rowIndex);
+    const credits = getCreditsState(kundeProfile);
+    if (credits.balance < totalCost) {
+      return NextResponse.json(
+        {
+          error: `Nicht genug Credits — ${count} ${count === 1 ? "Bild" : "Bilder"} kosten ${totalCost} (${perImage}/Bild). Du hast ${credits.balance}.`,
+          creditsRemaining: credits.balance,
+        },
+        { status: 402 },
+      );
+    }
   }
 
   const sceneId = typeof sceneIdRaw === "string" ? sceneIdRaw : "";
@@ -162,9 +175,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4) Single-call relight — IC-Light handles bg, shadows, and the
-  //    integration of the subject into the new lighting environment.
-  let relitBuffer: Buffer;
+  // 4) Single-call relight — request `count` variations at once.
+  //    IC-Light handles bg, shadows, and the integration of the
+  //    subject into the new lighting environment.
+  let relitUrls: string[];
   try {
     const iclight = await callFal<IcLightResponse>("fal-ai/iclight-v2", {
       image_url: normalisedDataUri,
@@ -179,62 +193,62 @@ export async function POST(req: Request) {
       // produziert natuerlichere Resultate. Wir lassen ihn explizit
       // damit Fal nicht plotzlich was anderes einsetzt.
       guidance_scale: 4.5,
+      // Mehrere Varianten in EINEM Job — günstiger an Latenz als N Calls.
+      num_images: count,
       enable_safety_checker: false,
     });
-    const relitUrl = iclight.images?.[0]?.url;
-    if (!relitUrl) {
+    relitUrls = (iclight.images || [])
+      .map((i) => i?.url)
+      .filter((u): u is string => typeof u === "string" && u.length > 0);
+    if (relitUrls.length === 0) {
       throw new FalError("iclight lieferte keine Bild-URL.", 502, iclight);
     }
-    const dl = await fetch(relitUrl);
-    if (!dl.ok) {
-      throw new FalError(
-        `Relight-Download fehlgeschlagen (${dl.status}).`,
-        502,
-      );
-    }
-    relitBuffer = Buffer.from(await dl.arrayBuffer());
   } catch (err) {
     return falErrorResponse(err, "Szenen-Generierung");
   }
 
-  // 5) Re-encode as a clean JPEG (Fal often returns PNG which is
-  //    larger; we standardise on JPEG for the download endpoint).
-  let finalJpeg: Buffer;
-  try {
-    finalJpeg = await sharp(relitBuffer)
-      .jpeg({ quality: 92, mozjpeg: true })
-      .toBuffer();
-  } catch (err) {
-    console.error("[ai-studio] sharp re-encode failed:", err);
-    finalJpeg = relitBuffer; // fall back to whatever Fal sent
+  // 5+6) Download, re-encode to clean JPEG, persist each variation.
+  const baseName = fileEntry.name.replace(/\.[^.]+$/, "");
+  const outputUrls: string[] = [];
+  for (let i = 0; i < relitUrls.length; i++) {
+    try {
+      const dl = await fetch(relitUrls[i]);
+      if (!dl.ok) {
+        throw new FalError(`Relight-Download fehlgeschlagen (${dl.status}).`, 502);
+      }
+      const buf = Buffer.from(await dl.arrayBuffer());
+      let jpeg: Buffer;
+      try {
+        jpeg = await sharp(buf).jpeg({ quality: 92, mozjpeg: true }).toBuffer();
+      } catch {
+        jpeg = buf; // fall back to whatever Fal sent
+      }
+      const blob = await put(
+        `ai-studio/${Date.now()}-${baseName}-${scene.id}-${i + 1}.jpg`,
+        jpeg,
+        { access: "public", contentType: "image/jpeg" },
+      );
+      outputUrls.push(blob.url);
+    } catch (err) {
+      console.error("[ai-studio] variation persist failed:", err);
+    }
   }
-
-  // 6) Persist final to Blob.
-  let outputUrl: string;
-  try {
-    const baseName = fileEntry.name.replace(/\.[^.]+$/, "");
-    const blob = await put(
-      `ai-studio/${Date.now()}-${baseName}-${scene.id}.jpg`,
-      finalJpeg,
-      { access: "public", contentType: "image/jpeg" },
-    );
-    outputUrl = blob.url;
-  } catch (err) {
-    console.error("[ai-studio] blob put failed:", err);
+  if (outputUrls.length === 0) {
     return NextResponse.json(
       { error: "Ergebnis konnte nicht gespeichert werden." },
       { status: 500 },
     );
   }
 
-  // 7) Charge credits — admins skip the meter.
+  // 7) Charge credits — bill ONLY for variations we actually delivered.
+  const billedCount = outputUrls.length;
   let creditsRemaining: number | undefined;
   if (kundeRowIndex !== null && kundeProfile !== null) {
     try {
       const result = await deductCredits(
         kundeRowIndex,
         kundeProfile,
-        CREDIT_LIMITS.AI_STUDIO,
+        perImage * billedCount,
       );
       if (result.success) creditsRemaining = result.remaining;
     } catch (err) {
@@ -243,13 +257,16 @@ export async function POST(req: Request) {
   }
 
   // Fal-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
-  await recordUsd("fal", FAL_AI_STUDIO_USD);
+  await recordUsd("fal", FAL_AI_STUDIO_USD * billedCount);
 
   return NextResponse.json(
     {
-      url: outputUrl,
+      urls: outputUrls,
+      // back-compat: callers that still read a single `url`.
+      url: outputUrls[0],
       sceneId: scene.id,
       sceneLabel: scene.label,
+      count: billedCount,
       creditsRemaining,
     },
     { status: 200, headers: { "Cache-Control": "no-store" } },

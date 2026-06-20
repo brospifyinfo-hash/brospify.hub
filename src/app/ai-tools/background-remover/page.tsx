@@ -23,7 +23,7 @@ export default function BackgroundRemoverPage() {
               Background Remover
             </h1>
             <p className="mt-1 text-[11px] sm:text-xs text-zinc-500 leading-snug">
-              3 Genauigkeits-Modi · BG ersetzen lokal (0 Credits) · 1-Klick in Mediathek
+              Präzise Freistellung · BG ersetzen lokal (0 Credits) · 1-Klick in Mediathek
             </p>
           </header>
 

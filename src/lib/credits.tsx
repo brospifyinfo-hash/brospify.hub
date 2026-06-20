@@ -45,6 +45,13 @@ interface CreditsContextValue extends CreditsState {
   /** Optimistically subtract from balance; server is the truth. */
   optimisticDeduct: (amount: number) => void;
 
+  // ─── Admin-editable credit config (icon + per-tool costs) ─────
+  // Sourced from /api/credit-config so an admin price/icon change
+  // shows up in every tool UI without a redeploy. `costOf` falls
+  // back to the caller's bundled default until the config arrives.
+  creditIcon: string;
+  costOf: (key: string, fallback: number) => number;
+
   // ─── Back-compat shims ────────────────────────────────────────
   // Some pages still read `remaining` / `setRemaining`. Keep them
   // pointing at `balance` so the migration is transparent.
@@ -72,6 +79,29 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
     loading: true,
     lastSyncedAt: 0,
   });
+
+  // Admin-editable credit config (icon + per-tool costs). Fetched once.
+  const [creditIcon, setCreditIcon] = useState<string>("🪙");
+  const [creditCosts, setCreditCosts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/credit-config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (cancelled || !data) return;
+        if (typeof data.icon === "string" && data.icon.trim()) setCreditIcon(data.icon);
+        if (data.costs && typeof data.costs === "object") setCreditCosts(data.costs);
+      })
+      .catch(() => {/* keep defaults */});
+    return () => { cancelled = true; };
+  }, []);
+  const costOf = useCallback(
+    (key: string, fallback: number) => {
+      const v = creditCosts[key];
+      return Number.isFinite(v) ? v : fallback;
+    },
+    [creditCosts],
+  );
 
   // Hold a ref to the BroadcastChannel so we can publish updates from
   // anywhere without recreating the channel on every render.
@@ -296,6 +326,8 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
         refresh,
         setBalance,
         optimisticDeduct,
+        creditIcon,
+        costOf,
         remaining: state.balance,
         setRemaining: setBalance,
       }}
@@ -317,6 +349,8 @@ export function useCredits(): CreditsContextValue {
       refresh: async () => {},
       setBalance: () => {},
       optimisticDeduct: () => {},
+      creditIcon: "🪙",
+      costOf: (_key: string, fallback: number) => fallback,
       remaining: 0,
       setRemaining: () => {},
     };

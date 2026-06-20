@@ -16,13 +16,13 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import sharp from "sharp";
 import {
-  CREDIT_LIMITS,
   deductCredits,
   findKundeByEmail,
   findKundeByKey,
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
+import { getCreditCost } from "@/lib/credit-config-server";
 import { isActiveSubFromKunde } from "@/lib/tiers-shared";
 import {
   AI_STUDIO_SCENES,
@@ -115,12 +115,13 @@ export async function POST(req: Request) {
   }
   const profile = await getKundeProfile(kunde.rowIndex);
   const credits = getCreditsState(profile);
-  if (credits.balance < CREDIT_LIMITS.AI_STUDIO) {
+  const cost = await getCreditCost("AI_STUDIO");
+  if (credits.balance < cost) {
     return json(
       {
-        error: `Nicht genug Credits — AI Studio kostet ${CREDIT_LIMITS.AI_STUDIO}. Du hast ${credits.balance}.`,
+        error: `Nicht genug Credits — AI Studio kostet ${cost}. Du hast ${credits.balance}.`,
         creditsRemaining: credits.balance,
-        cost: CREDIT_LIMITS.AI_STUDIO,
+        cost,
       },
       402,
     );
@@ -201,7 +202,7 @@ export async function POST(req: Request) {
   // 10) Credits deduction
   let creditsRemaining: number | undefined;
   try {
-    const result = await deductCredits(kunde.rowIndex, profile, CREDIT_LIMITS.AI_STUDIO);
+    const result = await deductCredits(kunde.rowIndex, profile, cost);
     if (result.success) creditsRemaining = result.remaining;
   } catch (err) {
     console.error("[ai-studio/public] credit deduction failed:", err);
@@ -213,6 +214,6 @@ export async function POST(req: Request) {
     sceneId: scene.id,
     sceneLabel: scene.label,
     creditsRemaining,
-    cost: CREDIT_LIMITS.AI_STUDIO,
+    cost,
   });
 }
