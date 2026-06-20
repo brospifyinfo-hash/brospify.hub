@@ -13,12 +13,14 @@ interface PublicBranding {
   logoUrl: string;
   brandName: string;
   brandAccent: string;
+  aboImageUrl: string;
 }
 
 export async function GET() {
   let logoUrl = "";
   let brandName = "";
   let brandAccent = "";
+  let aboImageUrl = "";
 
   try {
     const { blobs } = await list({ prefix: SETTINGS_KEY, limit: 1 });
@@ -29,13 +31,14 @@ export async function GET() {
         if (typeof data.logoUrl === "string") logoUrl = data.logoUrl;
         if (typeof data.brandName === "string") brandName = data.brandName;
         if (typeof data.brandAccent === "string") brandAccent = data.brandAccent;
+        if (typeof data.aboImageUrl === "string") aboImageUrl = data.aboImageUrl;
       }
     }
   } catch (err) {
     console.error("[Branding] read error:", err);
   }
 
-  const body: PublicBranding = { logoUrl, brandName, brandAccent };
+  const body: PublicBranding = { logoUrl, brandName, brandAccent, aboImageUrl };
   return NextResponse.json(body, {
     // Short cache so updates propagate within a minute, no auth check needed
     headers: { "Cache-Control": "public, max-age=30, s-maxage=30" },

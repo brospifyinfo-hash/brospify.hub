@@ -1,12 +1,41 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { KeyRound, Loader2, AlertCircle } from "lucide-react";
+import {
+  KeyRound,
+  Loader2,
+  AlertCircle,
+  HelpCircle,
+  Mail,
+  Send,
+  CheckCircle2,
+  Crown,
+  ShieldCheck,
+  Sparkles,
+  ArrowRight,
+  Check,
+  ChevronDown,
+  Zap,
+  Image as ImageIcon,
+} from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
+import { DEFAULT_TIERS } from "@/lib/tiers-shared";
+
+const ACCENT = "#95BF47";
+const MEMBERSHIP = DEFAULT_TIERS[0];
+
+// Was die Membership enthält — sichtbarer, crawlbarer Inhalt (SEO) +
+// Verkaufsargumente im „Abo abschließen"-Bereich.
+const MEMBERSHIP_PERKS = [
+  "Tägliche Winning-Product-Drops mit echten Markt-Daten",
+  "KI-Produktfotos (AI Studio) & präziser Background Remover",
+  "Video Scout, Image Upscaler & AI E-Mail-Generator",
+  "500 Credits bei jeder Zahlung + Theme & Coaching",
+];
 
 export default function LoginPage() {
   return (
@@ -29,9 +58,23 @@ function LoginContent() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [aboImageUrl, setAboImageUrl] = useState("");
   const router = useRouter();
   const params = useSearchParams();
   const urlError = params.get("error");
+
+  // Admin-Abo-Bild laden (öffentlich, ohne Session).
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/branding")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d && typeof d.aboImageUrl === "string") setAboImageUrl(d.aboImageUrl);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const ERROR_MAP: Record<string, string> = {
     no_email: t.login.errorNoEmail,
@@ -66,110 +109,426 @@ function LoginContent() {
   }
 
   const displayError = error || (urlError ? ERROR_MAP[urlError] || urlError : "");
+  const brand = brandName || "Brospify Hub";
 
   return (
-    <div className="min-h-screen bg-mesh flex items-center justify-center px-4">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="w-full max-w-md"
-      >
-        {/* Logo */}
-        <div className="text-center mb-8">
+    <div className="relative min-h-screen bg-mesh overflow-hidden">
+      {/* Ambient orbs */}
+      <div
+        className="pointer-events-none fixed -top-40 -right-40 w-[560px] h-[560px] rounded-full opacity-50"
+        style={{ background: "radial-gradient(closest-side, rgba(149,191,71,0.18), transparent 70%)" }}
+      />
+      <div
+        className="pointer-events-none fixed -bottom-40 -left-40 w-[520px] h-[520px] rounded-full opacity-40"
+        style={{ background: "radial-gradient(closest-side, rgba(99,102,241,0.16), transparent 70%)" }}
+      />
+
+      <main className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 py-10 lg:py-16">
+        {/* Hero — crawlbarer H1 + Keyword-Text für SEO */}
+        <header className="text-center mb-9 lg:mb-12">
           <motion.div
-            initial={{ scale: 0.8 }}
-            animate={{ scale: 1 }}
-            transition={{ delay: 0.2, type: "spring" }}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, type: "spring" }}
             className="inline-flex items-center justify-center mb-4"
           >
             <BrandLogo size="xl" />
           </motion.div>
-          <p className="text-white/40 mt-2">{t.login.title}</p>
-        </div>
+          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
+            {brand}
+          </h1>
+          <p className="mt-3 text-[15px] text-white/55 max-w-2xl mx-auto leading-relaxed">
+            Das All-in-One <strong className="text-white/80">Dropshipping-Dashboard von Brospify</strong> —
+            tägliche Winning-Product-Drops, KI-Produktfotos, Background Remover, Video Scout & Coaching.
+            Melde dich an oder sichere dir die Membership.
+          </p>
+        </header>
 
-        <div className="glass rounded-2xl p-6 space-y-5 backdrop-blur-xl">
-          {/* Error */}
-          <AnimatePresence>
-            {displayError && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-500/20 px-4 py-3 rounded-xl overflow-hidden"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span>{displayError}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Option A: Google */}
-          <button
-            onClick={handleGoogleLogin}
-            disabled={googleLoading || loading}
-            className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl bg-white text-zinc-900 font-semibold text-sm hover:bg-zinc-100 transition disabled:opacity-60"
+        <div className="grid lg:grid-cols-2 gap-5 lg:gap-7 items-start">
+          {/* ── LINKS: Login + Hilfe ─────────────────────────── */}
+          <motion.section
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            aria-label="Anmelden"
           >
-            {googleLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
-            ) : (
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-              </svg>
-            )}
-            {googleLoading ? t.login.googleConnecting : t.login.googleButton}
-          </button>
+            <div className="glass rounded-2xl p-6 space-y-5 backdrop-blur-xl">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Anmelden</h2>
+                <p className="text-[12.5px] text-white/45 mt-0.5">
+                  Mit Google oder deinem Lizenzschlüssel.
+                </p>
+              </div>
 
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-white/10" />
-            </div>
-            <div className="relative flex justify-center text-xs">
-              <span className="px-3 bg-transparent text-zinc-500 backdrop-blur-sm">
-                {t.login.divider}
-              </span>
-            </div>
-          </div>
+              <AnimatePresence>
+                {displayError && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="flex items-center gap-2 text-red-400 text-sm bg-red-400/10 border border-red-500/20 px-4 py-3 rounded-xl overflow-hidden"
+                  >
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{displayError}</span>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-          {/* Option B: License Key */}
-          <form onSubmit={handleKeyLogin} className="space-y-3">
-            <label className="block text-xs text-zinc-400 font-medium flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5" />
-              {t.login.licenseLabel}
-            </label>
-            <input
-              type="text"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder={t.login.licensePlaceholder}
-              className="input-glass w-full"
-              disabled={loading || googleLoading}
-            />
-            <button
-              type="submit"
-              disabled={loading || googleLoading}
-              className="btn-accent w-full py-3 rounded-xl text-sm flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <>
-                  <KeyRound className="w-4 h-4" />
-                  {t.login.licenseButton}
-                </>
-              )}
-            </button>
-          </form>
+              {/* Google */}
+              <button
+                onClick={handleGoogleLogin}
+                disabled={googleLoading || loading}
+                className="w-full flex items-center justify-center gap-3 py-3.5 rounded-xl bg-white text-zinc-900 font-semibold text-sm hover:bg-zinc-100 transition disabled:opacity-60"
+              >
+                {googleLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                  </svg>
+                )}
+                {googleLoading ? t.login.googleConnecting : t.login.googleButton}
+              </button>
+
+              {/* Divider */}
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-white/10" />
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-3 bg-transparent text-zinc-500 backdrop-blur-sm">
+                    {t.login.divider}
+                  </span>
+                </div>
+              </div>
+
+              {/* License key */}
+              <form onSubmit={handleKeyLogin} className="space-y-3">
+                <label className="text-xs text-zinc-400 font-medium flex items-center gap-1.5">
+                  <KeyRound className="w-3.5 h-3.5" />
+                  {t.login.licenseLabel}
+                </label>
+                <input
+                  type="text"
+                  value={key}
+                  onChange={(e) => setKey(e.target.value)}
+                  placeholder={t.login.licensePlaceholder}
+                  className="input-glass w-full"
+                  disabled={loading || googleLoading}
+                />
+                <button
+                  type="submit"
+                  disabled={loading || googleLoading}
+                  className="btn-accent w-full py-3 rounded-xl text-sm flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4" />
+                      {t.login.licenseButton}
+                    </>
+                  )}
+                </button>
+              </form>
+
+              {/* Hilfe bei der Anmeldung */}
+              <div className="pt-1">
+                <button
+                  onClick={() => setShowHelp((v) => !v)}
+                  className="w-full flex items-center justify-center gap-2 text-[12.5px] font-medium text-white/55 hover:text-white transition"
+                >
+                  <HelpCircle className="w-4 h-4" style={{ color: ACCENT }} />
+                  Hilfe bei der Anmeldung
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showHelp ? "rotate-180" : ""}`} />
+                </button>
+                <AnimatePresence initial={false}>
+                  {showHelp && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <HelpForm />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+          </motion.section>
+
+          {/* ── RECHTS: Abo abschließen ──────────────────────── */}
+          <motion.section
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.08 }}
+            aria-label="Membership abschließen"
+          >
+            <AboSection aboImageUrl={aboImageUrl} />
+          </motion.section>
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-8">
-          &copy; {new Date().getFullYear()} {brandName || "BrospifyHub"}. {t.login.footer}
-        </p>
-      </motion.div>
+        {/* SEO-Content: Feature-Grid (crawlbar, Keyword-reich) */}
+        <section className="mt-12 lg:mt-16" aria-label="Funktionen">
+          <h2 className="text-center text-[12px] uppercase tracking-[0.2em] font-semibold text-white/40 mb-5">
+            Was du mit Brospify bekommst
+          </h2>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <FeatureCard icon={Zap} title="Winning Products finden">
+              Täglicher Produkt-Drop mit Trend-, Viralitäts- und Margen-Score — direkt umsetzbar.
+            </FeatureCard>
+            <FeatureCard icon={ImageIcon} title="KI-Produktfotos">
+              AI Studio setzt dein Produkt in atemberaubende Szenen; der Background Remover stellt es sauber frei.
+            </FeatureCard>
+            <FeatureCard icon={Sparkles} title="Mehr Tools">
+              Video Scout, Image Upscaler, AI E-Mail-Generator, Mediathek & Coaching — alles im Brospify Hub.
+            </FeatureCard>
+          </div>
+        </section>
+
+        <footer className="text-center text-white/25 text-xs mt-12">
+          &copy; {new Date().getFullYear()} {brand}. {t.login.footer}
+        </footer>
+      </main>
+    </div>
+  );
+}
+
+// ─── Abo abschließen ─────────────────────────────────────────────
+
+function AboSection({ aboImageUrl }: { aboImageUrl: string }) {
+  return (
+    <div
+      className="relative rounded-2xl overflow-hidden border"
+      style={{
+        borderColor: "rgba(149,191,71,0.30)",
+        background:
+          "linear-gradient(160deg, rgba(149,191,71,0.10) 0%, rgba(255,255,255,0.03) 45%, rgba(168,85,247,0.06) 100%)",
+        boxShadow: "0 30px 80px -42px rgba(0,0,0,0.75), inset 0 1px 0 rgba(255,255,255,0.05)",
+      }}
+    >
+      {/* Bild / Header */}
+      <div className="relative h-44 sm:h-52 w-full overflow-hidden">
+        {aboImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={aboImageUrl} alt="Brospify Membership" className="w-full h-full object-cover" />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center"
+            style={{ background: "linear-gradient(135deg, #1a2410 0%, #0c0c0e 60%, #1a132a 100%)" }}
+          >
+            <Crown className="w-12 h-12" style={{ color: ACCENT }} />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+        <div
+          className="absolute top-3 left-3 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10.5px] font-bold uppercase tracking-[0.12em]"
+          style={{ background: ACCENT, color: "#0a1604" }}
+        >
+          <Sparkles className="w-3 h-3" />
+          {MEMBERSHIP.trialDays > 0 ? `${MEMBERSHIP.trialDays} Tage gratis testen` : "Jetzt starten"}
+        </div>
+        <div className="absolute bottom-3 left-4 right-4">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-white/70 font-semibold">
+            {MEMBERSHIP.tagline}
+          </div>
+          <div className="text-xl font-bold text-white tracking-tight">{MEMBERSHIP.label}</div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="p-5 sm:p-6 space-y-4">
+        <div className="flex items-baseline gap-2">
+          <span className="text-3xl font-bold tabular-nums text-white">
+            {MEMBERSHIP.priceMonthlyEur} €
+          </span>
+          <span className="text-[13px] text-white/45">/ Monat</span>
+          {MEMBERSHIP.trialDays > 0 && (
+            <span className="ml-auto text-[11px] text-[#bce078] font-semibold">
+              {MEMBERSHIP.trialDays} Tage gratis
+            </span>
+          )}
+        </div>
+
+        <ul className="space-y-2">
+          {MEMBERSHIP_PERKS.map((perk) => (
+            <li key={perk} className="flex items-start gap-2.5 text-[13px] text-white/75 leading-snug">
+              <span
+                className="mt-0.5 shrink-0 w-4 h-4 rounded-full flex items-center justify-center"
+                style={{ background: "rgba(149,191,71,0.18)" }}
+              >
+                <Check className="w-2.5 h-2.5" style={{ color: ACCENT }} />
+              </span>
+              {perk}
+            </li>
+          ))}
+        </ul>
+
+        <a
+          href={MEMBERSHIP.ctaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-deploy w-full py-3.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+        >
+          <Crown className="w-4 h-4" />
+          {MEMBERSHIP.ctaLabel || "Membership abschließen"}
+          <ArrowRight className="w-4 h-4" />
+        </a>
+
+        <div className="flex items-center justify-center gap-1.5 text-[11px] text-white/40 text-center">
+          <ShieldCheck className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
+          Sichere Bezahlung über den offiziellen Brospify-Checkout · jederzeit kündbar
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Hilfe-Formular (direkte E-Mail an den Support) ──────────────
+
+function HelpForm() {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [message, setMessage] = useState("");
+  const [company, setCompany] = useState(""); // honeypot
+  const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [errMsg, setErrMsg] = useState("");
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.trim() || !message.trim()) {
+      setStatus("error");
+      setErrMsg("Bitte E-Mail und Nachricht ausfüllen.");
+      return;
+    }
+    setStatus("loading");
+    setErrMsg("");
+    try {
+      const res = await fetch("/api/login-help", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, email, message, company }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setStatus("error");
+        setErrMsg(data.error || "Senden fehlgeschlagen.");
+        return;
+      }
+      setStatus("success");
+      setName("");
+      setEmail("");
+      setMessage("");
+    } catch {
+      setStatus("error");
+      setErrMsg("Verbindungsfehler — bitte erneut versuchen.");
+    }
+  }
+
+  if (status === "success") {
+    return (
+      <div className="mt-3 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/25 px-4 py-4 text-center">
+        <CheckCircle2 className="w-6 h-6 mx-auto mb-1.5" style={{ color: ACCENT }} />
+        <div className="text-[13px] font-semibold text-white">Nachricht gesendet</div>
+        <div className="text-[12px] text-white/55 mt-0.5">
+          Wir melden uns so schnell wie möglich per E-Mail bei dir.
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="mt-3 space-y-2.5 rounded-xl bg-white/[0.03] border border-white/10 p-4">
+      <p className="text-[12px] text-white/55 leading-snug">
+        Kommst du nicht rein? Schreib uns kurz — <strong className="text-white/80">deine E-Mail
+        nicht vergessen</strong>, damit wir dir direkt antworten können.
+      </p>
+
+      {/* Honeypot (vor Bots versteckt) */}
+      <input
+        type="text"
+        value={company}
+        onChange={(e) => setCompany(e.target.value)}
+        tabIndex={-1}
+        autoComplete="off"
+        className="hidden"
+        aria-hidden="true"
+      />
+
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Name (optional)"
+        className="input-glass w-full text-[13px]"
+        disabled={status === "loading"}
+      />
+      <div className="relative">
+        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-white/35" />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Deine E-Mail-Adresse *"
+          required
+          className="input-glass w-full text-[13px] pl-9"
+          disabled={status === "loading"}
+        />
+      </div>
+      <textarea
+        value={message}
+        onChange={(e) => setMessage(e.target.value)}
+        placeholder="Wobei brauchst du Hilfe? *"
+        rows={3}
+        required
+        className="input-glass w-full text-[13px] resize-none"
+        disabled={status === "loading"}
+      />
+
+      {status === "error" && (
+        <div className="flex items-center gap-1.5 text-[12px] text-red-300">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+          {errMsg}
+        </div>
+      )}
+
+      <button
+        type="submit"
+        disabled={status === "loading"}
+        className="btn-accent w-full py-2.5 rounded-xl text-[13px] font-semibold flex items-center justify-center gap-2 disabled:opacity-60"
+      >
+        {status === "loading" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+        Nachricht senden
+      </button>
+    </form>
+  );
+}
+
+// ─── Feature card (SEO content) ──────────────────────────────────
+
+function FeatureCard({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
+      <div
+        className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5"
+        style={{ background: "rgba(149,191,71,0.14)", border: "1px solid rgba(149,191,71,0.25)" }}
+      >
+        <Icon className="w-[18px] h-[18px]" style={{ color: ACCENT }} />
+      </div>
+      <h3 className="text-[14px] font-semibold text-white">{title}</h3>
+      <p className="text-[12.5px] text-white/50 mt-1 leading-relaxed">{children}</p>
     </div>
   );
 }

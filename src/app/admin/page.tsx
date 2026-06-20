@@ -508,6 +508,7 @@ export default function AdminPage() {
   interface SettingsData {
     logoUrl: string;
     brandName: string;
+    aboImageUrl: string;
     youtubeUrl: string;
     themeFileUrl: string;
     themeFileName: string;
@@ -519,9 +520,10 @@ export default function AdminPage() {
     themeChangelog: string;
     themes: ThemeEntry[];
   }
-  const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", brandName: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
+  const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", brandName: "", aboImageUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
+  const [aboBusy, setAboBusy] = useState(false);
   const [themeBusyId, setThemeBusyId] = useState<string | null>(null);
   const [themePreviewBusyId, setThemePreviewBusyId] = useState<string | null>(null);
 
@@ -1342,6 +1344,7 @@ export default function AdminPage() {
       setSettingsData({
         logoUrl: data.logoUrl || "",
         brandName: data.brandName || "",
+        aboImageUrl: data.aboImageUrl || "",
         youtubeUrl: data.youtubeUrl || "",
         themeFileUrl: data.themeFileUrl || "",
         themeFileName: data.themeFileName || "",
@@ -1468,6 +1471,61 @@ export default function AdminPage() {
       setError("Logo speichern fehlgeschlagen.");
     } finally {
       setLogoBusy(false);
+    }
+  }
+
+  // ── Abo-Bild (Login-Seite): upload + persist ───────────────────
+  async function persistAboImage(aboImageUrl: string): Promise<boolean> {
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ aboImageUrl }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "Abo-Bild speichern fehlgeschlagen.");
+      return false;
+    }
+    setSettingsData((prev) => ({ ...prev, aboImageUrl }));
+    return true;
+  }
+
+  async function uploadAboImage(file: File) {
+    setAboBusy(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const upRes = await fetch("/api/upload", { method: "POST", body: fd });
+      const upData = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upData?.url) {
+        setError(upData?.error || "Abo-Bild-Upload fehlgeschlagen.");
+        return;
+      }
+      if (await persistAboImage(upData.url)) {
+        setSuccess("Abo-Bild hochgeladen und gespeichert.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch {
+      setError("Abo-Bild-Upload fehlgeschlagen.");
+    } finally {
+      setAboBusy(false);
+    }
+  }
+
+  async function commitAboImageUrl(rawUrl: string) {
+    const aboImageUrl = rawUrl.trim();
+    setAboBusy(true);
+    setError("");
+    try {
+      if (await persistAboImage(aboImageUrl)) {
+        setSuccess(aboImageUrl ? "Abo-Bild gespeichert." : "Abo-Bild entfernt.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch {
+      setError("Abo-Bild speichern fehlgeschlagen.");
+    } finally {
+      setAboBusy(false);
     }
   }
 
@@ -2716,6 +2774,57 @@ export default function AdminPage() {
                 <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                   <p className="text-[10px] text-zinc-500 mb-2 uppercase tracking-wider">Vorschau</p>
                   <img src={settingsData.logoUrl} alt="Logo" className="h-14 object-contain rounded" />
+                </div>
+              )}
+            </div>
+
+            {/* Abo-Bild für die Login-Seite */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><Crown className="w-5 h-5 text-[#95BF47]" />Abo-Bild (Login-Seite)</h3>
+              <p className="text-zinc-400 text-sm">Wird im „Membership abschließen"-Bereich auf der Login-Seite angezeigt. Empfohlen: Querformat (z.B. 1200×600).</p>
+
+              <div className="flex items-center gap-3">
+                <label className={`flex items-center gap-2 px-4 py-2.5 rounded-xl bg-[#95BF47]/10 border border-[#95BF47]/20 text-[#95BF47] text-sm font-medium transition ${aboBusy ? "opacity-60 cursor-wait pointer-events-none" : "cursor-pointer hover:bg-[#95BF47]/15"}`}>
+                  <Upload className="w-4 h-4" />
+                  {aboBusy ? "Wird gespeichert…" : "Abo-Bild hochladen"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    disabled={aboBusy}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      e.target.value = "";
+                      if (file) uploadAboImage(file);
+                    }}
+                  />
+                </label>
+                {settingsData.aboImageUrl && (
+                  <button
+                    onClick={() => commitAboImageUrl("")}
+                    disabled={aboBusy}
+                    className="text-xs text-red-400 hover:text-red-300 transition disabled:opacity-50"
+                  >
+                    Entfernen
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-zinc-500 -mt-1">Wird sofort gespeichert &amp; auf der Login-Seite übernommen — max. 5MB.</p>
+
+              <input
+                type="text"
+                value={settingsData.aboImageUrl}
+                onChange={e => setSettingsData({ ...settingsData, aboImageUrl: e.target.value })}
+                onBlur={e => commitAboImageUrl(e.target.value)}
+                disabled={aboBusy}
+                placeholder="Oder Bild-URL direkt eingeben (speichert beim Verlassen des Feldes)…"
+                className="input-glass w-full text-xs disabled:opacity-50"
+              />
+
+              {settingsData.aboImageUrl && (
+                <div className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+                  <p className="text-[10px] text-zinc-500 mb-2 uppercase tracking-wider">Vorschau</p>
+                  <img src={settingsData.aboImageUrl} alt="Abo-Bild" className="w-full max-h-44 object-cover rounded-lg" />
                 </div>
               )}
             </div>

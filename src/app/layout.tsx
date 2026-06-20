@@ -3,12 +3,90 @@ import { Outfit } from "next/font/google";
 import "./globals.css";
 import { I18nProvider } from "@/lib/i18n";
 import { CreditsProvider } from "@/lib/credits";
+import { SITE_URL, SITE_NAME, SITE_DESCRIPTION, SITE_KEYWORDS } from "@/lib/seo";
 
 const outfit = Outfit({ subsets: ["latin"] });
 
+const OG_TITLE = "Brospify Hub – Dropshipping Dashboard & KI-Tools";
+
 export const metadata: Metadata = {
-  title: "BrospifyHub - Managed Dropshipping Dashboard",
-  description: "Dein persönliches Dropshipping Dashboard mit monatlichen Winning Product Charts.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: OG_TITLE,
+    template: "%s · Brospify Hub",
+  },
+  description: SITE_DESCRIPTION,
+  keywords: SITE_KEYWORDS,
+  applicationName: SITE_NAME,
+  authors: [{ name: "Brospify" }],
+  creator: "Brospify",
+  publisher: "Brospify",
+  category: "business",
+  alternates: { canonical: "/" },
+  icons: {
+    icon: "/brospify-logo.png",
+    shortcut: "/brospify-logo.png",
+    apple: "/brospify-logo.png",
+  },
+  openGraph: {
+    type: "website",
+    locale: "de_DE",
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    title: OG_TITLE,
+    description: SITE_DESCRIPTION,
+    images: [
+      { url: "/brospify-logo.png", width: 512, height: 512, alt: "Brospify Hub" },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: OG_TITLE,
+    description: SITE_DESCRIPTION,
+    images: ["/brospify-logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  // Google Search Console: setze NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in
+  // Vercel auf den Verifizierungs-Code, um die Domain zu bestätigen.
+  ...(process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION } }
+    : {}),
+};
+
+// Structured data so Google reliably associates the query „brospify"
+// with this hub (Organization + WebSite).
+const JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE_URL}/#organization`,
+      name: "Brospify",
+      alternateName: ["Brospify Hub", "BrospifyHub"],
+      url: SITE_URL,
+      logo: `${SITE_URL}/brospify-logo.png`,
+      sameAs: ["https://brospify.com"],
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE_URL}/#website`,
+      url: SITE_URL,
+      name: SITE_NAME,
+      description: SITE_DESCRIPTION,
+      inLanguage: "de-DE",
+      publisher: { "@id": `${SITE_URL}/#organization` },
+    },
+  ],
 };
 
 // Disable iOS auto-zoom on focus by anchoring initialScale=1 and
@@ -37,6 +115,11 @@ export default function RootLayout({
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@400;500;600;700&family=Bricolage+Grotesque:wght@400;500;600;700&family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700&family=DM+Serif+Display&family=EB+Garamond:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Lato:wght@400;700&family=Lora:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=Merriweather:wght@400;700&family=Montserrat:wght@400;500;600;700&family=Nunito:wght@400;600;700&family=Open+Sans:wght@400;500;600;700&family=Playfair+Display:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Raleway:wght@400;500;600;700&family=Roboto:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Work+Sans:wght@400;500;600;700&display=swap"
+        />
+        {/* SEO: structured data (Organization + WebSite) */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
       </head>
       <body className={`${outfit.className} bg-zinc-950 text-white antialiased`}>
