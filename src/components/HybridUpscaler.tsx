@@ -99,8 +99,8 @@ export default function HybridUpscaler() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const startedAtRef = useRef(0);
 
-  const insufficientCredits =
-    !credits.loading && credits.balance < CREDIT_COSTS.UPSCALE_IMAGE;
+  const cost = credits.costOf("UPSCALE_IMAGE", CREDIT_COSTS.UPSCALE_IMAGE);
+  const insufficientCredits = !credits.loading && credits.balance < cost;
 
   useEffect(() => {
     return () => {
@@ -153,7 +153,7 @@ export default function HybridUpscaler() {
       }
       if (insufficientCredits) {
         setErrorMsg(
-          `Du brauchst ${CREDIT_COSTS.UPSCALE_IMAGE} Credits — du hast ${credits.balance}.`,
+          `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
         );
         return;
       }
@@ -188,7 +188,7 @@ export default function HybridUpscaler() {
 
       setStage("processing");
       startTimer();
-      credits.optimisticDeduct(CREDIT_COSTS.UPSCALE_IMAGE);
+      credits.optimisticDeduct(cost);
       setLastInput({ file: payload, mode, scale });
       await runUpscale(payload, mode, scale);
     },
@@ -376,7 +376,7 @@ export default function HybridUpscaler() {
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              {CREDIT_COSTS.UPSCALE_IMAGE} Credits / Bild
+              {cost} {credits.creditIcon} / Bild
             </p>
 
             {insufficientCredits && (
@@ -396,13 +396,13 @@ export default function HybridUpscaler() {
                     border: "1px solid rgba(245,158,11,0.35)",
                   }}
                 >
-                  <span className="text-[24px]">🪙</span>
+                  <span className="text-[24px]">{credits.creditIcon}</span>
                 </div>
                 <h3 className="text-[18px] font-semibold tracking-tight">
                   Nicht genug Credits
                 </h3>
                 <p className="text-[13px] text-zinc-400 mt-1.5 max-w-xs">
-                  Pro Bild brauchst du {CREDIT_COSTS.UPSCALE_IMAGE} Credits.
+                  Pro Bild brauchst du {cost} Credits.
                   Aktuell verfügbar: {credits.balance.toLocaleString("de-DE")}.
                 </p>
                 <Link

@@ -479,7 +479,7 @@ export default function ChartsPage() {
                         <>
                           <Zap className="w-4 h-4" />
                           {revealed ? "Nochmal ziehen" : "Produkt ziehen"}
-                          <span className="font-mono opacity-80">· {cost} 🪙</span>
+                          <span className="font-mono opacity-80">· {cost} {credits.creditIcon}</span>
                         </>
                       )}
                     </button>

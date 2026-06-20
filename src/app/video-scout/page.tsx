@@ -281,7 +281,7 @@ export default function VideoScoutPage() {
                                 className="text-[10px] font-mono mt-0.5"
                                 style={{ color: active ? ACCENT : "#71717a" }}
                               >
-                                {t.cost} 🪙
+                                {t.cost} {credits.creditIcon}
                               </div>
                             </button>
                           );
@@ -308,7 +308,7 @@ export default function VideoScoutPage() {
                           <>
                             <Flame className="w-4 h-4" />
                             {selectedVideos.length > 0 ? "Weitere finden" : "Videos finden"}
-                            <span className="font-mono opacity-80">· {cost} 🪙</span>
+                            <span className="font-mono opacity-80">· {cost} {credits.creditIcon}</span>
                           </>
                         )}
                       </button>
