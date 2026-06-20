@@ -263,6 +263,9 @@ interface ApiBalance {
   endpoint?: string;
   billingUrl?: string;
   hasBalanceApi?: boolean;
+  ledgerKind?: "usd" | "count";
+  ledgerUsd?: number;
+  ledgerCount?: { monthUsed: number; monthLimit: number; dayUsed: number; dayLimit: number };
 }
 
 // ─── Code-Blöcke + Coaching admin types ─────────────────────────
@@ -5028,7 +5031,7 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
       </div>
 
       {/* ─── AI-API Balances (DeepSeek + Fal + Replicate) ─── */}
-      <ApiBalancesCard balances={apiBalances} loading={apiBalancesLoading} />
+      <ApiBalancesCard balances={apiBalances} loading={apiBalancesLoading} onRefresh={onRefreshBalances} />
 
       {/* ─── Starter-Credit Backfill ─── */}
       <BackfillStarterCard />
@@ -5115,9 +5118,120 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
 
 // ─── API Balances card (System tab) ────────────────────────────
 
-function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loading: boolean }) {
+const BAL_COLOR: Record<string, string> = {
+  ok: "#10B981",
+  low: "#F59E0B",
+  empty: "#EF4444",
+  unknown: "#71717A",
+  "not-configured": "#71717A",
+};
+const BAL_LABEL: Record<string, string> = {
+  ok: "OK",
+  low: "Niedrig",
+  empty: "Leer!",
+  unknown: "Unbekannt",
+  "not-configured": "Nicht konfiguriert",
+};
+
+// Effektiver Stand pro Provider: lokales Ledger (geschätzt) hat Vorrang vor
+// dem reinen API-Status; ein echtes API-"empty" (z. B. Anthropic 402) gewinnt.
+function effectiveBalance(b: ApiBalance): {
+  status: string;
+  detail: string;
+  color: string;
+  badge: string;
+  canReconcile: boolean;
+} {
+  if (b.ledgerKind === "usd" && b.ledgerUsd !== undefined) {
+    const v = b.ledgerUsd;
+    const st = b.status === "empty" ? "empty" : v < 0.5 ? "empty" : v < 2 ? "low" : "ok";
+    return {
+      status: st,
+      detail: `${v.toFixed(2)} $ geschätzt übrig`,
+      color: BAL_COLOR[st],
+      badge: BAL_LABEL[st],
+      canReconcile: true,
+    };
+  }
+  if (b.ledgerKind === "count" && b.ledgerCount) {
+    const c = b.ledgerCount;
+    const monthLeft = Math.max(0, c.monthLimit - c.monthUsed);
+    const dayLeft = Math.max(0, c.dayLimit - c.dayUsed);
+    const st =
+      monthLeft <= 0 || dayLeft <= 0
+        ? "empty"
+        : (c.monthLimit && monthLeft / c.monthLimit < 0.1) ||
+            (c.dayLimit && dayLeft / c.dayLimit < 0.1)
+          ? "low"
+          : "ok";
+    return {
+      status: st,
+      detail: `${c.monthUsed}/${c.monthLimit} Monat · ${c.dayUsed}/${c.dayLimit} Tag`,
+      color: BAL_COLOR[st],
+      badge: BAL_LABEL[st],
+      canReconcile: true,
+    };
+  }
+  // Kein Ledger → reine API-Sicht.
+  const dashboardOnly = b.status === "ok" && !b.hasBalanceApi;
+  const color = dashboardOnly ? "#71717A" : BAL_COLOR[b.status];
+  const badge = dashboardOnly ? "Dashboard" : BAL_LABEL[b.status];
+  const detail = dashboardOnly
+    ? "Guthaben nur im Anbieter-Dashboard sichtbar →"
+    : b.raw
+      ? b.raw
+      : b.balanceEur !== undefined
+        ? `${b.balanceEur.toFixed(2)} € (${b.balanceUsd?.toFixed(2)} $) übrig`
+        : b.error || "—";
+  return { status: b.status, detail, color, badge, canReconcile: false };
+}
+
+function ApiBalancesCard({
+  balances,
+  loading,
+  onRefresh,
+}: {
+  balances: ApiBalance[];
+  loading: boolean;
+  onRefresh?: () => void;
+}) {
   const [testing, setTesting] = useState(false);
   const [testMsg, setTestMsg] = useState("");
+
+  async function reconcile(b: ApiBalance) {
+    try {
+      if (b.ledgerKind === "usd") {
+        const input = window.prompt(
+          `Aktuelles ${b.label}-Guthaben in $ eingeben (laut Anbieter-Dashboard):`,
+          String(b.ledgerUsd ?? 0),
+        );
+        if (input == null) return;
+        const balance = parseFloat(input.replace(",", "."));
+        if (!Number.isFinite(balance)) return;
+        await fetch("/api/admin/provider-ledger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: b.provider, balance }),
+        });
+      } else if (b.ledgerKind === "count") {
+        const input = window.prompt(
+          `Resend: bereits genutzte E-Mails diesen Monat (von ${b.ledgerCount?.monthLimit ?? 3000}):`,
+          String(b.ledgerCount?.monthUsed ?? 0),
+        );
+        if (input == null) return;
+        const monthUsed = parseInt(input, 10);
+        if (!Number.isFinite(monthUsed)) return;
+        await fetch("/api/admin/provider-ledger", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider: "resend", monthUsed }),
+        });
+      }
+      onRefresh?.();
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function runTest() {
     setTesting(true);
@@ -5147,7 +5261,10 @@ function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loadin
   if (balances.length === 0) {
     return null;
   }
-  const lowOrEmpty = balances.filter((b) => b.status === "low" || b.status === "empty");
+  const lowOrEmpty = balances.filter((b) => {
+    const s = effectiveBalance(b).status;
+    return s === "low" || s === "empty";
+  });
 
   return (
     <DashboardCard
@@ -5156,43 +5273,31 @@ function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loadin
       accent={lowOrEmpty.length > 0 ? "#EF4444" : "#10B981"}
     >
       <p className="text-[10px] text-zinc-500 mb-2 leading-snug">
-        Was du noch bei jedem Provider auf dem Konto hast. Anbieter ohne öffentlichen Guthaben-Abruf
-        zeigen „nur im Dashboard" — dafür der direkte Auflade-Link. Rote/gelbe Karten brauchen Top-Up.
+        Apify/DeepSeek/Tavily zeigen echtes API-Guthaben; Anthropic/Fal/Replicate/Resend einen lokal
+        mitgeführten Stand, der nach jeder Nutzung abgezogen wird — „Korrigieren", wenn du aufgeladen hast.
       </p>
       <div className="space-y-1.5">
         {balances.map((b) => {
-          const meta = {
-            ok: { color: "#10B981", label: "OK" },
-            low: { color: "#F59E0B", label: "Niedrig" },
-            empty: { color: "#EF4444", label: "Leer!" },
-            unknown: { color: "#71717A", label: "Unbekannt" },
-            "not-configured": { color: "#71717A", label: "Nicht konfiguriert" },
-          }[b.status];
-
-          // Anbieter ohne echten Balance-Endpoint: kein irreführendes "OK",
-          // sondern neutral auf das Dashboard verweisen.
-          const dashboardOnly = b.status === "ok" && !b.hasBalanceApi;
-          const color = dashboardOnly ? "#71717A" : meta.color;
-          const badge = dashboardOnly ? "Dashboard" : meta.label;
-          const detail = dashboardOnly
-            ? "Guthaben nur im Anbieter-Dashboard sichtbar →"
-            : b.raw
-              ? b.raw
-              : b.balanceEur !== undefined
-                ? `${b.balanceEur.toFixed(2)} € (${b.balanceUsd?.toFixed(2)} $) übrig`
-                : b.error || "—";
-
+          const eff = effectiveBalance(b);
           return (
             <div
               key={b.provider}
               className="flex items-center gap-2 px-2.5 py-2 rounded-lg border"
-              style={{ background: `${color}10`, borderColor: `${color}30` }}
+              style={{ background: `${eff.color}10`, borderColor: `${eff.color}30` }}
             >
-              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: color }} />
+              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: eff.color }} />
               <div className="flex-1 min-w-0">
                 <div className="text-[12px] font-semibold truncate">{b.label}</div>
-                <div className="text-[9.5px] text-zinc-400 truncate">{detail}</div>
+                <div className="text-[9.5px] text-zinc-400 truncate">{eff.detail}</div>
               </div>
+              {eff.canReconcile && (
+                <button
+                  onClick={() => reconcile(b)}
+                  className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded bg-white/[0.05] border border-white/10 text-zinc-300 hover:bg-white/[0.10] hover:text-white transition"
+                >
+                  Korrigieren
+                </button>
+              )}
               {b.billingUrl && b.configured && (
                 <a
                   href={b.billingUrl}
@@ -5205,9 +5310,9 @@ function ApiBalancesCard({ balances, loading }: { balances: ApiBalance[]; loadin
               )}
               <span
                 className="text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded shrink-0"
-                style={{ background: `${color}20`, color }}
+                style={{ background: `${eff.color}20`, color: eff.color }}
               >
-                {badge}
+                {eff.badge}
               </span>
             </div>
           );

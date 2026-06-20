@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
+import { anthropicCostUsd, recordUsd } from "@/lib/provider-usage";
 import { getSession } from "@/lib/session";
 import {
   getAllProdukte,
@@ -530,6 +531,7 @@ async function claudeJson(
     system,
     messages: [{ role: "user", content: user }],
   });
+  await recordUsd("anthropic", anthropicCostUsd(MODEL, msg.usage));
   const text = msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
     .map((b) => b.text)

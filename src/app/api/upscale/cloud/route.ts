@@ -32,6 +32,7 @@ import {
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
+import { recordUsd, REPLICATE_UPSCALE_USD } from "@/lib/provider-usage";
 
 // Erkennt Replicate/Real-ESRGAN-Fehler die auf Pixel-Overload zeigen.
 function isPixelOverloadError(msg: string): boolean {
@@ -350,6 +351,9 @@ export async function POST(req: Request) {
       console.error("[Upscale cloud] credit deduction failed:", err);
     }
   }
+
+  // Replicate-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
+  await recordUsd("replicate", REPLICATE_UPSCALE_USD);
 
   return NextResponse.json(
     { url: outputUrl, scale, mode, creditsRemaining },

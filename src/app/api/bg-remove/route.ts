@@ -28,6 +28,7 @@ import {
   getKundeProfile,
 } from "@/lib/sheets";
 import { callFal, FalError, type RembgResponse } from "@/lib/fal";
+import { recordUsd, FAL_BG_REMOVE_USD } from "@/lib/provider-usage";
 import { findBgPrecision } from "@/lib/ai-studio-scenes";
 
 export const runtime = "nodejs";
@@ -187,6 +188,9 @@ export async function POST(req: Request) {
       console.error("[bg-remove] credit deduction failed:", err);
     }
   }
+
+  // Fal-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
+  await recordUsd("fal", FAL_BG_REMOVE_USD);
 
   return NextResponse.json(
     { url: outputUrl, precision: precision.id, creditsRemaining },

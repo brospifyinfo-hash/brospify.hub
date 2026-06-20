@@ -30,6 +30,7 @@ import {
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
+import { recordUsd, FAL_AI_STUDIO_USD } from "@/lib/provider-usage";
 import {
   AI_STUDIO_SCENES,
   buildNegativePrompt,
@@ -240,6 +241,9 @@ export async function POST(req: Request) {
       console.error("[ai-studio] credit deduction failed:", err);
     }
   }
+
+  // Fal-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
+  await recordUsd("fal", FAL_AI_STUDIO_USD);
 
   return NextResponse.json(
     {

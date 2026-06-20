@@ -77,6 +77,14 @@ async function sendViaResend(args: SendArgs): Promise<SendResult> {
       console.error("[email] Resend error:", res.status, data);
       return { sent: false, error: data.message || `HTTP ${res.status}` };
     }
+    // Erfolgreich versendet → Resend-Zähler im lokalen Ledger hochsetzen
+    // (Monats-/Tageskontingent). Nie fatal für den Versand.
+    try {
+      const { recordResendSend } = await import("./provider-usage");
+      await recordResendSend();
+    } catch {
+      /* ignore */
+    }
     return { sent: true, id: data.id };
   } catch (err) {
     console.error("[email] Resend fetch failed:", err);

@@ -46,6 +46,7 @@ import {
   type ScoutProduct,
   type ScoutVideo,
 } from "@/lib/video-scout";
+import { anthropicCostUsd, recordUsd } from "@/lib/provider-usage";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -268,6 +269,7 @@ Antworte ausschliesslich als JSON: {"query":"..."}.`;
       system,
       messages: [{ role: "user", content: `Produkt-Titel: ${title}` }],
     });
+    await recordUsd("anthropic", anthropicCostUsd(MODEL, msg.usage));
     const text = msg.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
@@ -311,6 +313,7 @@ Antworte ausschliesslich als JSON: {"relevant_indices": [0, 2, ...]}.`;
       system,
       messages: [{ role: "user", content: user }],
     });
+    await recordUsd("anthropic", anthropicCostUsd(MODEL, msg.usage));
     const text = msg.content
       .filter((b): b is Anthropic.TextBlock => b.type === "text")
       .map((b) => b.text)
