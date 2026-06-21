@@ -105,11 +105,17 @@ const STATUS_DEAD = new Set(["cancelled", "canceled", "expired", "failed"]);
 // WICHTIG: Wenn das 21-€-Produkt eine eigene SKU hat (z. B.
 // "brospify-membership"), diese in SKU_TO_TIER (tiers-shared.ts)
 // ergänzen, dann greift es hier automatisch.
-const LEGACY_SUBSCRIPTION_SKU_KEYS = ["bronze", "silber", "silver", "gold"];
+// Breite Substring-Erkennung: matcht auch zusammengesetzte SKUs wie
+// „brospify-abo", „abo-21", „member-monthly". „pro"/„kauf" bleiben EXAKT
+// (via tierFromSku), damit „product"/„kauf…" nicht versehentlich greifen.
+const SUBSCRIPTION_SKU_SUBSTRINGS = [
+  "bronze", "silber", "silver", "gold",
+  "abo", "member", "mitglied", "mitgliedschaft", "membership",
+];
 function isSubscriptionSku(sku: string | undefined): boolean {
   const s = (sku || "").trim().toLowerCase();
   if (s === "") return false;
-  if (LEGACY_SUBSCRIPTION_SKU_KEYS.some((k) => s.includes(k))) return true;
+  if (SUBSCRIPTION_SKU_SUBSTRINGS.some((k) => s.includes(k))) return true;
   return tierFromSku(s) !== null;
 }
 
@@ -132,7 +138,9 @@ function lineItemMintsLicense(li: ShopifyLineItem): boolean {
   if (variantId && MEMBERSHIP_VARIANT_IDS.has(variantId)) return true;
   if (isSubscriptionSku(li.sku)) return true;
   const title = (li.title || "").toLowerCase();
-  if (/\bmembership\b|mitglied|mitgliedschaft/.test(title)) return true;
+  // Bewusst OHNE „brospify" — Credit-Packs heißen oft „Brospify Credits"
+  // und dürfen KEINE Lizenz auslösen.
+  if (/\bmembership\b|mitglied|mitgliedschaft|\babo\b|\bmember\b/.test(title)) return true;
   return false;
 }
 
@@ -218,14 +226,23 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
   // matching line item; its SKU is what gets stored in the sheet.
   const subItem = (payload.line_items || []).find(lineItemMintsLicense);
   if (!subItem) {
+    // WARN + volle Line-Item-Daten (SKU, Variant-ID, Titel), damit man im
+    // System-Log sofort sieht, WAS bestellt wurde und warum es nicht als
+    // Abo erkannt wurde → exakt das, was zum Matchen fehlt.
     void logSystemEvent({
-      level: "info",
+      level: "warn",
       actor: "shopify.webhook",
       action: "webhook.skipped_non_subscription",
       target: orderName,
       details: {
         shopDomain,
-        skus: (payload.line_items || []).map((li) => li.sku).filter(Boolean),
+        email,
+        lineItems: (payload.line_items || []).map((li) => ({
+          sku: li.sku || "",
+          variantId: li.variant_id != null ? String(li.variant_id) : "",
+          title: li.title || "",
+        })),
+        knownMembershipVariantIds: [...MEMBERSHIP_VARIANT_IDS],
       },
     });
     // 200 — a non-subscription order is a valid event, just not ours.
