@@ -7586,7 +7586,7 @@ function CreditsAdminView({
           <h3 className="text-[11px] font-bold uppercase tracking-wider text-zinc-300">Credit-Pakete im Shop</h3>
         </div>
         <p className="text-[10px] text-zinc-600 mb-2.5">
-          Preis &amp; Credit-Menge je Paket. Die Shopify-Variant-IDs bleiben fix im Code — nur Anzeige &amp; Menge werden überschrieben.
+          Preis &amp; Label je Paket anpassbar. Die Credit-Menge pro Paket und die Shopify-Variant-IDs sind fix im Code (die Gutschrift beim Kauf richtet sich danach) — daher hier nur zur Info.
         </p>
         <div className="space-y-2">
           {form.packages.map((p, idx) => {
@@ -7594,11 +7594,10 @@ function CreditsAdminView({
             return (
               <div key={p.id} className="grid grid-cols-2 sm:grid-cols-[80px_1fr_1fr_1fr_auto] gap-2 items-center rounded-lg bg-white/[0.02] border border-white/[0.06] p-2">
                 <div className="text-[11px] font-bold uppercase tracking-widest text-zinc-400">{p.id}</div>
-                <label className="block">
-                  <span className="text-[9px] uppercase tracking-widest text-zinc-500">Credits</span>
-                  <input type="number" min={0} value={p.credits} onChange={(e) => setPkg(idx, "credits", e.target.value)}
-                    className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1 text-xs tabular-nums outline-none focus:border-white/25" />
-                </label>
+                <div className="block">
+                  <span className="text-[9px] uppercase tracking-widest text-zinc-500">Credits (fix)</span>
+                  <div className="w-full px-2 py-1 text-xs tabular-nums text-zinc-300">{p.credits}</div>
+                </div>
                 <label className="block">
                   <span className="text-[9px] uppercase tracking-widest text-zinc-500">Preis €</span>
                   <input type="number" min={0} step="0.01" value={p.priceEur} onChange={(e) => setPkg(idx, "priceEur", e.target.value)}
