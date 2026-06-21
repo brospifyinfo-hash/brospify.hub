@@ -903,7 +903,7 @@ export async function upsertKundeByKey(
     return { action: "updated", rowIndex: existing.rowIndex };
   }
 
-  // CREATE — append a fresh row with the full column layout.
+  // CREATE — neue Zeile mit dem vollen Spaltenlayout.
   const row = [
     input.shopifyToken ?? "",
     key,
@@ -916,18 +916,52 @@ export async function upsertKundeByKey(
     input.sku ?? "",
     JSON.stringify(mergedProfile),
   ];
-  const res = await sheets.spreadsheets.values.append({
+
+  // WICHTIG: NICHT `values.append` benutzen — das hat in der Produktion
+  // still ge-no-opt (Erfolg gemeldet, aber keine Zeile geschrieben; seine
+  // „Tabellen-Erkennung" versagt bei vielen geleerten/gelöschten Zeilen,
+  // siehe `deleteKunde`, das Zellen nur leert statt Zeilen zu entfernen).
+  // Stattdessen: Zielzeile selbst über Spalte B (Lizenzschlüssel)
+  // bestimmen und per `update` deterministisch an genau diese Zeile
+  // schreiben. Danach gegenlesen — schlägt das fehl, werfen wir, damit
+  // der Aufrufer es als echten Fehler behandelt (kein stiller Verlust).
+  const colB =
+    (
+      await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID(),
+        range: "Kunden!B2:B",
+      })
+    ).data.values || [];
+  let targetRow = colB.length + 2; // hinter dem letzten Eintrag
+  for (let i = 0; i < colB.length; i += 1) {
+    const cell = (colB[i]?.[0] ?? "").toString().trim();
+    if (!cell) {
+      targetRow = i + 2; // erste freie (Schlüssel-leere) Zeile wiederverwenden
+      break;
+    }
+  }
+
+  await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: "Kunden!A:J",
+    range: `Kunden!A${targetRow}:J${targetRow}`,
     valueInputOption: "RAW",
-    insertDataOption: "INSERT_ROWS",
     requestBody: { values: [row] },
   });
-  // `updatedRange` looks like "Kunden!A42:J42" — pull the trailing row number.
-  const rangeStr = res.data.updates?.updatedRange || "";
-  const m = rangeStr.match(/!A(\d+):/);
-  const rowIndex = m ? Number(m[1]) : -1;
-  return { action: "created", rowIndex };
+
+  // Gegenlesen: der Schlüssel MUSS jetzt in der Zielzeile stehen.
+  const check =
+    (
+      await sheets.spreadsheets.values.get({
+        spreadsheetId: SHEET_ID(),
+        range: `Kunden!B${targetRow}`,
+      })
+    ).data.values?.[0]?.[0] ?? "";
+  if (String(check).trim() !== key) {
+    throw new Error(
+      `Sheet-Schreibvorgang nicht bestätigt: erwartete "${key}" in Kunden!B${targetRow}, gelesen "${String(check).trim()}". Tab-Name "Kunden" + Editor-Rechte des Service-Accounts (GOOGLE_SERVICE_ACCOUNT_EMAIL) prüfen.`,
+    );
+  }
+  return { action: "created", rowIndex: targetRow };
 }
 
 // Daily-cron helper. Walks all Kunden, finds rows whose
