@@ -22,6 +22,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { SITE_URL } from "@/lib/seo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -32,7 +33,10 @@ export async function GET() {
     return NextResponse.json({ error: "Nur für Admins." }, { status: 403 });
   }
 
-  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
+  // Kanonische Live-Domain für alle Copy-Paste-URLs (Webhook etc.):
+  // NEXT_PUBLIC_SITE_URL → Default www.brospifyhub.com, statt der
+  // wechselnden NEXT_PUBLIC_APP_URL (vercel.app).
+  const baseUrl = (SITE_URL || process.env.NEXT_PUBLIC_APP_URL || "").replace(/\/+$/, "");
   return NextResponse.json({
     baseUrl,
     apiKey: process.env.LICENSE_API_KEY || "",
