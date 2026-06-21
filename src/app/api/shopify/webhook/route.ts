@@ -155,13 +155,30 @@ export async function POST(req: NextRequest) {
   // Raw body needed for HMAC — req.json() would consume the stream.
   const rawBody = await req.text();
   const headerHmac = req.headers.get("x-shopify-hmac-sha256") || "";
-  if (!verifyHmac(rawBody, headerHmac, expected)) {
-    console.warn("[shopify/webhook] HMAC mismatch — request rejected");
-    return NextResponse.json({ ok: false, error: "Ungültige HMAC-Signatur." }, { status: 401 });
-  }
-
   const topic = req.headers.get("x-shopify-topic") || "";
   const shopDomain = req.headers.get("x-shopify-shop-domain") || "";
+
+  if (!verifyHmac(rawBody, headerHmac, expected)) {
+    console.warn("[shopify/webhook] HMAC mismatch — request rejected");
+    // SICHTBAR machen: ein HMAC-Fehler bedeutet fast immer, dass das im
+    // Hub gesetzte SHOPIFY_WEBHOOK_SECRET nicht (mehr) zum Signing-Secret
+    // des Shopify-Webhooks passt → Bestellungen kommen nie an, KEINE
+    // Lizenz, KEINE Mail. Wird nur für echte Shopify-Requests geloggt
+    // (x-shopify-topic gesetzt), damit Scraper die Logs nicht fluten.
+    if (topic) {
+      void logSystemEvent({
+        level: "error",
+        actor: "shopify.webhook",
+        action: "webhook.hmac_rejected",
+        target: topic,
+        details: {
+          shopDomain,
+          hint: "SHOPIFY_WEBHOOK_SECRET im Hub stimmt nicht mit dem Signing-Secret des Shopify-Webhooks überein. In Vercel das korrekte Secret setzen.",
+        },
+      });
+    }
+    return NextResponse.json({ ok: false, error: "Ungültige HMAC-Signatur." }, { status: 401 });
+  }
 
   let payload: unknown;
   try {
