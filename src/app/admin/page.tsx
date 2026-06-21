@@ -11,7 +11,7 @@ import {
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
   Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
-  Link2, AlertTriangle, Percent,
+  Link2, Percent,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -7680,133 +7680,6 @@ function CreditsAdminView({
   );
 }
 
-// ─── License cleanup (danger zone) ──────────────────────────────
-// Bulk-deletes every license whose key is NOT in the whitelist.
-// Two-step: „Vorschau" (dry-run count) → type LÖSCHEN → execute.
-function LicenseCleanupPanel({ onDone }: { onDone: () => void }) {
-  const [keep, setKeep] = useState("IBSAMK, ILDCÜA");
-  const [busy, setBusy] = useState(false);
-  const [preview, setPreview] = useState<{ wouldDelete: number; kept: number } | null>(null);
-  const [confirmText, setConfirmText] = useState("");
-  const [msg, setMsg] = useState("");
-  const [err, setErr] = useState(false);
-
-  function keepList(): string[] {
-    return keep
-      .split(/[,\n]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-  }
-
-  async function run(dryRun: boolean) {
-    const list = keepList();
-    if (list.length === 0) {
-      setErr(true);
-      setMsg("Die Whitelist darf nicht leer sein.");
-      return;
-    }
-    if (!dryRun && confirmText.trim().toUpperCase() !== "LÖSCHEN") {
-      setErr(true);
-      setMsg('Tippe „LÖSCHEN" zur Bestätigung.');
-      return;
-    }
-    setBusy(true);
-    setErr(false);
-    setMsg("");
-    try {
-      const res = await fetch("/api/admin/license/cleanup", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keep: list, dryRun }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setErr(true);
-        setMsg(data.error || "Fehler bei der Bereinigung.");
-      } else if (dryRun) {
-        setPreview({ wouldDelete: data.wouldDelete, kept: data.kept });
-        setMsg(
-          data.wouldDelete === 0
-            ? "Nichts zu löschen — alle vorhandenen Lizenzen stehen in der Whitelist."
-            : `Vorschau: ${data.wouldDelete} Lizenz(en) würden gelöscht, ${data.kept} behalten.`,
-        );
-      } else {
-        setPreview(null);
-        setConfirmText("");
-        setMsg(`✓ ${data.deleted} Lizenz(en) gelöscht, ${data.kept} behalten.`);
-        onDone();
-      }
-    } catch {
-      setErr(true);
-      setMsg("Verbindungsfehler.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <details className="group rounded-xl border border-red-500/25 bg-red-500/[0.04] overflow-hidden">
-      <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden px-4 py-3 flex items-center gap-2 hover:bg-red-500/[0.06] transition">
-        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-        <span className="text-sm font-semibold text-red-200">Lizenzen-Bereinigung (Gefahrenzone)</span>
-        <ChevronDown className="ml-auto w-4 h-4 text-red-400/70 transition-transform duration-200 group-open:rotate-180" />
-      </summary>
-      <div className="px-4 pb-4 pt-3 border-t border-red-500/10 space-y-3">
-        <p className="text-[11px] text-zinc-400 leading-relaxed">
-          Löscht <strong className="text-red-200">ALLE</strong> Lizenzen/Kunden, deren Schlüssel NICHT in der
-          Whitelist steht (Kommaliste, Groß-/Kleinschreibung egal). Diese Aktion ist endgültig — erst „Vorschau",
-          dann „LÖSCHEN" tippen.
-        </p>
-        <div>
-          <label className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">
-            Behalten (Whitelist)
-          </label>
-          <input
-            value={keep}
-            onChange={(e) => {
-              setKeep(e.target.value);
-              setPreview(null);
-            }}
-            className="mt-1 w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-white/25 transition"
-            placeholder="IBSAMK, ILDCÜA"
-          />
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => run(true)}
-            disabled={busy}
-            className="px-3 py-2 rounded-lg bg-white/[0.05] border border-white/10 text-xs font-semibold text-zinc-200 hover:bg-white/[0.09] transition disabled:opacity-50 flex items-center gap-1.5"
-          >
-            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Eye className="w-3.5 h-3.5" />}
-            Vorschau
-          </button>
-          {preview && preview.wouldDelete > 0 && (
-            <>
-              <input
-                value={confirmText}
-                onChange={(e) => setConfirmText(e.target.value)}
-                placeholder="LÖSCHEN"
-                className="bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-red-500/40 transition w-28"
-              />
-              <button
-                onClick={() => run(false)}
-                disabled={busy || confirmText.trim().toUpperCase() !== "LÖSCHEN"}
-                className="px-3 py-2 rounded-lg bg-red-500/15 border border-red-500/35 text-xs font-semibold text-red-200 hover:bg-red-500/25 transition disabled:opacity-40 flex items-center gap-1.5"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                {busy ? "Lösche…" : `${preview.wouldDelete} löschen`}
-              </button>
-            </>
-          )}
-        </div>
-        {msg && (
-          <div className={`text-[11px] ${err ? "text-red-300" : "text-zinc-300"}`}>{msg}</div>
-        )}
-      </div>
-    </details>
-  );
-}
-
 function LicensesView({
   customers,
   loading,
@@ -7973,9 +7846,6 @@ function LicensesView({
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
-      {/* Danger zone: bulk cleanup keeping a whitelist */}
-      <LicenseCleanupPanel onDone={onRefresh} />
-
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
