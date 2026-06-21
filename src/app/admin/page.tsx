@@ -7680,6 +7680,115 @@ function CreditsAdminView({
   );
 }
 
+// ─── Lizenz manuell ausstellen ──────────────────────────────────
+// Echte Lizenz (Key → Sheet-Zeile → Mail) ohne Shopify — zum sauberen
+// Nachtragen von Kunden, deren Bestell-Webhook nicht durchkam.
+function ManualResultRow({ ok, label, error }: { ok: boolean; label: string; error?: string }) {
+  return (
+    <div className="flex items-start gap-1.5 text-xs">
+      <span className={ok ? "text-[#95BF47]" : "text-red-400"}>{ok ? "✓" : "✗"}</span>
+      <span className="text-zinc-300">
+        {label}
+        {error ? <span className="text-red-400/90"> — {error}</span> : null}
+      </span>
+    </div>
+  );
+}
+
+function ManualLicensePanel({ onDone }: { onDone: () => void }) {
+  const [email, setEmail] = useState("");
+  const [orderNumber, setOrderNumber] = useState("");
+  const [sku, setSku] = useState("abo");
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{
+    ok?: boolean; key?: string; action?: string;
+    sheetWritten?: boolean; sheetError?: string;
+    emailSent?: boolean; emailError?: string; error?: string;
+  } | null>(null);
+
+  async function issue() {
+    if (busy || !email.includes("@")) return;
+    setBusy(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/admin/license/manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), orderNumber: orderNumber.trim(), sku: sku.trim() || "abo" }),
+      });
+      const data = await res.json();
+      setResult(data);
+      if (data?.sheetWritten) onDone();
+    } catch {
+      setResult({ error: "Verbindungsfehler." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="group rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.04] overflow-hidden">
+      <summary className="cursor-pointer select-none list-none [&::-webkit-details-marker]:hidden px-4 py-3 flex items-center gap-2 hover:bg-[#95BF47]/[0.06] transition">
+        <Plus className="w-4 h-4 text-[#95BF47] shrink-0" />
+        <span className="text-sm font-semibold text-zinc-200">Lizenz manuell ausstellen</span>
+        <span className="ml-auto text-[10px] text-zinc-500 hidden sm:inline">Key + Sheet + Mail · ohne Shopify</span>
+        <ChevronDown className="ml-2 w-4 h-4 text-zinc-500 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div className="px-4 pb-4 pt-3 border-t border-white/5 space-y-3">
+        <p className="text-[11px] text-zinc-400 leading-relaxed">
+          Trägt eine echte Lizenz ins Sheet ein und schickt die Mail mit dem Key — z. B. um Kunden nachzutragen,
+          deren Bestell-Webhook nicht durchkam. Existiert die E-Mail schon, wird die bestehende Lizenz reaktiviert
+          (kein Duplikat).
+        </p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          <label className="block">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">E-Mail *</span>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="kunde@example.com"
+              className="mt-1 w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-white/25 transition" />
+          </label>
+          <label className="block">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Bestellnummer (optional)</span>
+            <input value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="#1234 — leer = automatisch"
+              className="mt-1 w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-white/25 transition" />
+          </label>
+        </div>
+        <div className="flex items-end gap-2">
+          <label className="block w-24 shrink-0">
+            <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">SKU</span>
+            <input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="abo"
+              className="mt-1 w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-xs outline-none focus:border-white/25 transition" />
+          </label>
+          <button onClick={issue} disabled={busy || !email.includes("@")}
+            className="flex-1 px-4 py-2 rounded-lg text-xs font-semibold transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+            style={{ background: "#95BF47", color: "#0a1604" }}>
+            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+            Lizenz ausstellen + Mail
+          </button>
+        </div>
+
+        {result && (
+          <div className="rounded-lg bg-white/[0.02] border border-white/[0.06] p-3 space-y-1.5">
+            {result.error ? (
+              <div className="text-xs text-red-300 flex items-center gap-1.5"><AlertCircle className="w-3.5 h-3.5 shrink-0" /> {result.error}</div>
+            ) : (
+              <>
+                {result.key && (
+                  <div className="text-xs text-zinc-200">
+                    Key: <code className="font-mono text-[#95BF47] bg-black/40 px-2 py-0.5 rounded">{result.key}</code>
+                    {result.action ? <span className="text-zinc-500"> · {result.action === "renewed" ? "reaktiviert" : "neu angelegt"}</span> : null}
+                  </div>
+                )}
+                <ManualResultRow ok={!!result.sheetWritten} label="In Sheets eingetragen" error={result.sheetError} />
+                <ManualResultRow ok={!!result.emailSent} label="Mail gesendet" error={result.emailError} />
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 function LicensesView({
   customers,
   loading,
@@ -7846,6 +7955,9 @@ function LicensesView({
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+      {/* Lizenz manuell ausstellen / Kunden nachtragen */}
+      <ManualLicensePanel onDone={onRefresh} />
+
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
