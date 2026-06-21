@@ -348,6 +348,28 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     return NextResponse.json({ ok: false, error: "Sheet-Fehler." }, { status: 500 });
   }
 
+  // SICHERHEITSNETZ: sofort gegenlesen, dass die Zeile WIRKLICH im Sheet
+  // gelandet ist. Eine generierte, aber nicht hinterlegte Lizenz darf NIE
+  // passieren — lieber 500 (Shopify wiederholt die Bestellung) als eine
+  // Mail mit einem Key zu schicken, der im Hub/Sheet fehlt.
+  const persisted = await findKundeByKey(licenseKey);
+  if (!persisted) {
+    console.error("[shopify/webhook] Lizenz nach upsert NICHT auffindbar:", licenseKey);
+    void logSystemEvent({
+      level: "error",
+      actor: "shopify.webhook",
+      action: "webhook.persist_failed",
+      target: licenseKey,
+      details: {
+        shopDomain,
+        orderName,
+        email,
+        hint: "upsertKundeByKey warf keine Exception, aber die Zeile ist nicht im Sheet. Google-Sheets-Schreibrechte/Quota oder GOOGLE_SHEET_ID prüfen.",
+      },
+    });
+    return NextResponse.json({ ok: false, error: "Lizenz nicht persistiert." }, { status: 500 });
+  }
+
   // ── Monthly credits refill for the first paid order ────────────
   // Same logic as renewal but on the row we just upserted. We re-read
   // by license key so applySubscriptionRefill operates on the fresh
