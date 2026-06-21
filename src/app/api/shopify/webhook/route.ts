@@ -40,7 +40,7 @@ import {
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
 import { writeOrderMetafield } from "@/lib/shopify";
-import { tierFromSku, DEFAULT_TIERS, TIER_DISPLAY_LABEL } from "@/lib/tiers-shared";
+import { tierFromSku, DEFAULT_TIERS, TIER_DISPLAY_LABEL, type TierKey } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,7 +54,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 // ─── Shopify payload subsets (only the fields we read) ──────────
 interface ShopifyAddress { first_name?: string; last_name?: string }
-interface ShopifyLineItem { sku?: string; title?: string }
+interface ShopifyLineItem { sku?: string; title?: string; variant_id?: number | string | null; product_id?: number | string | null }
 interface ShopifyCustomer { id?: number; email?: string; first_name?: string; last_name?: string }
 interface ShopifyOrder {
   id?: number;
@@ -113,6 +113,38 @@ function isSubscriptionSku(sku: string | undefined): boolean {
   return tierFromSku(s) !== null;
 }
 
+// Variant-IDs der Abo-Produkte, abgeleitet aus den Tier-CTA-URLs
+// (…/cart/<variantId>:1). Das ist das ZUVERLÄSSIGSTE Signal: eine
+// Membership-Bestellung mintet damit IMMER eine Lizenz — selbst wenn
+// das Produkt (versehentlich) keine oder eine unbekannte SKU hat.
+const MEMBERSHIP_VARIANT_IDS = new Set(
+  DEFAULT_TIERS
+    .map((t) => (t.ctaUrl || "").match(/\/cart\/(\d+)/)?.[1] || "")
+    .filter(Boolean),
+);
+
+// Entscheidet pro Line-Item, ob es eine Lizenz auslöst. Reihenfolge nach
+// Verlässlichkeit: Variant-ID → SKU → Titel. Credit-Packs / Einmal-
+// produkte haben andere Variant-IDs und keinen Abo-Titel, bekommen also
+// KEINE Lizenz (die Credits laufen über den separaten credits-fulfill-Hook).
+function lineItemMintsLicense(li: ShopifyLineItem): boolean {
+  const variantId = li.variant_id != null ? String(li.variant_id) : "";
+  if (variantId && MEMBERSHIP_VARIANT_IDS.has(variantId)) return true;
+  if (isSubscriptionSku(li.sku)) return true;
+  const title = (li.title || "").toLowerCase();
+  if (/\bmembership\b|mitglied|mitgliedschaft/.test(title)) return true;
+  return false;
+}
+
+// Wir landen hier NUR für Abo-Bestellungen (Gate oben). Falls die SKU
+// nicht auf einen Tier mappt (leere/unbekannte SKU), fallen wir auf den
+// einzigen Membership-Tier zurück — so wird die monatliche Credit-
+// Gutschrift trotzdem ausgelöst.
+const FALLBACK_TIER_KEY: TierKey = DEFAULT_TIERS[0]?.key ?? "pro";
+function resolveTierKey(sku: string): TierKey {
+  return tierFromSku(sku) ?? FALLBACK_TIER_KEY;
+}
+
 export async function POST(req: NextRequest) {
   const expected = (process.env.SHOPIFY_WEBHOOK_SECRET || "").trim();
   if (!expected) {
@@ -167,7 +199,7 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
   // a licence. Orders for any other product — credits, one-off items —
   // also fire orders/paid but must be ignored here. We pick the first
   // matching line item; its SKU is what gets stored in the sheet.
-  const subItem = (payload.line_items || []).find((li) => isSubscriptionSku(li.sku));
+  const subItem = (payload.line_items || []).find(lineItemMintsLicense);
   if (!subItem) {
     void logSystemEvent({
       level: "info",
@@ -225,8 +257,8 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     // Allowance read from the live tier config (DEFAULT_TIERS or admin
     // override). Idempotent via orderId, so a Shopify retry never
     // double-credits the customer.
-    const tierKey = tierFromSku(sku);
-    const tierDef = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
+    const tierKey = resolveTierKey(sku);
+    const tierDef = DEFAULT_TIERS.find((t) => t.key === tierKey) || null;
     let refillAmount = 0;
     let refillStatus: "skipped" | "applied" | "duplicate" | "error" = "skipped";
     if (tierDef && orderName && tierDef.monthlyCreditAllowance > 0) {
@@ -239,7 +271,7 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
             fresh.profile,
             tierDef.monthlyCreditAllowance,
             orderName,
-            TIER_DISPLAY_LABEL[tierKey!],
+            TIER_DISPLAY_LABEL[tierKey],
           );
           refillAmount = tierDef.monthlyCreditAllowance;
           refillStatus = refill.alreadyFulfilled ? "duplicate" : "applied";
@@ -303,8 +335,8 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
   // Same logic as renewal but on the row we just upserted. We re-read
   // by license key so applySubscriptionRefill operates on the fresh
   // profile that includes the just-set tier/sku from upsertKundeByKey.
-  const tierKey = tierFromSku(sku);
-  const tierDef = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
+  const tierKey = resolveTierKey(sku);
+  const tierDef = DEFAULT_TIERS.find((t) => t.key === tierKey) || null;
   let refillAmount = 0;
   let refillStatus: "skipped" | "applied" | "duplicate" | "error" = "skipped";
   if (tierDef && orderName && tierDef.monthlyCreditAllowance > 0) {
@@ -316,7 +348,7 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
           fresh.profile,
           tierDef.monthlyCreditAllowance,
           orderName,
-          TIER_DISPLAY_LABEL[tierKey!],
+          TIER_DISPLAY_LABEL[tierKey],
         );
         refillAmount = tierDef.monthlyCreditAllowance;
         refillStatus = refill.alreadyFulfilled ? "duplicate" : "applied";
