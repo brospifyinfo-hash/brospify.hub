@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -18,8 +18,6 @@ import {
   ArrowRight,
   Check,
   ChevronDown,
-  Zap,
-  Image as ImageIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { BrandLogo, useBranding } from "@/lib/branding";
@@ -60,9 +58,18 @@ function LoginContent() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [aboImageUrl, setAboImageUrl] = useState("");
+  // Der „Abo abschließen"-Bereich ist standardmäßig versteckt. Er taucht
+  // nur auf, wenn der Login 3× scheitert oder man „Hol dir Zugang" klickt.
+  const [showAbo, setShowAbo] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const aboRef = useRef<HTMLElement>(null);
   const router = useRouter();
   const params = useSearchParams();
   const urlError = params.get("error");
+
+  useEffect(() => {
+    if (showAbo) aboRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [showAbo]);
 
   // Admin-Abo-Bild laden (öffentlich, ohne Session).
   useEffect(() => {
@@ -94,7 +101,13 @@ function LoginContent() {
         body: JSON.stringify({ lizenzschluessel: key }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(data.error); return; }
+      if (!res.ok) {
+        setError(data.error);
+        const next = failedAttempts + 1;
+        setFailedAttempts(next);
+        if (next >= 3) setShowAbo(true);
+        return;
+      }
       router.push(data.redirect);
     } catch {
       setError(t.login.errorConnection);
@@ -124,28 +137,26 @@ function LoginContent() {
       />
 
       <main className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 py-10 lg:py-16">
-        {/* Hero — crawlbarer H1 + Keyword-Text für SEO */}
-        <header className="text-center mb-9 lg:mb-12">
+        {/* Hero — Logo bleibt der visuelle Anker. Die SEO-Überschrift
+            ist bewusst unauffällig (sr-only), bleibt aber für Google im
+            DOM. „Brospify" steckt zusätzlich sichtbar im Feature-Block. */}
+        <header className="text-center mb-8 lg:mb-10">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.5, type: "spring" }}
-            className="inline-flex items-center justify-center mb-4"
+            className="inline-flex items-center justify-center mb-3"
           >
             <BrandLogo size="xl" />
           </motion.div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-            {brand}
-          </h1>
-          <p className="mt-3 text-[15px] text-white/55 max-w-2xl mx-auto leading-relaxed">
-            Das All-in-One <strong className="text-white/80">Dropshipping-Dashboard von Brospify</strong> —
-            tägliche Winning-Product-Drops, KI-Produktfotos, Background Remover, Video Scout & Coaching.
-            Melde dich an oder sichere dir die Membership.
+          <h1 className="sr-only">{brand} – Dropshipping Dashboard & KI-Tools von Brospify</h1>
+          <p className="mt-1 text-[12.5px] text-white/35 max-w-sm mx-auto leading-relaxed">
+            Melde dich an, um zu deinem Dashboard zu gelangen.
           </p>
         </header>
 
-        <div className="grid lg:grid-cols-2 gap-5 lg:gap-7 items-start">
-          {/* ── LINKS: Login + Hilfe ─────────────────────────── */}
+        <div className="mx-auto max-w-md space-y-5">
+          {/* Login + Hilfe + „Hol dir Zugang" */}
           <motion.section
             initial={{ opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
@@ -258,39 +269,48 @@ function LoginContent() {
                   )}
                 </AnimatePresence>
               </div>
+
+              {/* „Hol dir Zugang" — blendet den Abo-Bereich ein */}
+              {!showAbo && (
+                <button
+                  onClick={() => setShowAbo(true)}
+                  className="w-full text-center text-[12px] text-white/40 hover:text-white transition"
+                >
+                  Noch keinen Zugang?{" "}
+                  <span className="font-semibold" style={{ color: ACCENT }}>Hol dir Zugang →</span>
+                </button>
+              )}
             </div>
           </motion.section>
 
-          {/* ── RECHTS: Abo abschließen ──────────────────────── */}
-          <motion.section
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.08 }}
-            aria-label="Membership abschließen"
-          >
-            <AboSection aboImageUrl={aboImageUrl} />
-          </motion.section>
+          {/* Abo — nur nach 3 Fehlversuchen oder Klick auf „Hol dir Zugang" */}
+          <AnimatePresence initial={false}>
+            {showAbo && (
+              <motion.section
+                ref={aboRef}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+                aria-label="Membership abschließen"
+              >
+                <AboSection aboImageUrl={aboImageUrl} />
+              </motion.section>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* SEO-Content: Feature-Grid (crawlbar, Keyword-reich) */}
-        <section className="mt-12 lg:mt-16" aria-label="Funktionen">
-          <h2 className="text-center text-[12px] uppercase tracking-[0.2em] font-semibold text-white/40 mb-5">
-            Was du mit Brospify bekommst
-          </h2>
-          <div className="grid sm:grid-cols-3 gap-3">
-            <FeatureCard icon={Zap} title="Winning Products finden">
-              Täglicher Produkt-Drop mit Trend-, Viralitäts- und Margen-Score — direkt umsetzbar.
-            </FeatureCard>
-            <FeatureCard icon={ImageIcon} title="KI-Produktfotos">
-              AI Studio setzt dein Produkt in atemberaubende Szenen; der Background Remover stellt es sauber frei.
-            </FeatureCard>
-            <FeatureCard icon={Sparkles} title="Mehr Tools">
-              Video Scout, Image Upscaler, AI E-Mail-Generator, Mediathek & Coaching — alles im Brospify Hub.
-            </FeatureCard>
-          </div>
+        {/* SEO-Content — bewusst dezent gehalten (klein, gedämpft), aber
+            mit allen relevanten „Brospify"-Keywords für die Indexierung. */}
+        <section className="mt-10 max-w-2xl mx-auto text-center" aria-label="Über Brospify Hub">
+          <p className="text-[11.5px] text-white/30 leading-relaxed">
+            <strong className="text-white/45 font-medium">Brospify Hub</strong> ist das All-in-One
+            Dropshipping-Dashboard von Brospify: tägliche Winning-Product-Drops, KI-Produktfotos (AI Studio),
+            Background Remover, Video Scout, Image Upscaler, AI E-Mail-Generator, Mediathek &amp; Coaching —
+            alles an einem Ort.
+          </p>
         </section>
 
-        <footer className="text-center text-white/25 text-xs mt-12">
+        <footer className="text-center text-white/25 text-xs mt-8">
           &copy; {new Date().getFullYear()} {brand}. {t.login.footer}
         </footer>
       </main>
@@ -330,7 +350,7 @@ function AboSection({ aboImageUrl }: { aboImageUrl: string }) {
           style={{ background: ACCENT, color: "#0a1604" }}
         >
           <Sparkles className="w-3 h-3" />
-          {MEMBERSHIP.trialDays > 0 ? `${MEMBERSHIP.trialDays} Tage gratis testen` : "Jetzt starten"}
+          Voller Zugang
         </div>
         <div className="absolute bottom-3 left-4 right-4">
           <div className="text-[11px] uppercase tracking-[0.16em] text-white/70 font-semibold">
@@ -347,11 +367,6 @@ function AboSection({ aboImageUrl }: { aboImageUrl: string }) {
             {MEMBERSHIP.priceMonthlyEur} €
           </span>
           <span className="text-[13px] text-white/45">/ Monat</span>
-          {MEMBERSHIP.trialDays > 0 && (
-            <span className="ml-auto text-[11px] text-[#bce078] font-semibold">
-              {MEMBERSHIP.trialDays} Tage gratis
-            </span>
-          )}
         </div>
 
         <ul className="space-y-2">
@@ -508,27 +523,3 @@ function HelpForm() {
   );
 }
 
-// ─── Feature card (SEO content) ──────────────────────────────────
-
-function FeatureCard({
-  icon: Icon,
-  title,
-  children,
-}: {
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-4">
-      <div
-        className="w-9 h-9 rounded-lg flex items-center justify-center mb-2.5"
-        style={{ background: "rgba(149,191,71,0.14)", border: "1px solid rgba(149,191,71,0.25)" }}
-      >
-        <Icon className="w-[18px] h-[18px]" style={{ color: ACCENT }} />
-      </div>
-      <h3 className="text-[14px] font-semibold text-white">{title}</h3>
-      <p className="text-[12.5px] text-white/50 mt-1 leading-relaxed">{children}</p>
-    </div>
-  );
-}
