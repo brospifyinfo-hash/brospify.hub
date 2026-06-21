@@ -735,9 +735,20 @@ export async function deleteKunde(rowIndex: number): Promise<void> {
   });
 }
 
+// Toleranter Lizenzschlüssel-Vergleich: NFKC + trim + lowercase —
+// exakt wie /api/license/validate. So scheitert das Hub-Login NICHT an
+// Groß-/Kleinschreibung, Leerzeichen oder Unicode-Varianten, wenn der
+// Kunde den Schlüssel aus der Mail abtippt. Generierte Keys sind alle
+// Großbuchstaben+Ziffern, daher gibt es keine case-only-Kollisionen.
+function normLicenseKey(s: string): string {
+  return (s || "").normalize("NFKC").trim().toLowerCase();
+}
+
 export async function findKundeByKey(key: string): Promise<Kunde | null> {
+  const wanted = normLicenseKey(key);
+  if (!wanted) return null;
   const kunden = await getAllKunden();
-  return kunden.find((k) => k.lizenzschluessel === key) || null;
+  return kunden.find((k) => normLicenseKey(k.lizenzschluessel) === wanted) || null;
 }
 
 // Match a customer by email — webhook flow uses this to figure out
