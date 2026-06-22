@@ -41,7 +41,6 @@ const ENV_BLOCKERS: { key: string; label: string }[] = [
   { key: "SHOPIFY_WEBHOOK_SECRET", label: "Shopify Webhook Secret (Bestellung→Lizenz)" },
   { key: "RESEND_API_KEY", label: "Resend API Key (Lizenz-Mail)" },
   { key: "RESEND_FROM_EMAIL", label: "Resend Absender (Kunde)" },
-  { key: "LICENSE_WRITE_KEY", label: "License WRITE Key (Ausstellung)" },
   { key: "LICENSE_API_KEY", label: "License READ Key (Validierung/Tools)" },
   { key: "NEXT_PUBLIC_SITE_URL", label: "Domain (NEXT_PUBLIC_SITE_URL — Lizenz-Mail-Link)" },
 ];
@@ -56,6 +55,9 @@ const ENV_TOOLS: { key: string; label: string }[] = [
   { key: "RESEND_ADMIN_FROM_EMAIL", label: "Resend Absender (Admin-Alerts)" },
   { key: "CRON_SECRET", label: "Cron-Secret (Guthaben-Alerts, Lizenz-Ablauf)" },
   { key: "NEXT_PUBLIC_SHOPIFY_CUSTOMER_PORTAL_URL", label: "Shopify-Kundenportal (Kündigung)" },
+  // Nur nötig, wenn die Ausstellung über Shopify Flow / Automation läuft.
+  // Beim orders/paid-Webhook (SHOPIFY_WEBHOOK_SECRET) NICHT erforderlich.
+  { key: "LICENSE_WRITE_KEY", label: "License WRITE Key (nur für Shopify-Flow-Ausstellung)" },
 ];
 
 const PRODUCT_MIN = 30;
