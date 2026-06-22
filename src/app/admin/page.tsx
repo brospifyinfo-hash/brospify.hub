@@ -11,7 +11,7 @@ import {
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
   Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
-  Link2, Percent, Star,
+  Link2, Percent, Star, Rocket, ListChecks,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -492,7 +492,7 @@ export default function AdminPage() {
   const [aiKategorie, setAiKategorie] = useState("");
   const [urlImportUrl, setUrlImportUrl] = useState("");
   const [urlImporting, setUrlImporting] = useState(false);
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs" | "survey";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs" | "survey" | "launch";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -2121,6 +2121,12 @@ export default function AdminPage() {
             {activeTab === "survey" && (
               <AdminErrorBoundary label="Umfragen">
                 <SurveyAdminView />
+              </AdminErrorBoundary>
+            )}
+
+            {activeTab === "launch" && (
+              <AdminErrorBoundary label="Launch-Check">
+                <LaunchCheckView />
               </AdminErrorBoundary>
             )}
 
@@ -4567,7 +4573,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs" | "survey";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs" | "survey" | "launch";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -4576,6 +4582,7 @@ const SIDEBAR_GROUPS: {
   {
     label: "Analyse",
     items: [
+      { key: "launch", label: "Launch-Check", icon: Rocket, color: "#EC4899" },
       { key: "dashboard", label: "Dashboard", icon: BarChart3, color: "#10B981" },
       { key: "stats", label: "Statistiken", icon: TrendingUp, color: "#06B6D4" },
       { key: "activity", label: "Aktivität", icon: Zap, color: "#F59E0B" },
@@ -7105,6 +7112,143 @@ function SurveyAdminView() {
           </DashboardCard>
         </>
       )}
+    </div>
+  );
+}
+
+// ─── Launch-Check (Tab "launch") ────────────────────────────────
+interface LaunchCheckItem { label: string; status: "ok" | "warn" | "fail"; severity: "blocker" | "warn"; detail?: string; fixUrl?: string }
+interface LaunchCheckGroup { title: string; items: LaunchCheckItem[] }
+interface LaunchCheckData { verdict: "go" | "caution" | "nogo"; blockerFails: number; warns: number; groups: LaunchCheckGroup[]; generatedAt: string }
+
+const MANUAL_CHECKLIST = [
+  "Echte Test-Bestellung → Lizenz-Mail → Login → 1.500 Credits (End-to-End, fremde E-Mail)",
+  "AI-API-Konten wirklich BEZAHLT + Auto-Recharge aktiv (nicht nur Key gesetzt) — v.a. Apify",
+  "Rechtstexte live: Impressum, Datenschutz, AGB, Widerruf — und Kündigung getestet",
+  "Domain + SSL ok, NEXT_PUBLIC_SITE_URL = echte Live-Domain (Lizenz-Mail-Link prüfen)",
+  "Mobil getestet (die meisten Kunden kommen übers Handy)",
+  "Produkt-Puffer aufgebaut (Drop zieht ohne Doppel — sonst sind Kunden schnell leer)",
+  "Vercel-Plan/Google-Sheets-Quota für die erwartete Last geprüft (ggf. Soft-Launch)",
+];
+
+function LaunchCheckView() {
+  const [data, setData] = useState<LaunchCheckData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [done, setDone] = useState<Record<number, boolean>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/launch-check", { cache: "no-store" });
+      const d = await res.json();
+      if (!res.ok) setError(d.error || "Konnte nicht laden.");
+      else setData(d);
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const verdictMeta = {
+    go: { label: "BEREIT ZUM LAUNCH", color: "#10B981", bg: "rgba(16,185,129,0.10)", border: "rgba(16,185,129,0.30)", icon: Check },
+    caution: { label: "FAST BEREIT — Warnungen prüfen", color: "#F59E0B", bg: "rgba(245,158,11,0.10)", border: "rgba(245,158,11,0.30)", icon: AlertCircle },
+    nogo: { label: "NOCH NICHT BEREIT — Blocker offen", color: "#EF4444", bg: "rgba(239,68,68,0.10)", border: "rgba(239,68,68,0.30)", icon: X },
+  } as const;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-zinc-500">Automatische Prüfung der Launch-Blocker · manuelle Schritte unten.</p>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          Neu prüfen
+        </button>
+      </div>
+
+      {error && <div className="text-[12px] text-red-300">{error}</div>}
+
+      {loading && !data ? (
+        <div className="h-24 rounded-2xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />
+      ) : data ? (
+        <>
+          {/* Verdikt */}
+          {(() => {
+            const v = verdictMeta[data.verdict];
+            const VIcon = v.icon;
+            return (
+              <div className="rounded-2xl border p-4 flex items-center gap-3" style={{ background: v.bg, borderColor: v.border }}>
+                <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: `${v.color}20`, border: `1px solid ${v.color}40` }}>
+                  <Rocket className="w-5 h-5" style={{ color: v.color }} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="text-[15px] font-black tracking-tight flex items-center gap-2" style={{ color: v.color }}>
+                    <VIcon className="w-4 h-4" /> {v.label}
+                  </div>
+                  <div className="text-[11px] text-zinc-400 mt-0.5">
+                    {data.blockerFails} Blocker offen · {data.warns} Warnung(en)
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Auto-Checks */}
+          {data.groups.map((g) => (
+            <DashboardCard key={g.title} title={g.title} icon={ListChecks} accent="#EC4899">
+              <div className="space-y-1">
+                {g.items.map((it, i) => {
+                  const c = it.status === "ok" ? "#10B981" : it.status === "warn" ? "#F59E0B" : "#EF4444";
+                  const Icon = it.status === "ok" ? Check : it.status === "warn" ? AlertCircle : X;
+                  return (
+                    <div key={i} className="flex items-center gap-2.5 px-2 py-1.5 rounded-md bg-white/[0.02] border border-white/[0.04]">
+                      <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: c }} />
+                      <span className="text-[12px] text-zinc-200 flex-1 min-w-0 truncate">
+                        {it.label}
+                        {it.severity === "blocker" && <span className="ml-1.5 text-[9px] uppercase tracking-wider text-red-400/80">Blocker</span>}
+                      </span>
+                      {it.detail && <span className="text-[10.5px] text-zinc-500 shrink-0">{it.detail}</span>}
+                      {it.fixUrl && it.status !== "ok" && (
+                        <a href={it.fixUrl} target="_blank" rel="noopener noreferrer" className="text-[10.5px] text-pink-300 hover:text-pink-200 shrink-0">aufladen ↗</a>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </DashboardCard>
+          ))}
+
+          {/* Manuelle Checkliste */}
+          <DashboardCard title="Manuell prüfen (nur du kannst das)" icon={ListChecks} accent="#06B6D4">
+            <div className="space-y-1.5">
+              {MANUAL_CHECKLIST.map((t, i) => (
+                <button
+                  key={i}
+                  onClick={() => setDone((d) => ({ ...d, [i]: !d[i] }))}
+                  className="w-full flex items-start gap-2.5 px-2 py-1.5 rounded-md hover:bg-white/[0.03] transition text-left"
+                >
+                  <span className={`mt-0.5 w-4 h-4 rounded border flex items-center justify-center shrink-0 ${done[i] ? "bg-[#95BF47] border-[#95BF47]" : "border-white/25"}`}>
+                    {done[i] && <Check className="w-2.5 h-2.5 text-black" strokeWidth={3} />}
+                  </span>
+                  <span className={`text-[12px] leading-snug ${done[i] ? "text-zinc-500 line-through" : "text-zinc-200"}`}>{t}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-zinc-600 mt-2">Haken sind nur eine Merkhilfe (nicht gespeichert).</p>
+          </DashboardCard>
+
+          <p className="text-[10px] text-zinc-600 text-right">
+            Geprüft: {new Date(data.generatedAt).toLocaleTimeString("de-DE")}
+          </p>
+        </>
+      ) : null}
     </div>
   );
 }
