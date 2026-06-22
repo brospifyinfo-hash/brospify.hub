@@ -22,9 +22,9 @@ export const CREDIT_COSTS = {
   // YouTube Shorts. Preis richtet sich nach der angeforderten Menge
   // (1/2/3). Höher als die reinen Text-Tools, weil pro Suche mehrere
   // Apify-Runs (ein Run je Plattform) echtes Geld kosten.
-  VIDEO_SCOUT_1: 20,
-  VIDEO_SCOUT_2: 35,
-  VIDEO_SCOUT_3: 50,
+  VIDEO_SCOUT_1: 40,
+  VIDEO_SCOUT_2: 70,
+  VIDEO_SCOUT_3: 95,
 } as const;
 
 // Welcome grant — every customer gets this once, automatically, the
