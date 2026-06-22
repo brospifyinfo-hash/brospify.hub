@@ -19,6 +19,8 @@ import {
   Eye,
   Heart,
   Music2,
+  Clapperboard,
+  MonitorPlay,
   Play,
   Gift,
   Check,
@@ -52,12 +54,13 @@ export default function VideoScoutPage() {
   const [productsError, setProductsError] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [count, setCount] = useState<VideoCount>(3);
+  const [count, setCount] = useState<VideoCount>(1);
   const [running, setRunning] = useState(false);
   const [locked, setLocked] = useState(false);
   const [error, setError] = useState("");
   const [noResults, setNoResults] = useState(false);
-  const [lastRefund, setLastRefund] = useState<{ count: number; total: number } | null>(null);
+  const [retryMsg, setRetryMsg] = useState("");
+  const [lastHalfPrice, setLastHalfPrice] = useState<{ saved: number; weak: number } | null>(null);
 
   const cost = VIDEO_SCOUT_TIERS.find((t) => t.count === count)!.cost;
   const cannotAfford = !credits.loading && credits.balance < cost;
@@ -114,14 +117,16 @@ export default function VideoScoutPage() {
     setPickerOpen(false);
     setError("");
     setNoResults(false);
-    setLastRefund(null);
+    setRetryMsg("");
+    setLastHalfPrice(null);
   }
 
   const run = useCallback(async () => {
     if (!selectedId || running || cannotAfford) return;
     setError("");
     setNoResults(false);
-    setLastRefund(null);
+    setRetryMsg("");
+    setLastHalfPrice(null);
     setRunning(true);
     const pid = selectedId;
     try {
@@ -145,6 +150,10 @@ export default function VideoScoutPage() {
         if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
         return;
       }
+      if (data?.retryLater) {
+        setRetryMsg(data?.error || "Bitte versuche es später erneut.");
+        return;
+      }
       if (data?.noResults) {
         setNoResults(true);
         return;
@@ -163,8 +172,8 @@ export default function VideoScoutPage() {
         const seen = new Set(existing.map((v) => v.url));
         return { ...m, [pid]: [...fresh.filter((v) => !seen.has(v.url)), ...existing] };
       });
-      if (typeof data.credits_refunded === "number" && data.credits_refunded > 0) {
-        setLastRefund({ count: data.refunded_count ?? 0, total: data.credits_refunded });
+      if (data.half_price && typeof data.credits_saved === "number" && data.credits_saved > 0) {
+        setLastHalfPrice({ saved: data.credits_saved, weak: data.weak_count ?? 0 });
       }
       if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
     } catch {
@@ -192,8 +201,8 @@ export default function VideoScoutPage() {
               Video Scout
             </h1>
             <p className="mt-1.5 sm:mt-2.5 text-[12px] sm:text-[14px] text-zinc-400 leading-relaxed max-w-md mx-auto">
-              Wähle ein gezogenes Produkt — der Scout findet dir TikTok-Videos dazu, die view-stärksten
-              (10k+) zuerst.
+              Wähle ein gezogenes Produkt — der Scout durchsucht TikTok, Instagram Reels & YouTube
+              Shorts und liefert die view-stärksten Videos (10k+) zuerst.
             </p>
           </header>
 
@@ -313,7 +322,7 @@ export default function VideoScoutPage() {
                         )}
                       </button>
                       <p className="mt-2 text-center text-[10px] text-zinc-600 leading-snug">
-                        Videos unter {VIRAL_LABEL} Views werden dir gutgeschrieben · kein Video doppelt
+                        Ist ein Video unter {VIRAL_LABEL} Views dabei, zahlst du nur die Hälfte · kein Video doppelt
                       </p>
 
                       {cannotAfford && (
@@ -338,7 +347,7 @@ export default function VideoScoutPage() {
               {selectedProduct && (
                 <section>
                   <AnimatePresence>
-                    {lastRefund && lastRefund.total > 0 && (
+                    {lastHalfPrice && lastHalfPrice.saved > 0 && (
                       <motion.div
                         initial={{ opacity: 0, y: -6 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -347,13 +356,26 @@ export default function VideoScoutPage() {
                       >
                         <Coins className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
                         <p className="text-[12px] text-amber-100/90 leading-snug">
-                          <span className="font-semibold">{lastRefund.total} Credits gutgeschrieben.</span>{" "}
-                          {lastRefund.count} {lastRefund.count === 1 ? "Video hatte" : "Videos hatten"} unter{" "}
-                          {VIRAL_LABEL} Views — du zahlst nur für die view-stärkeren.
+                          <span className="font-semibold">Nur halber Preis — {lastHalfPrice.saved} Credits gespart.</span>{" "}
+                          {lastHalfPrice.weak === 1 ? "Ein Video lag" : `${lastHalfPrice.weak} Videos lagen`} unter{" "}
+                          {VIRAL_LABEL} Views, darum ziehen wir nur die Hälfte ab.
                         </p>
                       </motion.div>
                     )}
                   </AnimatePresence>
+
+                  {retryMsg && !running && (
+                    <div className="mb-3 rounded-2xl sm:rounded-3xl border border-amber-500/20 bg-amber-500/[0.06] px-5 py-7 text-center">
+                      <div className="w-12 h-12 rounded-2xl bg-amber-500/[0.08] border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
+                        <AlertCircle className="w-5 h-5 text-amber-300" />
+                      </div>
+                      <p className="text-[14px] font-semibold text-white">Bitte später erneut versuchen</p>
+                      <p className="mt-1.5 text-[12px] text-zinc-400 max-w-xs mx-auto leading-snug">
+                        {retryMsg} Es wurden{" "}
+                        <span className="text-zinc-200 font-medium">keine Credits abgezogen</span>.
+                      </p>
+                    </div>
+                  )}
 
                   {noResults && !running && (
                     <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-white/[0.02] px-5 py-7 text-center">
@@ -494,8 +516,19 @@ function ProductThumb({ src, alt }: { src: string; alt: string }) {
 
 // ─── Video-Karte ─────────────────────────────────────────────────
 
+const PLATFORM_META: Record<
+  ScoutVideo["platform"],
+  { label: string; Icon: typeof Music2; color: string }
+> = {
+  TikTok: { label: "TikTok", Icon: Music2, color: "text-pink-300" },
+  Instagram: { label: "Reels", Icon: Clapperboard, color: "text-fuchsia-300" },
+  YouTube: { label: "Shorts", Icon: MonitorPlay, color: "text-red-400" },
+};
+
 function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
   const [broken, setBroken] = useState(false);
+  const plat = PLATFORM_META[video.platform] ?? PLATFORM_META.TikTok;
+  const PlatIcon = plat.Icon;
   return (
     <a
       href={video.url}
@@ -516,7 +549,7 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <Music2 className="w-7 h-7 text-zinc-700" />
+            <PlatIcon className="w-7 h-7 text-zinc-700" />
           </div>
         )}
 
@@ -524,7 +557,7 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
           {rank}
         </div>
         <div className="absolute top-1.5 right-1.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-black/70 backdrop-blur text-[9px] font-semibold text-white">
-          <Music2 className="w-2 h-2 text-pink-300" /> TikTok
+          <PlatIcon className={`w-2 h-2 ${plat.color}`} /> {plat.label}
         </div>
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
           <div className="w-11 h-11 rounded-full bg-black/50 backdrop-blur flex items-center justify-center">
@@ -550,7 +583,7 @@ function VideoCard({ video, rank }: { video: ScoutVideo; rank: number }) {
         {video.refunded ? (
           <span className="mt-1.5 inline-flex items-center gap-1 self-start px-1.5 py-0.5 rounded-md bg-amber-500/12 border border-amber-500/25 text-[9px] font-semibold text-amber-200">
             <Coins className="w-2.5 h-2.5" />
-            {video.refundAmount ? `${video.refundAmount} 🪙 zurück` : "gutgeschrieben"}
+            unter {VIRAL_LABEL} · halber Preis
           </span>
         ) : (
           <span className="mt-1.5 inline-flex items-center gap-1 text-[10px] font-medium text-zinc-400 group-hover:text-[#95BF47] transition">

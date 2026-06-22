@@ -17,13 +17,14 @@ export const CREDIT_COSTS = {
   // Zufalls-Generator ("Produkt-Drop"): jeder Zug zieht EIN zufälliges
   // Produkt, das der Account noch nie gezogen hat. Kein Doppel-Ziehen.
   CHARTS_DRAW: 50,
-  // Video Scout ("Premium Search"): findet per Apify-TikTok-
-  // Scraper echte virale Videos zu einem Produkt. Preis richtet sich
-  // nach der angeforderten Menge (3/6/9). Höher als die reinen Text-
-  // Tools, weil jeder Apify-Run echtes Geld kostet.
-  VIDEO_SCOUT_3: 40,
-  VIDEO_SCOUT_6: 70,
-  VIDEO_SCOUT_9: 90,
+  // Video Scout ("Premium Search"): findet per Apify-Scraper echte
+  // Videos zu einem Produkt — quer über TikTok, Instagram Reels und
+  // YouTube Shorts. Preis richtet sich nach der angeforderten Menge
+  // (1/2/3). Höher als die reinen Text-Tools, weil pro Suche mehrere
+  // Apify-Runs (ein Run je Plattform) echtes Geld kosten.
+  VIDEO_SCOUT_1: 20,
+  VIDEO_SCOUT_2: 35,
+  VIDEO_SCOUT_3: 50,
 } as const;
 
 // Welcome grant — every customer gets this once, automatically, the

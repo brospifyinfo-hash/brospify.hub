@@ -39,9 +39,9 @@ export const TOOL_PRICING_META: readonly ToolPricingMeta[] = [
   { key: "BG_REMOVE", label: "Background Remover", hint: "Fal BiRefNet · pro Bild", defaultApiCostEur: 0.037, group: "ai" },
   { key: "UPSCALE_IMAGE", label: "Image Upscaler", hint: "Replicate Real-ESRGAN", defaultApiCostEur: 0.010, group: "ai" },
   { key: "EMAIL_GENERATE", label: "E-Mail-Generator", hint: "DeepSeek-chat", defaultApiCostEur: 0.004, group: "ai" },
-  { key: "VIDEO_SCOUT_3", label: "Video Scout · 3 Videos", hint: "Apify TikTok + Claude", defaultApiCostEur: 0.040, group: "ai" },
-  { key: "VIDEO_SCOUT_6", label: "Video Scout · 6 Videos", hint: "Apify TikTok + Claude", defaultApiCostEur: 0.070, group: "ai" },
-  { key: "VIDEO_SCOUT_9", label: "Video Scout · 9 Videos", hint: "Apify TikTok + Claude", defaultApiCostEur: 0.100, group: "ai" },
+  { key: "VIDEO_SCOUT_1", label: "Video Scout · 1 Video", hint: "Apify TikTok+IG+YT + Claude", defaultApiCostEur: 0.060, group: "ai" },
+  { key: "VIDEO_SCOUT_2", label: "Video Scout · 2 Videos", hint: "Apify TikTok+IG+YT + Claude", defaultApiCostEur: 0.080, group: "ai" },
+  { key: "VIDEO_SCOUT_3", label: "Video Scout · 3 Videos", hint: "Apify TikTok+IG+YT + Claude", defaultApiCostEur: 0.100, group: "ai" },
   { key: "CHARTS_DRAW", label: "Produkt-Drop (Zufall)", hint: "Sheet-Lookup · keine externe API", defaultApiCostEur: 0, group: "tool" },
   { key: "BLOG_GENERATE", label: "Blog-Writer (versteckt)", hint: "DeepSeek-chat", defaultApiCostEur: 0.007, group: "ai", hidden: true },
 ] as const;

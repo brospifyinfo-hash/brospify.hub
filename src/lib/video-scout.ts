@@ -10,39 +10,46 @@
 
 import { CREDIT_COSTS } from "./credit-costs";
 
-/** Erlaubte Mengen + zugehörige Credit-Kosten (Premium-Search-Tiers). */
+/** Erlaubte Mengen + zugehörige Credit-Kosten (Premium-Search-Tiers).
+ *  Bewusst klein gehalten (1–3): pro Suche laufen jetzt mehrere Apify-
+ *  Runs (TikTok + Instagram Reels + YouTube Shorts), darum lieber wenige,
+ *  dafür starke Videos. */
 export const VIDEO_SCOUT_TIERS = [
+  { count: 1, cost: CREDIT_COSTS.VIDEO_SCOUT_1 },
+  { count: 2, cost: CREDIT_COSTS.VIDEO_SCOUT_2 },
   { count: 3, cost: CREDIT_COSTS.VIDEO_SCOUT_3 },
-  { count: 6, cost: CREDIT_COSTS.VIDEO_SCOUT_6 },
-  { count: 9, cost: CREDIT_COSTS.VIDEO_SCOUT_9 },
 ] as const;
 
 export type VideoCount = (typeof VIDEO_SCOUT_TIERS)[number]["count"];
 
 export function isVideoCount(n: unknown): n is VideoCount {
-  return n === 3 || n === 6 || n === 9;
+  return n === 1 || n === 2 || n === 3;
 }
 
 export function costForCount(count: VideoCount): number {
   return (
     VIDEO_SCOUT_TIERS.find((t) => t.count === count)?.cost ??
-    CREDIT_COSTS.VIDEO_SCOUT_3
+    CREDIT_COSTS.VIDEO_SCOUT_1
   );
 }
 
-/** Credits, die ein einzelnes Video kostet — Basis für die Gutschrift,
- *  wenn ein Video unter der Viral-Schwelle bleibt. */
-export function perVideoCost(count: VideoCount): number {
-  return Math.round(costForCount(count) / count);
-}
-
-// ─── Viralitäts-Schwellen ────────────────────────────────────────
-// Unter VIDEO_VIRAL_MIN gilt ein Video als "nicht viral genug": es wird
-// dem Kunden gutgeschrieben. Findet sich GAR kein Video ≥ dieser Grenze,
-// sucht das System erst gar nicht weiter ("Produkt geht aktuell nicht
-// viral"). VIDEO_INCLUDE_MIN hält offensichtlichen Müll komplett raus.
+// ─── Viralitäts-Schwellen & Qualitäts-Gates ──────────────────────
+// Unter VIDEO_VIRAL_MIN gilt ein Video als "schwach" (weniger als 10k
+// Views). VIDEO_INCLUDE_MIN hält offensichtlichen Müll komplett raus.
 export const VIDEO_VIRAL_MIN = 10_000;
 export const VIDEO_INCLUDE_MIN = 1_000;
+
+// Findet die Suche MEHR als so viele schwache Videos (< VIDEO_VIRAL_MIN),
+// ist der Pool zu schlecht → wir liefern nichts und bitten, es später
+// erneut zu versuchen (kein Credit-Abzug).
+export const LOW_VIEW_RETRY_THRESHOLD = 5;
+
+/** Halb-Preis-Regel: enthält das gelieferte Set mindestens ein Video
+ *  unter der Viral-Schwelle, zahlt der Kunde nur die HÄLFTE der Credits.
+ *  Sonst den vollen Preis. */
+export function chargedCredits(totalCost: number, hasWeakVideo: boolean): number {
+  return hasWeakVideo ? Math.round(totalCost / 2) : totalCost;
+}
 
 /** Ein gefundenes Video im finalen Ausgabe-Schema. Die ersten fünf
  *  Felder entsprechen 1:1 dem Agent-Output-Format; thumbnail/author/
@@ -56,11 +63,9 @@ export interface ScoutVideo {
   thumbnail?: string;
   author?: string;
   likes?: number;
-  /** True, wenn das Video unter der Viral-Schwelle lag und dem Kunden
-   *  dafür Credits gutgeschrieben wurden. */
+  /** True, wenn das Video unter der Viral-Schwelle (10k Views) lag —
+   *  ein solches "schwaches" Video löst die Halb-Preis-Regel aus. */
   refunded?: boolean;
-  /** Wie viele Credits für dieses Video gutgeschrieben wurden. */
-  refundAmount?: number;
 }
 
 /** Ein beim Kunden gespeichertes Video (Historie + Dedupe-Quelle). */
