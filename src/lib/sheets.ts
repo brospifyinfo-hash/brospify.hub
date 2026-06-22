@@ -1856,6 +1856,60 @@ export async function addToScoutCache(productId: string, videos: ScoutVideo[]): 
   }
 }
 
+export interface ScoutCacheEntry {
+  productId: string;
+  videos: ScoutVideo[];
+  rowNumber: number;
+}
+
+/** Alle Cache-Zeilen (für den wöchentlichen Link-Check/Prune). */
+export async function listScoutCacheEntries(): Promise<ScoutCacheEntry[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("ScoutCache", SCOUT_CACHE_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "ScoutCache!A2:B",
+    });
+    const rows = res.data.values || [];
+    const out: ScoutCacheEntry[] = [];
+    rows.forEach((r, i) => {
+      const productId = r[0] || "";
+      if (!productId || !r[1]) return;
+      let videos: ScoutVideo[] = [];
+      try {
+        const p = JSON.parse(r[1]);
+        if (Array.isArray(p)) videos = p as ScoutVideo[];
+      } catch {
+        /* defekte Zelle überspringen */
+      }
+      out.push({ productId, videos, rowNumber: i + 2 });
+    });
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+/** Cache-Zeile mit der bereinigten Video-Liste überschreiben. Ist die Liste
+ *  leer (alle Links tot), wird die Zeile geleert. */
+export async function setScoutCacheVideos(
+  rowNumber: number,
+  productId: string,
+  videos: ScoutVideo[],
+): Promise<void> {
+  const sheets = getSheets();
+  const values = videos.length === 0
+    ? [["", "", "", ""]]
+    : [[productId, JSON.stringify(videos), String(videos.length), new Date().toISOString()]];
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `ScoutCache!A${rowNumber}:D${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values },
+  });
+}
+
 // ─── START TASKS (Tab "StartTasks") ───────────────────────────────
 // Admin-curated checklist that replaces the old Shopify-app-only
 // insights on the home page. Each task is a short title plus optional

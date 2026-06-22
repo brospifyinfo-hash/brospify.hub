@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { expireOverdueSubscriptions, logSystemEvent } from "@/lib/sheets";
 import { getSession } from "@/lib/session";
 import { alertLowBalances } from "@/lib/api-balance-alerts";
+import { maybePruneScoutCache } from "@/lib/scout-cache-prune";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,7 +67,18 @@ async function run(req: NextRequest) {
       console.warn("[expire-overdue] api-balance alert failed:", e);
     }
 
-    return NextResponse.json({ success: true, ...result, apiBalances });
+    // Piggyback 2: wöchentlich (gedrosselt) tote Video-Links aus dem
+    // gemeinsamen ScoutCache entfernen. Kundengespeicherte Videos bleiben
+    // unangetastet. Niemals fatal.
+    let scoutPrune: Awaited<ReturnType<typeof maybePruneScoutCache>> | { error: string } | undefined;
+    try {
+      scoutPrune = await maybePruneScoutCache();
+    } catch (e) {
+      scoutPrune = { error: e instanceof Error ? e.message : "scout prune failed" };
+      console.warn("[expire-overdue] scout cache prune failed:", e);
+    }
+
+    return NextResponse.json({ success: true, ...result, apiBalances, scoutPrune });
   } catch (err) {
     console.error("[license/expire-overdue] error:", err);
     void logSystemEvent({
