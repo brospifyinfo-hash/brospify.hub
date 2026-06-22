@@ -27,10 +27,15 @@ export const CREDIT_COSTS = {
   VIDEO_SCOUT_3: 95,
 } as const;
 
-// Welcome grant — every customer gets this once, automatically, the
-// first time their profile is loaded after the grant shipped.
-// Idempotent via `credits.starterGranted` on the customer record.
-export const STARTER_CREDITS = 500;
+// Welcome grant — jeder Kunde bekommt das EINMALIG beim ersten Login.
+// Idempotent via `credits.starterGranted` auf dem Kundenrecord.
+export const STARTER_CREDITS = 1500;
+
+// Fortlaufende Gutschrift: danach alle RECURRING_PERIOD_DAYS Tage automatisch
+// RECURRING_CREDITS dazu. Anker ist `creditsStartedAt` (erster Login). Die
+// Top-ups passieren idempotent beim Profil-Lesen (ensureRecurringGrant).
+export const RECURRING_CREDITS = 1000;
+export const RECURRING_PERIOD_DAYS = 28;
 
 // ─── Shopify Cart Permalinks (purchase packages) ─────────────────
 // `[USER_EMAIL]` is replaced at render time with the logged-in

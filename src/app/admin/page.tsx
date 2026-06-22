@@ -37,9 +37,9 @@ import {
   formatEuro,
 } from "@/lib/credit-config";
 import {
-  SURVEY_QUESTIONS,
   type SurveyAggregate,
   type SurveyResponseRecord,
+  type SurveyQuestion,
 } from "@/lib/survey";
 
 // ─── Types ───────────────────────────────────────────────────────
@@ -6878,11 +6878,22 @@ function TiersFullEditor({
 // Bestehende Balances bleiben unangetastet — der Grant ist additiv.
 
 // ─── Umfragen-Auswertung (Tab "survey") ─────────────────────────
+interface AdminSurveyItem {
+  id: string;
+  title: string;
+  creditReward: number;
+  unlockAfterDays: number;
+  questions: SurveyQuestion[];
+  aggregate: SurveyAggregate;
+  responses: SurveyResponseRecord[];
+}
+
 function SurveyAdminView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [aggregate, setAggregate] = useState<SurveyAggregate | null>(null);
-  const [responses, setResponses] = useState<SurveyResponseRecord[]>([]);
+  const [items, setItems] = useState<AdminSurveyItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
@@ -6894,8 +6905,10 @@ function SurveyAdminView() {
       if (!res.ok) {
         setError(data.error || "Konnte nicht laden.");
       } else {
-        setAggregate(data.aggregate);
-        setResponses(Array.isArray(data.responses) ? data.responses : []);
+        const list: AdminSurveyItem[] = Array.isArray(data.surveys) ? data.surveys : [];
+        setItems(list);
+        setTotal(data.totalResponses || 0);
+        setSelectedId((cur) => cur || (list[0]?.id ?? ""));
       }
     } catch {
       setError("Verbindungsfehler.");
@@ -6906,7 +6919,7 @@ function SurveyAdminView() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading && !aggregate) {
+  if (loading && items.length === 0) {
     return (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
         {[...Array(4)].map((_, i) => (
@@ -6916,14 +6929,14 @@ function SurveyAdminView() {
     );
   }
 
-  const total = aggregate?.total ?? 0;
+  const selected = items.find((s) => s.id === selectedId) || null;
   const fmtUser = (u: string) => (u.includes("@") ? u : `${u.slice(0, 4)}…${u.slice(-4)}`);
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-[11px] text-zinc-500">
-          System-Verbesserungs-Umfrage · Gesamtergebnis &amp; einzelne Abgaben.
+          Gestaffelte Umfragen · {total} Antworten gesamt · pro Umfrage Gesamtergebnis &amp; einzelne Abgaben.
         </p>
         <button
           onClick={load}
@@ -6937,29 +6950,59 @@ function SurveyAdminView() {
 
       {error && <div className="text-[12px] text-red-300">{error}</div>}
 
-      {total === 0 ? (
-        <div className="text-center py-10 text-sm text-zinc-500">Noch keine Antworten.</div>
+      {/* Umfrage-Auswahl */}
+      <div className="flex flex-wrap gap-1.5">
+        {items.map((s) => {
+          const active = s.id === selectedId;
+          return (
+            <button
+              key={s.id}
+              onClick={() => { setSelectedId(s.id); setShowAll(false); }}
+              className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] transition ${
+                active ? "border-pink-500/50 bg-pink-500/15 text-white" : "border-white/10 bg-white/[0.02] text-zinc-300 hover:bg-white/[0.05]"
+              }`}
+            >
+              {s.title} <span className="text-zinc-500 tabular-nums">· {s.aggregate.total}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {!selected ? (
+        <div className="text-center py-10 text-sm text-zinc-500">Keine Umfragen.</div>
+      ) : selected.aggregate.total === 0 ? (
+        <div className="text-center py-10 text-sm text-zinc-500">Noch keine Antworten für „{selected.title}".</div>
       ) : (
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-            <BigKpi label="Antworten gesamt" value={total} icon={MessageCircle} color="#EC4899" />
-            {SURVEY_QUESTIONS.filter((q) => q.type === "rating").map((q) => (
+            <BigKpi label="Antworten" value={selected.aggregate.total} icon={MessageCircle} color="#EC4899" />
+            <BigKpi label="Belohnung" value={`${selected.creditReward}`} icon={Coins} color="#FACC15" hint="Credits / Abgabe" />
+            {selected.questions.filter((q) => q.type === "rating").slice(0, 2).map((q) => (
               <BigKpi
                 key={q.id}
-                label={q.id === "satisfaction" ? "Ø Zufriedenheit" : q.id === "recommend" ? "Ø Weiterempfehlung" : q.label}
-                value={aggregate?.ratingAvg[q.id] != null ? `${aggregate.ratingAvg[q.id]}/5` : "—"}
+                label={`Ø ${q.label.replace(/\?$/, "").slice(0, 22)}`}
+                value={selected.aggregate.ratingAvg[q.id] != null ? `${selected.aggregate.ratingAvg[q.id]}/5` : "—"}
                 icon={Star}
-                color="#FACC15"
+                color="#10B981"
               />
             ))}
           </div>
 
           {/* Aggregat je Frage */}
-          {SURVEY_QUESTIONS.map((q) => {
-            if (q.type === "rating") return null; // schon als KPI
+          {selected.questions.map((q) => {
+            if (q.type === "rating") {
+              const avg = selected.aggregate.ratingAvg[q.id];
+              return (
+                <DashboardCard key={q.id} title={q.label} icon={Star} accent="#10B981">
+                  <div className="text-[13px] text-zinc-200">
+                    Ø <span className="font-bold text-white">{avg != null ? `${avg} / 5` : "—"}</span>
+                  </div>
+                </DashboardCard>
+              );
+            }
             if (q.type === "text") {
-              const texts = aggregate?.texts[q.id] || [];
+              const texts = selected.aggregate.texts[q.id] || [];
               return (
                 <DashboardCard key={q.id} title={q.label} icon={MessageCircle} accent="#EC4899">
                   {texts.length === 0 ? (
@@ -6976,15 +7019,14 @@ function SurveyAdminView() {
                 </DashboardCard>
               );
             }
-            // single / multi → Balken
-            const counts = aggregate?.optionCounts[q.id] || {};
+            const counts = selected.aggregate.optionCounts[q.id] || {};
             const max = Math.max(1, ...Object.values(counts));
             return (
               <DashboardCard key={q.id} title={q.label} icon={BarChart3} accent="#A855F7">
                 <div className="space-y-1.5">
                   {(q.options || []).map((o) => {
                     const c = counts[o] || 0;
-                    const pct = total > 0 ? Math.round((c / total) * 100) : 0;
+                    const pct = selected.aggregate.total > 0 ? Math.round((c / selected.aggregate.total) * 100) : 0;
                     return (
                       <div key={o} className="flex items-center gap-2">
                         <span className="text-[11.5px] text-zinc-300 w-44 shrink-0 truncate">{o}</span>
@@ -7001,16 +7043,16 @@ function SurveyAdminView() {
           })}
 
           {/* Einzelne Abgaben */}
-          <DashboardCard title={`Einzelne Abgaben (${responses.length})`} icon={Users} accent="#06B6D4">
+          <DashboardCard title={`Einzelne Abgaben (${selected.responses.length})`} icon={Users} accent="#06B6D4">
             <div className="space-y-2">
-              {(showAll ? responses : responses.slice(0, 10)).map((r) => (
+              {(showAll ? selected.responses : selected.responses.slice(0, 10)).map((r) => (
                 <div key={r.id} className="px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="text-[11px] font-mono text-zinc-400 truncate">{fmtUser(r.user)}</span>
                     <span className="text-[10px] text-zinc-600 shrink-0">{r.submittedAt ? formatRelativeShort(r.submittedAt) : "—"}</span>
                   </div>
                   <div className="space-y-0.5">
-                    {SURVEY_QUESTIONS.map((q) => {
+                    {selected.questions.map((q) => {
                       const v = r.answers[q.id];
                       if (v === undefined) return null;
                       const display = Array.isArray(v) ? v.join(", ") : q.type === "rating" ? `${v}/5` : String(v);
@@ -7025,12 +7067,12 @@ function SurveyAdminView() {
                 </div>
               ))}
             </div>
-            {responses.length > 10 && (
+            {selected.responses.length > 10 && (
               <button
                 onClick={() => setShowAll((s) => !s)}
                 className="mt-2 text-[11px] text-zinc-400 hover:text-white transition"
               >
-                {showAll ? "Weniger zeigen" : `Alle ${responses.length} zeigen`}
+                {showAll ? "Weniger zeigen" : `Alle ${selected.responses.length} zeigen`}
               </button>
             )}
           </DashboardCard>

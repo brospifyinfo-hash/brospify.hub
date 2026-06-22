@@ -32,10 +32,21 @@ import { tierFromSku, TIER_DISPLAY_LABEL, DEFAULT_TIERS, type TierKey } from "@/
 
 interface CreditTransaction {
   ts: string;
-  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke" | "subscription";
+  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke" | "subscription" | "recurring" | "survey";
   delta: number;
   balanceAfter: number;
   reason?: string;
+}
+
+interface CreditCycle {
+  startedAt: string | null;
+  periodDays: number;
+  recurringAmount: number;
+  nextGrantAt: string | null;
+  daysUntilNext: number | null;
+  cycleProgressPct: number;
+  periodsGranted: number;
+  lastGrantAt: string | null;
 }
 
 interface ProfileWithSub {
@@ -61,6 +72,7 @@ export default function AccountSubscriptionPage() {
   const [planSku, setPlanSku] = useState("");
   const [profile, setProfile] = useState<ProfileWithSub | null>(null);
   const [balance, setBalance] = useState(0);
+  const [creditCycle, setCreditCycle] = useState<CreditCycle | null>(null);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
   const [canceling, setCanceling] = useState(false);
@@ -73,6 +85,7 @@ export default function AccountSubscriptionPage() {
         setProfile(data.profile || {});
         setPlanSku(data.sku || "");
         setBalance(data.credits?.balance || 0);
+        setCreditCycle(data.creditCycle || null);
         setLoading(false);
       })
       .catch(() => router.push("/"));
@@ -179,6 +192,11 @@ export default function AccountSubscriptionPage() {
             color="#6366F1"
           />
         </div>
+
+        {/* ─── CREDIT-ZYKLUS (Live-Countdown bis zur nächsten Gutschrift) ─── */}
+        {creditCycle && creditCycle.startedAt && (
+          <CreditCycleCard cycle={creditCycle} />
+        )}
 
         {/* ─── TIMELINE / RENEWAL ────────────────────────── */}
         {tierKey && (
@@ -361,6 +379,90 @@ const CANCEL_REASONS = [
   "Anderer Grund",
 ];
 
+// ─── Credit-Zyklus (28-Tage-Gutschrift, grafische Timeline) ──────
+
+function CreditCycleCard({ cycle }: { cycle: CreditCycle }) {
+  const days = cycle.periodDays;
+  const daysLeft = cycle.daysUntilNext ?? days;
+  const daysDone = Math.max(0, Math.min(days, days - daysLeft));
+  const pct = Math.max(0, Math.min(100, cycle.cycleProgressPct));
+
+  return (
+    <Card>
+      <div className="space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <h2 className="text-[13px] font-bold flex items-center gap-2 text-zinc-200">
+            <RefreshCcw className="w-4 h-4 text-[#95BF47]" />
+            Deine nächste Gutschrift
+          </h2>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/25 text-[11px] font-semibold text-[#95BF47]">
+            <Plus className="w-3 h-3" />
+            {cycle.recurringAmount.toLocaleString("de-DE")} Credits alle {days} Tage
+          </span>
+        </div>
+
+        {/* Großer Countdown */}
+        <div className="flex items-end gap-2">
+          <span className="text-4xl font-black text-white tabular-nums leading-none">{daysLeft}</span>
+          <span className="text-[13px] text-zinc-400 mb-0.5">
+            {daysLeft === 1 ? "Tag" : "Tage"} bis <span className="text-[#95BF47] font-semibold">+{cycle.recurringAmount.toLocaleString("de-DE")} Credits</span>
+          </span>
+        </div>
+
+        {/* Grafische Tage-Timeline */}
+        <div>
+          <div className="relative h-3 rounded-full bg-white/[0.05] overflow-hidden">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${pct}%` }}
+              transition={{ duration: 0.6, ease: "easeOut" }}
+              className="h-full rounded-full bg-gradient-to-r from-[#95BF47] to-emerald-400"
+            />
+          </div>
+          {/* Tag-Marker (alle 7 Tage) */}
+          <div className="relative mt-1 h-4">
+            {Array.from({ length: Math.floor(days / 7) + 1 }, (_, i) => i * 7).map((d) => (
+              <span
+                key={d}
+                className="absolute -translate-x-1/2 text-[9px] text-zinc-600 tabular-nums"
+                style={{ left: `${Math.min(100, (d / days) * 100)}%` }}
+              >
+                {d === 0 ? "Start" : `T${d}`}
+              </span>
+            ))}
+          </div>
+          <div className="flex justify-between text-[10.5px] text-zinc-500 mt-1">
+            <span>Tag {daysDone} von {days}</span>
+            <span>
+              {cycle.nextGrantAt ? `Nächste: ${formatDate(cycle.nextGrantAt)}` : ""}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="p-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02]">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Letzte Gutschrift</div>
+            <div className="text-[12.5px] text-zinc-200 mt-0.5">
+              {cycle.lastGrantAt ? formatRelative(cycle.lastGrantAt) : "Noch keine (Willkommens-Bonus war der Start)"}
+            </div>
+          </div>
+          <div className="p-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02]">
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Bisher erhalten</div>
+            <div className="text-[12.5px] text-zinc-200 mt-0.5 tabular-nums">
+              {cycle.periodsGranted}× {cycle.recurringAmount.toLocaleString("de-DE")} Credits
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[10.5px] text-zinc-600 leading-snug">
+          Jeder Account bekommt beim ersten Login 1.500 Credits und danach automatisch alle {days} Tage
+          {" "}{cycle.recurringAmount.toLocaleString("de-DE")} Credits dazu — unabhängig vom Abo-Status.
+        </p>
+      </div>
+    </Card>
+  );
+}
+
 // ─── Plan Hero ────────────────────────────────────────────────────
 
 function PlanHero({
@@ -508,6 +610,8 @@ function TxRow({ tx }: { tx: CreditTransaction }) {
   const typeLabel = {
     starter: "Willkommens-Bonus",
     subscription: "Monats-Credits",
+    recurring: "28-Tage-Gutschrift",
+    survey: "Umfrage-Bonus",
     topup: "Aufladung",
     voucher: "Code eingeloest",
     "admin-grant": "Admin-Gutschrift",

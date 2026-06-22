@@ -97,7 +97,7 @@ export interface OnboardingChecklist {
 export interface CreditTransaction {
   /** ISO timestamp */
   ts: string;
-  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke" | "subscription";
+  type: "starter" | "deduct" | "topup" | "voucher" | "admin-grant" | "admin-revoke" | "subscription" | "recurring" | "survey";
   /** Positive for credits added, negative for deductions. */
   delta: number;
   /** Resulting balance after this transaction. */
@@ -229,10 +229,18 @@ export interface KundeProfile {
    *  (neueste zuerst, dedupliziert per url). Dient als Historie UND als
    *  Garantie, dass kein Video zweimal gezogen werden kann. */
   scoutVideos?: SavedScoutVideo[];
-  /** System-Verbesserungs-Umfrage (v1) bereits abgegeben? Steuert nur, ob
-   *  die Umfrage-Karte auf der Startseite automatisch erscheint. */
+  /** Legacy (v1, einzelne Umfrage) — durch surveysCompleted abgelöst. */
   surveyAnsweredV1?: boolean;
   surveyAnsweredAt?: string;
+  /** IDs aller abgeschlossenen Umfragen (gestaffeltes System). */
+  surveysCompleted?: string[];
+  /** Anker für das Credit-Modell + Umfrage-Freischaltung: ISO-Zeitpunkt des
+   *  ersten Logins (Starter-Grant). Ab hier zählen die 28-Tage-Zyklen und
+   *  die zeitversetzten Umfragen. */
+  creditsStartedAt?: string;
+  /** Wie viele 28-Tage-Gutschriften bereits vergeben wurden (idempotent). */
+  recurringPeriodsGranted?: number;
+  lastRecurringGrantAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
@@ -240,7 +248,7 @@ export interface KundeProfile {
 // it under the legacy name `CREDIT_LIMITS` so old call sites keep
 // working without pulling googleapis into client bundles.
 export { CREDIT_COSTS as CREDIT_LIMITS } from "./credit-costs";
-import { STARTER_CREDITS } from "./credit-costs";
+import { STARTER_CREDITS, RECURRING_CREDITS, RECURRING_PERIOD_DAYS } from "./credit-costs";
 
 function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
   if (!raw) {
@@ -522,6 +530,7 @@ export async function ensureStarterGrant(
   if (credits.starterGranted) {
     return { ...profile, credits };
   }
+  const nowIso = new Date().toISOString();
   const newBalance = credits.balance + STARTER_CREDITS;
   const next: CreditsRecord = {
     ...credits,
@@ -529,17 +538,131 @@ export async function ensureStarterGrant(
     totalPurchased: credits.totalPurchased + STARTER_CREDITS,
     starterGranted: true,
     log: appendLog(credits.log, {
-      ts: new Date().toISOString(),
+      ts: nowIso,
       type: "starter",
       delta: STARTER_CREDITS,
       balanceAfter: newBalance,
       reason: "Willkommens-Bonus",
     }),
-    lastUpdated: new Date().toISOString(),
+    lastUpdated: nowIso,
   };
-  const updated: KundeProfile = { ...profile, credits: next };
+  // Anker für das 28-Tage-Modell + Umfrage-Staffel setzen (nur falls leer).
+  const updated: KundeProfile = {
+    ...profile,
+    credits: next,
+    creditsStartedAt: profile.creditsStartedAt || nowIso,
+    recurringPeriodsGranted: profile.recurringPeriodsGranted ?? 0,
+  };
   await updateKundeProfile(rowIndex, updated);
   return { ...updated, __granted: true };
+}
+
+// Fortlaufende 28-Tage-Gutschrift (RECURRING_CREDITS je Periode). Idempotent
+// über `recurringPeriodsGranted`: pro vergangener Periode seit dem Anker wird
+// genau einmal gutgeschrieben. Wird beim Profil-Lesen aufgerufen (wie der
+// Starter-Grant) — wer länger nicht da war, bekommt alle fälligen Perioden
+// auf einmal nachgezahlt. Setzt den Anker nach, falls er fehlt (Bestands-
+// kunden vor Einführung des Modells), OHNE rückwirkend zu zahlen.
+export async function ensureRecurringGrant(
+  rowIndex: number,
+  profile: KundeProfile,
+): Promise<KundeProfile> {
+  const nowIso = new Date().toISOString();
+
+  // Anker nachsetzen, falls Bestandskunde ohne creditsStartedAt — ab JETZT
+  // läuft der Zyklus (keine rückwirkende Gutschrift).
+  if (!profile.creditsStartedAt) {
+    const seeded: KundeProfile = {
+      ...profile,
+      creditsStartedAt: nowIso,
+      recurringPeriodsGranted: profile.recurringPeriodsGranted ?? 0,
+    };
+    await updateKundeProfile(rowIndex, seeded);
+    return seeded;
+  }
+
+  const anchor = Date.parse(profile.creditsStartedAt);
+  if (!Number.isFinite(anchor)) return profile;
+  const periodMs = RECURRING_PERIOD_DAYS * 86400000;
+  const elapsedPeriods = Math.floor((Date.now() - anchor) / periodMs);
+  const alreadyGranted = profile.recurringPeriodsGranted ?? 0;
+  if (elapsedPeriods <= alreadyGranted) return profile;
+
+  const periodsDue = elapsedPeriods - alreadyGranted;
+  const amount = periodsDue * RECURRING_CREDITS;
+  const credits = normalizeCredits(profile.credits);
+  const newBalance = credits.balance + amount;
+  const next: CreditsRecord = {
+    ...credits,
+    balance: newBalance,
+    totalPurchased: credits.totalPurchased + amount,
+    log: appendLog(credits.log, {
+      ts: nowIso,
+      type: "recurring",
+      delta: amount,
+      balanceAfter: newBalance,
+      reason:
+        periodsDue === 1
+          ? `28-Tage-Gutschrift (+${RECURRING_CREDITS})`
+          : `${periodsDue}× 28-Tage-Gutschrift (+${amount})`,
+    }),
+    lastUpdated: nowIso,
+    ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
+  };
+  const updated: KundeProfile = {
+    ...profile,
+    credits: next,
+    recurringPeriodsGranted: elapsedPeriods,
+    lastRecurringGrantAt: nowIso,
+  };
+  await updateKundeProfile(rowIndex, updated);
+  return updated;
+}
+
+// Berechnet die nächste fällige Gutschrift + Zyklus-Fortschritt für die
+// Live-Anzeige in den Einstellungen. Rein lesend, kein Sheet-Write.
+export function getCreditCycle(profile: KundeProfile): {
+  startedAt: string | null;
+  periodDays: number;
+  recurringAmount: number;
+  nextGrantAt: string | null;
+  daysUntilNext: number | null;
+  cycleProgressPct: number;
+  periodsGranted: number;
+  lastGrantAt: string | null;
+} {
+  const periodDays = RECURRING_PERIOD_DAYS;
+  if (!profile.creditsStartedAt) {
+    return {
+      startedAt: null,
+      periodDays,
+      recurringAmount: RECURRING_CREDITS,
+      nextGrantAt: null,
+      daysUntilNext: null,
+      cycleProgressPct: 0,
+      periodsGranted: profile.recurringPeriodsGranted ?? 0,
+      lastGrantAt: profile.lastRecurringGrantAt ?? null,
+    };
+  }
+  const anchor = Date.parse(profile.creditsStartedAt);
+  const periodMs = periodDays * 86400000;
+  const elapsedPeriods = Math.floor((Date.now() - anchor) / periodMs);
+  const nextIdx = elapsedPeriods + 1;
+  const nextGrantMs = anchor + nextIdx * periodMs;
+  const cycleStartMs = anchor + elapsedPeriods * periodMs;
+  const intoCycle = Date.now() - cycleStartMs;
+  const cycleProgressPct = Math.max(0, Math.min(100, Math.round((intoCycle / periodMs) * 100)));
+  const daysUntilNext = Math.max(0, Math.ceil((nextGrantMs - Date.now()) / 86400000));
+  return {
+    startedAt: profile.creditsStartedAt,
+    periodDays,
+    recurringAmount: RECURRING_CREDITS,
+    nextGrantAt: new Date(nextGrantMs).toISOString(),
+    daysUntilNext,
+    cycleProgressPct,
+    periodsGranted: profile.recurringPeriodsGranted ?? elapsedPeriods,
+    lastGrantAt: profile.lastRecurringGrantAt ?? null,
+  };
 }
 
 // Walk every customer row and grant 500 starter credits to anyone who
@@ -1916,23 +2039,66 @@ export async function setScoutCacheVideos(
 }
 
 // ─── SURVEY (Tab "SurveyResponses") ──────────────────────────────
-// System-Verbesserungs-Umfrage. Eine Zeile je Abgabe; die Antworten
-// liegen als JSON in einer Zelle. Definition + Aggregation in lib/survey.
-//   A=Id, B=User (Lizenzschlüssel/E-Mail), C=SubmittedAt, D=AnswersJson
-const SURVEY_HEADERS = ["Id", "User", "SubmittedAt", "AnswersJson"];
+// Gestaffelte User-Umfragen. Eine Zeile je Abgabe; die Antworten liegen als
+// JSON in einer Zelle. Definition + Aggregation in lib/survey.
+//   A=Id, B=User (Lizenzschlüssel/E-Mail), C=SurveyId, D=SubmittedAt, E=AnswersJson
+const SURVEY_HEADERS = ["Id", "User", "SurveyId", "SubmittedAt", "AnswersJson"];
 
-export async function addSurveyResponse(user: string, answers: SurveyAnswers): Promise<void> {
+export async function addSurveyResponse(
+  user: string,
+  surveyId: string,
+  answers: SurveyAnswers,
+): Promise<void> {
   const sheets = getSheets();
   await ensureSheet("SurveyResponses", SURVEY_HEADERS);
   const id = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "SurveyResponses!A:D",
+    range: "SurveyResponses!A:E",
     valueInputOption: "RAW",
     requestBody: {
-      values: [[id, user || "", new Date().toISOString(), JSON.stringify(answers)]],
+      values: [[id, user || "", surveyId, new Date().toISOString(), JSON.stringify(answers)]],
     },
   });
+}
+
+/** Markiert eine Umfrage als abgeschlossen UND schreibt die Belohnungs-
+ *  Credits gut — atomar in EINEM Profil-Write. Idempotent: ist die Umfrage
+ *  schon abgeschlossen, passiert nichts (kein Doppel-Credit). */
+export async function completeSurvey(
+  rowIndex: number,
+  profile: KundeProfile,
+  surveyId: string,
+  reward: number,
+): Promise<{ balance: number; awarded: number; already: boolean }> {
+  const completed = Array.isArray(profile.surveysCompleted) ? profile.surveysCompleted : [];
+  const credits = normalizeCredits(profile.credits);
+  if (completed.includes(surveyId)) {
+    return { balance: credits.balance, awarded: 0, already: true };
+  }
+  const amount = Math.max(0, Math.round(reward));
+  const nowIso = new Date().toISOString();
+  const newBalance = credits.balance + amount;
+  const next: CreditsRecord = {
+    ...credits,
+    balance: newBalance,
+    totalPurchased: credits.totalPurchased + amount,
+    log: appendLog(credits.log, {
+      ts: nowIso,
+      type: "survey",
+      delta: amount,
+      balanceAfter: newBalance,
+      reason: "Umfrage abgeschlossen",
+    }),
+    lastUpdated: nowIso,
+    ...(newBalance >= LOW_CREDITS_THRESHOLD ? { lowCreditsAlertedAt: undefined } : {}),
+  };
+  await updateKundeProfile(rowIndex, {
+    ...profile,
+    credits: next,
+    surveysCompleted: [...completed, surveyId],
+  });
+  return { balance: newBalance, awarded: amount, already: false };
 }
 
 export async function listSurveyResponses(): Promise<SurveyResponseRecord[]> {
@@ -1941,21 +2107,22 @@ export async function listSurveyResponses(): Promise<SurveyResponseRecord[]> {
     await ensureSheet("SurveyResponses", SURVEY_HEADERS);
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID(),
-      range: "SurveyResponses!A2:D",
+      range: "SurveyResponses!A2:E",
     });
     const rows = res.data.values || [];
     const out: SurveyResponseRecord[] = [];
     for (const r of rows) {
       const id = r[0] || "";
-      if (!id || !r[3]) continue;
+      const answersRaw = r[4];
+      if (!id || !answersRaw) continue;
       let answers: SurveyAnswers = {};
       try {
-        const p = JSON.parse(r[3]);
+        const p = JSON.parse(answersRaw);
         if (p && typeof p === "object") answers = p as SurveyAnswers;
       } catch {
         continue;
       }
-      out.push({ id, user: r[1] || "", submittedAt: r[2] || "", answers });
+      out.push({ id, user: r[1] || "", surveyId: r[2] || "", submittedAt: r[3] || "", answers });
     }
     // Neueste zuerst.
     return out.reverse();

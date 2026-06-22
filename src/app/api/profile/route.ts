@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { ensureStarterGrant, findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, type KundeProfile } from "@/lib/sheets";
+import { ensureStarterGrant, ensureRecurringGrant, getCreditCycle, findKundeByKey, getKundeProfile, updateKundeProfile, getCreditsState, type KundeProfile } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,9 @@ export async function GET() {
     // logged-in users who never went through the new login flow.
     // Idempotent — only writes when the flag isn't set yet.
     const rawProfile = await getKundeProfile(kunde.rowIndex);
-    const profile = await ensureStarterGrant(kunde.rowIndex, rawProfile);
+    const granted = await ensureStarterGrant(kunde.rowIndex, rawProfile);
+    // Fortlaufende 28-Tage-Gutschrift nachzahlen (idempotent pro Periode).
+    const profile = await ensureRecurringGrant(kunde.rowIndex, granted);
 
     const creditState = getCreditsState(profile);
 
@@ -38,6 +40,7 @@ export async function GET() {
         totalPurchased: creditState.totalPurchased,
         totalUsed: creditState.totalUsed,
       },
+      creditCycle: getCreditCycle(profile),
     });
   } catch (error) {
     console.error("[Profile] GET error:", error);
