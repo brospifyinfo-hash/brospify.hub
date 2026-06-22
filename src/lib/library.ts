@@ -187,6 +187,63 @@ async function evictOverflow(userKey: string): Promise<void> {
   }
 }
 
+// ─── Auto-Save aus den Generierungs-Routen ───────────────────────
+// Wird SERVERSEITIG direkt nach dem Generieren aufgerufen, damit jedes
+// Bild / jede E-Mail automatisch in der Mediathek landet — auch wenn der
+// User den Tab schliesst, solange die Route durchläuft. Niemals fatal:
+// schlägt das Speichern fehl, wird nur geloggt, das Tool-Ergebnis bleibt.
+export async function autoSaveLibraryImage(opts: {
+  userKey: string | null | undefined;
+  source: LibrarySource;
+  title: string;
+  remoteUrl: string;
+  keepAlpha?: boolean;
+  meta?: Record<string, unknown>;
+}): Promise<void> {
+  if (!opts.userKey || !opts.remoteUrl) return;
+  try {
+    const prepared = await ingestRemoteImage(opts.remoteUrl, opts.title || opts.source, !!opts.keepAlpha);
+    await persistLibraryItem(opts.userKey, {
+      type: "image",
+      source: opts.source,
+      title: opts.title || "Generiertes Bild",
+      assetUrl: prepared.assetUrl,
+      thumbnailUrl: prepared.thumbnailUrl,
+      meta: {
+        ...(opts.meta || {}),
+        width: prepared.width,
+        height: prepared.height,
+        bytes: prepared.bytes,
+        autoSaved: true,
+      },
+    });
+  } catch (err) {
+    console.warn("[library] auto-save image failed (non-fatal):", err);
+  }
+}
+
+export async function autoSaveLibraryEmail(opts: {
+  userKey: string | null | undefined;
+  subject: string;
+  liquid: string;
+  meta?: Record<string, unknown>;
+}): Promise<void> {
+  if (!opts.userKey || !opts.liquid) return;
+  try {
+    await persistLibraryItem(opts.userKey, {
+      type: "email",
+      source: "email-templates",
+      title: opts.subject || "E-Mail-Vorlage",
+      assetUrl: "",
+      thumbnailUrl: "",
+      body: opts.liquid,
+      meta: { ...(opts.meta || {}), subject: opts.subject, autoSaved: true },
+    });
+  } catch (err) {
+    console.warn("[library] auto-save email failed (non-fatal):", err);
+  }
+}
+
 // ─── Utility: hard-delete a single item (sheet row + blobs).
 export async function purgeLibraryItem(item: LibraryItem): Promise<void> {
   await deleteLibraryItem(item.rowIndex);

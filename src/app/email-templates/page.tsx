@@ -227,32 +227,10 @@ function EmailStudio() {
     setSavedToLibrary(false);
   }, [generated]);
 
+  // E-Mails werden bereits SERVERSEITIG bei der Generierung automatisch in
+  // die Mediathek gespeichert → Button markiert nur noch lokal.
   async function saveToLibrary() {
-    if (!generated || savingToLibrary || savedToLibrary) return;
-    setSavingToLibrary(true);
-    try {
-      const r = await fetch("/api/library/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "email",
-          source: "email-templates",
-          title: generated.subject || tpl.title,
-          subject: generated.subject,
-          liquid: generated.liquid,
-          meta: {
-            templateId: tpl.id,
-            shopifyName: tpl.shopifyName,
-            source: generated.source,
-          },
-        }),
-      });
-      if (r.ok) setSavedToLibrary(true);
-    } catch {
-      // ignore
-    } finally {
-      setSavingToLibrary(false);
-    }
+    setSavedToLibrary(true);
   }
 
   const insufficient =

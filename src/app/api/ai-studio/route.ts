@@ -22,6 +22,7 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import sharp from "sharp";
 import { getSession } from "@/lib/session";
+import { autoSaveLibraryImage } from "@/lib/library";
 import { requireFeature } from "@/lib/tier-guard";
 import {
   deductCredits,
@@ -258,6 +259,17 @@ export async function POST(req: Request) {
   // Fal-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
   await recordUsd("fal", FAL_AI_STUDIO_USD * billedCount);
 
+  // Automatisch in die Mediathek (serverseitig, bleibt auch bei zu-Tab).
+  for (const u of outputUrls) {
+    await autoSaveLibraryImage({
+      userKey: session.lizenzschluessel,
+      source: "ai-studio",
+      title: `AI Studio — ${scene.label}`,
+      remoteUrl: u,
+      meta: { sceneId: scene.id, sceneLabel: scene.label },
+    });
+  }
+
   return NextResponse.json(
     {
       urls: outputUrls,
@@ -267,6 +279,7 @@ export async function POST(req: Request) {
       sceneLabel: scene.label,
       count: billedCount,
       creditsRemaining,
+      savedToLibrary: !!session.lizenzschluessel,
     },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );

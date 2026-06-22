@@ -5,6 +5,7 @@
 
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
+import { autoSaveLibraryEmail } from "@/lib/library";
 import { requireFeature } from "@/lib/tier-guard";
 import { generateEmailTemplate, type GenerateInput } from "@/lib/ai-email-generator";
 import { getTemplateById, type EmailTemplateDef } from "@/lib/email-templates";
@@ -359,6 +360,12 @@ export async function POST(req: Request) {
             kundeRowIndex,
             kundeProfile,
           );
+          await autoSaveLibraryEmail({
+            userKey: session.lizenzschluessel,
+            subject,
+            liquid,
+            meta: { templateId: tpl.id, source: "deepseek" },
+          });
           return NextResponse.json({
             liquid,
             subject,
@@ -366,6 +373,7 @@ export async function POST(req: Request) {
             generatedAt: new Date().toISOString(),
             source: "deepseek",
             creditsRemaining,
+            savedToLibrary: !!session.lizenzschluessel,
           });
         }
       } else {
@@ -395,10 +403,17 @@ export async function POST(req: Request) {
     });
 
     const creditsRemaining = await chargeCredits(kundeRowIndex, kundeProfile);
+    await autoSaveLibraryEmail({
+      userKey: session.lizenzschluessel,
+      subject: result.subject,
+      liquid: result.liquid,
+      meta: { templateId, source: "deterministic" },
+    });
     return NextResponse.json({
       ...result,
       source: "deterministic",
       creditsRemaining,
+      savedToLibrary: !!session.lizenzschluessel,
       _warning: apiKey ? undefined : "DEEPSEEK_API_KEY nicht konfiguriert — deterministischer Fallback verwendet.",
     });
   } catch (err) {

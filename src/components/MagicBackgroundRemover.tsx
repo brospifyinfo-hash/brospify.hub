@@ -317,16 +317,23 @@ export default function MagicBackgroundRemover() {
 
   async function handleSaveToLibrary() {
     if (!cutoutUrl || saving || savedToLibrary) return;
+    // Der transparente Freisteller wird bereits SERVERSEITIG automatisch in
+    // die Mediathek gespeichert → hier nur lokal markieren (kein Doppel).
+    // Ein zusammengesetztes Bild (mit ersetztem Hintergrund) entsteht NUR
+    // im Browser — das muss weiterhin hier hochgeladen + gespeichert werden.
+    if (bgKind === "transparent") {
+      setSavedToLibrary(true);
+      return;
+    }
     setSaving(true);
     try {
-      // For composed images we need to upload the local blob first.
-      // For transparent we can pass the remote URL straight through —
-      // sharp on the server will keep alpha.
+      // Hier kommen wir nur für ZUSAMMENGESETZTE Bilder hin (bgKind ist nie
+      // "transparent" — das ist oben schon abgehandelt). Das Composite
+      // entsteht nur im Browser → lokalen Blob erst hochladen, dann ingesten.
       let remoteUrl = cutoutUrl;
-      let title = `Freigestellt · ${BG_PRECISION_OPTIONS.find((p) => p.id === precision)?.label}`;
+      let title = `Mit Hintergrund · ${bgKind === "color" ? "Farbe" : bgKind === "gradient" ? "Gradient" : "Bild"}`;
 
-      if (bgKind !== "transparent" && composedUrl?.startsWith("blob:")) {
-        // Upload composed JPG via /api/upload first, then ingest into library.
+      if (composedUrl?.startsWith("blob:")) {
         const blob = await fetch(composedUrl).then((r) => r.blob());
         const fd = new FormData();
         fd.append("file", new File([blob], `composed-${Date.now()}.jpg`, { type: "image/jpeg" }));
@@ -334,7 +341,6 @@ export default function MagicBackgroundRemover() {
         if (!upRes.ok) throw new Error("Upload fehlgeschlagen");
         const upData = await upRes.json();
         remoteUrl = upData.url;
-        title = `Mit Hintergrund · ${bgKind === "color" ? "Farbe" : bgKind === "gradient" ? "Gradient" : "Bild"}`;
       }
 
       const r = await fetch("/api/library/items", {
@@ -344,7 +350,7 @@ export default function MagicBackgroundRemover() {
           mode: "image-url",
           source: "bg-remover",
           remoteUrl,
-          keepAlpha: bgKind === "transparent",
+          keepAlpha: false,
           title,
           basename: "cutout",
           meta: {

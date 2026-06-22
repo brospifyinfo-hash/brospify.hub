@@ -28,6 +28,7 @@ import {
 } from "@/lib/sheets";
 import { callFal, FalError, type RembgResponse } from "@/lib/fal";
 import { recordUsd, FAL_BG_REMOVE_USD } from "@/lib/provider-usage";
+import { autoSaveLibraryImage } from "@/lib/library";
 import { findBgPrecision } from "@/lib/ai-studio-scenes";
 import { getCreditCost } from "@/lib/credit-config-server";
 
@@ -194,8 +195,18 @@ export async function POST(req: Request) {
   // Fal-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
   await recordUsd("fal", FAL_BG_REMOVE_USD);
 
+  // Automatisch in die Mediathek (Alpha behalten — ist ein Cutout).
+  await autoSaveLibraryImage({
+    userKey: session.lizenzschluessel,
+    source: "bg-remover",
+    title: "Freisteller (Background entfernt)",
+    remoteUrl: outputUrl,
+    keepAlpha: true,
+    meta: { precision: precision.id },
+  });
+
   return NextResponse.json(
-    { url: outputUrl, precision: precision.id, creditsRemaining },
+    { url: outputUrl, precision: precision.id, creditsRemaining, savedToLibrary: !!session.lizenzschluessel },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }

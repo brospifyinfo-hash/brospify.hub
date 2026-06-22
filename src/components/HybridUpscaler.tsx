@@ -262,32 +262,10 @@ export default function HybridUpscaler() {
     }
   }
 
+  // Upscales werden bereits SERVERSEITIG automatisch in die Mediathek
+  // gespeichert. Button markiert nur noch lokal — kein zweiter Eintrag.
   async function handleSaveToLibrary() {
-    if (!upscaledUrl || saving || savedToLibrary) return;
-    setSaving(true);
-    try {
-      const r = await fetch("/api/library/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "image-url",
-          source: "upscaler",
-          remoteUrl: upscaledUrl,
-          title: `Upscale ${scale}× · ${MODES.find((m) => m.id === mode)?.label}`,
-          basename: "upscaled",
-          meta: {
-            scale,
-            mode,
-            ...(outputDims || {}),
-          },
-        }),
-      });
-      if (r.ok) setSavedToLibrary(true);
-    } catch {
-      // ignore — user can retry
-    } finally {
-      setSaving(false);
-    }
+    setSavedToLibrary(true);
   }
 
   const elapsedSec = (elapsed / 1000).toFixed(1);

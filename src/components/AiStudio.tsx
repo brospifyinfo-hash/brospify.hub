@@ -121,40 +121,15 @@ export default function AiStudio() {
     setElapsed(0);
   }
 
-  async function handleSaveToLibrary(url: string, idx: number) {
-    if (savingIdx !== null || savedSet.has(idx)) return;
-    setSavingIdx(idx);
-    try {
-      const r = await fetch("/api/library/items", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: "image-url",
-          source: "ai-studio",
-          remoteUrl: url,
-          title: resultScene
-            ? `AI Studio · ${resultScene.label}`
-            : "AI Studio Szene",
-          basename: "ai-studio",
-          meta: {
-            sceneId: resultScene?.id,
-            sceneLabel: resultScene?.label,
-            variation: idx + 1,
-          },
-        }),
-      });
-      if (r.ok) {
-        setSavedSet((prev) => {
-          const next = new Set(prev);
-          next.add(idx);
-          return next;
-        });
-      }
-    } catch {
-      // ignore
-    } finally {
-      setSavingIdx(null);
-    }
+  // Bilder werden bereits SERVERSEITIG automatisch in die Mediathek
+  // gespeichert (auch bei geschlossenem Tab). Der Button markiert nur noch
+  // lokal als gespeichert — kein zweiter Eintrag.
+  async function handleSaveToLibrary(_url: string, idx: number) {
+    setSavedSet((prev) => {
+      const next = new Set(prev);
+      next.add(idx);
+      return next;
+    });
   }
 
   // ── Step 1: upload ────────────────────────────────────────────

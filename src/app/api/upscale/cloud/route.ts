@@ -33,6 +33,7 @@ import {
 } from "@/lib/sheets";
 import { recordUsd, REPLICATE_UPSCALE_USD } from "@/lib/provider-usage";
 import { getCreditCost } from "@/lib/credit-config-server";
+import { autoSaveLibraryImage } from "@/lib/library";
 
 // Erkennt Replicate/Real-ESRGAN-Fehler die auf Pixel-Overload zeigen.
 function isPixelOverloadError(msg: string): boolean {
@@ -357,8 +358,18 @@ export async function POST(req: Request) {
   // Replicate-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
   await recordUsd("replicate", REPLICATE_UPSCALE_USD);
 
+  // Automatisch in die Mediathek (serverseitig → bleibt erhalten, auch wenn
+  // der Tab schon zu ist). Nicht-fatal.
+  await autoSaveLibraryImage({
+    userKey: session.lizenzschluessel,
+    source: "upscaler",
+    title: `Upscale ${scale}× (${mode})`,
+    remoteUrl: outputUrl,
+    meta: { scale, mode },
+  });
+
   return NextResponse.json(
-    { url: outputUrl, scale, mode, creditsRemaining },
+    { url: outputUrl, scale, mode, creditsRemaining, savedToLibrary: !!session.lizenzschluessel },
     { status: 200, headers: { "Cache-Control": "no-store" } },
   );
 }
