@@ -1,4 +1,5 @@
 import { google } from "googleapis";
+import type { ScoutVideo } from "./video-scout";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -1768,6 +1769,91 @@ export async function deleteTheme(rowIndex: number): Promise<void> {
     valueInputOption: "RAW",
     requestBody: { values: [["", "", "", "", "", "", ""]] },
   });
+}
+
+// ─── SCOUT CACHE (Tab "ScoutCache") ──────────────────────────────
+// Globaler, PRODUKT-basierter Video-Cache für den Video Scout. Findet EIN
+// Kunde per Apify Videos zu einem Produkt, landen sie hier — der NÄCHSTE
+// Kunde mit demselben Produkt wird daraus bedient, ohne dass ein neuer
+// (teurer) Apify-Run nötig ist. Pro Produkt EINE Zeile; die Videos liegen
+// als JSON in einer Zelle. Die Thumbnails sind bereits auf Vercel Blob
+// re-hostet (stabile, kurze URLs) — der Cache bleibt also auch nach Tagen
+// gültig und die Zelle klein. Cap pro Produkt hält die Zelle unter dem
+// 50k-Zeichen-Limit.
+//   A=ProductId, B=VideosJson, C=Count, D=UpdatedAt
+const SCOUT_CACHE_HEADERS = ["ProductId", "VideosJson", "Count", "UpdatedAt"];
+const SCOUT_CACHE_MAX = 60;
+
+/** Gemeinsamer Video-Pool zu einem Produkt (leer, wenn nichts gecacht). */
+export async function getScoutCache(productId: string): Promise<ScoutVideo[]> {
+  if (!productId) return [];
+  const sheets = getSheets();
+  try {
+    await ensureSheet("ScoutCache", SCOUT_CACHE_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "ScoutCache!A2:B",
+    });
+    const rows = res.data.values || [];
+    const hit = rows.find((r) => (r[0] || "") === productId);
+    if (!hit || !hit[1]) return [];
+    const parsed = JSON.parse(hit[1]);
+    return Array.isArray(parsed) ? (parsed as ScoutVideo[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Neue Videos in den gemeinsamen Produkt-Cache mergen (dedupe per URL,
+ *  neueste/stärkste zuerst, gedeckelt). Upsert: bestehende Produktzeile
+ *  wird per `values.update` überschrieben, neue Produkte angehängt. */
+export async function addToScoutCache(productId: string, videos: ScoutVideo[]): Promise<void> {
+  if (!productId || videos.length === 0) return;
+  const sheets = getSheets();
+  await ensureSheet("ScoutCache", SCOUT_CACHE_HEADERS);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: "ScoutCache!A2:B",
+  });
+  const rows = res.data.values || [];
+  const idx = rows.findIndex((r) => (r[0] || "") === productId);
+
+  let existing: ScoutVideo[] = [];
+  if (idx >= 0 && rows[idx][1]) {
+    try {
+      const p = JSON.parse(rows[idx][1]);
+      if (Array.isArray(p)) existing = p as ScoutVideo[];
+    } catch {
+      /* defekte Zelle ignorieren, frisch befüllen */
+    }
+  }
+
+  const seen = new Set<string>();
+  const merged: ScoutVideo[] = [];
+  for (const v of [...videos, ...existing]) {
+    if (!v?.url || seen.has(v.url)) continue;
+    seen.add(v.url);
+    merged.push(v);
+    if (merged.length >= SCOUT_CACHE_MAX) break;
+  }
+
+  const rowValues = [productId, JSON.stringify(merged), String(merged.length), new Date().toISOString()];
+  if (idx >= 0) {
+    const rowNumber = idx + 2; // +2: Header + 0-basiert
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID(),
+      range: `ScoutCache!A${rowNumber}:D${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "ScoutCache!A:D",
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  }
 }
 
 // ─── START TASKS (Tab "StartTasks") ───────────────────────────────

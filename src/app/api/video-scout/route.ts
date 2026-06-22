@@ -33,6 +33,8 @@ import {
   getAllProdukte,
   getCreditsState,
   updateKundeProfile,
+  getScoutCache,
+  addToScoutCache,
   type Produkt,
 } from "@/lib/sheets";
 import {
@@ -606,6 +608,101 @@ export async function POST(req: Request) {
     }
   }
 
+  // Bereits beim Kunden gespeicherte Video-URLs (Dedupe-Quelle). Wird
+  // sowohl für den Cache-Treffer als auch für den Live-Pool gebraucht.
+  const savedUrls = new Set(
+    (kunde && Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : []).map(
+      (v) => v.url,
+    ),
+  );
+
+  // ── Gemeinsamer Abschluss (Cache- UND Live-Pfad nutzen ihn) ──
+  // Wendet die Halb-Preis-Regel an, speichert beim Kunden, zieht Credits
+  // ab und antwortet. Bei einem Live-Fund (fromCache=false) werden die
+  // Videos ausserdem in den globalen Produkt-Cache geschrieben, damit der
+  // NÄCHSTE Kunde mit diesem Produkt ohne Apify-Run bedient werden kann.
+  // `top` ist das finale ScoutVideo-Set mit stabilen (Blob-)Thumbnails.
+  const finalize = async (top: ScoutVideo[], fromCache: boolean) => {
+    const hasWeakVideo = top.some((v) => v.refunded);
+    const netCost = chargedCredits(cost, hasWeakVideo);
+    const creditsSaved = Math.max(0, cost - netCost);
+
+    let creditsRemaining: number | undefined;
+    if (kunde) {
+      const nowIso = new Date().toISOString();
+      const newRecords: SavedScoutVideo[] = top.map((v) => ({
+        ...v,
+        productId,
+        savedAt: nowIso,
+      }));
+      const existing = Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : [];
+      // Neueste zuerst, global auf 60 begrenzt (Profil-Zelle nicht sprengen).
+      const merged = [...newRecords, ...existing].slice(0, 60);
+      const updatedProfile = { ...kunde.profile, scoutVideos: merged };
+      try {
+        if (netCost > 0) {
+          const result = await deductCredits(kunde.rowIndex, updatedProfile, netCost, "video-scout");
+          if (!result.success) {
+            return NextResponse.json(
+              { error: `Nicht genug Credits — die Suche kostet ${cost}.`, creditsRemaining: result.remaining },
+              { status: 402 },
+            );
+          }
+          creditsRemaining = result.remaining;
+        } else {
+          await updateKundeProfile(kunde.rowIndex, updatedProfile);
+          creditsRemaining = getCreditsState(updatedProfile).balance;
+        }
+      } catch (e) {
+        console.error("[video-scout] save+deduct failed:", e);
+        return NextResponse.json({ error: "Abrechnung fehlgeschlagen." }, { status: 500 });
+      }
+    }
+
+    // Live-Funde in den gemeinsamen Cache mergen (nicht-fatal, daher nach
+    // der Abrechnung und in try/catch).
+    if (!fromCache) {
+      try {
+        await addToScoutCache(productId, top);
+      } catch (e) {
+        console.warn("[video-scout] cache write failed (non-fatal):", e);
+      }
+    }
+
+    return NextResponse.json(
+      {
+        product,
+        productId,
+        requested_videos: count,
+        credits_used: netCost,
+        credits_saved: creditsSaved,
+        half_price: hasWeakVideo,
+        weak_count: top.filter((v) => v.refunded).length,
+        from_cache: fromCache,
+        tier_status: "Premium Search",
+        verification: { requested: count, delivered: top.length },
+        videos_found: top,
+        creditsRemaining,
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  };
+
+  // ── Cache-First: schon mal jemand Videos zu diesem Produkt gefunden? ──
+  // Deckt der gemeinsame Cache die gewünschte Menge mit Videos, die DIESER
+  // Kunde noch nicht hat, bedienen wir ihn daraus — KEIN Apify-/Claude-Run,
+  // die API-Kosten entfallen komplett.
+  try {
+    const cacheAvailable = (await getScoutCache(productId))
+      .filter((v) => v.url && !savedUrls.has(v.url))
+      .sort((a, b) => b.view_count - a.view_count);
+    if (cacheAvailable.length >= count) {
+      return await finalize(cacheAvailable.slice(0, count), true);
+    }
+  } catch (e) {
+    console.warn("[video-scout] cache lookup failed, scraping live:", e);
+  }
+
   // ── KI-Client (für Query-Gen + Relevanzfilter) ──
   const client = new Anthropic({ apiKey: anthropicKey });
 
@@ -641,14 +738,9 @@ export async function POST(req: Request) {
   }
 
   // ── 3) Müll raus + bereits gezogene Videos ausschliessen ──
-  // Kein Video kann zweimal gezogen werden: gegen die gespeicherten URLs
-  // dieses Kunden deduplizieren. Offensichtlichen Müll (< INCLUDE_MIN)
-  // ganz raus. Nach echten Views sortieren, Pool deckeln.
-  const savedUrls = new Set(
-    (kunde && Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : []).map(
-      (v) => v.url,
-    ),
-  );
+  // Kein Video kann zweimal gezogen werden: gegen die (oben berechneten)
+  // gespeicherten URLs dieses Kunden deduplizieren. Offensichtlichen Müll
+  // (< INCLUDE_MIN) ganz raus. Nach echten Views sortieren, Pool deckeln.
   const pool = candidates
     .filter((c) => c.views >= VIDEO_INCLUDE_MIN && !savedUrls.has(c.url))
     .sort((a, b) => b.views - a.views)
@@ -710,13 +802,11 @@ export async function POST(req: Request) {
     );
   }
 
-  // ── 7) Halb-Preis-Regel: ist ≥1 geliefertes Video schwach (<10k), zahlt
-  //      der Kunde nur die Hälfte der Credits. Sonst den vollen Preis. ──
-  // Thumbnails dauerhaft machen (nur wenn wir persistieren = kunde);
-  // für Admin reicht die Original-URL (nur in-Session sichtbar).
-  const thumbs: string[] = kunde
-    ? await Promise.all(top.map((c) => rehostThumbnail(c.thumbnail)))
-    : top.map((c) => c.thumbnail);
+  // ── 7) Finales Set bauen + Thumbnails dauerhaft machen ──
+  // Thumbnails IMMER re-hosten (stabile Blob-URLs) — auch für Admin-Runs,
+  // denn diese Funde wandern in den gemeinsamen Cache und müssen darum
+  // auch Tage später noch ein gültiges Vorschaubild haben.
+  const thumbs = await Promise.all(top.map((c) => rehostThumbnail(c.thumbnail)));
   const videos_found: ScoutVideo[] = top.map((c, i) => ({
     url: c.url,
     platform: c.platform,
@@ -728,71 +818,7 @@ export async function POST(req: Request) {
     likes: c.likes || undefined,
     refunded: c.views < VIDEO_VIRAL_MIN,
   }));
-  const hasWeakVideo = videos_found.some((v) => v.refunded);
-  const netCost = chargedCredits(cost, hasWeakVideo);
-  const creditsSaved = Math.max(0, cost - netCost);
 
-  // ── 7) Videos beim Kunden speichern + Netto-Credits abziehen (atomar) ──
-  // deductCredits schreibt `{ ...profile, credits }`, nimmt also unser
-  // erweitertes scoutVideos mit — ein einziger Write, keine halben Zustände.
-  let creditsRemaining: number | undefined;
-  if (kunde) {
-    const nowIso = new Date().toISOString();
-    const newRecords: SavedScoutVideo[] = videos_found.map((v) => ({
-      url: v.url,
-      platform: v.platform,
-      view_count: v.view_count,
-      formatted_views: v.formatted_views,
-      title_snippet: v.title_snippet, // nur 15 Zeichen
-      thumbnail: v.thumbnail, // dauerhafte Blob-URL (oder leer)
-      likes: v.likes,
-      refunded: v.refunded,
-      productId,
-      savedAt: nowIso,
-    }));
-    const existing = Array.isArray(kunde.profile.scoutVideos) ? kunde.profile.scoutVideos : [];
-    // Neueste zuerst, global auf 60 begrenzt (Profil-Zelle nicht sprengen).
-    const merged = [...newRecords, ...existing].slice(0, 60);
-    const updatedProfile = { ...kunde.profile, scoutVideos: merged };
-    try {
-      if (netCost > 0) {
-        const result = await deductCredits(kunde.rowIndex, updatedProfile, netCost, "video-scout");
-        if (!result.success) {
-          return NextResponse.json(
-            { error: `Nicht genug Credits — die Suche kostet ${cost}.`, creditsRemaining: result.remaining },
-            { status: 402 },
-          );
-        }
-        creditsRemaining = result.remaining;
-      } else {
-        // Alles gutgeschrieben (theoretisch) — nur speichern, nichts abziehen.
-        await updateKundeProfile(kunde.rowIndex, updatedProfile);
-        creditsRemaining = getCreditsState(updatedProfile).balance;
-      }
-    } catch (e) {
-      console.error("[video-scout] save+deduct failed:", e);
-      return NextResponse.json({ error: "Abrechnung fehlgeschlagen." }, { status: 500 });
-    }
-  }
-
-  // Antwort: videos_found hält das Agent-Schema ein; productId, die
-  // Credit-/Verifier-Infos und creditsRemaining sind App-Extras fürs UI.
-  return NextResponse.json(
-    {
-      product,
-      productId,
-      requested_videos: count,
-      credits_used: netCost,
-      credits_saved: creditsSaved,
-      half_price: hasWeakVideo,
-      weak_count: videos_found.filter((v) => v.refunded).length,
-      tier_status: "Premium Search",
-      // Verifier-Beleg: gewünscht vs. tatsächlich geliefert (immer gleich,
-      // sonst wäre oben schon retryLater gegriffen).
-      verification: { requested: count, delivered: videos_found.length, weak_seen: weakSeen },
-      videos_found,
-      creditsRemaining,
-    },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  // Halb-Preis-Regel + Speichern + Abzug + Cache-Write erledigt finalize.
+  return await finalize(videos_found, false);
 }
