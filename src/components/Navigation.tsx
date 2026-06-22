@@ -8,6 +8,7 @@ import {
   Home,
   Settings,
   Settings as SettingsIcon,
+  AlertTriangle,
   LogOut,
   Menu,
   X,
@@ -531,7 +532,7 @@ export default function Navigation() {
               <MobileSection title="Support" icon={Bot} defaultOpen={false}>
                 <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub="Sofort-Antwort vom KI-Bot" />
                 <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
-                <SheetItem href="/email-support" icon={Mail} label="E-Mail Support" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Direkt an unser Team" />
+                <SheetItem href="/email-support" icon={AlertTriangle} label="Problem melden" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Kurzes Formular ans Team" />
                 <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team" />
               </MobileSection>
 
@@ -1160,7 +1161,7 @@ interface SupportItem {
 const SUPPORT_ITEMS: SupportItem[] = [
   { href: "/ai-support", label: "AI Support", sub: "Sofort-Antworten vom KI-Bot", icon: Bot, color: "text-cyan-400" },
   { href: "/ai-support?view=tickets", label: "Meine Tickets", sub: "Vergangene Anfragen & Verlauf", icon: Inbox, color: "text-amber-400" },
-  { href: "/email-support", label: "E-Mail Support", sub: "Direkt an unser Team schreiben", icon: Mail, color: "text-rose-400" },
+  { href: "/email-support", label: "Problem melden", sub: "Kurzes Formular ans Team", icon: AlertTriangle, color: "text-amber-400" },
   { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team", icon: GraduationCap, color: "text-purple-400" },
 ];
 

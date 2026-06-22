@@ -158,11 +158,12 @@ export const DEFAULT_TIERS: TierDefinition[] = [
     priceMonthlyEur: 21,
     priceYearlyEur: 0,
     trialDays: 7,
-    // 500 Credits werden bei JEDER Abo-Zahlung gutgeschrieben
-    // (orders/paid webhook). startingCredits = erste Zahlung,
-    // monthlyCreditAllowance = jedes Renewal danach (gleicher Key bleibt).
-    startingCredits: 500,
-    monthlyCreditAllowance: 500,
+    // Credits laufen NICHT mehr über das Shopify-Abo, sondern über den
+    // Hub-Zyklus: 1.500 beim ersten Login + 1.000 alle 28 Tage
+    // (ensureStarterGrant / ensureRecurringGrant). Darum hier 0 — sonst
+    // bekäme der Neukunde zusätzlich zu den 1.500 noch die Abo-Credits.
+    startingCredits: 0,
+    monthlyCreditAllowance: 0,
     limits: {
       maxProducts: -1,
       maxBlogsPerMonth: -1,

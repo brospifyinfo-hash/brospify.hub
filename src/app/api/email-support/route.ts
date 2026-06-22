@@ -39,21 +39,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let subject = "";
+  let category = "";
+  let urgency = "";
   let message = "";
+  let providedEmail = "";
   try {
     const body = await req.json();
-    subject = String(body?.subject || "").trim().slice(0, 200);
+    category = String(body?.category || "").trim().slice(0, 120);
+    urgency = String(body?.urgency || "").trim().slice(0, 120);
     message = String(body?.message || "").trim().slice(0, 10_000);
+    providedEmail = String(body?.email || "").trim().slice(0, 200);
   } catch {
     return NextResponse.json({ error: "Body unleserlich." }, { status: 400 });
   }
-  if (!subject || !message) {
+  if (!category || !message) {
     return NextResponse.json(
-      { error: "Bitte Betreff und Nachricht angeben." },
+      { error: "Bitte Kategorie und Beschreibung angeben." },
       { status: 400 },
     );
   }
+  const subject = category;
 
   const apiKey = (process.env.RESEND_API_KEY || "").trim();
   // Admin-Mails bevorzugen die Hub-Domain (RESEND_ADMIN_FROM_EMAIL),
@@ -70,15 +75,15 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // User-Infos sammeln fuer den Email-Header.
-  let kundeEmail = session.googleEmail || "";
+  // Absender-Mail: vom User eingegeben hat Vorrang, sonst Google-/Kunden-Mail.
+  let kundeEmail = providedEmail || session.googleEmail || "";
   let shopDomain = "";
   let tier = "";
   if (session.lizenzschluessel) {
     try {
       const kunde = await findKundeByKey(session.lizenzschluessel);
       if (kunde) {
-        kundeEmail = kunde.kundenEmail || kundeEmail;
+        kundeEmail = kundeEmail || kunde.kundenEmail || "";
         shopDomain = kunde.shopDomain || "";
         tier = kunde.profile?.tier || "";
       }
@@ -88,7 +93,7 @@ export async function POST(req: NextRequest) {
   }
 
   const userLabel = session.googleName || kundeEmail || session.lizenzschluessel || "Unbekannt";
-  const fullSubject = `[Brospify Hub] ${subject}`;
+  const fullSubject = `[Problem] ${subject}${urgency ? ` · ${urgency}` : ""}`;
 
   // HTML-Header mit User-Kontext + Original-Nachricht.
   const html = `
@@ -97,7 +102,9 @@ export async function POST(req: NextRequest) {
         <strong style="color: #95BF47;">Brospify Hub Support-Anfrage</strong><br/>
         <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 8px 0;"/>
         <strong>Von:</strong> ${escapeHtml(userLabel)}<br/>
-        ${kundeEmail ? `<strong>E-Mail:</strong> <a href="mailto:${escapeHtml(kundeEmail)}">${escapeHtml(kundeEmail)}</a><br/>` : ""}
+        ${kundeEmail ? `<strong>E-Mail:</strong> <a href="mailto:${escapeHtml(kundeEmail)}">${escapeHtml(kundeEmail)}</a><br/>` : `<strong style="color:#dc2626;">Keine E-Mail angegeben</strong><br/>`}
+        <strong>Kategorie:</strong> ${escapeHtml(category)}<br/>
+        ${urgency ? `<strong>Dringlichkeit:</strong> ${escapeHtml(urgency)}<br/>` : ""}
         ${session.lizenzschluessel ? `<strong>Lizenz:</strong> <code>${escapeHtml(session.lizenzschluessel)}</code><br/>` : ""}
         ${shopDomain ? `<strong>Shop:</strong> ${escapeHtml(shopDomain)}<br/>` : ""}
         ${tier ? `<strong>Tier:</strong> ${escapeHtml(tier)}<br/>` : ""}
@@ -114,14 +121,14 @@ export async function POST(req: NextRequest) {
   `.trim();
 
   const text = [
-    `Brospify Hub — Support-Anfrage`,
+    `Brospify Hub — Problem gemeldet`,
     `Von: ${userLabel}`,
-    kundeEmail ? `E-Mail: ${kundeEmail}` : "",
+    kundeEmail ? `E-Mail: ${kundeEmail}` : "Keine E-Mail angegeben",
+    `Kategorie: ${category}`,
+    urgency ? `Dringlichkeit: ${urgency}` : "",
     session.lizenzschluessel ? `Lizenz: ${session.lizenzschluessel}` : "",
     shopDomain ? `Shop: ${shopDomain}` : "",
     tier ? `Tier: ${tier}` : "",
-    "",
-    subject,
     "",
     message,
   ].filter(Boolean).join("\n");

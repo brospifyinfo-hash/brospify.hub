@@ -26,10 +26,10 @@ NAVIGATION (wo finde ich was?)
 
 CREDITS
 - Credits werden für KI-Aktionen verbraucht. Guthaben & Pakete: [Credits](/credits).
-- Jeder neue Account erhält einmalig 500 Start-Credits geschenkt.
-- Credit-Pakete (Kauf im Brospify-Shop, Aufladung erfolgt automatisch): Starter 500 Credits = 9,95 €, Pro 2.000 Credits = 24,95 €, Max 5.000 Credits = 39,95 €.
-- Kosten pro Aktion (Standardpreise, können vom Admin angepasst werden): Produkt-Drop 50 · Video Scout 40 (3 Videos) / 70 (6) / 90 (9) · AI Email Generator 20 · AI Studio 15 pro Bild · Image Upscaler 5 · Background Remover 5.
-- Mitgliedschaft: es gibt genau EINEN Plan, die Brospify Membership für 21 €/Monat (alle Tools, Coaching, Priority-Support, 2.000 Credits/Monat). Buchen/verwalten unter [Abo verwalten](/account/subscription).
+- Jeder neue Account erhält beim ERSTEN Login einmalig 1.500 Start-Credits geschenkt — danach automatisch alle 28 Tage 1.000 Credits dazu (unabhängig vom Abo). Wichtig: NICHT mehr 500, NICHT 2.000 beim Start, sondern genau 1.500 zu Beginn und dann +1.000 je 28-Tage-Zyklus. Die nächste Gutschrift mit Countdown + Tage-Timeline sieht man unter [Abo verwalten](/account/subscription).
+- Credit-Pakete (zusätzlicher Kauf im Brospify-Shop, Aufladung automatisch): Starter 500 Credits = 9,95 €, Pro 2.000 Credits = 24,95 €, Max 5.000 Credits = 39,95 €.
+- Kosten pro Aktion (Standardpreise, können vom Admin angepasst werden): Produkt-Drop 50 · Video Scout 40 (1 Video) / 70 (2) / 95 (3) · AI Email Generator 20 · AI Studio 15 pro Bild · Image Upscaler 5 · Background Remover 5.
+- Mitgliedschaft: es gibt genau EINEN Plan, die Brospify Membership für 21 €/Monat (alle Tools, Coaching, Priority-Support). Die Credits (1.500 Start + 1.000 alle 28 Tage) laufen über den Hub-Zyklus, nicht über die monatliche Abo-Zahlung. Buchen/verwalten unter [Abo verwalten](/account/subscription).
 - Sobald das Guthaben auf 0 fällt (egal bei welcher Aktion man die letzten Credits ausgibt), wird man automatisch auf die [Credits aufladen](/credits)-Seite weitergeleitet.
 
 PRODUKT-DROP / ZUFALLS-GENERATOR ("Produkt Search") — [Produkt Search](/charts)
@@ -69,7 +69,7 @@ KONTO & EINSTELLUNGEN
 SUPPORT
 - AI Support (hier) — [AI Support](/ai-support): Sofort-Antworten vom KI-Bot. Wird die Frage nicht gelöst, kann daraus mit einem Klick ein Live-Ticket werden (der gesamte Chat-Verlauf wird mitgeschickt und bleibt gespeichert).
 - Meine Tickets — [Meine Tickets](/ai-support?view=tickets): Verlauf sowie offene/gelöste Tickets.
-- E-Mail Support — [E-Mail Support](/email-support): direkt ans Team schreiben.
+- Problem melden — [Problem melden](/email-support): kurzes Formular (Kategorie, Dringlichkeit, Beschreibung + Antwort-E-Mail), geht direkt ans Team.
 - Privates Coaching — [Coaching](/coaching): 1:1-Begleitung mit dem Team.
 
 AKTUELL NICHT VERFÜGBAR

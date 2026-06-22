@@ -179,9 +179,9 @@ export default function AccountSubscriptionPage() {
           />
           <KPICard
             icon={TrendingUp}
-            label="Monatlich"
-            value={tier ? tier.monthlyCreditAllowance.toLocaleString("de-DE") : "—"}
-            suffix={tier ? "Credits / Monat" : ""}
+            label="Automatisch"
+            value={creditCycle ? creditCycle.recurringAmount.toLocaleString("de-DE") : "—"}
+            suffix={creditCycle ? `Credits / ${creditCycle.periodDays} Tage` : ""}
             color="#10B981"
           />
           <KPICard
@@ -223,7 +223,7 @@ export default function AccountSubscriptionPage() {
                     value={`${formatDate(profile.subscriptionEndsAt)} (${formatRelative(profile.subscriptionEndsAt)})`}
                     icon={Sparkles}
                     highlight
-                    note={tier ? `+${tier.monthlyCreditAllowance.toLocaleString("de-DE")} Credits automatisch` : undefined}
+                    note="Verlängert deinen Zugang — Credits kommen separat alle 28 Tage"
                   />
                 )}
                 {isCanceled && !isExpired && profile?.subscriptionEndsAt && (
