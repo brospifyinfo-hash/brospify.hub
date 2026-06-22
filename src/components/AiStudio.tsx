@@ -70,6 +70,9 @@ export default function AiStudio() {
 
   const [savedSet, setSavedSet] = useState<Set<number>>(() => new Set());
   const [savingIdx, setSavingIdx] = useState<number | null>(null);
+  // Hintergrund-Modus: Tab darf zu, Ergebnis landet automatisch in der Mediathek.
+  const [bgMode, setBgMode] = useState(false);
+  const [bgNotice, setBgNotice] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const [dragActive, setDragActive] = useState(false);
@@ -199,6 +202,32 @@ export default function AiStudio() {
       AI_STUDIO_SCENES.find((s) => s.id === sceneId) || AI_STUDIO_SCENES[0];
 
     setErrorMsg(null);
+
+    // ── Hintergrund-Modus: feuern, sofort bestätigen, Tab darf zu. ──
+    if (bgMode) {
+      try {
+        const fd = new FormData();
+        fd.append("file", preparedFile);
+        fd.append("sceneId", scene.id);
+        fd.append("background", "true");
+        const trimmedPrompt = customPrompt.trim().slice(0, CUSTOM_PROMPT_MAX);
+        if (trimmedPrompt) fd.append("customPrompt", trimmedPrompt);
+        const res = await fetch("/api/ai-studio", { method: "POST", body: fd });
+        if (!res.ok && res.status !== 202) {
+          const d = await res.json().catch(() => ({}));
+          throw new Error(d?.error || "Konnte nicht starten.");
+        }
+        credits.optimisticDeduct(cost);
+        setBgNotice(true);
+        setStage("configure");
+        setTimeout(() => credits.refresh(), 4000);
+      } catch (err) {
+        setErrorMsg(err instanceof Error ? err.message : "Start fehlgeschlagen.");
+        setStage("error");
+      }
+      return;
+    }
+
     setStage("processing");
     startTimer();
     credits.optimisticDeduct(cost);
@@ -423,8 +452,32 @@ export default function AiStudio() {
             }}
           >
             <SparklesIcon />
-            Generieren · {cost} {credits.creditIcon}
+            {bgMode ? "Im Hintergrund generieren" : "Generieren"} · {cost} {credits.creditIcon}
           </button>
+
+          {/* Hintergrund-Modus-Schalter */}
+          <button
+            onClick={() => { setBgMode((v) => !v); setBgNotice(false); }}
+            className="mt-2.5 w-full flex items-center gap-2.5 rounded-xl border border-white/10 bg-white/[0.02] px-3 py-2.5 text-left hover:bg-white/[0.04] transition"
+          >
+            <span className={`w-9 h-5 rounded-full relative transition shrink-0 ${bgMode ? "bg-[#95BF47]" : "bg-white/15"}`}>
+              <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${bgMode ? "left-[18px]" : "left-0.5"}`} />
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="block text-[12px] font-medium text-zinc-200">Im Hintergrund generieren</span>
+              <span className="block text-[10.5px] text-zinc-500 leading-snug">Du kannst den Tab schliessen — das fertige Bild landet automatisch in der Mediathek.</span>
+            </span>
+          </button>
+
+          {bgNotice && (
+            <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.07] px-3.5 py-3">
+              <span className="text-[18px] leading-none mt-0.5">🚀</span>
+              <p className="text-[12px] text-zinc-200 leading-snug">
+                Läuft im Hintergrund! Du kannst den Tab schliessen — das Ergebnis findest du gleich in der{" "}
+                <a href="/library" className="underline font-medium text-[#95BF47]">Mediathek</a>.
+              </p>
+            </div>
+          )}
 
           {insufficientCredits && (
             <div

@@ -18,7 +18,7 @@
 //
 // Env: FAL_KEY required.
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { put } from "@vercel/blob";
 import sharp from "sharp";
 import { getSession } from "@/lib/session";
@@ -109,6 +109,9 @@ export async function POST(req: Request) {
     1,
     Math.min(MAX_IMAGES, Math.round(Number(countRaw) || 1)),
   );
+  // Hintergrund-Modus: Client darf den Tab schliessen, Ergebnis landet
+  // automatisch in der Mediathek.
+  const background = String(formData.get("background")) === "true";
 
   // 3) Credit gate (per image × count). Admins skip the meter.
   const perImage = await getCreditCost("AI_STUDIO");
@@ -176,108 +179,109 @@ export async function POST(req: Request) {
     );
   }
 
-  // 4) Relight — ONE IC-Light job that returns `count` variations via
-  //    the model's native `num_images`. One queue job = reliable count
-  //    + predictable latency. (Firing N parallel jobs got throttled by
-  //    Fal, which is why "2 angefragt → nur 1, und 3 Min" passierte.)
-  let relitUrls: string[];
-  try {
+  // ── Schwere Arbeit als Funktion: IC-Light + Download + Persist.
+  //    Kann sync ODER im Hintergrund (after) laufen. Wirft bei Fehler. ──
+  const doGenerate = async (): Promise<string[]> => {
     const iclight = await callFal<IcLightResponse>("fal-ai/iclight-v2", {
       image_url: normalisedDataUri,
       prompt: finalPrompt,
       negative_prompt: buildNegativePrompt(scene),
       image_size: "square_hd",
-      // Anzahl Varianten in EINEM Job (Fal IC-Light v2 unterstützt das).
       num_images: count,
-      // 30 Steps: spürbar schneller als 40 und visuell quasi gleich gut.
       num_inference_steps: 30,
-      // IC-Light v2 Default ist 5; 4.5 wirkt minimal natürlicher und das
-      // (verschärfte) Negative-Prompt greift bei diesem CFG zuverlässig.
       guidance_scale: 4.5,
       output_format: "jpeg",
       enable_safety_checker: false,
     });
-    relitUrls = (iclight.images || [])
+    const relitUrls = (iclight.images || [])
       .map((i) => i?.url)
       .filter((u): u is string => typeof u === "string" && u.length > 0);
     if (relitUrls.length === 0) {
       throw new FalError("iclight lieferte keine Bild-URL.", 502, iclight);
     }
-  } catch (err) {
-    return falErrorResponse(err, "Szenen-Generierung");
-  }
-
-  // 5+6) Download, re-encode to clean JPEG, persist each variation.
-  const baseName = fileEntry.name.replace(/\.[^.]+$/, "");
-  const outputUrls: string[] = [];
-  for (let i = 0; i < relitUrls.length; i++) {
-    try {
-      const dl = await fetch(relitUrls[i]);
-      if (!dl.ok) {
-        throw new FalError(`Relight-Download fehlgeschlagen (${dl.status}).`, 502);
-      }
-      const buf = Buffer.from(await dl.arrayBuffer());
-      let jpeg: Buffer;
+    const baseName = fileEntry.name.replace(/\.[^.]+$/, "");
+    const urls: string[] = [];
+    for (let i = 0; i < relitUrls.length; i++) {
       try {
-        jpeg = await sharp(buf).jpeg({ quality: 92, mozjpeg: true }).toBuffer();
-      } catch {
-        jpeg = buf; // fall back to whatever Fal sent
+        const dl = await fetch(relitUrls[i]);
+        if (!dl.ok) throw new FalError(`Relight-Download fehlgeschlagen (${dl.status}).`, 502);
+        const buf = Buffer.from(await dl.arrayBuffer());
+        let jpeg: Buffer;
+        try { jpeg = await sharp(buf).jpeg({ quality: 92, mozjpeg: true }).toBuffer(); }
+        catch { jpeg = buf; }
+        const blob = await put(
+          `ai-studio/${Date.now()}-${baseName}-${scene.id}-${i + 1}.jpg`,
+          jpeg,
+          { access: "public", contentType: "image/jpeg" },
+        );
+        urls.push(blob.url);
+      } catch (err) {
+        console.error("[ai-studio] variation persist failed:", err);
       }
-      const blob = await put(
-        `ai-studio/${Date.now()}-${baseName}-${scene.id}-${i + 1}.jpg`,
-        jpeg,
-        { access: "public", contentType: "image/jpeg" },
-      );
-      outputUrls.push(blob.url);
-    } catch (err) {
-      console.error("[ai-studio] variation persist failed:", err);
     }
-  }
-  if (outputUrls.length === 0) {
+    if (urls.length === 0) throw new FalError("Ergebnis konnte nicht gespeichert werden.", 500);
+    return urls;
+  };
+
+  // ── Abrechnen + Mediathek (sync und Hintergrund identisch). ──
+  const finalize = async (outputUrls: string[]): Promise<number | undefined> => {
+    const billedCount = outputUrls.length;
+    let creditsRemaining: number | undefined;
+    if (kundeRowIndex !== null && kundeProfile !== null) {
+      try {
+        const result = await deductCredits(kundeRowIndex, kundeProfile, perImage * billedCount);
+        if (result.success) creditsRemaining = result.remaining;
+      } catch (err) {
+        console.error("[ai-studio] credit deduction failed:", err);
+      }
+    }
+    await recordUsd("fal", FAL_AI_STUDIO_USD * billedCount);
+    for (const u of outputUrls) {
+      await autoSaveLibraryImage({
+        userKey: session.lizenzschluessel,
+        source: "ai-studio",
+        title: `AI Studio — ${scene.label}`,
+        remoteUrl: u,
+        meta: { sceneId: scene.id, sceneLabel: scene.label },
+      });
+    }
+    return creditsRemaining;
+  };
+
+  // ── Hintergrund-Modus: sofort antworten, Arbeit läuft via after() weiter
+  //    (überlebt das Schliessen des Tabs). Ergebnis landet in der Mediathek. ──
+  if (background) {
+    after(async () => {
+      try {
+        const urls = await doGenerate();
+        await finalize(urls);
+        console.log(`[ai-studio] background job done (${urls.length} Bilder)`);
+      } catch (err) {
+        console.error("[ai-studio] background job failed:", err);
+      }
+    });
     return NextResponse.json(
-      { error: "Ergebnis konnte nicht gespeichert werden." },
-      { status: 500 },
+      { queued: true, background: true, count },
+      { status: 202, headers: { "Cache-Control": "no-store" } },
     );
   }
 
-  // 7) Charge credits — bill ONLY for variations we actually delivered.
-  const billedCount = outputUrls.length;
-  let creditsRemaining: number | undefined;
-  if (kundeRowIndex !== null && kundeProfile !== null) {
-    try {
-      const result = await deductCredits(
-        kundeRowIndex,
-        kundeProfile,
-        perImage * billedCount,
-      );
-      if (result.success) creditsRemaining = result.remaining;
-    } catch (err) {
-      console.error("[ai-studio] credit deduction failed:", err);
-    }
+  // ── Synchron ──
+  let outputUrls: string[];
+  try {
+    outputUrls = await doGenerate();
+  } catch (err) {
+    return falErrorResponse(err, "Szenen-Generierung");
   }
-
-  // Fal-Operation war erfolgreich → lokales Verbrauchs-Ledger belasten.
-  await recordUsd("fal", FAL_AI_STUDIO_USD * billedCount);
-
-  // Automatisch in die Mediathek (serverseitig, bleibt auch bei zu-Tab).
-  for (const u of outputUrls) {
-    await autoSaveLibraryImage({
-      userKey: session.lizenzschluessel,
-      source: "ai-studio",
-      title: `AI Studio — ${scene.label}`,
-      remoteUrl: u,
-      meta: { sceneId: scene.id, sceneLabel: scene.label },
-    });
-  }
+  const creditsRemaining = await finalize(outputUrls);
 
   return NextResponse.json(
     {
       urls: outputUrls,
-      // back-compat: callers that still read a single `url`.
       url: outputUrls[0],
       sceneId: scene.id,
       sceneLabel: scene.label,
-      count: billedCount,
+      count: outputUrls.length,
       creditsRemaining,
       savedToLibrary: !!session.lizenzschluessel,
     },
