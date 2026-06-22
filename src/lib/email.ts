@@ -22,6 +22,8 @@
 // issuance must NEVER be blocked by an email-send failure — the
 // customer's row is already in the sheet at that point.
 
+import { SITE_URL } from "./seo";
+
 const RESEND_ENDPOINT = "https://api.resend.com/emails";
 
 interface SendResult {
@@ -126,7 +128,7 @@ export async function sendLicenseEmail(args: LicenseEmailArgs): Promise<SendResu
       Im Hub findest du alle KI-Tools, deine Credits, Trend-Charts und vieles mehr:
     </p>
     <div style="text-align:center;margin:16px 0 24px;">
-      <a href="https://brospifyhub.com/login"
+      <a href="${SITE_URL}"
          style="display:inline-block;background:#95BF47;color:#fff;font-weight:700;
                 font-size:15px;text-decoration:none;padding:14px 28px;border-radius:8px;
                 box-shadow:0 2px 6px rgba(149,191,71,0.3);">
@@ -162,7 +164,7 @@ vielen Dank für deinen Kauf${orderLine}! Hier ist dein Brospify Lizenzschlüsse
 
   ${args.licenseKey}
 
-1. Brospify Hub öffnen: https://brospifyhub.com/login
+1. Brospify Hub öffnen: ${SITE_URL}
    → Mit obigem Lizenzschlüssel einloggen.
 
 2. Theme in deinem Shop aktivieren:

@@ -34,6 +34,8 @@ interface AppSettings {
   youtubeUrl?: string;
   /** Bild für den „Abo abschließen"-Bereich der Login-Seite. */
   aboImageUrl?: string;
+  /** Favicon (Browser-Tab-Icon), wird über /api/favicon ausgeliefert. */
+  faviconUrl?: string;
   // Legacy single-theme fields — kept for backward compat
   themeFileUrl?: string;
   themeFileName?: string;
@@ -167,6 +169,7 @@ export async function POST(req: NextRequest) {
       ...(body.brandName !== undefined && { brandName: body.brandName }),
       ...(body.youtubeUrl !== undefined && { youtubeUrl: body.youtubeUrl }),
       ...(body.aboImageUrl !== undefined && { aboImageUrl: body.aboImageUrl }),
+      ...(body.faviconUrl !== undefined && { faviconUrl: body.faviconUrl }),
       ...(body.themeFileUrl !== undefined && { themeFileUrl: body.themeFileUrl }),
       ...(body.themeFileName !== undefined && { themeFileName: body.themeFileName }),
       ...(body.themeVersion !== undefined && { themeVersion: body.themeVersion }),

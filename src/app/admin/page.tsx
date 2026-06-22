@@ -509,6 +509,7 @@ export default function AdminPage() {
     logoUrl: string;
     brandName: string;
     aboImageUrl: string;
+    faviconUrl: string;
     youtubeUrl: string;
     themeFileUrl: string;
     themeFileName: string;
@@ -520,10 +521,12 @@ export default function AdminPage() {
     themeChangelog: string;
     themes: ThemeEntry[];
   }
-  const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", brandName: "", aboImageUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
+  const [settingsData, setSettingsData] = useState<SettingsData>({ logoUrl: "", brandName: "", aboImageUrl: "", faviconUrl: "", youtubeUrl: "", themeFileUrl: "", themeFileName: "", themeVersion: "", brandPrimary: "", brandAccent: "#95BF47", typography: "Inter", toneOfVoice: "", themeChangelog: "", themes: [] });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [logoBusy, setLogoBusy] = useState(false);
   const [aboBusy, setAboBusy] = useState(false);
+  const [faviconBusy, setFaviconBusy] = useState(false);
+  const [faviconDragging, setFaviconDragging] = useState(false);
   const [themeBusyId, setThemeBusyId] = useState<string | null>(null);
   const [themePreviewBusyId, setThemePreviewBusyId] = useState<string | null>(null);
 
@@ -1345,6 +1348,7 @@ export default function AdminPage() {
         logoUrl: data.logoUrl || "",
         brandName: data.brandName || "",
         aboImageUrl: data.aboImageUrl || "",
+        faviconUrl: data.faviconUrl || "",
         youtubeUrl: data.youtubeUrl || "",
         themeFileUrl: data.themeFileUrl || "",
         themeFileName: data.themeFileName || "",
@@ -1526,6 +1530,66 @@ export default function AdminPage() {
       setError("Abo-Bild speichern fehlgeschlagen.");
     } finally {
       setAboBusy(false);
+    }
+  }
+
+  // ── Favicon (Browser-Tab-Icon) — Upload + Drag&Drop ──
+  async function persistFavicon(faviconUrl: string): Promise<boolean> {
+    const res = await fetch("/api/admin/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ faviconUrl }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      setError(d.error || "Favicon speichern fehlgeschlagen.");
+      return false;
+    }
+    setSettingsData((prev) => ({ ...prev, faviconUrl }));
+    return true;
+  }
+
+  async function uploadFavicon(file: File) {
+    if (!file.type.startsWith("image/")) {
+      setError("Bitte eine Bilddatei ablegen (PNG, ICO, SVG …).");
+      return;
+    }
+    setFaviconBusy(true);
+    setError("");
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const upRes = await fetch("/api/upload", { method: "POST", body: fd });
+      const upData = await upRes.json().catch(() => ({}));
+      if (!upRes.ok || !upData?.url) {
+        setError(upData?.error || "Favicon-Upload fehlgeschlagen.");
+        return;
+      }
+      if (await persistFavicon(upData.url)) {
+        setSuccess("Favicon hochgeladen und gespeichert.");
+        refreshBranding();
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch {
+      setError("Favicon-Upload fehlgeschlagen.");
+    } finally {
+      setFaviconBusy(false);
+    }
+  }
+
+  async function commitFaviconUrl(rawUrl: string) {
+    const faviconUrl = rawUrl.trim();
+    setFaviconBusy(true);
+    setError("");
+    try {
+      if (await persistFavicon(faviconUrl)) {
+        setSuccess(faviconUrl ? "Favicon gespeichert." : "Favicon entfernt.");
+        setTimeout(() => setSuccess(""), 3000);
+      }
+    } catch {
+      setError("Favicon speichern fehlgeschlagen.");
+    } finally {
+      setFaviconBusy(false);
     }
   }
 
@@ -2827,6 +2891,82 @@ export default function AdminPage() {
                   <img src={settingsData.aboImageUrl} alt="Abo-Bild" className="w-full max-h-44 object-cover rounded-lg" />
                 </div>
               )}
+            </div>
+
+            {/* Favicon (Browser-Tab-Icon) — Drag & Drop */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><ImageIcon className="w-5 h-5 text-[#95BF47]" />Favicon (Browser-Tab)</h3>
+              <p className="text-zinc-400 text-sm">Das kleine Icon im Browser-Tab und in Lesezeichen. Empfohlen: quadratisch, PNG/SVG/ICO (z.B. 512×512). Wird sofort gespeichert.</p>
+
+              <div
+                onDragOver={(e) => { e.preventDefault(); if (!faviconBusy) setFaviconDragging(true); }}
+                onDragLeave={(e) => { e.preventDefault(); setFaviconDragging(false); }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setFaviconDragging(false);
+                  if (faviconBusy) return;
+                  const file = e.dataTransfer.files?.[0];
+                  if (file) uploadFavicon(file);
+                }}
+                className={`relative rounded-2xl border-2 border-dashed p-6 text-center transition ${
+                  faviconDragging
+                    ? "border-[#95BF47] bg-[#95BF47]/10"
+                    : "border-white/15 bg-white/[0.02] hover:border-white/25"
+                } ${faviconBusy ? "opacity-60 pointer-events-none" : ""}`}
+              >
+                <div className="flex items-center justify-center gap-4">
+                  {settingsData.faviconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={settingsData.faviconUrl} alt="Favicon" className="w-12 h-12 object-contain rounded-lg bg-white/5 border border-white/10 p-1" />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                      <ImageIcon className="w-6 h-6 text-zinc-600" />
+                    </div>
+                  )}
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-zinc-200">
+                      {faviconBusy ? "Wird hochgeladen…" : faviconDragging ? "Datei hier ablegen" : "Bild hierher ziehen & ablegen"}
+                    </p>
+                    <label className={`mt-1 inline-flex items-center gap-1.5 text-xs text-[#95BF47] ${faviconBusy ? "cursor-wait" : "cursor-pointer hover:underline"}`}>
+                      <Upload className="w-3.5 h-3.5" />
+                      oder Datei auswählen
+                      <input
+                        type="file"
+                        accept="image/*,.ico"
+                        className="hidden"
+                        disabled={faviconBusy}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (file) uploadFavicon(file);
+                        }}
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <input
+                  type="text"
+                  value={settingsData.faviconUrl}
+                  onChange={e => setSettingsData({ ...settingsData, faviconUrl: e.target.value })}
+                  onBlur={e => commitFaviconUrl(e.target.value)}
+                  disabled={faviconBusy}
+                  placeholder="Oder Bild-URL direkt eingeben (speichert beim Verlassen)…"
+                  className="input-glass w-full text-xs disabled:opacity-50"
+                />
+                {settingsData.faviconUrl && (
+                  <button
+                    onClick={() => commitFaviconUrl("")}
+                    disabled={faviconBusy}
+                    className="shrink-0 text-xs text-red-400 hover:text-red-300 transition disabled:opacity-50"
+                  >
+                    Entfernen
+                  </button>
+                )}
+              </div>
+              <p className="text-[10px] text-zinc-500 -mt-1">Hinweis: Browser cachen Favicons aggressiv — nach dem Speichern ggf. Tab neu laden oder Hard-Refresh, bis das neue Icon erscheint.</p>
             </div>
 
             {/* YouTube */}
