@@ -131,7 +131,12 @@ export interface SurveyResponseMeta {
   rushed: boolean;
 }
 
-export const FAST_GAP_MS = 900;
+// Schwellen fürs „durchgeklickt"-Erkennen. Bewusst streng (lieber einmal zu
+// viel markieren) — hier justieren, falls es zu hart/zu lasch greift.
+export const FAST_GAP_MS = 1500;            // Antwort < 1,5s nach der vorherigen = „schnell"
+const RUSH_MEDIAN_GAP_MS = 2500;            // Median-Abstand darunter = gehetzt
+const RUSH_MS_PER_QUESTION = 3500;          // < 3,5s pro Frage gesamt = gehetzt
+const RUSH_FAST_FRACTION = 0.34;            // ≥ 1/3 der Antworten schnell = gehetzt
 
 export interface SurveyResponseRecord {
   id: string;
@@ -157,13 +162,15 @@ export function sanitizeMeta(input: unknown, questionCount: number): SurveyRespo
   const fastCount = num(m.fastCount);
   const medianGapMs = num(m.medianGapMs);
   const minGapMs = num(m.minGapMs);
-  // „Durchgeklickt", wenn die Antworten im Schnitt sehr schnell kamen ODER
-  // die ganze Umfrage unrealistisch kurz war (< 1,5s pro Frage).
+  // „Durchgeklickt", wenn die Antworten im Schnitt schnell kamen ODER die
+  // ganze Umfrage unrealistisch kurz war ODER schon ein Drittel der Antworten
+  // im Schnellklick-Tempo lag.
+  const q = Math.max(1, questionCount);
   const rushed =
     answeredCount > 0 &&
-    ((medianGapMs > 0 && medianGapMs < 1200) ||
-      (durationMs > 0 && durationMs < Math.max(1, questionCount) * 1500) ||
-      fastCount >= Math.ceil(Math.max(1, questionCount) / 2));
+    ((medianGapMs > 0 && medianGapMs < RUSH_MEDIAN_GAP_MS) ||
+      (durationMs > 0 && durationMs < q * RUSH_MS_PER_QUESTION) ||
+      fastCount >= Math.ceil(q * RUSH_FAST_FRACTION));
   return { durationMs, answeredCount, fastCount, medianGapMs, minGapMs, rushed };
 }
 
