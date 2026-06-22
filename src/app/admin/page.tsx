@@ -5237,6 +5237,9 @@ function SystemStatusView({ status, loading, onRefresh, apiBalances, apiBalances
       {/* ─── Starter-Credit Backfill ─── */}
       <BackfillStarterCard />
 
+      {/* ─── Video-Scout-Cache (gemeinsamer Pool + Link-Prune) ─── */}
+      <ScoutCacheCard />
+
       {/* ─── License Sync API (Make.com → Hub → Sheet) ─── */}
       <LicenseSyncCard />
 
@@ -6814,6 +6817,165 @@ function BackfillStarterCard() {
             {error && (
               <span className="text-[11px] text-red-300">{error}</span>
             )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Video-Scout-Cache card (System tab) ────────────────────────
+// Zeigt den gemeinsamen Produkt-Video-Cache + den wöchentlichen Link-
+// Prune (tote Videos raus). Lädt Status beim Öffnen, "Jetzt prüfen"
+// erzwingt einen Lauf.
+interface ScoutCacheStatusT {
+  products: number;
+  videos: number;
+  lastFullRunAt: string | null;
+  lastRunAt: string | null;
+  lastChecked: number;
+  lastRemoved: number;
+  totalRemoved: number;
+  inProgress: boolean;
+  nextDueAt: string | null;
+}
+
+function ScoutCacheCard() {
+  const [status, setStatus] = useState<ScoutCacheStatusT | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [running, setRunning] = useState(false);
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/scout-cache", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) setError(data.error || "Konnte nicht laden.");
+      else setStatus(data.status);
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function runNow() {
+    if (running) return;
+    setRunning(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/scout-cache", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) setError(data.error || "Prüfung fehlgeschlagen.");
+      else setStatus(data.status);
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <div
+      className="rounded-2xl border border-pink-500/15 p-3"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(236,72,153,0.06) 0%, rgba(255,255,255,0.02) 100%)",
+        backdropFilter: "blur(40px) saturate(180%)",
+        WebkitBackdropFilter: "blur(40px) saturate(180%)",
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-9 h-9 rounded-xl bg-pink-500/15 border border-pink-500/25 flex items-center justify-center shrink-0">
+          <Video className="w-4 h-4 text-pink-300" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-bold text-white">Video-Scout-Cache</h3>
+            <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-pink-300/80 bg-pink-500/10 border border-pink-500/25 rounded px-1.5 py-0.5">
+              Link-Prune · wöchentlich
+            </span>
+            {status?.inProgress && (
+              <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-amber-300/80 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5">
+                Durchlauf läuft
+              </span>
+            )}
+          </div>
+          <p className="text-[11px] text-zinc-400 mt-1 leading-snug">
+            Gemeinsamer Pool gefundener Videos pro Produkt — spart Apify-Kosten,
+            weil der nächste Kunde mit demselben Produkt daraus bedient wird. Tote
+            Links werden 1×/Woche geprüft und aus dem Cache entfernt; bereits beim
+            Kunden gespeicherte Videos bleiben (nur der Link geht dann ins Leere).
+          </p>
+
+          {status && (
+            <div className="grid grid-cols-3 gap-2 mt-2.5">
+              <div className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Produkte</div>
+                <div className="text-[15px] font-bold tabular-nums text-white">{status.products}</div>
+              </div>
+              <div className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Videos im Cache</div>
+                <div className="text-[15px] font-bold tabular-nums text-white">{status.videos}</div>
+              </div>
+              <div className="px-2 py-1.5 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Tote entfernt (ges.)</div>
+                <div className="text-[15px] font-bold tabular-nums text-pink-300">{status.totalRemoved}</div>
+              </div>
+            </div>
+          )}
+
+          {status && (
+            <div className="text-[10.5px] text-zinc-500 mt-2 flex flex-wrap gap-x-3 gap-y-0.5">
+              <span>
+                Zuletzt geprüft:{" "}
+                <span className="text-zinc-300">
+                  {status.lastRunAt ? formatRelativeShort(status.lastRunAt) : "noch nie"}
+                </span>
+              </span>
+              {status.lastRunAt && (
+                <span>
+                  dabei entfernt: <span className="text-zinc-300 tabular-nums">{status.lastRemoved}</span> /{" "}
+                  <span className="tabular-nums">{status.lastChecked}</span> geprüft
+                </span>
+              )}
+              <span>
+                Nächster Voll-Lauf:{" "}
+                <span className="text-zinc-300">
+                  {status.inProgress
+                    ? "läuft (setzt täglich fort)"
+                    : status.nextDueAt
+                      ? formatRelativeShort(status.nextDueAt)
+                      : "beim nächsten Cron"}
+                </span>
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 mt-2.5 flex-wrap">
+            <button
+              onClick={runNow}
+              disabled={running || loading}
+              className="px-3 py-1.5 rounded-lg bg-pink-500/15 border border-pink-500/30 text-pink-200 text-xs font-semibold hover:bg-pink-500/25 transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {running ? <Loader2 className="w-3 h-3 animate-spin" /> : <Repeat className="w-3 h-3" />}
+              Jetzt prüfen
+            </button>
+            <button
+              onClick={load}
+              disabled={loading || running}
+              className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition disabled:opacity-50 flex items-center gap-1.5"
+            >
+              {loading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
+              Status
+            </button>
+            {error && <span className="text-[11px] text-red-300">{error}</span>}
           </div>
         </div>
       </div>

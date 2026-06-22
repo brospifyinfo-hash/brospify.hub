@@ -31,8 +31,16 @@ const UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 interface PruneState {
+  /** Letzter KOMPLETT abgeschlossener Wochen-Durchlauf. */
   lastFullRunAt?: string;
+  /** Resume-Cursor — gesetzt, solange ein Voll-Durchlauf noch läuft. */
   cursorProductId?: string;
+  /** Letzter Lauf (auch ein Teil-Lauf), für die Admin-Anzeige. */
+  lastRunAt?: string;
+  lastChecked?: number;
+  lastRemoved?: number;
+  /** Kumulativ entfernte tote Links über alle Läufe. */
+  totalRemoved?: number;
 }
 
 export interface PruneResult {
@@ -41,6 +49,47 @@ export interface PruneResult {
   checked?: number;
   removed?: number;
   completed?: boolean;
+}
+
+export interface ScoutCacheStatus {
+  products: number;
+  videos: number;
+  lastFullRunAt: string | null;
+  lastRunAt: string | null;
+  lastChecked: number;
+  lastRemoved: number;
+  totalRemoved: number;
+  inProgress: boolean;
+  nextDueAt: string | null;
+}
+
+async function readState(): Promise<PruneState> {
+  try {
+    const raw = await getAdminSetting(STATE_KEY);
+    if (raw) return JSON.parse(raw) as PruneState;
+  } catch {
+    /* defekter State → frisch starten */
+  }
+  return {};
+}
+
+/** Status für die Admin-Anzeige: Cache-Grösse + letzter/​nächster Lauf. */
+export async function getScoutCacheStatus(): Promise<ScoutCacheStatus> {
+  const state = await readState();
+  const entries = await listScoutCacheEntries();
+  return {
+    products: entries.length,
+    videos: entries.reduce((s, e) => s + e.videos.length, 0),
+    lastFullRunAt: state.lastFullRunAt ?? null,
+    lastRunAt: state.lastRunAt ?? null,
+    lastChecked: state.lastChecked ?? 0,
+    lastRemoved: state.lastRemoved ?? 0,
+    totalRemoved: state.totalRemoved ?? 0,
+    inProgress: !!state.cursorProductId,
+    nextDueAt: state.lastFullRunAt
+      ? new Date(Date.parse(state.lastFullRunAt) + WEEK_MS).toISOString()
+      : null,
+  };
 }
 
 // Liefert TRUE nur bei einem KLAREN „weg"-Signal. Bei Timeout/Netzfehler/
@@ -97,24 +146,29 @@ async function deadFlags(videos: ScoutVideo[]): Promise<boolean[]> {
 }
 
 /** Wöchentlich (gedrosselt) den ScoutCache auf tote Links prüfen und diese
- *  entfernen. Nie fatal — Fehler werden geloggt, nicht geworfen. */
-export async function maybePruneScoutCache(): Promise<PruneResult> {
-  let state: PruneState = {};
-  try {
-    const raw = await getAdminSetting(STATE_KEY);
-    if (raw) state = JSON.parse(raw) as PruneState;
-  } catch {
-    state = {};
-  }
+ *  entfernen. Nie fatal — Fehler werden geloggt, nicht geworfen.
+ *  `force` (Admin-Button) umgeht die Wochen-Drossel. */
+export async function maybePruneScoutCache(force = false): Promise<PruneResult> {
+  const state = await readState();
 
   const now = Date.now();
   const last = state.lastFullRunAt ? Date.parse(state.lastFullRunAt) : 0;
-  const due = !!state.cursorProductId || !last || now - last >= WEEK_MS;
+  const due = force || !!state.cursorProductId || !last || now - last >= WEEK_MS;
   if (!due) return { ran: false, reason: "not_due" };
 
   const entries = await listScoutCacheEntries();
+  const nowIso = new Date().toISOString();
   if (entries.length === 0) {
-    await setAdminSetting(STATE_KEY, JSON.stringify({ lastFullRunAt: new Date().toISOString() }));
+    await setAdminSetting(
+      STATE_KEY,
+      JSON.stringify({
+        lastFullRunAt: nowIso,
+        lastRunAt: nowIso,
+        lastChecked: 0,
+        lastRemoved: 0,
+        totalRemoved: state.totalRemoved ?? 0,
+      }),
+    );
     return { ran: true, checked: 0, removed: 0, completed: true };
   }
 
@@ -156,9 +210,14 @@ export async function maybePruneScoutCache(): Promise<PruneResult> {
     }
   }
 
-  const newState: PruneState = completed
-    ? { lastFullRunAt: new Date().toISOString() }
-    : { lastFullRunAt: state.lastFullRunAt, cursorProductId: nextCursor };
+  const newState: PruneState = {
+    lastFullRunAt: completed ? nowIso : state.lastFullRunAt,
+    cursorProductId: completed ? undefined : nextCursor,
+    lastRunAt: nowIso,
+    lastChecked: checked,
+    lastRemoved: removed,
+    totalRemoved: (state.totalRemoved ?? 0) + removed,
+  };
   try {
     await setAdminSetting(STATE_KEY, JSON.stringify(newState));
   } catch (e) {
