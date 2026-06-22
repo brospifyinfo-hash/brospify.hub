@@ -17,9 +17,10 @@ export async function POST(req: NextRequest) {
     const guard = await requireFeature(session, "aiChat");
     if (!guard.ok) return guard.response;
 
-    const { messages, attemptCount } = (await req.json()) as {
+    const { messages } = (await req.json()) as {
       messages: ChatMessage[];
-      attemptCount: number;
+      // attemptCount wird vom Client noch mitgeschickt, aber nicht mehr
+      // genutzt — Eskalation entscheidet sich jetzt am Inhalt (siehe unten).
     };
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -76,6 +77,11 @@ HARTE REGELN:
 - Erkenne Frust/echte Bugs/Account-Probleme und leite proaktiv weiter: „Am schnellsten hilft dir das Team über [Problem melden](/email-support)" — oder bei offenen Fragen: ein Live-Ticket aus diesem Chat.
 - Geht die Antwort NICHT aus dem Wissen hervor: antworte sinngemäß „Dazu habe ich leider keine gesicherte Info — am besten [Problem melden](/email-support) oder hier ein Live-Ticket eröffnen, dann hilft dir ein Mensch persönlich." Erfinde nichts.
 
+ESKALATIONS-SIGNAL (wichtig):
+- Wenn du das Anliegen NICHT zufriedenstellend lösen kannst — Antwort nicht im Wissen, echter Bug, Account-/Zahlungs-/Lizenz-Problem, oder der Nutzer kommt mit deiner Hilfe nicht weiter — hänge GANZ AM ENDE deiner Nachricht in einer eigenen Zeile den Marker [[ESCALATE]] an.
+- Dieser Marker wird dem Nutzer NICHT angezeigt; er signalisiert dem System nur, ein Live-Ticket anzubieten.
+- Konntest du die Frage normal beantworten, verwende den Marker NIEMALS.
+
 BEISPIELE (Stil, nicht wörtlich übernehmen):
 - Frage „wie bekomme ich mehr credits?" → „Du bekommst alle 28 Tage automatisch +1.000 Credits (Countdown unter [Abo verwalten](/account/subscription)). Sofort mehr gibt's über eine kurze Umfrage auf der [Home](/home) oder ein Paket unter [Credits](/credits)."
 - Frage „mein bild lädt ewig" → „Aktiviere im [AI Studio](/ai-tools/ai-studio) den Schalter „Im Hintergrund generieren" — dann kannst du den Tab schließen und findest das Bild gleich in der [Mediathek](/library)."
@@ -116,10 +122,14 @@ ${adminKnowledge && adminKnowledge.trim().length > 0 ? `ZUSÄTZLICHES ADMIN-WISS
     }
 
     const data = await res.json();
-    const reply = data.choices?.[0]?.message?.content || "Entschuldigung, ich konnte keine Antwort generieren. Bitte eröffne ein Live-Ticket.";
+    const raw = data.choices?.[0]?.message?.content || "Entschuldigung, ich konnte keine Antwort generieren. Bitte eröffne ein Live-Ticket.";
 
-    // If this is the 2nd attempt, suggest escalation
-    const shouldEscalate = attemptCount >= 2;
+    // Eskalation rein inhaltlich: der Bot hängt [[ESCALATE]] an, wenn er
+    // nicht helfen kann. Marker erkennen + aus der Antwort entfernen.
+    const ESCALATE_RE = /\[\[\s*ESCALATE\s*\]\]/gi;
+    const shouldEscalate = ESCALATE_RE.test(raw);
+    const reply = raw.replace(ESCALATE_RE, "").trim() ||
+      "Dazu habe ich leider keine gesicherte Info — am besten [Problem melden](/email-support) oder hier ein Live-Ticket eröffnen.";
 
     return NextResponse.json({
       reply,

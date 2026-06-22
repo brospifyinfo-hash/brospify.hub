@@ -776,7 +776,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
         <div className="mt-1.5 px-1 flex items-center gap-1.5">
           <Bot className="w-2.5 h-2.5 text-zinc-700" />
           <span className="text-[10px] text-zinc-700">
-            DeepSeek AI{attemptCount > 0 ? ` · Versuch ${attemptCount}/2` : ""}
+            KI-Support
           </span>
         </div>
       </div>
