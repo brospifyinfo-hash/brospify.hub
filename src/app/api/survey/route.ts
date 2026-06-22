@@ -12,6 +12,7 @@ import {
   completeSurvey,
   findKundeByKey,
   getKundeProfile,
+  updateKundeProfile,
 } from "@/lib/sheets";
 import {
   getSurveyById,
@@ -103,10 +104,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Diese Umfrage ist noch nicht freigeschaltet." }, { status: 403 });
     }
 
-    // Antwort speichern (Kennung = E-Mail, sonst Lizenzschlüssel).
-    await addSurveyResponse(kunde.kundenEmail || session.lizenzschluessel, surveyId, answers, meta);
+    const user = kunde.kundenEmail || session.lizenzschluessel;
 
-    // Abschluss markieren + Credits gutschreiben (atomar).
+    // ── Durchklick-Eskalation ──
+    // 1× erkannt → Warnung (kein Abschluss, neu ausfüllen). 2× → Umfrage
+    // beendet, KEINE Credits (wird trotzdem zur Auswertung gespeichert).
+    if (meta?.rushed) {
+      const counts = profile.surveyRushCounts && typeof profile.surveyRushCounts === "object"
+        ? profile.surveyRushCounts
+        : {};
+      const strikes = (counts[surveyId] || 0) + 1;
+
+      if (strikes >= 2) {
+        // Beenden ohne Credits — Antwort für die Auswertung festhalten.
+        await addSurveyResponse(user, surveyId, answers, meta);
+        await completeSurvey(
+          kunde.rowIndex,
+          { ...profile, surveyRushCounts: { ...counts, [surveyId]: strikes } },
+          surveyId,
+          0,
+        );
+        return NextResponse.json({
+          blocked: true,
+          message:
+            "Diese Umfrage wurde beendet, weil sie zu schnell durchgeklickt wurde. Es werden keine Credits gutgeschrieben.",
+        });
+      }
+
+      // Erste Warnung — nur den Strike merken, noch nicht abschließen.
+      await updateKundeProfile(kunde.rowIndex, {
+        ...profile,
+        surveyRushCounts: { ...counts, [surveyId]: strikes },
+      });
+      return NextResponse.json({
+        warning: true,
+        message:
+          "Bitte lies dir die Fragen in Ruhe durch und beantworte sie ehrlich. Beim nächsten zu schnellen Durchklicken wird die Umfrage ohne Credits beendet.",
+      });
+    }
+
+    // ── Normale, ehrliche Abgabe ──
+    await addSurveyResponse(user, surveyId, answers, meta);
     const result = await completeSurvey(kunde.rowIndex, profile, surveyId, survey.creditReward);
 
     return NextResponse.json({

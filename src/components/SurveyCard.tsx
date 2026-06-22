@@ -11,7 +11,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  MessageSquareHeart, Star, Check, Loader2, Send, Coins, Clock, Lock, ArrowRight, ListChecks,
+  MessageSquareHeart, Star, Check, Loader2, Send, Coins, Clock, Lock, ArrowRight, ListChecks, AlertTriangle, Ban,
 } from "lucide-react";
 import { useCredits } from "@/lib/credits";
 import { FAST_GAP_MS, type SurveyQuestion, type SurveyAnswers } from "@/lib/survey";
@@ -39,6 +39,8 @@ export default function SurveyCard() {
   const [submitting, setSubmitting] = useState(false);
   const [doneReward, setDoneReward] = useState<number | null>(null);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
+  const [blockedMsg, setBlockedMsg] = useState("");
 
   // Timing-Tracking (Hintergrund).
   const startRef = useRef(0);
@@ -82,6 +84,7 @@ export default function SurveyCard() {
     timesRef.current = {};
     setAnswers({});
     setError("");
+    setWarning("");
     setPhase("active");
   }
 
@@ -122,6 +125,20 @@ export default function SurveyCard() {
         setError(data?.error || "Speichern fehlgeschlagen.");
         return;
       }
+      // 2× durchgeklickt → Umfrage beendet, keine Credits (Terminal-Karte).
+      if (data.blocked) {
+        setSurveys((list) => list.map((x) => (x.id === s.id ? { ...x, status: "completed" } : x)));
+        setBlockedMsg(data.message || "Diese Umfrage wurde beendet. Es werden keine Credits gutgeschrieben.");
+        return;
+      }
+      // 1× durchgeklickt → Warnung: in Ruhe neu ausfüllen (Antworten + Timer reset).
+      if (data.warning) {
+        setWarning(data.message || "Bitte lies dir die Fragen in Ruhe durch.");
+        setAnswers({});
+        timesRef.current = {};
+        startRef.current = Date.now();
+        return;
+      }
       if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
       setDoneReward(typeof data.creditsAwarded === "number" ? data.creditsAwarded : s.creditReward);
       setSurveys((list) => list.map((x) => (x.id === s.id ? { ...x, status: "completed" } : x)));
@@ -135,6 +152,21 @@ export default function SurveyCard() {
   }
 
   if (!loaded) return null;
+
+  // ── BLOCKED: 2× durchgeklickt → beendet, keine Credits ──
+  if (blockedMsg) {
+    return (
+      <section className="rounded-2xl sm:rounded-3xl border border-red-500/25 bg-red-500/[0.06] p-5 sm:p-6 text-center">
+        <div className="inline-flex flex-col items-center gap-2.5">
+          <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
+            <Ban className="w-6 h-6 text-red-400" />
+          </div>
+          <p className="text-[15px] font-bold text-white">Umfrage beendet</p>
+          <p className="text-[12.5px] text-zinc-300 max-w-sm leading-snug">{blockedMsg}</p>
+        </div>
+      </section>
+    );
+  }
 
   // ── DONE ──
   if (doneReward !== null) {
@@ -224,6 +256,12 @@ export default function SurveyCard() {
         ) : (
           // ── ACTIVE: Fragen ──
           <motion.div key="active" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+            {warning && (
+              <div className="mx-4 sm:mx-5 mb-3 flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/[0.08] px-3.5 py-3">
+                <AlertTriangle className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-amber-100/90 leading-snug">{warning}</p>
+              </div>
+            )}
             {/* Fortschrittsleiste */}
             <div className="px-4 sm:px-5">
               <div className="flex items-center justify-between text-[10.5px] text-zinc-500 mb-1">

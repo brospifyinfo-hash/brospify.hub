@@ -234,6 +234,9 @@ export interface KundeProfile {
   surveyAnsweredAt?: string;
   /** IDs aller abgeschlossenen Umfragen (gestaffeltes System). */
   surveysCompleted?: string[];
+  /** Wie oft eine Umfrage als „durchgeklickt" erkannt wurde (pro surveyId).
+   *  1× = Warnung, 2× = Umfrage beendet ohne Credits. */
+  surveyRushCounts?: Record<string, number>;
   /** Anker für das Credit-Modell + Umfrage-Freischaltung: ISO-Zeitpunkt des
    *  ersten Logins (Starter-Grant). Ab hier zählen die 28-Tage-Zyklen und
    *  die zeitversetzten Umfragen. */
