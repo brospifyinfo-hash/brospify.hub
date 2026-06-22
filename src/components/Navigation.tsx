@@ -185,6 +185,13 @@ export default function Navigation() {
       .catch(() => {});
   }, []);
 
+  // Credits bei jedem Seitenwechsel frisch ziehen, damit der Header die
+  // Balance konstant live zeigt (nicht nur beim ersten Mount / 30s-Poll).
+  useEffect(() => {
+    credits.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
+
   useEffect(() => {
     setAiOpen(false);
     setAiSheetOpen(false);
@@ -295,7 +302,7 @@ export default function Navigation() {
 
             {/* Right Side */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <CreditsPill balance={credits.balance} loading={credits.loading} icon={credits.creditIcon} />
+              <CreditsPill balance={credits.balance} loading={credits.loading} icon={credits.creditIcon} isAdmin={!!session?.isAdmin} />
 
               {/* Account mega-dropdown — desktop only */}
               <div ref={accountRef} className="relative hidden md:block">
@@ -811,7 +818,7 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 // Always-visible balance display. Compact on mobile (icon + number),
 // full pill on tablet+. Pulses when value changes after a tool runs.
 
-function CreditsPill({ balance, loading, icon = "🪙" }: { balance: number; loading: boolean; icon?: string }) {
+function CreditsPill({ balance, loading, icon = "🪙", isAdmin = false }: { balance: number; loading: boolean; icon?: string; isAdmin?: boolean }) {
   const [pulse, setPulse] = useState(false);
   const prev = useRef(balance);
 
@@ -824,8 +831,10 @@ function CreditsPill({ balance, loading, icon = "🪙" }: { balance: number; loa
     prev.current = balance;
   }, [balance, loading]);
 
-  const empty = balance <= 0 && !loading;
-  const low = !empty && balance < 20 && !loading;
+  // Admins haben kein eigenes Credit-Konto (ihre Tool-Aufrufe umgehen den
+  // Zähler) — daher „∞" statt einer irreführenden 0/„···".
+  const empty = !isAdmin && balance <= 0 && !loading;
+  const low = !isAdmin && !empty && balance < 20 && !loading;
   const accent = empty ? "#ef4444" : low ? "#fbbf24" : "#95BF47";
   const tint = empty
     ? "rgba(239, 68, 68, 0.10)"
@@ -860,7 +869,7 @@ function CreditsPill({ balance, loading, icon = "🪙" }: { balance: number; loa
         className="font-mono font-semibold text-[11px] sm:text-[12.5px] tabular-nums"
         style={{ color: accent }}
       >
-        {loading ? "···" : balance.toLocaleString("de-DE")}
+        {isAdmin ? "∞" : loading ? "···" : balance.toLocaleString("de-DE")}
       </motion.span>
       <Plus className="w-2.5 sm:w-3 h-2.5 sm:h-3 opacity-70" style={{ color: accent }} />
     </Link>

@@ -33,6 +33,7 @@ import {
   Flame,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import SurveyCard from "@/components/SurveyCard";
 import { useTier } from "@/lib/use-tier";
 import { useCredits } from "@/lib/credits";
 import Link from "next/link";
@@ -324,6 +325,9 @@ export default function HomePage() {
           </div>
         </section>
 
+
+        {/* ─── System-Verbesserungs-Umfrage (nur für Kunden) ─── */}
+        {!session.isAdmin && <SurveyCard />}
 
         {/* ─── Bis du verkaufst (Schritte + Tasks) ─────── */}
         <section>

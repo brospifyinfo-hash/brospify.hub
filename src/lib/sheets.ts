@@ -1,5 +1,6 @@
 import { google } from "googleapis";
 import type { ScoutVideo } from "./video-scout";
+import type { SurveyAnswers, SurveyResponseRecord } from "./survey";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -228,6 +229,10 @@ export interface KundeProfile {
    *  (neueste zuerst, dedupliziert per url). Dient als Historie UND als
    *  Garantie, dass kein Video zweimal gezogen werden kann. */
   scoutVideos?: SavedScoutVideo[];
+  /** System-Verbesserungs-Umfrage (v1) bereits abgegeben? Steuert nur, ob
+   *  die Umfrage-Karte auf der Startseite automatisch erscheint. */
+  surveyAnsweredV1?: boolean;
+  surveyAnsweredAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────
@@ -1908,6 +1913,55 @@ export async function setScoutCacheVideos(
     valueInputOption: "RAW",
     requestBody: { values },
   });
+}
+
+// ─── SURVEY (Tab "SurveyResponses") ──────────────────────────────
+// System-Verbesserungs-Umfrage. Eine Zeile je Abgabe; die Antworten
+// liegen als JSON in einer Zelle. Definition + Aggregation in lib/survey.
+//   A=Id, B=User (Lizenzschlüssel/E-Mail), C=SubmittedAt, D=AnswersJson
+const SURVEY_HEADERS = ["Id", "User", "SubmittedAt", "AnswersJson"];
+
+export async function addSurveyResponse(user: string, answers: SurveyAnswers): Promise<void> {
+  const sheets = getSheets();
+  await ensureSheet("SurveyResponses", SURVEY_HEADERS);
+  const id = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "SurveyResponses!A:D",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: [[id, user || "", new Date().toISOString(), JSON.stringify(answers)]],
+    },
+  });
+}
+
+export async function listSurveyResponses(): Promise<SurveyResponseRecord[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("SurveyResponses", SURVEY_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "SurveyResponses!A2:D",
+    });
+    const rows = res.data.values || [];
+    const out: SurveyResponseRecord[] = [];
+    for (const r of rows) {
+      const id = r[0] || "";
+      if (!id || !r[3]) continue;
+      let answers: SurveyAnswers = {};
+      try {
+        const p = JSON.parse(r[3]);
+        if (p && typeof p === "object") answers = p as SurveyAnswers;
+      } catch {
+        continue;
+      }
+      out.push({ id, user: r[1] || "", submittedAt: r[2] || "", answers });
+    }
+    // Neueste zuerst.
+    return out.reverse();
+  } catch {
+    return [];
+  }
 }
 
 // ─── START TASKS (Tab "StartTasks") ───────────────────────────────

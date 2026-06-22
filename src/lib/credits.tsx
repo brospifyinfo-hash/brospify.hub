@@ -149,9 +149,13 @@ export function CreditsProvider({ children }: { children: ReactNode }) {
 
     const scheduleRetry = (reason: string) => {
       if (retryCountRef.current >= RETRY_MAX) {
-        // Aufgegeben — endgueltig loading: false setzen damit die UI
-        // nicht ewig hangs (z.B. echter Logout-Fall).
-        if (token === fetchTokenRef.current) {
+        // Aufgegeben. Hatten wir SCHON MAL eine Balance, loading: false
+        // setzen (alte Zahl bleibt sichtbar). Wurde dagegen NIE erfolgreich
+        // geladen (z.B. 401 weil der Session-Cookie nach Login/OAuth noch
+        // nicht propagiert ist), loading: true LASSEN → der Header zeigt
+        // weiter "···" statt eine irreführende 0. Der 30s-Poll und der
+        // Route-Wechsel-Refresh holen die Zahl dann nach.
+        if (token === fetchTokenRef.current && lastSyncedAtRef.current > 0) {
           setState((s) => ({ ...s, loading: false }));
         }
         return;

@@ -11,7 +11,7 @@ import {
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
   Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
-  Link2, Percent,
+  Link2, Percent, Star,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -36,6 +36,11 @@ import {
   toolProfit,
   formatEuro,
 } from "@/lib/credit-config";
+import {
+  SURVEY_QUESTIONS,
+  type SurveyAggregate,
+  type SurveyResponseRecord,
+} from "@/lib/survey";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -487,7 +492,7 @@ export default function AdminPage() {
   const [aiKategorie, setAiKategorie] = useState("");
   const [urlImportUrl, setUrlImportUrl] = useState("");
   const [urlImporting, setUrlImporting] = useState(false);
-  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
+  type TabKey = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs" | "survey";
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [sidebarOpen, setSidebarOpen] = useState(false); // mobile drawer
   interface ThemeEntry {
@@ -2110,6 +2115,12 @@ export default function AdminPage() {
                   apiBalancesLoading={apiBalancesLoading}
                   onRefreshBalances={loadApiBalances}
                 />
+              </AdminErrorBoundary>
+            )}
+
+            {activeTab === "survey" && (
+              <AdminErrorBoundary label="Umfragen">
+                <SurveyAdminView />
               </AdminErrorBoundary>
             )}
 
@@ -4556,7 +4567,7 @@ function formatRelativeShort(iso: string): string {
 
 // ─── Admin sidebar nav ─────────────────────────────────────────
 
-type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs";
+type SidebarTab = "dashboard" | "stats" | "activity" | "customers" | "licenses" | "credits" | "users" | "tiers" | "tickets" | "codes" | "products" | "themes" | "codeBlocks" | "coaching" | "news" | "knowledge" | "settings" | "system" | "logs" | "survey";
 
 const SIDEBAR_GROUPS: {
   label: string;
@@ -4596,6 +4607,7 @@ const SIDEBAR_GROUPS: {
     label: "System",
     items: [
       { key: "system", label: "System-Status", icon: Power, color: "#10B981" },
+      { key: "survey", label: "Umfragen", icon: MessageCircle, color: "#EC4899" },
       { key: "logs", label: "System-Logs", icon: ScrollText, color: "#FB7185" },
       { key: "knowledge", label: "KI-Wissen", icon: Sparkles, color: "#8B5CF6" },
       { key: "settings", label: "Settings", icon: Settings, color: "#71717A" },
@@ -5012,7 +5024,7 @@ function MoneySection({ money }: { money: MoneyData }) {
 
 function BigKpi({ label, value, icon: Icon, color, hint }: {
   label: string;
-  value: number;
+  value: number | string;
   icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
   color: string;
   hint?: string;
@@ -5025,7 +5037,7 @@ function BigKpi({ label, value, icon: Icon, color, hint }: {
           <span className="text-[9px] uppercase tracking-widest font-semibold text-zinc-500 truncate">{label}</span>
           <Icon className="w-3 h-3" style={{ color }} />
         </div>
-        <div className="text-base font-bold tabular-nums" style={{ color }}>{value.toLocaleString("de-DE")}</div>
+        <div className="text-base font-bold tabular-nums" style={{ color }}>{typeof value === "number" ? value.toLocaleString("de-DE") : value}</div>
         {hint && <div className="text-[9px] text-zinc-500 mt-0.5 truncate">{hint}</div>}
       </div>
     </div>
@@ -6864,6 +6876,169 @@ function TiersFullEditor({
 // Manueller Trigger für den gleichen Endpoint, den der stündliche
 // Vercel-Cron pingt. Zeigt Ergebnis (gescannt / vergeben / errors).
 // Bestehende Balances bleiben unangetastet — der Grant ist additiv.
+
+// ─── Umfragen-Auswertung (Tab "survey") ─────────────────────────
+function SurveyAdminView() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [aggregate, setAggregate] = useState<SurveyAggregate | null>(null);
+  const [responses, setResponses] = useState<SurveyResponseRecord[]>([]);
+  const [showAll, setShowAll] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/admin/survey", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Konnte nicht laden.");
+      } else {
+        setAggregate(data.aggregate);
+        setResponses(Array.isArray(data.responses) ? data.responses : []);
+      }
+    } catch {
+      setError("Verbindungsfehler.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading && !aggregate) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {[...Array(4)].map((_, i) => (
+          <div key={i} className="h-28 rounded-xl border border-white/[0.06] bg-white/[0.02] animate-pulse" />
+        ))}
+      </div>
+    );
+  }
+
+  const total = aggregate?.total ?? 0;
+  const fmtUser = (u: string) => (u.includes("@") ? u : `${u.slice(0, 4)}…${u.slice(-4)}`);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-[11px] text-zinc-500">
+          System-Verbesserungs-Umfrage · Gesamtergebnis &amp; einzelne Abgaben.
+        </p>
+        <button
+          onClick={load}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/10 text-xs text-zinc-300 hover:bg-white/[0.08] transition flex items-center gap-1.5 disabled:opacity-50"
+        >
+          {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+          Aktualisieren
+        </button>
+      </div>
+
+      {error && <div className="text-[12px] text-red-300">{error}</div>}
+
+      {total === 0 ? (
+        <div className="text-center py-10 text-sm text-zinc-500">Noch keine Antworten.</div>
+      ) : (
+        <>
+          {/* KPIs */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <BigKpi label="Antworten gesamt" value={total} icon={MessageCircle} color="#EC4899" />
+            {SURVEY_QUESTIONS.filter((q) => q.type === "rating").map((q) => (
+              <BigKpi
+                key={q.id}
+                label={q.id === "satisfaction" ? "Ø Zufriedenheit" : q.id === "recommend" ? "Ø Weiterempfehlung" : q.label}
+                value={aggregate?.ratingAvg[q.id] != null ? `${aggregate.ratingAvg[q.id]}/5` : "—"}
+                icon={Star}
+                color="#FACC15"
+              />
+            ))}
+          </div>
+
+          {/* Aggregat je Frage */}
+          {SURVEY_QUESTIONS.map((q) => {
+            if (q.type === "rating") return null; // schon als KPI
+            if (q.type === "text") {
+              const texts = aggregate?.texts[q.id] || [];
+              return (
+                <DashboardCard key={q.id} title={q.label} icon={MessageCircle} accent="#EC4899">
+                  {texts.length === 0 ? (
+                    <p className="text-[12px] text-zinc-500">Keine Freitext-Antworten.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                      {texts.map((t, i) => (
+                        <div key={i} className="text-[12px] text-zinc-300 px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.05] leading-snug">
+                          „{t}"
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </DashboardCard>
+              );
+            }
+            // single / multi → Balken
+            const counts = aggregate?.optionCounts[q.id] || {};
+            const max = Math.max(1, ...Object.values(counts));
+            return (
+              <DashboardCard key={q.id} title={q.label} icon={BarChart3} accent="#A855F7">
+                <div className="space-y-1.5">
+                  {(q.options || []).map((o) => {
+                    const c = counts[o] || 0;
+                    const pct = total > 0 ? Math.round((c / total) * 100) : 0;
+                    return (
+                      <div key={o} className="flex items-center gap-2">
+                        <span className="text-[11.5px] text-zinc-300 w-44 shrink-0 truncate">{o}</span>
+                        <div className="flex-1 h-4 rounded bg-white/[0.04] overflow-hidden">
+                          <div className="h-full rounded bg-purple-500/50" style={{ width: `${Math.round((c / max) * 100)}%` }} />
+                        </div>
+                        <span className="text-[11px] text-zinc-400 tabular-nums w-16 text-right shrink-0">{c} · {pct}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </DashboardCard>
+            );
+          })}
+
+          {/* Einzelne Abgaben */}
+          <DashboardCard title={`Einzelne Abgaben (${responses.length})`} icon={Users} accent="#06B6D4">
+            <div className="space-y-2">
+              {(showAll ? responses : responses.slice(0, 10)).map((r) => (
+                <div key={r.id} className="px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-[11px] font-mono text-zinc-400 truncate">{fmtUser(r.user)}</span>
+                    <span className="text-[10px] text-zinc-600 shrink-0">{r.submittedAt ? formatRelativeShort(r.submittedAt) : "—"}</span>
+                  </div>
+                  <div className="space-y-0.5">
+                    {SURVEY_QUESTIONS.map((q) => {
+                      const v = r.answers[q.id];
+                      if (v === undefined) return null;
+                      const display = Array.isArray(v) ? v.join(", ") : q.type === "rating" ? `${v}/5` : String(v);
+                      return (
+                        <div key={q.id} className="text-[11px] text-zinc-400 leading-snug">
+                          <span className="text-zinc-600">{q.label.replace(/\?$/, "")}: </span>
+                          <span className="text-zinc-200">{display}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {responses.length > 10 && (
+              <button
+                onClick={() => setShowAll((s) => !s)}
+                className="mt-2 text-[11px] text-zinc-400 hover:text-white transition"
+              >
+                {showAll ? "Weniger zeigen" : `Alle ${responses.length} zeigen`}
+              </button>
+            )}
+          </DashboardCard>
+        </>
+      )}
+    </div>
+  );
+}
 
 function BackfillStarterCard() {
   const [running, setRunning] = useState(false);
