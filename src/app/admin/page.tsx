@@ -6977,7 +6977,19 @@ function SurveyAdminView() {
           {/* KPIs */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             <BigKpi label="Antworten" value={selected.aggregate.total} icon={MessageCircle} color="#EC4899" />
-            <BigKpi label="Belohnung" value={`${selected.creditReward}`} icon={Coins} color="#FACC15" hint="Credits / Abgabe" />
+            {(() => {
+              const rushed = selected.responses.filter((r) => r.meta?.rushed).length;
+              const pct = selected.responses.length > 0 ? Math.round((rushed / selected.responses.length) * 100) : 0;
+              return (
+                <BigKpi
+                  label="Durchgeklickt"
+                  value={rushed}
+                  icon={Zap}
+                  color={rushed > 0 ? "#EF4444" : "#10B981"}
+                  hint={`${pct}% wirken gehetzt`}
+                />
+              );
+            })()}
             {selected.questions.filter((q) => q.type === "rating").slice(0, 2).map((q) => (
               <BigKpi
                 key={q.id}
@@ -7046,10 +7058,25 @@ function SurveyAdminView() {
           <DashboardCard title={`Einzelne Abgaben (${selected.responses.length})`} icon={Users} accent="#06B6D4">
             <div className="space-y-2">
               {(showAll ? selected.responses : selected.responses.slice(0, 10)).map((r) => (
-                <div key={r.id} className="px-2.5 py-2 rounded-lg bg-white/[0.02] border border-white/[0.05]">
-                  <div className="flex items-center justify-between gap-2 mb-1">
+                <div key={r.id} className={`px-2.5 py-2 rounded-lg border ${
+                  r.meta?.rushed ? "bg-red-500/[0.04] border-red-500/20" : "bg-white/[0.02] border-white/[0.05]"
+                }`}>
+                  <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
                     <span className="text-[11px] font-mono text-zinc-400 truncate">{fmtUser(r.user)}</span>
-                    <span className="text-[10px] text-zinc-600 shrink-0">{r.submittedAt ? formatRelativeShort(r.submittedAt) : "—"}</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {r.meta && (
+                        <span className="text-[10px] text-zinc-500 tabular-nums inline-flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          {r.meta.durationMs >= 1000 ? `${Math.round(r.meta.durationMs / 1000)}s` : "<1s"}
+                        </span>
+                      )}
+                      {r.meta?.rushed && (
+                        <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/15 border border-red-500/30 text-red-300 inline-flex items-center gap-1">
+                          <Zap className="w-2.5 h-2.5" /> durchgeklickt
+                        </span>
+                      )}
+                      <span className="text-[10px] text-zinc-600">{r.submittedAt ? formatRelativeShort(r.submittedAt) : "—"}</span>
+                    </div>
                   </div>
                   <div className="space-y-0.5">
                     {selected.questions.map((q) => {

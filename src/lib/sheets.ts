@@ -1,6 +1,6 @@
 import { google } from "googleapis";
 import type { ScoutVideo } from "./video-scout";
-import type { SurveyAnswers, SurveyResponseRecord } from "./survey";
+import type { SurveyAnswers, SurveyResponseRecord, SurveyResponseMeta } from "./survey";
 
 const SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
@@ -2041,23 +2041,27 @@ export async function setScoutCacheVideos(
 // ─── SURVEY (Tab "SurveyResponses") ──────────────────────────────
 // Gestaffelte User-Umfragen. Eine Zeile je Abgabe; die Antworten liegen als
 // JSON in einer Zelle. Definition + Aggregation in lib/survey.
-//   A=Id, B=User (Lizenzschlüssel/E-Mail), C=SurveyId, D=SubmittedAt, E=AnswersJson
-const SURVEY_HEADERS = ["Id", "User", "SurveyId", "SubmittedAt", "AnswersJson"];
+//   A=Id, B=User, C=SurveyId, D=SubmittedAt, E=AnswersJson, F=MetaJson (Timing)
+const SURVEY_HEADERS = ["Id", "User", "SurveyId", "SubmittedAt", "AnswersJson", "MetaJson"];
 
 export async function addSurveyResponse(
   user: string,
   surveyId: string,
   answers: SurveyAnswers,
+  meta?: SurveyResponseMeta,
 ): Promise<void> {
   const sheets = getSheets();
   await ensureSheet("SurveyResponses", SURVEY_HEADERS);
   const id = `s_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "SurveyResponses!A:E",
+    range: "SurveyResponses!A:F",
     valueInputOption: "RAW",
     requestBody: {
-      values: [[id, user || "", surveyId, new Date().toISOString(), JSON.stringify(answers)]],
+      values: [[
+        id, user || "", surveyId, new Date().toISOString(),
+        JSON.stringify(answers), meta ? JSON.stringify(meta) : "",
+      ]],
     },
   });
 }
@@ -2107,7 +2111,7 @@ export async function listSurveyResponses(): Promise<SurveyResponseRecord[]> {
     await ensureSheet("SurveyResponses", SURVEY_HEADERS);
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID(),
-      range: "SurveyResponses!A2:E",
+      range: "SurveyResponses!A2:F",
     });
     const rows = res.data.values || [];
     const out: SurveyResponseRecord[] = [];
@@ -2122,7 +2126,16 @@ export async function listSurveyResponses(): Promise<SurveyResponseRecord[]> {
       } catch {
         continue;
       }
-      out.push({ id, user: r[1] || "", surveyId: r[2] || "", submittedAt: r[3] || "", answers });
+      let meta: SurveyResponseMeta | undefined;
+      if (r[5]) {
+        try {
+          const pm = JSON.parse(r[5]);
+          if (pm && typeof pm === "object") meta = pm as SurveyResponseMeta;
+        } catch {
+          /* ignorieren */
+        }
+      }
+      out.push({ id, user: r[1] || "", surveyId: r[2] || "", submittedAt: r[3] || "", answers, meta });
     }
     // Neueste zuerst.
     return out.reverse();

@@ -112,6 +112,27 @@ export type SurveyStatus = "available" | "completed" | "locked";
 
 export type SurveyAnswers = Record<string, number | string | string[]>;
 
+// Hintergrund-Tracking: misst, wie schnell der Nutzer geantwortet hat, um
+// „nur schnell durchgeklickt"-Abgaben zu erkennen. Wird clientseitig aus den
+// Zeitstempeln der Antworten berechnet und serverseitig verifiziert
+// (rushed-Flag wird IMMER server-side neu bestimmt, nie vom Client geglaubt).
+export interface SurveyResponseMeta {
+  /** Gesamtdauer Start → Absenden (ms). */
+  durationMs: number;
+  /** Wie viele Fragen beantwortet wurden. */
+  answeredCount: number;
+  /** Antworten schneller als FAST_GAP_MS nach der vorherigen. */
+  fastCount: number;
+  /** Median-Abstand zwischen aufeinanderfolgenden Antworten (ms). */
+  medianGapMs: number;
+  /** Kleinster Abstand zwischen zwei Antworten (ms). */
+  minGapMs: number;
+  /** Heuristik: wirkt durchgeklickt? (server-side bestimmt) */
+  rushed: boolean;
+}
+
+export const FAST_GAP_MS = 900;
+
 export interface SurveyResponseRecord {
   id: string;
   surveyId: string;
@@ -119,6 +140,31 @@ export interface SurveyResponseRecord {
   user: string;
   submittedAt: string;
   answers: SurveyAnswers;
+  meta?: SurveyResponseMeta;
+}
+
+/** Säubert + verifiziert das Timing-Meta. Bestimmt `rushed` IMMER neu aus
+ *  den Metriken (Client-Flag wird ignoriert). */
+export function sanitizeMeta(input: unknown, questionCount: number): SurveyResponseMeta | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const m = input as Record<string, unknown>;
+  const num = (v: unknown) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const durationMs = num(m.durationMs);
+  const answeredCount = num(m.answeredCount);
+  const fastCount = num(m.fastCount);
+  const medianGapMs = num(m.medianGapMs);
+  const minGapMs = num(m.minGapMs);
+  // „Durchgeklickt", wenn die Antworten im Schnitt sehr schnell kamen ODER
+  // die ganze Umfrage unrealistisch kurz war (< 1,5s pro Frage).
+  const rushed =
+    answeredCount > 0 &&
+    ((medianGapMs > 0 && medianGapMs < 1200) ||
+      (durationMs > 0 && durationMs < Math.max(1, questionCount) * 1500) ||
+      fastCount >= Math.ceil(Math.max(1, questionCount) / 2));
+  return { durationMs, answeredCount, fastCount, medianGapMs, minGapMs, rushed };
 }
 
 export interface SurveyAggregate {

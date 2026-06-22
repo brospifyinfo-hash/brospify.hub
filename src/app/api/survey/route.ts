@@ -16,6 +16,7 @@ import {
 import {
   getSurveyById,
   sanitizeAnswers,
+  sanitizeMeta,
   hasRequiredAnswers,
   surveysWithStatus,
 } from "@/lib/survey";
@@ -64,7 +65,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { surveyId?: unknown; answers?: unknown };
+  let body: { surveyId?: unknown; answers?: unknown; meta?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -78,6 +79,7 @@ export async function POST(req: NextRequest) {
   }
 
   const answers = sanitizeAnswers(survey, body.answers);
+  const meta = sanitizeMeta(body.meta, survey.questions.length);
   if (!hasRequiredAnswers(survey, answers)) {
     return NextResponse.json({ error: "Bitte beantworte die Pflichtfragen." }, { status: 400 });
   }
@@ -102,7 +104,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Antwort speichern (Kennung = E-Mail, sonst Lizenzschlüssel).
-    await addSurveyResponse(kunde.kundenEmail || session.lizenzschluessel, surveyId, answers);
+    await addSurveyResponse(kunde.kundenEmail || session.lizenzschluessel, surveyId, answers, meta);
 
     // Abschluss markieren + Credits gutschreiben (atomar).
     const result = await completeSurvey(kunde.rowIndex, profile, surveyId, survey.creditReward);
