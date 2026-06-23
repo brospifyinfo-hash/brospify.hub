@@ -305,6 +305,7 @@ export default function HomePage() {
 
         {/* ─── Produkt-Generator Hero (Haupt-CTA) ─────── */}
         <motion.button
+          data-tour="hero-drop"
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           onClick={() => router.push("/charts")}
@@ -349,10 +350,12 @@ export default function HomePage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 mt-2.5">
             {HOME_AI_TOOLS.map((tool) => {
               const Icon = tool.icon;
+              const slug = tool.href.split("/").filter(Boolean).pop();
               return (
                 <Link
                   key={tool.href}
                   href={tool.href}
+                  data-tour={`tool-${slug}`}
                   className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-3 hover:bg-white/[0.05] hover:border-white/15 transition"
                 >
                   <div

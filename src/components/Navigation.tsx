@@ -303,11 +303,14 @@ export default function Navigation() {
 
             {/* Right Side */}
             <div className="flex items-center gap-1.5 sm:gap-2">
-              <CreditsPill balance={credits.balance} loading={credits.loading} icon={credits.creditIcon} isAdmin={!!session?.isAdmin} />
+              <span data-tour="credits" className="inline-flex">
+                <CreditsPill balance={credits.balance} loading={credits.loading} icon={credits.creditIcon} isAdmin={!!session?.isAdmin} />
+              </span>
 
               {/* Account mega-dropdown — desktop only */}
               <div ref={accountRef} className="relative hidden md:block">
                 <button
+                  data-tour="account"
                   onClick={() => setAccountOpen((v) => !v)}
                   className={`flex items-center gap-1.5 pl-1 pr-1.5 py-1 rounded-lg border transition-all duration-200 ${
                     accountOpen
