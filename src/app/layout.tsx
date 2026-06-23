@@ -23,13 +23,14 @@ export const metadata: Metadata = {
   publisher: "Brospify",
   category: "business",
   alternates: { canonical: "/" },
-  // Dynamisch über /api/favicon — der Admin kann im Hub ein eigenes
-  // Favicon hochladen; ohne Upload fällt die Route auf /brospify-logo.png
-  // zurück. Der <head> bleibt dadurch statisch.
+  // Dynamisch über /favicon.ico (Rewrite → /api/favicon). Bewusst NICHT
+  // direkt /api/favicon, weil robots.txt /api/ sperrt — Google könnte das
+  // Favicon dann nicht crawlen. /favicon.ico ist erlaubt und liefert das
+  // Bild direkt (200) aus.
   icons: {
-    icon: "/api/favicon",
-    shortcut: "/api/favicon",
-    apple: "/api/favicon",
+    icon: "/favicon.ico",
+    shortcut: "/favicon.ico",
+    apple: "/favicon.ico",
   },
   openGraph: {
     type: "website",
