@@ -34,8 +34,10 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import SurveyCard from "@/components/SurveyCard";
+import GuidedTour from "@/components/GuidedTour";
 import { useTier } from "@/lib/use-tier";
 import { useCredits } from "@/lib/credits";
+import { useI18n } from "@/lib/i18n";
 import Link from "next/link";
 import { Crown, Lock } from "lucide-react";
 
@@ -70,6 +72,8 @@ interface NewsPost {
   previewImageUrl: string;
   active: boolean;
   createdAt: string;
+  titleEn: string;
+  bodyEn: string;
 }
 
 interface StartTask {
@@ -113,6 +117,8 @@ export default function HomePage() {
   const router = useRouter();
   const tierState = useTier();
   const credits = useCredits();
+  const { lang, setLang } = useI18n();
+  const [showTour, setShowTour] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
   const [tasksDone, setTasksDone] = useState<Record<string, boolean>>({});
@@ -158,6 +164,9 @@ export default function HomePage() {
         setSession(sess);
 
         const profile = profileData?.profile || {};
+        // Sprachwahl aus dem Profil übernehmen (geräteübergreifend), falls
+        // gesetzt — der localStorage-Spiegel im I18nProvider greift sonst.
+        if (profile.language === "de" || profile.language === "en") setLang(profile.language);
         const cl = profile.onboarding_checklist || {};
         setChecklist(cl);
         // Server-Stand + localStorage-Spiegel mergen (Server gewinnt) —
@@ -173,7 +182,30 @@ export default function HomePage() {
 
     loadPosts();
     loadTasks();
-  }, [router, loadPosts, loadTasks]);
+  }, [router, loadPosts, loadTasks, setLang]);
+
+  // Interaktive Tour beim Erstlogin: wird über ?tour=1 ausgelöst (nach dem
+  // Onboarding-Wizard). window.location statt useSearchParams, damit keine
+  // Suspense-Grenze nötig ist.
+  useEffect(() => {
+    try {
+      if (new URLSearchParams(window.location.search).get("tour") === "1") {
+        setShowTour(true);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
+  async function finishTour() {
+    setShowTour(false);
+    // URL säubern (?tour=1 entfernen), damit ein Reload die Tour nicht erneut zeigt.
+    try {
+      window.history.replaceState({}, "", "/home");
+    } catch { /* ignore */ }
+    // Onboarding als abgeschlossen markieren (idempotent — meist schon gesetzt).
+    try {
+      await fetch("/api/profile/onboarding", { method: "POST" });
+    } catch { /* ignore */ }
+  }
 
   if (loading || !session) {
     return (
@@ -225,16 +257,28 @@ export default function HomePage() {
     } catch { /* keep optimistic value */ }
   }
 
+  // News in der aktuellen Sprache rendern: bei EN auf die EN-Felder gehen,
+  // mit Fallback auf Deutsch, falls noch keine Übersetzung gepflegt ist.
+  // Die Anzeige-Komponenten lesen weiter p.title/p.body — das Admin-Modal
+  // bekommt unten die ROH-Posts (mit titleEn/bodyEn) zum Bearbeiten.
+  const localizedPosts: NewsPost[] = posts.map((p) =>
+    lang === "en"
+      ? { ...p, title: p.titleEn || p.title, body: p.bodyEn || p.body }
+      : p
+  );
+
   return (
     <div className="min-h-screen bg-mesh">
       <Navigation />
+
+      {showTour && <GuidedTour onComplete={finishTour} />}
 
       <div className="fixed top-20 right-6 w-56 h-56 bg-[#95BF47]/6 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-20 left-6 w-48 h-48 bg-indigo-500/5 rounded-full blur-[100px] pointer-events-none" />
 
       {/* ─── News-Hero — full-bleed, ganz oben ─── */}
       <NewsHero
-        posts={posts.filter((p) => p.active)}
+        posts={localizedPosts.filter((p) => p.active)}
         onOpenText={(p) => setActivePost(p)}
         isAdmin={!!session.isAdmin}
         onManage={() => setNewsAdminOpen(true)}
@@ -1503,6 +1547,8 @@ function NewsForm({ initial, onCancel, onSaved }: {
   const [type, setType] = useState<"text" | "video">(initial?.type || "text");
   const [title, setTitle] = useState(initial?.title || "");
   const [body, setBody] = useState(initial?.body || "");
+  const [titleEn, setTitleEn] = useState(initial?.titleEn || "");
+  const [bodyEn, setBodyEn] = useState(initial?.bodyEn || "");
   const [imageUrl, setImageUrl] = useState(initial?.imageUrl || "");
   const [youtubeUrl, setYoutubeUrl] = useState(initial?.youtubeUrl || "");
   const [previewImageUrl, setPreviewImageUrl] = useState(initial?.previewImageUrl || "");
@@ -1535,14 +1581,14 @@ function NewsForm({ initial, onCancel, onSaved }: {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            rowIndex: initial.rowIndex, type, title, body, imageUrl, youtubeUrl, previewImageUrl,
+            rowIndex: initial.rowIndex, type, title, body, imageUrl, youtubeUrl, previewImageUrl, titleEn, bodyEn,
           }),
         });
       } else {
         await fetch("/api/admin/news", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type, title, body, imageUrl, youtubeUrl, previewImageUrl }),
+          body: JSON.stringify({ type, title, body, imageUrl, youtubeUrl, previewImageUrl, titleEn, bodyEn }),
         });
       }
       onSaved();
@@ -1575,6 +1621,9 @@ function NewsForm({ initial, onCancel, onSaved }: {
         </button>
       </div>
 
+      <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">
+        <span className="text-base leading-none">🇩🇪</span> Deutsch
+      </div>
       <input
         type="text"
         value={title}
@@ -1613,6 +1662,30 @@ function NewsForm({ initial, onCancel, onSaved }: {
           />
         </>
       )}
+
+      {/* Englische Version (optional — fällt sonst auf Deutsch zurück) */}
+      <div className="pt-2 mt-1 border-t border-white/[0.06] space-y-2">
+        <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">
+          <span className="text-base leading-none">🇬🇧</span> English (optional)
+        </div>
+        <input
+          type="text"
+          value={titleEn}
+          onChange={(e) => setTitleEn(e.target.value)}
+          placeholder="Title (English)"
+          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-sky-500/40 transition placeholder:text-zinc-600"
+        />
+        <textarea
+          value={bodyEn}
+          onChange={(e) => setBodyEn(e.target.value)}
+          placeholder={type === "video" ? "Description (English)" : "Text content (English)"}
+          rows={type === "video" ? 2 : 5}
+          className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm outline-none focus:border-sky-500/40 transition placeholder:text-zinc-600 resize-y"
+        />
+        <p className="text-[10px] text-zinc-600">
+          Lässt du dies leer, sehen englische Nutzer den deutschen Text.
+        </p>
+      </div>
 
       <div className="flex gap-2 pt-1">
         <button

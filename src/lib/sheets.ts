@@ -163,6 +163,12 @@ export interface KundeProfile {
   checkout_settings?: CheckoutSettings;
   hasCompletedOnboarding?: boolean;
   linkedGoogleEmail?: string;
+  /** Vom Kunden im Onboarding gewählter Anzeigename (im Profil sichtbar).
+   *  Fällt im UI auf den Google-Namen bzw. den Lizenzschlüssel zurück. */
+  displayName?: string;
+  /** Bevorzugte Oberflächen-Sprache. "de" (Default) oder "en". Wird im
+   *  Onboarding gesetzt und vom Sprach-Umschalter aktualisiert. */
+  language?: "de" | "en";
   onboarding_checklist?: OnboardingChecklist;
   /** Per-user check-off state for the admin-curated StartTasks list
    *  (home page). Key = StartTask.id, value = true once the user
@@ -1713,9 +1719,17 @@ export async function deleteNewsSlide(rowIndex: number): Promise<void> {
 // ─── NEWS POSTS (Tab "NewsPosts") ─────────────────────────────────
 // Admin-curated news cards rendered on the home page.
 //   A=ID, B=Type ("text" or "video"), C=Title, D=Body (markdown/plain),
-//   E=ImageUrl, F=YoutubeUrl, G=PreviewImageUrl, H=Active, I=CreatedAt
+//   E=ImageUrl, F=YoutubeUrl, G=PreviewImageUrl, H=Active, I=CreatedAt,
+//   J=TitleEn, K=BodyEn
 // Text cards: image is the cover, body opens in a detail modal.
 // Video cards: previewImage is the cover, click opens youtube embed.
+// Zweisprachig: TitleEn/BodyEn sind optional. Fehlen sie, fällt die
+// englische Ansicht auf die deutschen Felder zurück.
+
+const NEWS_HEADERS = [
+  "ID", "Type", "Title", "Body", "ImageUrl", "YoutubeUrl",
+  "PreviewImageUrl", "Active", "CreatedAt", "TitleEn", "BodyEn",
+];
 
 export interface NewsPost {
   rowIndex: number;
@@ -1728,6 +1742,8 @@ export interface NewsPost {
   previewImageUrl: string;
   active: boolean;
   createdAt: string;
+  titleEn: string;
+  bodyEn: string;
 }
 
 function rowToNewsPost(row: string[], index: number): NewsPost {
@@ -1742,19 +1758,18 @@ function rowToNewsPost(row: string[], index: number): NewsPost {
     previewImageUrl: row[6] || "",
     active: row[7] !== "false",
     createdAt: row[8] || "",
+    titleEn: row[9] || "",
+    bodyEn: row[10] || "",
   };
 }
 
 export async function getAllNewsPosts(): Promise<NewsPost[]> {
   const sheets = getSheets();
   try {
-    await ensureSheet("NewsPosts", [
-      "ID", "Type", "Title", "Body", "ImageUrl", "YoutubeUrl",
-      "PreviewImageUrl", "Active", "CreatedAt",
-    ]);
+    await ensureSheet("NewsPosts", NEWS_HEADERS);
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId: SHEET_ID(),
-      range: "NewsPosts!A2:I",
+      range: "NewsPosts!A2:K",
     });
     const rows = res.data.values || [];
     return rows.map((row, i) => rowToNewsPost(row, i)).filter((p) => p.id);
@@ -1765,18 +1780,16 @@ export async function getAllNewsPosts(): Promise<NewsPost[]> {
 
 export async function addNewsPost(post: Omit<NewsPost, "rowIndex">): Promise<void> {
   const sheets = getSheets();
-  await ensureSheet("NewsPosts", [
-    "ID", "Type", "Title", "Body", "ImageUrl", "YoutubeUrl",
-    "PreviewImageUrl", "Active", "CreatedAt",
-  ]);
+  await ensureSheet("NewsPosts", NEWS_HEADERS);
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID(),
-    range: "NewsPosts!A:I",
+    range: "NewsPosts!A:K",
     valueInputOption: "RAW",
     requestBody: {
       values: [[
         post.id, post.type, post.title, post.body, post.imageUrl,
         post.youtubeUrl, post.previewImageUrl, String(post.active), post.createdAt,
+        post.titleEn, post.bodyEn,
       ]],
     },
   });
@@ -1790,7 +1803,7 @@ export async function updateNewsPost(
   // Read the existing row to merge non-provided fields.
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
+    range: `NewsPosts!A${rowIndex}:K${rowIndex}`,
   });
   const row = res.data.values?.[0] || [];
   const merged: NewsPost = {
@@ -1804,15 +1817,18 @@ export async function updateNewsPost(
     previewImageUrl: patch.previewImageUrl ?? row[6] ?? "",
     active: patch.active ?? row[7] !== "false",
     createdAt: row[8] || "",
+    titleEn: patch.titleEn ?? row[9] ?? "",
+    bodyEn: patch.bodyEn ?? row[10] ?? "",
   };
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
+    range: `NewsPosts!A${rowIndex}:K${rowIndex}`,
     valueInputOption: "RAW",
     requestBody: {
       values: [[
         merged.id, merged.type, merged.title, merged.body, merged.imageUrl,
         merged.youtubeUrl, merged.previewImageUrl, String(merged.active), merged.createdAt,
+        merged.titleEn, merged.bodyEn,
       ]],
     },
   });
@@ -1822,9 +1838,9 @@ export async function deleteNewsPost(rowIndex: number): Promise<void> {
   const sheets = getSheets();
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `NewsPosts!A${rowIndex}:I${rowIndex}`,
+    range: `NewsPosts!A${rowIndex}:K${rowIndex}`,
     valueInputOption: "RAW",
-    requestBody: { values: [["", "", "", "", "", "", "", "", ""]] },
+    requestBody: { values: [["", "", "", "", "", "", "", "", "", "", ""]] },
   });
 }
 

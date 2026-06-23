@@ -7,7 +7,7 @@ import {
   getKundeProfile,
   logSystemEvent,
 } from "@/lib/sheets";
-import { getSession } from "@/lib/session";
+import { applySessionLifetime, getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +43,11 @@ export async function GET(req: NextRequest) {
 
     const isAdminRole = kunde.profile.role === "admin";
 
+    // „Angemeldet bleiben" wird über die Callback-URL durch den OAuth-
+    // Round-Trip getragen (?remember=1). Google-Logins sollen standardmäßig
+    // persistent sein; nur ?remember=0 erzeugt ein Session-Cookie.
+    const remember = req.nextUrl.searchParams.get("remember") !== "0";
+
     // Create iron-session (same fields as license key login)
     const session = await getSession();
     session.isLoggedIn = true;
@@ -56,6 +61,8 @@ export async function GET(req: NextRequest) {
     session.googleName = authSession.user.name || undefined;
     session.googleEmail = authSession.user.email || undefined;
     session.googleImage = authSession.user.image || undefined;
+    session.rememberMe = remember;
+    applySessionLifetime(session, remember);
 
     if (kunde.shopifyToken) {
       session.hasShopifyConnection = true;

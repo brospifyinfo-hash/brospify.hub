@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, LOCALES, type Locale } from "@/lib/i18n";
 import { useBranding } from "@/lib/branding";
 
 interface Profile {
@@ -39,6 +39,8 @@ interface Profile {
   };
   ai_usage?: { month: string; count: number };
   linkedGoogleEmail?: string;
+  displayName?: string;
+  language?: "de" | "en";
 }
 
 interface TicketInfo {
@@ -52,7 +54,8 @@ interface TicketInfo {
 
 export default function ProfilePage() {
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
+  const [displayName, setDisplayName] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -94,6 +97,8 @@ export default function ProfilePage() {
         setKundenEmail(data.kundenEmail || "");
         setHasShopifyToken(data.hasShopifyToken || false);
         setLinkedGoogleEmail(p.linkedGoogleEmail || "");
+        setDisplayName(p.displayName || "");
+        if (p.language === "de" || p.language === "en") setLang(p.language);
         if (data.credits) setCredits(data.credits);
         setCredentials({
           clientId: p.shopify_credentials?.clientId || "",
@@ -122,7 +127,7 @@ export default function ProfilePage() {
       .then((data) => setTickets(data.tickets || []))
       .catch(() => {})
       .finally(() => setTicketsLoading(false));
-  }, [router]);
+  }, [router, setLang]);
 
   // Ticket refresh function
   const refreshTickets = useCallback(async () => {
@@ -151,7 +156,7 @@ export default function ProfilePage() {
       const res = await fetch("/api/profile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shopify_credentials: credentials, legal_data: legalData }),
+        body: JSON.stringify({ shopify_credentials: credentials, legal_data: legalData, displayName, language: lang }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Fehler"); return; }
@@ -237,7 +242,7 @@ export default function ProfilePage() {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <h2 className="text-lg md:text-xl font-bold truncate">{googleProfile?.name || kundenEmail || "Kunde"}</h2>
+                <h2 className="text-lg md:text-xl font-bold truncate">{displayName || googleProfile?.name || kundenEmail || "Kunde"}</h2>
                 <p className="text-sm text-zinc-400 truncate">{googleProfile?.email || kundenEmail}</p>
                 {shopDomain && <p className="text-xs text-zinc-600 mt-0.5">{shopDomain}</p>}
                 <div className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#95BF47]/10 border border-[#95BF47]/20">
@@ -298,6 +303,59 @@ export default function ProfilePage() {
                 </button>
               )}
             </div>
+          </motion.div>
+
+          {/* Anzeigename & Sprache */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}
+            className="glass-strong rounded-2xl border border-white/10 p-5 md:p-6 space-y-4 backdrop-blur-xl">
+            <h2 className="font-bold flex items-center gap-2">
+              <User className="w-4 h-4 text-[#95BF47]" />
+              {t.profile.displayName} & {t.profile.language}
+            </h2>
+            <div className="space-y-1.5">
+              <label className="block text-xs text-zinc-400">{t.profile.displayName}</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                maxLength={60}
+                placeholder={t.profile.displayName}
+                className="input-glass w-full"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="block text-xs text-zinc-400">{t.profile.language}</label>
+              <div className="grid grid-cols-2 gap-2">
+                {LOCALES.map((l) => (
+                  <button
+                    key={l.code}
+                    type="button"
+                    onClick={() => setLang(l.code as Locale)}
+                    className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition ${
+                      lang === l.code
+                        ? "border-[#95BF47]/50 bg-[#95BF47]/10 text-white"
+                        : "border-white/10 bg-white/[0.03] text-white/55 hover:text-white hover:border-white/20"
+                    }`}
+                  >
+                    <span className="text-lg leading-none">{l.flag}</span>
+                    {l.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="btn-accent w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {t.profile.save}
+            </button>
+            {success && (
+              <div className="text-[12px] text-emerald-400 flex items-center gap-1.5">
+                <Check className="w-3.5 h-3.5" /> {success}
+              </div>
+            )}
           </motion.div>
 
           {/* Credit Balance Card */}

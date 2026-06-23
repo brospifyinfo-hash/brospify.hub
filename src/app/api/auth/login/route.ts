@@ -6,11 +6,12 @@ import {
   getKundeProfile,
   logSystemEvent,
 } from "@/lib/sheets";
-import { getSession } from "@/lib/session";
+import { applySessionLifetime, getSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
-    const { lizenzschluessel } = await req.json();
+    const { lizenzschluessel, rememberMe } = await req.json();
+    const remember = rememberMe === true;
 
     if (!lizenzschluessel || typeof lizenzschluessel !== "string") {
       return NextResponse.json(
@@ -35,6 +36,8 @@ export async function POST(req: NextRequest) {
       const session = await getSession();
       session.isLoggedIn = true;
       session.isAdmin = true;
+      session.rememberMe = remember;
+      applySessionLifetime(session, remember);
       await session.save();
       void logSystemEvent({
         level: "audit",
@@ -80,6 +83,8 @@ export async function POST(req: NextRequest) {
     session.shopifyToken = kunde.shopifyToken || undefined;
     session.setupStep1Done = !!kunde.shopifyToken;
     session.setupStep2Done = false;
+    session.rememberMe = remember;
+    applySessionLifetime(session, remember);
 
     if (kunde.shopifyToken) {
       session.hasShopifyConnection = true;

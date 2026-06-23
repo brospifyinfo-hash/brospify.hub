@@ -12,7 +12,11 @@
 
 export const APP_KNOWLEDGE = `BROSPIFY HUB — KOMPLETTES FUNKTIONSWISSEN (Stand: aktuell)
 
-Brospify Hub (brospifyhub.com) ist die Mitglieder-Web-App für Produkt-Recherche + KI-Tools fürs Dropshipping. Sprache: Deutsch. Login auf der Startseite mit dem Lizenzschlüssel ODER per "Mit Google anmelden". Den Lizenzschlüssel bekommt man nach dem Kauf automatisch per E-Mail.
+Brospify Hub (brospifyhub.com) ist die Mitglieder-Web-App für Produkt-Recherche + KI-Tools fürs Dropshipping. Oberfläche zweisprachig: Deutsch ODER Englisch — oben rechts auf der Login-Seite und im Profil per Flaggen-Schalter umstellbar (Standard Deutsch). Login auf der Startseite mit dem Lizenzschlüssel ODER per "Mit Google anmelden". Den Lizenzschlüssel bekommt man nach dem Kauf automatisch per E-Mail.
+
+LIZENZSCHLÜSSEL-EINGABE: Der Key hat das Format XXX-XXXXXX (3 Zeichen, Bindestrich, 6 Zeichen). Auf der Login-Seite gibt es dafür einzelne Kästchen (3 + automatischer Bindestrich + 6); der Cursor springt automatisch weiter, der Bindestrich muss NICHT getippt werden. Man kann den ganzen Key auch reinkopieren. Mehrdeutige Zeichen (I, O, 0, 1) kommen im Key nicht vor.
+
+ERSTER LOGIN (Einrichtung, nur einmalig): Nach dem ersten Login führt ein kurzer Einrichtungs-Assistent durch (1) Anzeigename (erscheint im Profil) + Sprachauswahl (Deutsch/Englisch) + Häkchen "Angemeldet bleiben", dann (2) "Mit Google anmelden" zum Verknüpfen des Google-Kontos (oder "Überspringen"). Danach läuft einmalig eine interaktive Tour durch die wichtigsten Bereiche. "Angemeldet bleiben" hält dich auf dem Gerät eingeloggt (sonst nur bis der Browser geschlossen wird). Name und Sprache lassen sich später jederzeit im Profil ändern.
 
 WICHTIG: Der Hub verbindet sich NICHT (mehr) mit deinem Shopify-Shop. Es gibt keine Shop-Verbindung, kein automatisches Pushen ins Theme, keinen Setup-Wizard. Schritte wie "Theme hinzufügen" oder "Produkt veröffentlichen" macht man direkt im eigenen Shopify-Admin (siehe Schnellstart auf der Home).
 

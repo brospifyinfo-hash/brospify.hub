@@ -19,7 +19,8 @@ import {
   Check,
   ChevronDown,
 } from "lucide-react";
-import { useI18n } from "@/lib/i18n";
+import { useI18n, LOCALES } from "@/lib/i18n";
+import LicenseKeyInput from "@/components/LicenseKeyInput";
 import { BrandLogo, useBranding } from "@/lib/branding";
 import { DEFAULT_TIERS } from "@/lib/tiers-shared";
 
@@ -50,9 +51,11 @@ export default function LoginPage() {
 }
 
 function LoginContent() {
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const { brandName } = useBranding();
   const [key, setKey] = useState("");
+  const [manualKey, setManualKey] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -89,16 +92,16 @@ function LoginContent() {
     server: t.login.errorServer,
   };
 
-  async function handleKeyLogin(e: React.FormEvent) {
-    e.preventDefault();
-    if (!key.trim()) { setError(t.login.errorInvalidKey); return; }
+  async function doKeyLogin(keyValue: string) {
+    if (loading || googleLoading) return;
+    if (!keyValue.trim()) { setError(t.login.errorInvalidKey); return; }
     setError("");
     setLoading(true);
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lizenzschluessel: key }),
+        body: JSON.stringify({ lizenzschluessel: keyValue, rememberMe }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -116,9 +119,17 @@ function LoginContent() {
     }
   }
 
+  function handleKeyLogin(e: React.FormEvent) {
+    e.preventDefault();
+    doKeyLogin(key);
+  }
+
   function handleGoogleLogin() {
     setGoogleLoading(true);
-    signIn("google", { callbackUrl: "/api/auth/google-callback" });
+    // „Angemeldet bleiben" durch den OAuth-Round-Trip tragen.
+    signIn("google", {
+      callbackUrl: `/api/auth/google-callback?remember=${rememberMe ? "1" : "0"}`,
+    });
   }
 
   const displayError = error || (urlError ? ERROR_MAP[urlError] || urlError : "");
@@ -137,6 +148,24 @@ function LoginContent() {
       />
 
       <main className="relative z-10 mx-auto max-w-5xl px-4 sm:px-6 py-10 lg:py-16">
+        {/* Sprachumschalter (Deutsch / English mit Flagge) */}
+        <div className="absolute top-4 right-4 sm:top-6 sm:right-6 z-20 flex items-center gap-1 rounded-full bg-white/[0.04] border border-white/10 p-1 backdrop-blur">
+          {LOCALES.map((l) => (
+            <button
+              key={l.code}
+              type="button"
+              onClick={() => setLang(l.code)}
+              aria-pressed={lang === l.code}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[12px] font-medium transition ${
+                lang === l.code ? "bg-white/10 text-white" : "text-white/45 hover:text-white"
+              }`}
+            >
+              <span className="text-sm leading-none">{l.flag}</span>
+              <span className="hidden sm:inline">{l.code.toUpperCase()}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Hero — Logo bleibt der visuelle Anker. Die SEO-Überschrift
             ist bewusst unauffällig (sr-only), bleibt aber für Google im
             DOM. „Brospify" steckt zusätzlich sichtbar im Feature-Block. */}
@@ -151,7 +180,7 @@ function LoginContent() {
           </motion.div>
           <h1 className="sr-only">{brand} – Dropshipping Dashboard & KI-Tools von Brospify</h1>
           <p className="mt-1 text-[12.5px] text-white/35 max-w-sm mx-auto leading-relaxed">
-            Melde dich an, um zu deinem Dashboard zu gelangen.
+            {t.login.intro}
           </p>
         </header>
 
@@ -165,9 +194,9 @@ function LoginContent() {
           >
             <div className="glass rounded-2xl p-6 space-y-5 backdrop-blur-xl">
               <div>
-                <h2 className="text-lg font-semibold text-white">Anmelden</h2>
+                <h2 className="text-lg font-semibold text-white">{t.login.signInHeading}</h2>
                 <p className="text-[12.5px] text-white/45 mt-0.5">
-                  Mit Google oder deinem Lizenzschlüssel.
+                  {t.login.signInSub}
                 </p>
               </div>
 
@@ -216,20 +245,39 @@ function LoginContent() {
                 </div>
               </div>
 
-              {/* License key */}
-              <form onSubmit={handleKeyLogin} className="space-y-3">
-                <label className="text-xs text-zinc-400 font-medium flex items-center gap-1.5">
+              {/* License key — segmentierte Eingabe (3 + Bindestrich + 6) */}
+              <form id="license-form" onSubmit={handleKeyLogin} className="space-y-3">
+                <label className="text-xs text-zinc-400 font-medium flex items-center gap-1.5 justify-center">
                   <KeyRound className="w-3.5 h-3.5" />
                   {t.login.licenseLabel}
                 </label>
-                <input
-                  type="text"
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder={t.login.licensePlaceholder}
-                  className="input-glass w-full"
-                  disabled={loading || googleLoading}
-                />
+                {manualKey ? (
+                  <input
+                    type="text"
+                    value={key}
+                    onChange={(e) => setKey(e.target.value)}
+                    placeholder={t.login.licensePlaceholder}
+                    className="input-glass w-full text-center tracking-wider"
+                    autoComplete="off"
+                    disabled={loading || googleLoading}
+                  />
+                ) : (
+                  <LicenseKeyInput
+                    value={key}
+                    onChange={setKey}
+                    onComplete={(full) => doKeyLogin(full)}
+                    disabled={loading || googleLoading}
+                  />
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setManualKey((v) => !v); setKey(""); }}
+                  className="block mx-auto text-[11px] text-white/35 hover:text-white/70 transition"
+                >
+                  {manualKey
+                    ? (lang === "en" ? "Use boxes" : "Kästchen verwenden")
+                    : (lang === "en" ? "Enter key manually" : "Schlüssel manuell eingeben")}
+                </button>
                 <button
                   type="submit"
                   disabled={loading || googleLoading}
@@ -244,6 +292,17 @@ function LoginContent() {
                     </>
                   )}
                 </button>
+
+                {/* Angemeldet bleiben */}
+                <label className="flex items-center justify-center gap-2 text-[12.5px] text-white/55 cursor-pointer select-none pt-0.5">
+                  <input
+                    type="checkbox"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-4 h-4 rounded border-white/20 bg-white/5 accent-[#95BF47]"
+                  />
+                  {t.login.rememberMe}
+                </label>
               </form>
 
               {/* Hilfe bei der Anmeldung */}
@@ -253,7 +312,7 @@ function LoginContent() {
                   className="w-full flex items-center justify-center gap-2 text-[12.5px] font-medium text-white/55 hover:text-white transition"
                 >
                   <HelpCircle className="w-4 h-4" style={{ color: ACCENT }} />
-                  Hilfe bei der Anmeldung
+                  {t.login.helpToggle}
                   <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showHelp ? "rotate-180" : ""}`} />
                 </button>
                 <AnimatePresence initial={false}>
@@ -276,8 +335,8 @@ function LoginContent() {
                   onClick={() => setShowAbo(true)}
                   className="w-full text-center text-[12px] text-white/40 hover:text-white transition"
                 >
-                  Noch keinen Zugang?{" "}
-                  <span className="font-semibold" style={{ color: ACCENT }}>Hol dir Zugang →</span>
+                  {t.login.noAccess}{" "}
+                  <span className="font-semibold" style={{ color: ACCENT }}>{t.login.getAccess}</span>
                 </button>
               )}
             </div>

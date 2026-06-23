@@ -70,11 +70,19 @@ export async function POST(req: NextRequest) {
       ...(body.shopify_credentials !== undefined && { shopify_credentials: { ...current.shopify_credentials, ...body.shopify_credentials } }),
       ...(body.brand_kit !== undefined && { brand_kit: { ...current.brand_kit, ...body.brand_kit } }),
       ...(body.legal_data !== undefined && { legal_data: { ...current.legal_data, ...body.legal_data } }),
+      ...(body.displayName !== undefined && { displayName: String(body.displayName).trim().slice(0, 60) }),
+      ...(body.language !== undefined && { language: body.language === "en" ? "en" : "de" }),
       // ai_usage is managed by the ai-optimize route, not here
     };
 
     console.log("[Profile] Saving for row:", kunde.rowIndex, JSON.stringify(updated));
     await updateKundeProfile(kunde.rowIndex, updated);
+
+    // Anzeigename in der Session spiegeln, damit Greeting/Header sofort passen.
+    if (body.displayName !== undefined && updated.displayName) {
+      session.googleName = updated.displayName;
+      await session.save();
+    }
 
     return NextResponse.json({ success: true, profile: updated });
   } catch (error) {

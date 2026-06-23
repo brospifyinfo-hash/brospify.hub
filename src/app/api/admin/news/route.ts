@@ -55,6 +55,8 @@ export async function POST(req: NextRequest) {
       previewImageUrl: String(body.previewImageUrl || ""),
       active: body.active !== false,
       createdAt: new Date().toISOString(),
+      titleEn: String(body.titleEn || ""),
+      bodyEn: String(body.bodyEn || ""),
     };
 
     await addNewsPost(post);
@@ -87,6 +89,8 @@ export async function PATCH(req: NextRequest) {
     if (body.youtubeUrl !== undefined) patch.youtubeUrl = String(body.youtubeUrl);
     if (body.previewImageUrl !== undefined) patch.previewImageUrl = String(body.previewImageUrl);
     if (body.active !== undefined) patch.active = !!body.active;
+    if (body.titleEn !== undefined) patch.titleEn = String(body.titleEn);
+    if (body.bodyEn !== undefined) patch.bodyEn = String(body.bodyEn);
 
     await updateNewsPost(rowIndex, patch);
     return NextResponse.json({ success: true });
