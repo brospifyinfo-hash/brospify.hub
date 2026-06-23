@@ -1555,8 +1555,17 @@ export default function AdminPage() {
   }
 
   async function uploadFavicon(file: File) {
-    if (!file.type.startsWith("image/")) {
+    // .ico (und manchmal .svg) melden einen leeren MIME-Type → auch per
+    // Dateiendung akzeptieren.
+    const okType =
+      file.type.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif|svg|ico|avif)$/i.test(file.name);
+    if (!okType) {
       setError("Bitte eine Bilddatei ablegen (PNG, ICO, SVG …).");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Favicon ist zu groß (max. 5 MB).");
       return;
     }
     setFaviconBusy(true);

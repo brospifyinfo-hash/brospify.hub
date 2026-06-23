@@ -19,8 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Keine Datei." }, { status: 400 });
     }
 
-    // Allow images and zip files
-    const isImage = file.type.startsWith("image/");
+    // Allow images and zip files. Favicons (.ico) und manche .svg melden
+    // einen leeren/abweichenden MIME-Type → zusätzlich per Endung erlauben.
+    const isImage =
+      file.type.startsWith("image/") ||
+      /\.(png|jpe?g|webp|gif|svg|ico|avif)$/i.test(file.name);
     const isZip = file.type === "application/zip" || file.type === "application/x-zip-compressed" || file.name.endsWith(".zip");
 
     if (!isImage && !isZip) {
