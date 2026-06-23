@@ -100,6 +100,10 @@ async function saveSettings(settings: AppSettings): Promise<string> {
   const blob = await put(SETTINGS_KEY, JSON.stringify(settings), {
     access: "public",
     addRandomSuffix: false,
+    // @vercel/blob v2 wirft sonst beim Überschreiben des festen Keys einen
+    // Fehler ("blob already exists") → JEDES Settings-Speichern (Favicon,
+    // Logo, Abo-Bild …) würde fehlschlagen.
+    allowOverwrite: true,
   });
   return blob.url;
 }
