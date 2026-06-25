@@ -24,6 +24,7 @@ import {
   RefreshCw,
   Coins,
   Plus,
+  Compass,
 } from "lucide-react";
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
@@ -356,6 +357,15 @@ export default function ProfilePage() {
                 <Check className="w-3.5 h-3.5" /> {success}
               </div>
             )}
+
+            {/* Einführungs-Tour erneut ansehen */}
+            <button
+              onClick={() => router.push("/home?tour=1")}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-zinc-300 hover:bg-white/[0.08] hover:text-white transition text-sm font-medium"
+            >
+              <Compass className="w-4 h-4 text-[#95BF47]" />
+              {lang === "en" ? "Replay intro tour" : "Einführungs-Tour erneut ansehen"}
+            </button>
           </motion.div>
 
           {/* Credit Balance Card */}

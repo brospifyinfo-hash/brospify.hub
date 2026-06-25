@@ -162,6 +162,11 @@ export interface KundeProfile {
   credits?: CreditsRecord;
   checkout_settings?: CheckoutSettings;
   hasCompletedOnboarding?: boolean;
+  /** True, sobald die interaktive Einführungs-Tour einmal abgeschlossen/
+   *  übersprungen wurde. Getrennt von hasCompletedOnboarding, damit auch
+   *  BESTANDSKUNDEN (die vor dem Tour-Feature onboardet waren) die Tour
+   *  einmalig automatisch sehen. Bleibt unangetastet beim manuellen Replay. */
+  hasSeenTour?: boolean;
   linkedGoogleEmail?: string;
   /** Vom Kunden im Onboarding gewählter Anzeigename (im Profil sichtbar).
    *  Fällt im UI auf den Google-Namen bzw. den Lizenzschlüssel zurück. */

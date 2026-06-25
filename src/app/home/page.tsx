@@ -167,6 +167,10 @@ export default function HomePage() {
         // Sprachwahl aus dem Profil übernehmen (geräteübergreifend), falls
         // gesetzt — der localStorage-Spiegel im I18nProvider greift sonst.
         if (profile.language === "de" || profile.language === "en") setLang(profile.language);
+        // Einführungs-Tour automatisch zeigen, solange sie noch NICHT gesehen
+        // wurde — auch für Bestandskunden, die vor dem Tour-Feature onboardet
+        // waren. Admins haben kein Profil zum Persistieren → ausnehmen.
+        if (!sess.isAdmin && profile.hasSeenTour !== true) setShowTour(true);
         const cl = profile.onboarding_checklist || {};
         setChecklist(cl);
         // Server-Stand + localStorage-Spiegel mergen (Server gewinnt) —
@@ -201,9 +205,10 @@ export default function HomePage() {
     try {
       window.history.replaceState({}, "", "/home");
     } catch { /* ignore */ }
-    // Onboarding als abgeschlossen markieren (idempotent — meist schon gesetzt).
+    // Tour als gesehen markieren (idempotent) → wird nicht mehr automatisch
+    // gezeigt. Manuelles Replay über /home?tour=1 bleibt davon unberührt.
     try {
-      await fetch("/api/profile/onboarding", { method: "POST" });
+      await fetch("/api/profile/tour-seen", { method: "POST" });
     } catch { /* ignore */ }
   }
 

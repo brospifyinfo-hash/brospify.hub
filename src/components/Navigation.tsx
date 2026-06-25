@@ -40,6 +40,7 @@ import {
   Flame,
   LayoutTemplate,
   Scale,
+  Compass,
 } from "lucide-react";
 import { BrandLogo } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
@@ -1093,6 +1094,24 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             />
           ))}
         </MenuGroup>
+
+        {/* Einführung — Tour jederzeit erneut abspielbar. Volle Navigation
+            (location.assign) statt Link, damit die Tour auch dann startet,
+            wenn man bereits auf /home ist (sonst kein Remount). */}
+        {!session.isAdmin && (
+          <MenuGroup label="Einführung">
+            <button
+              onClick={() => { onClose(); window.location.assign("/home?tour=1"); }}
+              className="group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 border border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.06]"
+            >
+              <Compass className="w-3.5 h-3.5 shrink-0 text-zinc-500 group-hover:text-zinc-300" />
+              <div className="flex-1 min-w-0 text-left">
+                <div className="text-[12.5px] font-medium truncate leading-tight">Tour erneut ansehen</div>
+                <div className="text-[10px] text-zinc-600 truncate">Interaktive Einführung</div>
+              </div>
+            </button>
+          </MenuGroup>
+        )}
 
         {/* Rechtliches — externe Policy-Seiten auf brospify.com */}
         <MenuGroup label="Rechtliches">
