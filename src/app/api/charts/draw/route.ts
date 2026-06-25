@@ -13,7 +13,7 @@
 // EINEM Profil-Write gespeichert (deductCredits schreibt den ganzen
 // Profil-Datensatz), also keine halben Zustände.
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { requireFeature } from "@/lib/tier-guard";
 import {
@@ -25,9 +25,16 @@ import {
   type Produkt,
 } from "@/lib/sheets";
 import { getCreditCost } from "@/lib/credit-config-server";
+import { localizeArray, localizeObject, type Lang } from "@/lib/translate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Zielsprache aus ?lang= lesen. Englisch → Produktinhalte werden per KI
+// übersetzt (gecached); Deutsch = Originaltext, keine Übersetzung.
+function langFrom(req: NextRequest): Lang {
+  return req.nextUrl.searchParams.get("lang") === "en" ? "en" : "de";
+}
 
 // Volle Projektion fürs Frontend — exakt die Felder, die die alte
 // Charts-Detailansicht gerendert hat (Stats, Finanzen, Ads, Links,
@@ -48,10 +55,12 @@ function project(p: Produkt) {
 }
 
 // ─── GET: aktueller Stand ─────────────────────────────────────────
-export async function GET() {
+export async function GET(req: NextRequest) {
   const session = await getSession();
   const guard = await requireFeature(session, "chartsAnalytics");
   if (!guard.ok) return guard.response;
+
+  const lang = langFrom(req);
 
   const DRAW_COST = await getCreditCost("CHARTS_DRAW");
 
@@ -81,11 +90,13 @@ export async function GET() {
   const drawnSet = new Set(drawnIds);
   // In der Reihenfolge des Ziehens (neueste zuletzt gezogen → vorne).
   const byId = new Map(all.map((p) => [p.id, p]));
-  const drawn = drawnIds
+  const drawnRaw = drawnIds
     .map((id) => byId.get(id))
     .filter((p): p is Produkt => !!p)
     .reverse()
     .map(project);
+  // Bei Englisch die Produktinhalte per KI übersetzen (gecached, fail-safe).
+  const drawn = await localizeArray(drawnRaw, lang);
   const remainingCount = all.filter((p) => !drawnSet.has(p.id)).length;
 
   return NextResponse.json(
@@ -103,10 +114,12 @@ export async function GET() {
 }
 
 // ─── POST: einen Zug machen ───────────────────────────────────────
-export async function POST() {
+export async function POST(req: NextRequest) {
   const session = await getSession();
   const guard = await requireFeature(session, "chartsAnalytics");
   if (!guard.ok) return guard.response;
+
+  const lang = langFrom(req);
 
   const DRAW_COST = await getCreditCost("CHARTS_DRAW");
 
@@ -128,7 +141,7 @@ export async function POST() {
     return NextResponse.json(
       {
         ok: true,
-        produkt: project(pick),
+        produkt: await localizeObject(project(pick), lang),
         creditsRemaining: undefined,
         drawnCount: 0,
         totalCount,
@@ -236,7 +249,7 @@ export async function POST() {
   return NextResponse.json(
     {
       ok: true,
-      produkt: project(pick),
+      produkt: await localizeObject(project(pick), lang),
       creditsRemaining,
       drawnCount: newDrawnCount,
       totalCount,

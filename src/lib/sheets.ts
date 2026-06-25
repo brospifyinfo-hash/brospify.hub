@@ -1849,6 +1849,56 @@ export async function deleteNewsPost(rowIndex: number): Promise<void> {
   });
 }
 
+// ─── TRANSLATIONS (Tab "Translations") ────────────────────────────
+// KV-Cache für KI-Übersetzungen (lib/translate.ts). Jede Quell-Phrase
+// wird einmal per Claude übersetzt und hier dauerhaft gespeichert →
+// danach kostenlos. Schlüssel = sha1(Quelltext) (kurz). Pro Sprache
+// eine Zeile.
+//   A=Key (Hash), B=Lang, C=Source (gekürzt, nur Debug), D=Value, E=UpdatedAt
+
+const TRANSLATIONS_HEADERS = ["Key", "Lang", "Source", "Value", "UpdatedAt"];
+
+// Liefert eine Map hash→Übersetzung für die gewünschte Sprache.
+export async function getTranslationCache(lang: string): Promise<Map<string, string>> {
+  const sheets = getSheets();
+  const map = new Map<string, string>();
+  try {
+    await ensureSheet("Translations", TRANSLATIONS_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "Translations!A2:E",
+    });
+    for (const row of res.data.values || []) {
+      const key = row[0];
+      const rowLang = row[1];
+      const value = row[3];
+      if (key && rowLang === lang && typeof value === "string") map.set(key, value);
+    }
+  } catch (err) {
+    console.error("[Translations] read failed:", err);
+  }
+  return map;
+}
+
+// Hängt neue Übersetzungen an (append, ein Aufruf für alle Einträge).
+export async function addTranslationEntries(
+  lang: string,
+  entries: { key: string; source: string; value: string }[],
+): Promise<void> {
+  if (entries.length === 0) return;
+  const sheets = getSheets();
+  await ensureSheet("Translations", TRANSLATIONS_HEADERS);
+  const now = new Date().toISOString();
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID(),
+    range: "Translations!A:E",
+    valueInputOption: "RAW",
+    requestBody: {
+      values: entries.map((e) => [e.key, lang, e.source.slice(0, 200), e.value, now]),
+    },
+  });
+}
+
 // ─── THEMES (Tab "Themes") ────────────────────────────────────────
 // Admin lädt Shopify-Themes als ZIP hoch (via /api/upload → Vercel Blob,
 // Ordner themes/). Die Metadaten liegen hier; Kunden laden per Klick die

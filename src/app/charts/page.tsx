@@ -53,6 +53,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useCredits } from "@/lib/credits";
+import { useI18n } from "@/lib/i18n";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -226,6 +227,7 @@ function displayedScore(p: Produkt, v?: ProduktVotes): number {
 export default function ChartsPage() {
   const router = useRouter();
   const credits = useCredits();
+  const { lang } = useI18n();
 
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
@@ -253,7 +255,7 @@ export default function ChartsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/charts/draw", { cache: "no-store" });
+        const res = await fetch(`/api/charts/draw?lang=${lang}`, { cache: "no-store" });
         if (res.status === 401) {
           router.push("/");
           return;
@@ -286,7 +288,8 @@ export default function ChartsPage() {
     return () => {
       cancelled = true;
     };
-  }, [router]);
+    // lang in den Deps: bei Sprachwechsel werden die Produkte neu (übersetzt) geladen.
+  }, [router, lang]);
 
   const cannotAfford = !credits.loading && credits.balance < cost;
 
@@ -301,7 +304,7 @@ export default function ChartsPage() {
     const startedAt = Date.now();
 
     try {
-      const res = await fetch("/api/charts/draw", { method: "POST", cache: "no-store" });
+      const res = await fetch(`/api/charts/draw?lang=${lang}`, { method: "POST", cache: "no-store" });
       const data = await res.json().catch(() => ({}));
 
       const elapsed = Date.now() - startedAt;
@@ -338,7 +341,7 @@ export default function ChartsPage() {
     } finally {
       setDrawing(false);
     }
-  }, [drawing, credits]);
+  }, [drawing, credits, lang]);
 
   // ── Vote-Handler (optimistic + Server) ──
   const getProduktVotes = useCallback(
