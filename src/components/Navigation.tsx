@@ -45,6 +45,7 @@ import {
 import { BrandLogo } from "@/lib/branding";
 import { useCredits } from "@/lib/credits";
 import { useTier } from "@/lib/use-tier";
+import { useI18n } from "@/lib/i18n";
 
 interface SessionInfo {
   isLoggedIn: boolean;
@@ -153,6 +154,7 @@ const BOTTOM_TABS: readonly BottomTab[] = [
 export default function Navigation() {
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -371,6 +373,11 @@ export default function Navigation() {
         <div className="flex items-center justify-around h-14">
           {BOTTOM_TABS.map((tab) => {
             const Icon = tab.icon;
+            // Bottom-Bar-Labels lokalisieren (Schlüssel → t.nav). "ai" bleibt "AI".
+            const tabLabels: Record<string, string> = {
+              home: t.nav.home, themes: t.nav.theme, ai: "AI", library: t.nav.library, more: t.nav.more,
+            };
+            const tabLabel = tabLabels[tab.key] ?? tab.label;
             const isActiveLink = tab.href && (pathname === tab.href || pathname.startsWith(tab.href + "/"));
             const isActiveAction =
               (tab.action === "ai" && (isAiActive || aiSheetOpen)) ||
@@ -406,7 +413,7 @@ export default function Navigation() {
                         : "text-zinc-500 font-medium"
                   }`}
                 >
-                  {tab.label}
+                  {tabLabel}
                 </span>
               </div>
             );
@@ -528,16 +535,16 @@ export default function Navigation() {
                   </div>
                 }
               >
-                <SheetItem href="/account/settings" icon={Settings} label="Einstellungen" active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub="Login & Google-Verknüpfung" />
-                <SheetItem href="/account/subscription" icon={Coins} label="Abo verwalten" active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub="Status, Credits, Verlängerung" />
+                <SheetItem href="/account/settings" icon={Settings} label={t.nav.settings} active={pathname === "/account/settings"} onClick={() => setMoreSheetOpen(false)} sub={t.nav.subSettings} />
+                <SheetItem href="/account/subscription" icon={Coins} label={t.nav.manageSub} active={pathname === "/account/subscription"} onClick={() => setMoreSheetOpen(false)} sub={t.nav.subSubscription} />
               </MobileSection>
 
               {/* ═══ SUPPORT — Section mit Pfeil, DEFAULT ZU ═══ */}
-              <MobileSection title="Support" icon={Bot} defaultOpen={false}>
-                <SheetItem href="/ai-support" icon={Bot} label="AI Support" active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub="Sofort-Antwort vom KI-Bot" />
-                <SheetItem href="/ai-support?view=tickets" icon={Inbox} label="Meine Tickets" active={false} onClick={() => setMoreSheetOpen(false)} sub="Vergangene Anfragen" />
-                <SheetItem href="/email-support" icon={AlertTriangle} label="Problem melden" active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub="Kurzes Formular ans Team" />
-                <SheetItem href="/coaching" icon={GraduationCap} label="Privates Coaching" active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub="1:1 mit Team" />
+              <MobileSection title={t.nav.groupSupport} icon={Bot} defaultOpen={false}>
+                <SheetItem href="/ai-support" icon={Bot} label={t.nav.aiSupport} active={isAiSupportActive && !pathname.includes("ticket")} onClick={() => setMoreSheetOpen(false)} sub={t.nav.subAiSupport} />
+                <SheetItem href="/ai-support?view=tickets" icon={Inbox} label={t.nav.myTickets} active={false} onClick={() => setMoreSheetOpen(false)} sub={t.nav.subMyTickets} />
+                <SheetItem href="/email-support" icon={AlertTriangle} label={t.nav.reportProblem} active={pathname === "/email-support"} onClick={() => setMoreSheetOpen(false)} sub={t.nav.subReportProblem} />
+                <SheetItem href="/coaching" icon={GraduationCap} label={t.nav.coachingPrivate} active={pathname === "/coaching"} onClick={() => setMoreSheetOpen(false)} sub={t.nav.subCoaching} />
               </MobileSection>
 
               {/* Admin */}
@@ -562,7 +569,7 @@ export default function Navigation() {
                   className="w-full flex items-center gap-3 px-3 py-3 rounded-xl border border-red-500/15 bg-red-500/[0.06] text-red-300 transition active:bg-red-500/15"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span className="text-sm font-semibold flex-1 text-left">Abmelden</span>
+                  <span className="text-sm font-semibold flex-1 text-left">{t.nav.logout}</span>
                 </button>
               </div>
             </div>
@@ -736,6 +743,7 @@ function MobileSection({
 // dass User sofort sieht ob ein Deploy durch ist.
 
 function MobileLegalFooter({ onNavigate }: { onNavigate: () => void }) {
+  const { t } = useI18n();
   const [version, setVersion] = useState<{ version: string; buildTime: string } | null>(null);
 
   useEffect(() => {
@@ -752,14 +760,14 @@ function MobileLegalFooter({ onNavigate }: { onNavigate: () => void }) {
       {/* Rechtstexte als kompakte Link-Liste */}
       <div className="px-2 pb-1">
         <span className="text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-500">
-          Rechtliches
+          {t.nav.groupLegal}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-1.5 px-1">
-        <LegalLink href="https://brospify.com/policies/legal-notice" label="Impressum" onClick={onNavigate} />
-        <LegalLink href="https://brospify.com/policies/privacy-policy" label="Datenschutz" onClick={onNavigate} />
-        <LegalLink href="https://brospify.com/policies/terms-of-service" label="AGB" onClick={onNavigate} />
-        <LegalLink href="https://brospify.com/policies/refund-policy" label="Widerruf" onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/legal-notice" label={t.nav.legalNotice} onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/privacy-policy" label={t.nav.privacy} onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/terms-of-service" label={t.nav.terms} onClick={onNavigate} />
+        <LegalLink href="https://brospify.com/policies/refund-policy" label={t.nav.refund} onClick={onNavigate} />
       </div>
 
       {/* Version-Indicator — updated automatisch bei jedem Deploy */}
@@ -918,6 +926,7 @@ interface AccountMenuProps {
 }
 
 function AccountMenu({ session, tierState, pathname, onClose, onLogout }: AccountMenuProps) {
+  const { t } = useI18n();
   const tier = tierState.tier;
   const tierKey = tier?.key || "";
   const chipStyle = TIER_CHIP_STYLES[tierKey] || NEUTRAL_CHIP_STYLE;
@@ -989,7 +998,7 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-zinc-500/10 text-zinc-500 border border-zinc-500/20">
-                  Kein Abo
+                  {t.nav.noSubscription}
                 </span>
               )}
               {tier && tier.priceMonthlyEur > 0 && !session.isAdmin && (
@@ -1014,15 +1023,15 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           <MenuItem
             href="/home"
             icon={Home}
-            label="Home"
+            label={t.nav.home}
             active={pathname === "/home"}
             onClick={onClose}
-            sub="Startseite"
+            sub={t.nav.subHome}
           />
         </div>
 
         {/* AI Tools — komplettes Dropdown im rechten Menü (inkl. Produkt Search) */}
-        <MenuGroup label="AI Tools">
+        <MenuGroup label={t.nav.groupAiTools}>
           {AI_TOOLS.map((tool) => (
             <MenuItem
               key={tool.href}
@@ -1037,60 +1046,60 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
         </MenuGroup>
 
         {/* Shop — Theme-Download */}
-        <MenuGroup label="Shop">
+        <MenuGroup label={t.nav.groupShop}>
           <MenuItem
             href="/themes"
             icon={LayoutTemplate}
-            label="Theme"
+            label={t.nav.theme}
             active={pathname === "/themes"}
             onClick={onClose}
-            sub="Shopify-Theme herunterladen"
+            sub={t.nav.subTheme}
           />
         </MenuGroup>
 
         {/* Konto */}
-        <MenuGroup label="Konto">
+        <MenuGroup label={t.nav.groupAccount}>
           <MenuItem
             href="/account/settings"
             icon={SettingsIcon}
-            label="Einstellungen"
+            label={t.nav.settings}
             active={pathname === "/account/settings"}
             onClick={onClose}
-            sub="Login & Google-Verknüpfung"
+            sub={t.nav.subSettings}
           />
           <MenuItem
             href="/account/subscription"
             icon={Coins}
-            label="Abo verwalten"
+            label={t.nav.manageSub}
             active={pathname === "/account/subscription"}
             onClick={onClose}
-            sub={tier ? `${tier.label} · Status & Credits` : "Status & Credits"}
+            sub={tier ? `${tier.label} · ${t.nav.subSubscription}` : t.nav.subSubscription}
           />
         </MenuGroup>
 
         {/* Mediathek — auf dem Desktop hier statt in der Top-Bar. */}
-        <MenuGroup label="Mediathek">
+        <MenuGroup label={t.nav.groupLibrary}>
           <MenuItem
             href="/library"
             icon={FolderHeart}
-            label="Mediathek"
+            label={t.nav.library}
             active={pathname === "/library"}
             onClick={onClose}
-            sub="Deine gespeicherten Assets"
+            sub={t.nav.subLibrary}
           />
         </MenuGroup>
 
         {/* Support — auf dem Desktop hier statt eigenem Top-Bar-Dropdown. */}
-        <MenuGroup label="Support">
+        <MenuGroup label={t.nav.groupSupport}>
           {SUPPORT_ITEMS.map((it) => (
             <MenuItem
               key={it.href}
               href={it.href}
               icon={it.icon}
-              label={it.label}
+              label={(t.nav as Record<string, string>)[it.labelKey] || it.label}
               active={pathname === it.href.split("?")[0]}
               onClick={onClose}
-              sub={it.sub}
+              sub={(t.nav as Record<string, string>)[it.subKey] || it.sub}
             />
           ))}
         </MenuGroup>
@@ -1099,26 +1108,26 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
             (location.assign) statt Link, damit die Tour auch dann startet,
             wenn man bereits auf /home ist (sonst kein Remount). */}
         {!session.isAdmin && (
-          <MenuGroup label="Einführung">
+          <MenuGroup label={t.nav.groupIntro}>
             <button
               onClick={() => { onClose(); window.location.assign("/home?tour=1"); }}
               className="group w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all duration-150 border border-transparent text-zinc-300 hover:bg-white/[0.04] hover:border-white/[0.06]"
             >
               <Compass className="w-3.5 h-3.5 shrink-0 text-zinc-500 group-hover:text-zinc-300" />
               <div className="flex-1 min-w-0 text-left">
-                <div className="text-[12.5px] font-medium truncate leading-tight">Tour erneut ansehen</div>
-                <div className="text-[10px] text-zinc-600 truncate">Interaktive Einführung</div>
+                <div className="text-[12.5px] font-medium truncate leading-tight">{t.nav.replayTour}</div>
+                <div className="text-[10px] text-zinc-600 truncate">{t.nav.replayTourSub}</div>
               </div>
             </button>
           </MenuGroup>
         )}
 
         {/* Rechtliches — externe Policy-Seiten auf brospify.com */}
-        <MenuGroup label="Rechtliches">
-          <MenuItem href="https://brospify.com/policies/legal-notice" icon={Scale} label="Impressum" external onClick={onClose} />
-          <MenuItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label="Datenschutz" external onClick={onClose} />
-          <MenuItem href="https://brospify.com/policies/terms-of-service" icon={FileText} label="AGB" external onClick={onClose} />
-          <MenuItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label="Widerruf" external onClick={onClose} />
+        <MenuGroup label={t.nav.groupLegal}>
+          <MenuItem href="https://brospify.com/policies/legal-notice" icon={Scale} label={t.nav.legalNotice} external onClick={onClose} />
+          <MenuItem href="https://brospify.com/policies/privacy-policy" icon={Shield} label={t.nav.privacy} external onClick={onClose} />
+          <MenuItem href="https://brospify.com/policies/terms-of-service" icon={FileText} label={t.nav.terms} external onClick={onClose} />
+          <MenuItem href="https://brospify.com/policies/refund-policy" icon={Undo2} label={t.nav.refund} external onClick={onClose} />
         </MenuGroup>
 
         {session.isAdmin && (
@@ -1161,7 +1170,7 @@ function AccountMenu({ session, tierState, pathname, onClose, onLogout }: Accoun
           className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg border border-red-500/15 bg-red-500/[0.05] text-red-300 hover:bg-red-500/[0.10] hover:border-red-500/25 transition"
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span className="text-[12.5px] font-semibold flex-1 text-left">Abmelden</span>
+          <span className="text-[12.5px] font-semibold flex-1 text-left">{t.nav.logout}</span>
         </button>
       </div>
     </motion.div>
@@ -1176,15 +1185,18 @@ interface SupportItem {
   href: string;
   label: string;
   sub: string;
+  /** i18n-Schlüssel (t.nav.*) für Label/Untertitel; label/sub sind DE-Fallback. */
+  labelKey: string;
+  subKey: string;
   icon: React.ComponentType<{ className?: string }>;
   color: string;
 }
 
 const SUPPORT_ITEMS: SupportItem[] = [
-  { href: "/ai-support", label: "AI Support", sub: "Sofort-Antworten vom KI-Bot", icon: Bot, color: "text-cyan-400" },
-  { href: "/ai-support?view=tickets", label: "Meine Tickets", sub: "Vergangene Anfragen & Verlauf", icon: Inbox, color: "text-amber-400" },
-  { href: "/email-support", label: "Problem melden", sub: "Kurzes Formular ans Team", icon: AlertTriangle, color: "text-amber-400" },
-  { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team", icon: GraduationCap, color: "text-purple-400" },
+  { href: "/ai-support", label: "AI Support", sub: "Sofort-Antworten vom KI-Bot", labelKey: "aiSupport", subKey: "subAiSupport", icon: Bot, color: "text-cyan-400" },
+  { href: "/ai-support?view=tickets", label: "Meine Tickets", sub: "Vergangene Anfragen & Verlauf", labelKey: "myTickets", subKey: "subMyTickets", icon: Inbox, color: "text-amber-400" },
+  { href: "/email-support", label: "Problem melden", sub: "Kurzes Formular ans Team", labelKey: "reportProblem", subKey: "subReportProblem", icon: AlertTriangle, color: "text-amber-400" },
+  { href: "/coaching", label: "Privates Coaching", sub: "1:1 mit unserem Team", labelKey: "coachingPrivate", subKey: "subCoaching", icon: GraduationCap, color: "text-purple-400" },
 ];
 
 
