@@ -42,6 +42,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 
 interface LibraryItem {
   rowIndex: number;
@@ -83,6 +84,7 @@ type FilterSource = "all" | LibraryItem["source"];
 
 export default function LibraryPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +131,7 @@ export default function LibraryPage() {
   }, [items]);
 
   async function handleDelete(rowIndex: number) {
-    if (!confirm("Eintrag dauerhaft löschen?")) return;
+    if (!confirm(t.library.deleteConfirm)) return;
     try {
       await fetch("/api/library/items", {
         method: "DELETE",
@@ -159,14 +161,14 @@ export default function LibraryPage() {
                 <FolderHeart className="w-4 h-4 text-[#95BF47]" />
               </span>
               <div className="min-w-0">
-                <h1 className="text-base font-bold leading-tight">Mediathek</h1>
+                <h1 className="text-base font-bold leading-tight">{t.library.title}</h1>
                 <p className="hidden sm:block text-zinc-500 text-[11px]">
-                  Alle KI-generierten Bilder & E-Mails an einem Ort
+                  {t.library.subtitle}
                 </p>
               </div>
             </div>
             <div className="text-right shrink-0">
-              <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Belegt</div>
+              <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">{t.library.used}</div>
               <div className="text-sm font-bold text-[#95BF47] tabular-nums">
                 {items.length}<span className="text-zinc-500 text-[10px] font-normal">/60</span>
               </div>
@@ -184,23 +186,23 @@ export default function LibraryPage() {
           {/* Type filter + search */}
           <div className="flex items-center gap-1.5">
             {([
-              { id: "all", label: "Alles", icon: Sparkles },
-              { id: "image", label: "Bilder", icon: ImageIcon },
-              { id: "email", label: "E-Mails", icon: Mail },
-            ] as const).map((t) => {
-              const Icon = t.icon;
+              { id: "all", label: t.library.all, icon: Sparkles },
+              { id: "image", label: t.library.images, icon: ImageIcon },
+              { id: "email", label: t.library.emails, icon: Mail },
+            ] as const).map((tab) => {
+              const Icon = tab.icon;
               return (
                 <button
-                  key={t.id}
-                  onClick={() => setType(t.id as FilterType)}
+                  key={tab.id}
+                  onClick={() => setType(tab.id as FilterType)}
                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold border transition shrink-0 ${
-                    type === t.id
+                    type === tab.id
                       ? "bg-[#95BF47]/15 border-[#95BF47]/35 text-[#95BF47]"
                       : "bg-white/[0.03] border-white/10 text-zinc-400"
                   }`}
                 >
                   <Icon className="w-3 h-3" />
-                  {t.label}
+                  {tab.label}
                 </button>
               );
             })}
@@ -210,7 +212,7 @@ export default function LibraryPage() {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Suche…"
+                placeholder={t.library.search}
                 className="w-full bg-white/[0.04] border border-white/10 rounded-lg pl-7 pr-2 py-1 text-[11px] outline-none focus:border-white/25 transition placeholder:text-zinc-600"
               />
             </div>
@@ -220,7 +222,7 @@ export default function LibraryPage() {
           <div className="flex items-center gap-1 overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 pb-1">
             {(["all", "upscaler", "bg-remover", "ai-studio", "email-templates"] as FilterSource[]).map((s) => {
               const meta = s === "all"
-                ? { label: "Alle Tools", color: "#95BF47", icon: FolderHeart }
+                ? { label: t.library.allTools, color: "#95BF47", icon: FolderHeart }
                 : SOURCE_META[s];
               const Icon = meta.icon;
               const count = sourceCounts[s] || 0;
@@ -290,6 +292,7 @@ export default function LibraryPage() {
 // ─── Grid card ──────────────────────────────────────────────────
 
 function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => void }) {
+  const { lang } = useI18n();
   const meta = SOURCE_META[item.source];
   const Icon = meta.icon;
   const isImage = item.type === "image";
@@ -347,7 +350,7 @@ function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => vo
       <div className="hidden sm:block p-2">
         <div className="text-[10px] font-semibold truncate">{item.title}</div>
         <div className="text-[9px] text-zinc-500 mt-0.5 truncate">
-          {formatRelative(item.createdAt)}
+          {formatRelative(item.createdAt, lang)}
         </div>
       </div>
     </motion.button>
@@ -357,18 +360,17 @@ function LibraryGridCard({ item, onOpen }: { item: LibraryItem; onOpen: () => vo
 // ─── Empty state ────────────────────────────────────────────────
 
 function EmptyState({ hasItems }: { hasItems: boolean }) {
+  const { t } = useI18n();
   return (
     <div className="flex flex-col items-center justify-center text-center py-16">
       <div className="w-14 h-14 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/25 flex items-center justify-center mb-4">
         <FolderHeart className="w-6 h-6 text-[#95BF47]" />
       </div>
       <h3 className="text-base font-bold mb-1">
-        {hasItems ? "Nichts gefunden" : "Deine Mediathek ist leer"}
+        {hasItems ? t.library.nothingFound : t.library.emptyTitle}
       </h3>
       <p className="text-xs text-zinc-500 max-w-md mb-5">
-        {hasItems
-          ? "Probier einen anderen Filter oder Suchbegriff."
-          : "Generiere ein Bild oder eine E-Mail-Vorlage und tippe „In Mediathek speichern“ — wir komprimieren es automatisch und legen es hier ab."}
+        {hasItems ? t.library.emptyFiltered : t.library.emptyDesc}
       </p>
       {!hasItems && (
         <div className="flex flex-wrap gap-2 justify-center">
@@ -398,6 +400,7 @@ function ItemModal({ item, onClose, onDelete, onReuse }: {
   onDelete: () => void;
   onReuse: () => void;
 }) {
+  const { t, lang } = useI18n();
   const meta = SOURCE_META[item.source];
   const Icon = meta.icon;
   const [copied, setCopied] = useState(false);
@@ -473,7 +476,7 @@ function ItemModal({ item, onClose, onDelete, onReuse }: {
             <div className="min-w-0">
               <div className="text-sm font-semibold truncate">{item.title}</div>
               <div className="text-[10px] text-zinc-500">
-                {meta.label} · {formatRelative(item.createdAt)}
+                {meta.label} · {formatRelative(item.createdAt, lang)}
                 {item.meta.width && item.meta.height && (
                   <span> · {item.meta.width}×{item.meta.height}</span>
                 )}
@@ -558,28 +561,28 @@ function ItemModal({ item, onClose, onDelete, onReuse }: {
             className="flex-1 min-w-[140px] inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-[#95BF47] text-black font-semibold text-xs hover:brightness-110 transition disabled:opacity-50"
           >
             {downloading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-            {item.type === "email" ? "Liquid herunterladen" : "Bild herunterladen"}
+            {item.type === "email" ? t.library.downloadLiquid : t.library.downloadImage}
           </button>
           <button
             onClick={handleCopy}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-zinc-300 text-xs hover:bg-white/[0.08] transition"
           >
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-            {copied ? "Kopiert" : item.type === "email" ? "Liquid kopieren" : "URL kopieren"}
+            {copied ? t.library.copied : item.type === "email" ? t.library.copyLiquid : t.library.copyUrl}
           </button>
           <button
             onClick={onReuse}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-white/[0.04] border border-white/10 text-zinc-300 text-xs hover:bg-white/[0.08] transition"
           >
             <ExternalLink className="w-3.5 h-3.5" />
-            Tool öffnen
+            {t.library.openTool}
           </button>
           <button
             onClick={onDelete}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-red-500/10 border border-red-500/20 text-red-300 text-xs hover:bg-red-500/20 transition"
           >
             <Trash2 className="w-3.5 h-3.5" />
-            Löschen
+            {t.library.delete}
           </button>
         </div>
       </motion.div>
@@ -589,17 +592,18 @@ function ItemModal({ item, onClose, onDelete, onReuse }: {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, lang: "de" | "en" = "de"): string {
   if (!iso) return "";
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return "";
-  const diff = Date.now() - t;
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return "";
+  const en = lang === "en";
+  const diff = Date.now() - ts;
   const m = Math.floor(diff / 60_000);
-  if (m < 1) return "gerade eben";
-  if (m < 60) return `vor ${m} min`;
+  if (m < 1) return en ? "just now" : "gerade eben";
+  if (m < 60) return en ? `${m} min ago` : `vor ${m} min`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `vor ${h} h`;
+  if (h < 24) return en ? `${h} h ago` : `vor ${h} h`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `vor ${d} Tag${d === 1 ? "" : "en"}`;
-  return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "short" });
+  if (d < 7) return en ? `${d} day${d === 1 ? "" : "s"} ago` : `vor ${d} Tag${d === 1 ? "" : "en"}`;
+  return new Date(iso).toLocaleDateString(en ? "en-GB" : "de-DE", { day: "2-digit", month: "short" });
 }
