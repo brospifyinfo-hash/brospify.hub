@@ -12,22 +12,15 @@ import {
   AlertTriangle, Send, Loader2, CheckCircle2, AlertCircle, Inbox, Bot, ArrowRight, Check,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
-
-const CATEGORIES = [
-  "Lizenz / Login",
-  "Credits / Bezahlung",
-  "Ein Tool funktioniert nicht",
-  "Theme / Shop",
-  "Sonstiges",
-];
-const URGENCIES = [
-  "Blockiert mich komplett",
-  "Stört, aber ich komme klar",
-  "Nur ein Hinweis",
-];
+import { useI18n } from "@/lib/i18n";
 
 export default function ProblemMeldenPage() {
   const router = useRouter();
+  const { t } = useI18n();
+  const CATEGORIES = [
+    t.support.catLicense, t.support.catCredits, t.support.catTool, t.support.catTheme, t.support.catOther,
+  ];
+  const URGENCIES = [t.support.urgBlocked, t.support.urgAnnoying, t.support.urgInfo];
   const [loading, setLoading] = useState(true);
   const [authorized, setAuthorized] = useState(false);
 
@@ -59,9 +52,9 @@ export default function ProblemMeldenPage() {
   const canSend = !!category && !!urgency && message.trim().length >= 5 && emailOk && !sending;
 
   async function handleSend() {
-    if (!category || !urgency) { setError("Bitte wähle Kategorie und Dringlichkeit."); return; }
-    if (message.trim().length < 5) { setError("Bitte beschreibe das Problem kurz."); return; }
-    if (!emailOk) { setError("Bitte gib eine gültige Antwort-E-Mail an."); return; }
+    if (!category || !urgency) { setError(t.support.errChooseCatUrg); return; }
+    if (message.trim().length < 5) { setError(t.support.errDescribe); return; }
+    if (!emailOk) { setError(t.support.errValidEmail); return; }
     setSending(true);
     setError("");
     try {
@@ -71,13 +64,13 @@ export default function ProblemMeldenPage() {
         body: JSON.stringify({ category, urgency, message: message.trim(), email: email.trim() }),
       });
       const data = await res.json();
-      if (!res.ok) { setError(String(data.error || "Versand fehlgeschlagen.")); return; }
+      if (!res.ok) { setError(String(data.error || t.support.errSendFailed)); return; }
       setSuccess(true);
       setCategory("");
       setUrgency("");
       setMessage("");
     } catch {
-      setError("Verbindung zum Server fehlgeschlagen.");
+      setError(t.support.errServer);
     } finally {
       setSending(false);
     }
@@ -99,10 +92,10 @@ export default function ProblemMeldenPage() {
         <div className="space-y-1">
           <h1 className="text-base font-bold flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-amber-300" />
-            Problem melden
+            {t.support.reportTitle}
           </h1>
           <p className="text-[11px] text-zinc-500">
-            3 kurze Angaben — wir kümmern uns drum, Antwort meist innerhalb von 24h.
+            {t.support.reportSub}
           </p>
         </div>
 
@@ -111,15 +104,15 @@ export default function ProblemMeldenPage() {
             <Bot className="w-4 h-4 text-purple-300 shrink-0" />
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold text-zinc-200">AI Support</div>
-              <div className="text-[10px] text-zinc-500">Sofort-Antwort per KI</div>
+              <div className="text-[10px] text-zinc-500">{t.support.aiSupportDesc}</div>
             </div>
             <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
           </button>
           <button onClick={() => router.push("/ai-support?view=tickets")} className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition text-left">
             <Inbox className="w-4 h-4 text-blue-300 shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-zinc-200">Meine Tickets</div>
-              <div className="text-[10px] text-zinc-500">Frühere Anfragen</div>
+              <div className="text-xs font-semibold text-zinc-200">{t.support.myTickets}</div>
+              <div className="text-[10px] text-zinc-500">{t.support.pastRequests}</div>
             </div>
             <ArrowRight className="w-3.5 h-3.5 text-zinc-500" />
           </button>
@@ -129,12 +122,12 @@ export default function ProblemMeldenPage() {
           <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="flex items-start gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/[0.06] border border-emerald-500/20 text-emerald-100">
             <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-300" />
             <div className="flex-1">
-              <div className="text-xs font-semibold text-emerald-200">Problem gemeldet</div>
+              <div className="text-xs font-semibold text-emerald-200">{t.support.reported}</div>
               <p className="text-[11px] text-emerald-100/80 mt-0.5">
-                Danke! Wir melden uns {email ? <>an <strong>{email}</strong></> : "bei dir"}.
+                {t.support.thanksReply} {email ? <>{t.support.thanksAt} <strong>{email}</strong></> : t.support.thanksToYou}.
               </p>
             </div>
-            <button onClick={() => setSuccess(false)} className="text-[10px] text-emerald-300/70 hover:text-emerald-200 underline shrink-0">Neu melden</button>
+            <button onClick={() => setSuccess(false)} className="text-[10px] text-emerald-300/70 hover:text-emerald-200 underline shrink-0">{t.support.reportAgain}</button>
           </motion.div>
         )}
 
@@ -147,7 +140,7 @@ export default function ProblemMeldenPage() {
 
         <div className="space-y-4 bg-white/[0.03] border border-white/10 rounded-2xl p-4">
           {/* Q1 — Kategorie */}
-          <Question num={1} label="Worum geht es?" required>
+          <Question num={1} label={t.support.q1} required>
             <div className="flex flex-wrap gap-1.5">
               {CATEGORIES.map((c) => (
                 <Pill key={c} active={category === c} onClick={() => setCategory(c)}>{c}</Pill>
@@ -156,7 +149,7 @@ export default function ProblemMeldenPage() {
           </Question>
 
           {/* Q2 — Dringlichkeit */}
-          <Question num={2} label="Wie dringend ist es?" required>
+          <Question num={2} label={t.support.q2} required>
             <div className="flex flex-wrap gap-1.5">
               {URGENCIES.map((u) => (
                 <Pill key={u} active={urgency === u} onClick={() => setUrgency(u)}>{u}</Pill>
@@ -165,33 +158,33 @@ export default function ProblemMeldenPage() {
           </Question>
 
           {/* Q3 — Beschreibung */}
-          <Question num={3} label="Beschreibe das Problem" required>
+          <Question num={3} label={t.support.q3} required>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               disabled={sending}
               rows={6}
               maxLength={10000}
-              placeholder="Was passiert? Was hast du erwartet? Gerne mit Schritten / Screenshot-Link."
+              placeholder={t.support.descPlaceholder}
               className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50 resize-none"
             />
-            <p className="text-[10px] text-zinc-500 mt-1">Wir sehen automatisch deinen Account & Shop — du brauchst nichts zusätzlich angeben.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">{t.support.autoSeeNote}</p>
           </Question>
 
           {/* Antwort-E-Mail */}
           <div>
             <label className="block text-[11px] font-semibold text-zinc-200 mb-1">
-              Antwort-E-Mail <span className="text-amber-300">*</span>
+              {t.support.replyEmail} <span className="text-amber-300">*</span>
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               disabled={sending}
-              placeholder="deine@email.de"
+              placeholder={t.support.emailPlaceholder}
               className={`w-full px-3 py-2 bg-zinc-900 border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-amber-500/50 disabled:opacity-50 ${email && !emailOk ? "border-red-500/50" : "border-zinc-700"}`}
             />
-            <p className="text-[10px] text-zinc-500 mt-1">Damit wir dir antworten können — wird automatisch vorausgefüllt, falls bekannt.</p>
+            <p className="text-[10px] text-zinc-500 mt-1">{t.support.replyEmailNote}</p>
           </div>
 
           <button
@@ -199,13 +192,13 @@ export default function ProblemMeldenPage() {
             disabled={!canSend}
             className="w-full py-2.5 bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl text-sm font-semibold flex items-center justify-center gap-2 text-amber-100 transition"
           >
-            {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> Wird gesendet…</> : <><Send className="w-4 h-4" /> Problem melden</>}
+            {sending ? <><Loader2 className="w-4 h-4 animate-spin" /> {t.support.sending}</> : <><Send className="w-4 h-4" /> {t.support.submitReport}</>}
           </button>
         </div>
 
         <div className="text-center pt-2">
           <p className="text-[10px] text-zinc-600">
-            Geht an <strong className="text-zinc-500">brospify.info@gmail.com</strong>. Antwort meist innerhalb von 24h.
+            {t.support.goesTo} <strong className="text-zinc-500">brospify.info@gmail.com</strong>. {t.support.reply24}
           </p>
         </div>
       </main>
