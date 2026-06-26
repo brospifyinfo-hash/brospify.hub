@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 import {
   type TierDefinition,
   FEATURE_LABELS,
@@ -42,6 +43,8 @@ function formatLimit(n: number): string {
 
 export default function TiersPage() {
   const router = useRouter();
+  const { t, lang } = useI18n();
+  const dateLocale = lang === "en" ? "en-GB" : "de-DE";
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<TierDefinition | null>(null);
   const [context, setContext] = useState<UserContextInfo>({
@@ -99,7 +102,7 @@ export default function TiersPage() {
         router.push(`/credits?plan=pro`);
       }
     } catch {
-      setMessage({ type: "error", text: "Wechsel fehlgeschlagen. Bitte erneut versuchen." });
+      setMessage({ type: "error", text: t.tiers.errSwitch });
     } finally {
       setSwitching(false);
     }
@@ -113,7 +116,7 @@ export default function TiersPage() {
     );
   }
 
-  const canceledOn = context.tierCanceledAt ? new Date(context.tierCanceledAt).toLocaleDateString("de-DE") : "";
+  const canceledOn = context.tierCanceledAt ? new Date(context.tierCanceledAt).toLocaleDateString(dateLocale) : "";
   const enabledFeatures = plan
     ? Object.entries(plan.features)
         .filter(([, on]) => on)
@@ -145,11 +148,10 @@ export default function TiersPage() {
             Brospify Hub · Membership
           </div>
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-            Eine Membership. Alles drin.
+            {t.tiers.title}
           </h1>
           <p className="text-[12px] sm:text-sm text-zinc-400 mt-2 leading-snug max-w-xl mx-auto">
-            Voller Zugriff auf alle Tools, Themes und Coaching — ohne Stufen, ohne Limits.
-            Jederzeit kündbar.
+            {t.tiers.subtitle}
           </p>
         </motion.div>
 
@@ -193,46 +195,45 @@ export default function TiersPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-400">
                   {context.isAdmin
-                    ? "Admin-Konto"
+                    ? t.tiers.statusAdmin
                     : context.hasTier && !context.tierCanceledAt
-                      ? "Aktive Membership"
+                      ? t.tiers.statusActive
                       : context.hasTier && context.tierCanceledAt
-                        ? "Membership gekündigt"
-                        : "Keine aktive Membership"}
+                        ? t.tiers.statusCanceled
+                        : t.tiers.statusNone}
                 </span>
                 {context.tierCanceledAt && (
                   <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-red-500/15 text-red-300 border border-red-500/25">
-                    seit {canceledOn}
+                    {t.tiers.since} {canceledOn}
                   </span>
                 )}
                 {context.hasTier && !context.tierCanceledAt && !context.isAdmin && (
                   <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 inline-flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    aktiv
+                    {t.tiers.activeShort}
                   </span>
                 )}
               </div>
               <h2 className="text-base sm:text-lg font-bold mt-0.5">
                 {context.isAdmin
-                  ? "alle Funktionen freigeschaltet"
+                  ? t.tiers.adminAllUnlocked
                   : context.hasTier && plan
-                    ? `${plan.label}${plan.priceMonthlyEur > 0 ? ` · ${plan.priceMonthlyEur} €/Monat` : ""}`
-                    : "Schalte alle Tools mit der Membership frei"}
+                    ? `${plan.label}${plan.priceMonthlyEur > 0 ? ` · ${plan.priceMonthlyEur} €${t.tiers.perMonth}` : ""}`
+                    : t.tiers.unlockAll}
               </h2>
               {!context.isAdmin && context.hasTier && context.tierSince && !context.tierCanceledAt && (
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Aktiv seit {new Date(context.tierSince).toLocaleDateString("de-DE")} ·
-                  Du nutzt alle Funktionen ohne Einschränkung.
+                  {t.tiers.activeSincePrefix} {new Date(context.tierSince).toLocaleDateString(dateLocale)} · {t.tiers.activeSinceNote}
                 </p>
               )}
               {!context.isAdmin && context.hasTier && context.tierCanceledAt && (
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Zugang bleibt bis zum Ende der Laufzeit aktiv — danach werden alle Premium-Features gesperrt.
+                  {t.tiers.canceledNote}
                 </p>
               )}
               {!context.isAdmin && !context.hasTier && (
                 <p className="text-[11px] text-zinc-500 mt-0.5">
-                  Eine einzige Membership entsperrt alles. Buche unten — jederzeit kündbar.
+                  {t.tiers.noneNote}
                 </p>
               )}
             </div>
@@ -318,11 +319,11 @@ export default function TiersPage() {
               <div>
                 <div className="flex items-baseline gap-1">
                   <span className="text-3xl font-bold tabular-nums">{plan.priceMonthlyEur}</span>
-                  <span className="text-sm text-zinc-500">€/Monat</span>
+                  <span className="text-sm text-zinc-500">€{t.tiers.perMonth}</span>
                 </div>
                 {plan.priceYearlyEur > 0 && plan.priceMonthlyEur > 0 && (
                   <p className="text-[11px] text-zinc-500 mt-0.5">
-                    oder {plan.priceYearlyEur} €/Jahr ({Math.round(((plan.priceMonthlyEur * 12 - plan.priceYearlyEur) / (plan.priceMonthlyEur * 12)) * 100)}% Rabatt)
+                    {lang === "en" ? "or" : "oder"} {plan.priceYearlyEur} €{lang === "en" ? "/year" : "/Jahr"} ({Math.round(((plan.priceMonthlyEur * 12 - plan.priceYearlyEur) / (plan.priceMonthlyEur * 12)) * 100)}% {lang === "en" ? "off" : "Rabatt"})
                   </p>
                 )}
                 <p className="text-[12px] text-zinc-400 mt-1.5 leading-snug">{plan.tagline}</p>
@@ -343,7 +344,7 @@ export default function TiersPage() {
               {/* Limits + Features (details) */}
               <div className="space-y-2">
                 <div className="flex justify-between text-[11px]">
-                  <span className="text-zinc-500">Monatliche Credits</span>
+                  <span className="text-zinc-500">{t.tiers.monthlyCredits}</span>
                   <span className="text-zinc-200 font-mono">
                     {plan.monthlyCreditAllowance > 0
                       ? plan.monthlyCreditAllowance.toLocaleString("de-DE")
@@ -352,7 +353,7 @@ export default function TiersPage() {
                 </div>
                 <details className="group">
                   <summary className="text-[11px] text-zinc-500 cursor-pointer hover:text-zinc-300 select-none">
-                    Limits anzeigen
+                    {t.tiers.showLimits}
                   </summary>
                   <div className="mt-1.5 space-y-1 text-[11px] text-zinc-500">
                     {(Object.keys(plan.limits) as (keyof typeof LIMIT_LABELS)[]).map((k) => (
@@ -367,7 +368,7 @@ export default function TiersPage() {
                 </details>
                 <details className="group">
                   <summary className="text-[11px] text-zinc-500 cursor-pointer hover:text-zinc-300 select-none">
-                    Features anzeigen
+                    {t.tiers.showFeatures}
                   </summary>
                   <div className="mt-1.5 grid grid-cols-2 gap-x-2 gap-y-1 text-[11px]">
                     {enabledFeatures.map((f) => (
@@ -384,7 +385,7 @@ export default function TiersPage() {
               <div className="mt-2">
                 {context.isAdmin ? (
                   <span className="block text-center text-[11px] text-zinc-500 py-2">
-                    Als Admin sind alle Funktionen verfügbar.
+                    {t.tiers.adminAllAvailable}
                   </span>
                 ) : context.hasTier && !context.tierCanceledAt ? (
                   <button
@@ -392,7 +393,7 @@ export default function TiersPage() {
                     className="w-full px-4 py-3 rounded-xl text-[13px] font-bold border border-[#95BF47]/30 bg-[#95BF47]/15 text-[#95BF47] inline-flex items-center justify-center gap-1.5"
                   >
                     <Check className="w-4 h-4" />
-                    Deine aktive Membership
+                    {t.tiers.yourActiveMembership}
                   </button>
                 ) : (
                   <button
@@ -409,7 +410,7 @@ export default function TiersPage() {
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
                       <>
-                        {plan.ctaLabel || "Membership buchen"}
+                        {plan.ctaLabel || t.tiers.bookMembership}
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}
