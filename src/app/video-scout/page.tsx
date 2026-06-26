@@ -31,6 +31,7 @@ import {
   Pencil,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
 import {
   VIDEO_SCOUT_TIERS,
@@ -48,6 +49,7 @@ const VIRAL_LABEL = formatViews(VIDEO_VIRAL_MIN); // "10K"
 export default function VideoScoutPage() {
   const router = useRouter();
   const credits = useCredits();
+  const { t, lang } = useI18n();
 
   const [products, setProducts] = useState<ScoutProduct[] | null>(null);
   const [savedByProduct, setSavedByProduct] = useState<Record<string, SavedScoutVideo[]>>({});
@@ -146,7 +148,7 @@ export default function VideoScoutPage() {
         return;
       }
       if (res.status === 402) {
-        setError(data?.error || "Nicht genug Credits.");
+        setError(data?.error || t.videoScout.errNotEnough);
         if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
         return;
       }
@@ -159,7 +161,7 @@ export default function VideoScoutPage() {
         return;
       }
       if (!res.ok) {
-        setError(data?.error || "Suche fehlgeschlagen.");
+        setError(data?.error || t.videoScout.errSearchFailed);
         return;
       }
 
@@ -177,7 +179,7 @@ export default function VideoScoutPage() {
       }
       if (typeof data.creditsRemaining === "number") credits.setBalance(data.creditsRemaining);
     } catch {
-      setError("Verbindungsfehler. Bitte erneut versuchen.");
+      setError(t.videoScout.errConnection);
     } finally {
       setRunning(false);
     }
@@ -201,8 +203,7 @@ export default function VideoScoutPage() {
               Video Scout
             </h1>
             <p className="mt-1.5 sm:mt-2.5 text-[12px] sm:text-[14px] text-zinc-400 leading-relaxed max-w-md mx-auto">
-              Wähle ein gezogenes Produkt — der Scout durchsucht TikTok, Instagram Reels & YouTube
-              Shorts und liefert die view-stärksten Videos (10k+) zuerst.
+              {t.videoScout.intro}
             </p>
           </header>
 
@@ -226,9 +227,9 @@ export default function VideoScoutPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2.5">
                         <label className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
-                          Produkt wählen
+                          {t.videoScout.pickProduct}
                         </label>
-                        <span className="text-[10.5px] text-zinc-600">{products.length} gezogen</span>
+                        <span className="text-[10.5px] text-zinc-600">{products.length} {t.videoScout.drawn}</span>
                       </div>
                       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-2 max-h-[268px] overflow-y-auto custom-scrollbar pr-0.5">
                         {products.map((p) => (
@@ -251,14 +252,14 @@ export default function VideoScoutPage() {
                         <ProductThumb src={selectedProduct.bildUrl} alt={selectedProduct.titel} />
                         <div className="min-w-0 flex-1">
                           <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-0.5">
-                            Gewähltes Produkt
+                            {t.videoScout.chosenProduct}
                           </div>
                           <div className="text-[13.5px] font-semibold text-white leading-tight line-clamp-1">
-                            {selectedProduct.titel || "Produkt"}
+                            {selectedProduct.titel || t.videoScout.product}
                           </div>
                         </div>
                         <span className="shrink-0 inline-flex items-center gap-1 text-[11px] font-medium text-zinc-400 px-2 py-1 rounded-lg border border-white/[0.08]">
-                          <Pencil className="w-3 h-3" /> Ändern
+                          <Pencil className="w-3 h-3" /> {t.videoScout.change}
                         </span>
                       </button>
                     )
@@ -268,15 +269,15 @@ export default function VideoScoutPage() {
                   {selectedProduct && (
                     <div className="mt-4">
                       <label className="block text-[11px] font-semibold uppercase tracking-wider text-zinc-400 mb-1.5">
-                        Anzahl Videos
+                        {t.videoScout.videoCount}
                       </label>
                       <div className="grid grid-cols-3 gap-2">
-                        {VIDEO_SCOUT_TIERS.map((t) => {
-                          const active = count === t.count;
+                        {VIDEO_SCOUT_TIERS.map((tier) => {
+                          const active = count === tier.count;
                           return (
                             <button
-                              key={t.count}
-                              onClick={() => setCount(t.count)}
+                              key={tier.count}
+                              onClick={() => setCount(tier.count)}
                               className={`rounded-xl border px-2 py-2.5 text-center transition ${
                                 active
                                   ? "border-[#95BF47]/40 bg-[#95BF47]/10"
@@ -284,13 +285,13 @@ export default function VideoScoutPage() {
                               }`}
                             >
                               <div className={`text-[17px] font-bold ${active ? "text-white" : "text-zinc-300"}`}>
-                                {t.count}
+                                {tier.count}
                               </div>
                               <div
                                 className="text-[10px] font-mono mt-0.5"
                                 style={{ color: active ? ACCENT : "#71717a" }}
                               >
-                                {t.cost} {credits.creditIcon}
+                                {tier.cost} {credits.creditIcon}
                               </div>
                             </button>
                           );
@@ -311,25 +312,27 @@ export default function VideoScoutPage() {
                             >
                               <Sparkles className="w-4 h-4" />
                             </motion.span>
-                            Scoute… (~30–60 s)
+                            {t.videoScout.scouting}
                           </>
                         ) : (
                           <>
                             <Flame className="w-4 h-4" />
-                            {selectedVideos.length > 0 ? "Weitere finden" : "Videos finden"}
+                            {selectedVideos.length > 0 ? t.videoScout.findMore : t.videoScout.findVideos}
                             <span className="font-mono opacity-80">· {cost} {credits.creditIcon}</span>
                           </>
                         )}
                       </button>
                       <p className="mt-2 text-center text-[10px] text-zinc-600 leading-snug">
-                        Ist ein Video unter {VIRAL_LABEL} Views dabei, zahlst du nur die Hälfte · kein Video doppelt
+                        {lang === "en"
+                          ? `If a video has under ${VIRAL_LABEL} views, you only pay half · no video twice`
+                          : `Ist ein Video unter ${VIRAL_LABEL} Views dabei, zahlst du nur die Hälfte · kein Video doppelt`}
                       </p>
 
                       {cannotAfford && (
                         <p className="mt-2 text-center text-[11px] text-amber-300/90">
-                          Nicht genug Credits ({credits.balance}/{cost}).{" "}
+                          {t.videoScout.notEnough} ({credits.balance}/{cost}).{" "}
                           <Link href="/credits" className="underline font-semibold hover:text-amber-200">
-                            Aufladen
+                            {t.videoScout.topUp}
                           </Link>
                         </p>
                       )}
@@ -356,9 +359,19 @@ export default function VideoScoutPage() {
                       >
                         <Coins className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
                         <p className="text-[12px] text-amber-100/90 leading-snug">
-                          <span className="font-semibold">Nur halber Preis — {lastHalfPrice.saved} Credits gespart.</span>{" "}
-                          {lastHalfPrice.weak === 1 ? "Ein Video lag" : `${lastHalfPrice.weak} Videos lagen`} unter{" "}
-                          {VIRAL_LABEL} Views, darum ziehen wir nur die Hälfte ab.
+                          {lang === "en" ? (
+                            <>
+                              <span className="font-semibold">Half price only — {lastHalfPrice.saved} credits saved.</span>{" "}
+                              {lastHalfPrice.weak === 1 ? "One video was" : `${lastHalfPrice.weak} videos were`} under{" "}
+                              {VIRAL_LABEL} views, so we only charge half.
+                            </>
+                          ) : (
+                            <>
+                              <span className="font-semibold">Nur halber Preis — {lastHalfPrice.saved} Credits gespart.</span>{" "}
+                              {lastHalfPrice.weak === 1 ? "Ein Video lag" : `${lastHalfPrice.weak} Videos lagen`} unter{" "}
+                              {VIRAL_LABEL} Views, darum ziehen wir nur die Hälfte ab.
+                            </>
+                          )}
                         </p>
                       </motion.div>
                     )}
@@ -369,10 +382,10 @@ export default function VideoScoutPage() {
                       <div className="w-12 h-12 rounded-2xl bg-amber-500/[0.08] border border-amber-500/20 flex items-center justify-center mx-auto mb-3">
                         <AlertCircle className="w-5 h-5 text-amber-300" />
                       </div>
-                      <p className="text-[14px] font-semibold text-white">Bitte später erneut versuchen</p>
+                      <p className="text-[14px] font-semibold text-white">{t.videoScout.retryTitle}</p>
                       <p className="mt-1.5 text-[12px] text-zinc-400 max-w-xs mx-auto leading-snug">
-                        {retryMsg} Es wurden{" "}
-                        <span className="text-zinc-200 font-medium">keine Credits abgezogen</span>.
+                        {retryMsg}{" "}
+                        {lang === "en" ? <>No <span className="text-zinc-200 font-medium">credits were charged</span>.</> : <>Es wurden <span className="text-zinc-200 font-medium">keine Credits abgezogen</span>.</>}
                       </p>
                     </div>
                   )}
@@ -382,11 +395,15 @@ export default function VideoScoutPage() {
                       <div className="w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-3">
                         <SearchX className="w-5 h-5 text-zinc-400" />
                       </div>
-                      <p className="text-[14px] font-semibold text-white">Keine weiteren Videos gefunden</p>
+                      <p className="text-[14px] font-semibold text-white">{t.videoScout.noResultsTitle}</p>
                       <p className="mt-1.5 text-[12px] text-zinc-500 max-w-xs mx-auto leading-snug">
-                        Zu diesem Produkt konnten wir gerade keine weiteren Videos finden. Es wurden{" "}
-                        <span className="text-zinc-300 font-medium">keine Credits abgezogen</span>. Versuch
-                        es später noch einmal.
+                        {lang === "en" ? (
+                          <>We couldn&apos;t find any more videos for this product right now. No{" "}
+                          <span className="text-zinc-300 font-medium">credits were charged</span>. Try again later.</>
+                        ) : (
+                          <>Zu diesem Produkt konnten wir gerade keine weiteren Videos finden. Es wurden{" "}
+                          <span className="text-zinc-300 font-medium">keine Credits abgezogen</span>. Versuch es später noch einmal.</>
+                        )}
                       </p>
                     </div>
                   )}
@@ -398,7 +415,7 @@ export default function VideoScoutPage() {
                       <div className="flex items-center gap-2 mb-2.5">
                         <Flame className="w-4 h-4" style={{ color: ACCENT }} />
                         <h2 className="text-[13px] font-semibold text-white">
-                          Gefundene Videos
+                          {t.videoScout.foundVideos}
                           <span className="text-zinc-500 font-normal"> · {selectedVideos.length}</span>
                         </h2>
                       </div>
@@ -410,11 +427,7 @@ export default function VideoScoutPage() {
 
                       <p className="mt-3.5 text-[10px] text-zinc-600 leading-snug flex items-start gap-1.5">
                         <Info className="w-3 h-3 shrink-0 mt-0.5" />
-                        <span>
-                          Das in den Videos gezeigte Produkt kann leicht abweichen — manche Clips zeigen
-                          ähnliche oder verwandte Varianten. View-Counts sind echte Werte zum Abrufzeitpunkt
-                          und können sich ändern.
-                        </span>
+                        <span>{t.videoScout.disclaimer}</span>
                       </p>
                     </>
                   )}
@@ -619,6 +632,7 @@ function ScoutSkeleton({ count }: { count: number }) {
 // ─── Lade-Karte (Produkte werden geholt) ─────────────────────────
 
 function LoadingCard() {
+  const { t } = useI18n();
   return (
     <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-8 text-center">
       <motion.span
@@ -628,7 +642,7 @@ function LoadingCard() {
       >
         <Sparkles className="w-6 h-6" style={{ color: ACCENT }} />
       </motion.span>
-      <p className="text-sm text-zinc-400">Lade deine gezogenen Produkte…</p>
+      <p className="text-sm text-zinc-400">{t.videoScout.loadingProducts}</p>
     </section>
   );
 }
@@ -636,20 +650,19 @@ function LoadingCard() {
 // ─── Keine gezogenen Produkte ────────────────────────────────────
 
 function EmptyProductsCard({ error }: { error?: string }) {
+  const { t } = useI18n();
   return (
     <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-[#95BF47]/10 border border-[#95BF47]/20 flex items-center justify-center mx-auto mb-4">
         <Gift className="w-6 h-6" style={{ color: ACCENT }} />
       </div>
-      <h2 className="text-lg font-semibold text-white">Noch keine Produkte gezogen</h2>
+      <h2 className="text-lg font-semibold text-white">{t.videoScout.noProductsTitle}</h2>
       <p className="mt-2 text-sm text-zinc-400 max-w-sm mx-auto">
-        {error
-          ? error
-          : "Der Video Scout sucht Videos zu deinen gezogenen Produkten. Zieh zuerst ein Winning-Produkt im Produkt-Drop, dann findest du hier passende Videos dazu."}
+        {error ? error : t.videoScout.noProductsDesc}
       </p>
       <Link href="/charts" className="btn-deploy inline-flex items-center gap-2 mt-5 px-5 py-2.5 text-sm">
         <Gift className="w-4 h-4" />
-        Zum Produkt-Drop
+        {t.videoScout.toProductDrop}
       </Link>
     </section>
   );
@@ -658,22 +671,22 @@ function EmptyProductsCard({ error }: { error?: string }) {
 // ─── Locked (kein aktives Abo) ───────────────────────────────────
 
 function LockedCard() {
+  const { t } = useI18n();
   return (
     <section className="glass-strong rounded-2xl sm:rounded-3xl border border-white/[0.08] p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
         <Lock className="w-6 h-6 text-amber-400" />
       </div>
-      <h2 className="text-lg font-semibold text-white">Teil der Brospify Membership</h2>
+      <h2 className="text-lg font-semibold text-white">{t.videoScout.lockedTitle}</h2>
       <p className="mt-2 text-sm text-zinc-400 max-w-sm mx-auto">
-        Der Video Scout ist Teil deiner Membership. Aktiviere dein Abo, um Videos zu deinen
-        Produkten zu finden.
+        {t.videoScout.lockedDesc}
       </p>
       <Link
         href="/account/subscription"
         className="btn-deploy inline-flex items-center gap-2 mt-5 px-5 py-2.5 text-sm"
       >
         <Sparkles className="w-4 h-4" />
-        Membership ansehen
+        {t.videoScout.viewMembership}
       </Link>
     </section>
   );
