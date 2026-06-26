@@ -96,13 +96,14 @@ const SETUP_STEPS: { key: keyof Checklist; label: string }[] = [
 ];
 
 // AI-Tools-Kacheln für die Home-Seite (auch im rechten Avatar-Menü verlinkt).
-const HOME_AI_TOOLS: { title: string; desc: string; href: string; icon: typeof Search; color: string }[] = [
-  { title: "Produkt Search", desc: "Zufalls-Generator · 50 Credits", href: "/charts", icon: Search, color: "#95BF47" },
-  { title: "Video Scout", desc: "TikTok-Videos zum Produkt · ab 40 Credits", href: "/video-scout", icon: Flame, color: "#EC4899" },
-  { title: "AI Email Generator", desc: "Shopify-Mails per KI · 20 Credits", href: "/email-templates", icon: Mail, color: "#F43F5E" },
-  { title: "AI Studio", desc: "Produktfotos · 15 Credits", href: "/ai-tools/ai-studio", icon: Camera, color: "#A855F7" },
-  { title: "Background Remover", desc: "Freistellen · 5 Credits", href: "/ai-tools/background-remover", icon: Scissors, color: "#F59E0B" },
-  { title: "Image Upscaler", desc: "4× HD · 5 Credits", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#06B6D4" },
+// descKey → t.home.* (im Render lokalisiert); desc ist DE-Fallback.
+const HOME_AI_TOOLS: { title: string; desc: string; descKey: string; href: string; icon: typeof Search; color: string }[] = [
+  { title: "Produkt Search", desc: "Zufalls-Generator · 50 Credits", descKey: "descSearch", href: "/charts", icon: Search, color: "#95BF47" },
+  { title: "Video Scout", desc: "TikTok-Videos zum Produkt · ab 40 Credits", descKey: "descVideo", href: "/video-scout", icon: Flame, color: "#EC4899" },
+  { title: "AI Email Generator", desc: "Shopify-Mails per KI · 20 Credits", descKey: "descEmail", href: "/email-templates", icon: Mail, color: "#F43F5E" },
+  { title: "AI Studio", desc: "Produktfotos · 15 Credits", descKey: "descStudio", href: "/ai-tools/ai-studio", icon: Camera, color: "#A855F7" },
+  { title: "Background Remover", desc: "Freistellen · 5 Credits", descKey: "descBg", href: "/ai-tools/background-remover", icon: Scissors, color: "#F59E0B" },
+  { title: "Image Upscaler", desc: "4× HD · 5 Credits", descKey: "descUpscale", href: "/ai-tools/hybrid-upscaler", icon: ImageUp, color: "#06B6D4" },
 ];
 
 // localStorage-Spiegel für abgehakte Tasks. Wichtig: Admins haben keinen
@@ -117,7 +118,7 @@ export default function HomePage() {
   const router = useRouter();
   const tierState = useTier();
   const credits = useCredits();
-  const { lang, setLang } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const [showTour, setShowTour] = useState(false);
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checklist, setChecklist] = useState<Checklist>({});
@@ -231,11 +232,11 @@ export default function HomePage() {
   const quickSteps: {
     id: string; n: number; title: string; desc: string; href: string; cta: string; external: boolean;
   }[] = [
-    { id: "qs_produkt", n: 1, title: "Produkt finden", desc: "Zieh ein Winning-Produkt im Generator.", href: "/charts", cta: "Generator öffnen", external: false },
-    { id: "qs_theme", n: 2, title: "Theme hinzufügen", desc: "Füge ein Theme in deinem Shopify-Shop hinzu.", href: "", cta: "", external: false },
-    { id: "qs_dsers", n: 3, title: "DSERS installieren", desc: "Die AliExpress-Dropshipping-App für Shopify.", href: "https://apps.shopify.com/dsers", cta: "DSERS installieren", external: true },
-    { id: "qs_alilink", n: 4, title: "AliExpress-Link einfügen", desc: "Verknüpfe dein Produkt in DSERS mit dem AliExpress-Link.", href: "", cta: "", external: false },
-    { id: "qs_publish", n: 5, title: "Veröffentlichen", desc: "Schalte dein Produkt live in deinem Shop.", href: publishHref, cta: "In Shopify öffnen", external: true },
+    { id: "qs_produkt", n: 1, title: t.home.qsProductTitle, desc: t.home.qsProductDesc, href: "/charts", cta: t.home.qsProductCta, external: false },
+    { id: "qs_theme", n: 2, title: t.home.qsThemeTitle, desc: t.home.qsThemeDesc, href: "", cta: "", external: false },
+    { id: "qs_dsers", n: 3, title: t.home.qsDsersTitle, desc: t.home.qsDsersDesc, href: "https://apps.shopify.com/dsers", cta: t.home.qsDsersCta, external: true },
+    { id: "qs_alilink", n: 4, title: t.home.qsAliTitle, desc: t.home.qsAliDesc, href: "", cta: "", external: false },
+    { id: "qs_publish", n: 5, title: t.home.qsPublishTitle, desc: t.home.qsPublishDesc, href: publishHref, cta: t.home.qsPublishCta, external: true },
   ];
   const quickDone = quickSteps.filter((s) => tasksDone[s.id]).length;
 
@@ -299,7 +300,7 @@ export default function HomePage() {
         >
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold leading-tight truncate">
-              {firstName ? `Hi ${firstName} ` : "Willkommen "}
+              {firstName ? `${t.home.hi} ${firstName} ` : `${t.home.welcome} `}
               <span className="text-[#95BF47]">{allDone ? "\u{1F389}" : "\u{1F44B}"}</span>
             </h1>
           </div>
@@ -327,22 +328,22 @@ export default function HomePage() {
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-[9px] uppercase tracking-[0.18em] font-bold text-[#95BF47] mb-0.5">
-                Produkt-Generator
+                {t.home.heroEyebrow}
               </div>
               <h2 className="text-[15px] sm:text-[17px] font-bold text-white leading-tight">
-                Zieh dein nächstes Winning-Produkt
+                {t.home.heroTitle}
               </h2>
               <p className="text-[11px] sm:text-xs text-zinc-400 mt-0.5">
-                Ein Klick = ein zufälliges, voll analysiertes Produkt · 50 Credits
+                {t.home.heroDesc}
                 {drawsLeft > 0 && (
                   <span className="text-zinc-300">
-                    {" "}· Guthaben reicht für {drawsLeft} {drawsLeft === 1 ? "Drop" : "Drops"}
+                    {" "}· {t.home.balanceFor} {drawsLeft} {drawsLeft === 1 ? t.home.drop : t.home.drops}
                   </span>
                 )}
               </p>
             </div>
             <div className="hidden sm:flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#95BF47] text-black font-bold text-[13px] shrink-0 group-hover:translate-x-0.5 transition">
-              Ziehen <ArrowRight className="w-4 h-4" />
+              {t.home.drawCta} <ArrowRight className="w-4 h-4" />
             </div>
             <ArrowRight className="sm:hidden w-5 h-5 text-white/70 shrink-0" />
           </div>
@@ -351,7 +352,7 @@ export default function HomePage() {
 
         {/* ─── AI Tools ─────────────────────────────────── */}
         <section>
-          <SectionHeader icon={Sparkles} title="AI Tools" sub="Deine KI-Werkzeuge für Produkte, Bilder & Mails." />
+          <SectionHeader icon={Sparkles} title={t.home.toolsTitle} sub={t.home.toolsSub} />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-2.5 mt-2.5">
             {HOME_AI_TOOLS.map((tool) => {
               const Icon = tool.icon;
@@ -370,7 +371,7 @@ export default function HomePage() {
                     <Icon className="w-[18px] h-[18px]" style={{ color: tool.color }} />
                   </div>
                   <div className="text-[12.5px] font-semibold text-white leading-tight">{tool.title}</div>
-                  <div className="text-[10.5px] text-zinc-500 mt-0.5 leading-snug">{tool.desc}</div>
+                  <div className="text-[10.5px] text-zinc-500 mt-0.5 leading-snug">{(t.home as Record<string, string>)[tool.descKey] || tool.desc}</div>
                 </Link>
               );
             })}
@@ -386,8 +387,8 @@ export default function HomePage() {
           <div className="flex items-center justify-between mb-2">
             <SectionHeader
               icon={ListChecks}
-              title="Bis du verkaufst"
-              sub="Hak die Schritte ab, sobald du sie erledigt hast."
+              title={t.home.sellTitle}
+              sub={t.home.sellSub}
               inline
             />
             <div className="flex items-center gap-2 shrink-0">
@@ -542,6 +543,7 @@ function StartTasksList({ tasks, doneMap, onToggle, adminEmpty, onOpenAdmin }: {
   adminEmpty: boolean;
   onOpenAdmin: () => void;
 }) {
+  const { t: tr } = useI18n();
   if (adminEmpty && tasks.length === 0) {
     return (
       <button
@@ -555,7 +557,7 @@ function StartTasksList({ tasks, doneMap, onToggle, adminEmpty, onOpenAdmin }: {
   if (tasks.length === 0) {
     return (
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-6 text-center text-[12px] text-zinc-500">
-        Bisher keine Aufgaben hinterlegt. Schau bald wieder rein.
+        {tr.home.noTasks}
       </div>
     );
   }
@@ -566,7 +568,7 @@ function StartTasksList({ tasks, doneMap, onToggle, adminEmpty, onOpenAdmin }: {
     <div className="space-y-1.5">
       {totalActive > 0 && (
         <div className="flex items-center justify-between text-[10px] uppercase tracking-widest font-semibold mb-1.5">
-          <span className="text-zinc-500">Fortschritt</span>
+          <span className="text-zinc-500">{tr.home.progress}</span>
           <span className={allDone ? "text-emerald-300" : "text-zinc-400"}>
             {doneCount}/{totalActive}
             {allDone && " · Du bist startklar! \u{1F680}"}
@@ -1152,6 +1154,7 @@ function HeroNewsCard({ post, onOpenText, large, fullBleed }: {
   large?: boolean;
   fullBleed?: boolean;
 }) {
+  const { t } = useI18n();
   const isVideo = post.type === "video" && !!post.youtubeUrl;
   const cover = isVideo ? post.previewImageUrl || post.imageUrl : post.imageUrl;
   const [open, setOpen] = useState(false);
@@ -1208,7 +1211,7 @@ function HeroNewsCard({ post, onOpenText, large, fullBleed }: {
             }`}
           >
             {isVideo ? <Play className="w-2.5 h-2.5" /> : <Newspaper className="w-2.5 h-2.5" />}
-            {isVideo ? "Video" : "News"}
+            {isVideo ? t.news.video : t.news.badge}
           </span>
         </div>
 
@@ -1246,6 +1249,7 @@ function NewsCard({ post, onOpenText }: {
   post: NewsPost;
   onOpenText: (p: NewsPost) => void;
 }) {
+  const { t } = useI18n();
   const isVideo = post.type === "video" && post.youtubeUrl;
   const cover = isVideo ? (post.previewImageUrl || post.imageUrl) : post.imageUrl;
   const [open, setOpen] = useState(false);
@@ -1283,7 +1287,7 @@ function NewsCard({ post, onOpenText }: {
                   : "bg-[#95BF47]/20 border-[#95BF47]/30 text-[#95BF47]"
               }`}>
                 {isVideo ? <Play className="w-2 h-2 sm:w-2.5 sm:h-2.5" /> : <FileText className="w-2 h-2 sm:w-2.5 sm:h-2.5" />}
-                {isVideo ? "Video" : "News"}
+                {isVideo ? t.news.video : t.news.badge}
               </span>
             </div>
             <div className="absolute bottom-0 left-0 right-0 p-2 sm:p-3.5">
@@ -1294,7 +1298,7 @@ function NewsCard({ post, onOpenText }: {
           <div className="p-3 sm:p-5">
             <div className="flex items-center gap-1.5 mb-1.5">
               <Megaphone className="w-3 h-3 sm:w-4 sm:h-4 text-[#95BF47]" />
-              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-[#95BF47]">News</span>
+              <span className="text-[8px] sm:text-[9px] font-bold uppercase tracking-widest text-[#95BF47]">{t.news.badge}</span>
             </div>
             <h3 className="text-[12px] sm:text-sm font-bold leading-snug">{post.title}</h3>
             {post.body && (
@@ -1769,11 +1773,12 @@ function FileUploadField({ label, url, setUrl, inputRef, uploading, onPick }: {
 // ─── Abo-Status Banner ─────────────────────────────────────────
 
 function AboStatusBanner({ tierState, isAdmin }: { tierState: ReturnType<typeof useTier>; isAdmin: boolean }) {
+  const { t } = useI18n();
   const tier = tierState.tier;
   if (tierState.loading) {
     return (
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3 py-2 text-[10px] text-zinc-500">
-        Lade Abo-Status…
+        {t.home.loadingAbo}
       </div>
     );
   }
@@ -1799,13 +1804,13 @@ function AboStatusBanner({ tierState, isAdmin }: { tierState: ReturnType<typeof 
           <Lock className="w-4 h-4 text-amber-300" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[11px] font-bold text-amber-100">Keine aktive Membership</div>
+          <div className="text-[11px] font-bold text-amber-100">{t.home.noMembership}</div>
           <div className="text-[10px] text-amber-200/80 leading-snug">
-            Schalte alle Tools mit der Brospify Membership frei.
+            {t.home.unlockTools}
           </div>
         </div>
         <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-bold text-amber-200 group-hover:text-amber-100 shrink-0">
-          Jetzt buchen
+          {t.home.bookNow}
           <ArrowRight className="w-3.5 h-3.5" />
         </span>
         <ArrowRight className="sm:hidden w-4 h-4 text-amber-200 shrink-0" />
@@ -1830,11 +1835,11 @@ function AboStatusBanner({ tierState, isAdmin }: { tierState: ReturnType<typeof 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-400">
-            Aktive Membership
+            {t.home.activeMembership}
           </span>
           <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/25 inline-flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            aktiv
+            {t.home.activeShort}
           </span>
         </div>
         <div className="text-[12px] font-bold leading-tight truncate">
@@ -1845,7 +1850,7 @@ function AboStatusBanner({ tierState, isAdmin }: { tierState: ReturnType<typeof 
         </div>
       </div>
       <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold text-zinc-400 group-hover:text-zinc-200 shrink-0">
-        Verwalten
+        {t.home.manage}
         <ArrowRight className="w-3 h-3" />
       </span>
       <ArrowRight className="sm:hidden w-4 h-4 text-zinc-500 shrink-0" />
