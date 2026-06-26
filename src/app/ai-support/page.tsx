@@ -35,6 +35,7 @@ import {
   Lock,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 import {
   useResilientJob,
   readJobResponse,
@@ -82,6 +83,7 @@ export default function AISupportPage() {
 
 function AISupportContent() {
   const router = useRouter();
+  const { t, lang } = useI18n();
   const searchParams = useSearchParams();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -212,6 +214,7 @@ function AISupportContent() {
             body: JSON.stringify({
               messages: newMessages.map((m) => ({ role: m.role, content: m.content })),
               attemptCount: newAttempt,
+              lang,
             }),
           });
           return await readJobResponse<{ reply: string; shouldEscalate?: boolean }>(res);
@@ -225,7 +228,7 @@ function AISupportContent() {
       setMessages([...newMessages, assistantMsg]);
       if (data.shouldEscalate) setShowEscalation(true);
     } catch (err) {
-      const msg = err instanceof TerminalJobError ? err.message : "Verbindungsfehler.";
+      const msg = err instanceof TerminalJobError ? err.message : t.aiSupport.errConnection;
       setError(msg);
     } finally {
       setSending(false);
@@ -236,7 +239,7 @@ function AISupportContent() {
     if (creatingTicket) return;
     setCreatingTicket(true);
     try {
-      const subject = messages.find((m) => m.role === "user")?.content.slice(0, 80) || "Support-Anfrage";
+      const subject = messages.find((m) => m.role === "user")?.content.slice(0, 80) || t.aiSupport.defaultSubject;
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -257,10 +260,10 @@ function AISupportContent() {
         setShowEscalation(false);
         setAttemptCount(0);
       } else {
-        setError(data.error || "Ticket konnte nicht erstellt werden.");
+        setError(data.error || t.aiSupport.errTicketFailed);
       }
     } catch {
-      setError("Verbindungsfehler.");
+      setError(t.aiSupport.errConnection);
     } finally {
       setCreatingTicket(false);
     }
@@ -313,7 +316,7 @@ function AISupportContent() {
                 <span className="ai-gradient-text">Support</span>
               </h1>
               <p className="text-[10px] text-zinc-500 truncate">
-                KI-Chat & deine Support-Tickets
+                {t.aiSupport.subtitle}
               </p>
             </div>
           </div>
@@ -328,7 +331,7 @@ function AISupportContent() {
                 view === "chat" ? "bg-purple-500/15 border border-purple-500/30 text-purple-300" : "text-zinc-400"
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" /> Neuer Chat
+              <Sparkles className="w-3.5 h-3.5" /> {t.aiSupport.newChat}
             </button>
             <button
               onClick={() => setView("tickets")}
@@ -336,7 +339,7 @@ function AISupportContent() {
                 view === "tickets" ? "bg-amber-500/15 border border-amber-500/30 text-amber-300" : "text-zinc-400"
               }`}
             >
-              <Inbox className="w-3.5 h-3.5" /> Meine Tickets
+              <Inbox className="w-3.5 h-3.5" /> {t.aiSupport.myTickets}
               {tickets.length > 0 && (
                 <span className="ml-0.5 px-1 py-px rounded text-[9px] font-bold bg-white/[0.08] text-zinc-300 tabular-nums">
                   {tickets.length}
@@ -408,6 +411,8 @@ function TicketsListView({ tickets, loading, onOpenTicket, onStartChat }: {
   onOpenTicket: (id: string) => void;
   onStartChat: () => void;
 }) {
+  const { t } = useI18n();
+  const statusLabel = (s: string) => s === "open" ? t.aiSupport.statusOpen : s === "resolved" ? t.aiSupport.statusResolved : t.aiSupport.statusClosed;
   return (
     <div className="space-y-2">
       {loading ? (
@@ -419,7 +424,7 @@ function TicketsListView({ tickets, loading, onOpenTicket, onStartChat }: {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3">
             <Inbox className="w-5 h-5 text-zinc-500" />
           </div>
-          <h3 className="text-sm font-bold mb-1">Noch keine Tickets</h3>
+          <h3 className="text-sm font-bold mb-1">{t.aiSupport.noTickets}</h3>
           <p className="text-[11px] text-zinc-500 max-w-xs mx-auto mb-4">
             Tickets werden gespeichert, sobald du den KI-Chat eskalierst. Der Verlauf bleibt für dich abrufbar.
           </p>
@@ -460,7 +465,7 @@ function TicketsListView({ tickets, loading, onOpenTicket, onStartChat }: {
                   ticket.status === "open" ? "text-amber-400" :
                   ticket.status === "resolved" ? "text-emerald-400" : "text-zinc-500"
                 }`}>
-                  {ticket.status === "open" ? "Offen" : ticket.status === "resolved" ? "Gelöst" : "Geschlossen"}
+                  {statusLabel(ticket.status)}
                 </span>
                 <span className="text-[10px] text-zinc-600 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5" />
@@ -500,6 +505,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
   onSendLive: () => void;
   liveEndRef: React.RefObject<HTMLDivElement | null>;
 }) {
+  const { t } = useI18n();
   if (!ticket) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -527,7 +533,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
               isOpen ? "text-amber-400" :
               ticket.status === "resolved" ? "text-emerald-400" : "text-zinc-500"
             }`}>
-              {isOpen ? "Offen" : ticket.status === "resolved" ? "Gelöst" : "Geschlossen"}
+              {isOpen ? t.aiSupport.statusOpen : ticket.status === "resolved" ? t.aiSupport.statusResolved : t.aiSupport.statusClosed}
             </span>
             <span className="text-[9px] text-zinc-600 flex items-center gap-1">
               <Clock className="w-2.5 h-2.5" />
@@ -546,15 +552,15 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
         }`}>
           {ticket.status === "resolved" ? <CheckCircle className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
           {ticket.status === "resolved"
-            ? "Dieses Ticket wurde gelöst. Der Verlauf bleibt jederzeit für dich abrufbar."
-            : "Dieses Ticket ist geschlossen. Du kannst den Verlauf einsehen."}
+            ? t.aiSupport.resolvedNote
+            : t.aiSupport.closedNote}
         </div>
       )}
 
       {/* Messages */}
       <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
         {ticket.messages.length === 0 ? (
-          <div className="text-xs text-zinc-500 text-center py-6">Keine Nachrichten.</div>
+          <div className="text-xs text-zinc-500 text-center py-6">{t.aiSupport.noMessages}</div>
         ) : (
           ticket.messages.map((msg, i) => (
             <motion.div
@@ -597,7 +603,7 @@ function TicketDetailView({ ticket, onBack, liveInput, setLiveInput, sendingLive
               value={liveInput}
               onChange={(e) => setLiveInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && onSendLive()}
-              placeholder="Antwort senden…"
+              placeholder={t.aiSupport.replyPlaceholder}
               className="flex-1 bg-transparent border-none outline-none text-[13px] text-white placeholder:text-zinc-600"
             />
             <motion.button
@@ -630,6 +636,8 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   jobState: import("@/lib/resilient-job").ResilientJobState;
 }) {
+  const { t } = useI18n();
+  const suggestions = [t.aiSupport.q1, t.aiSupport.q2, t.aiSupport.q3, t.aiSupport.q4];
   return (
     <div className="space-y-3">
       {/* Empty state */}
@@ -642,17 +650,12 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
           <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-purple-500/15 flex items-center justify-center mb-3">
             <Sparkles className="w-6 h-6 text-purple-400/60" />
           </div>
-          <h2 className="text-sm font-bold text-zinc-300 mb-1.5">Wie kann ich helfen?</h2>
+          <h2 className="text-sm font-bold text-zinc-300 mb-1.5">{t.aiSupport.helpTitle}</h2>
           <p className="text-[11px] text-zinc-600 max-w-sm mx-auto mb-4">
-            Stelle deine Frage, der KI-Agent versucht sie sofort zu lösen. Falls nicht, wird daraus ein Ticket.
+            {t.aiSupport.helpSub}
           </p>
           <div className="grid grid-cols-2 gap-1.5 max-w-md mx-auto">
-            {[
-              "Wo finde ich das Theme?",
-              "Wie funktioniert der Produkt-Generator?",
-              "Wie verbinde ich Shopify?",
-              "Wie kaufe ich Credits?",
-            ].map((q) => (
+            {suggestions.map((q) => (
               <button
                 key={q}
                 onClick={() => setInput(q)}
@@ -707,7 +710,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "0ms" }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "150ms" }} />
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400/60 animate-bounce" style={{ animationDelay: "300ms" }} />
-                  <span className="text-[10px] text-zinc-500 ml-0.5">denkt nach…</span>
+                  <span className="text-[10px] text-zinc-500 ml-0.5">{t.aiSupport.thinking}</span>
                 </div>
               </div>
               <JobDebugPanel state={jobState} compact />
@@ -728,9 +731,9 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
                     <AlertTriangle className="w-4 h-4 text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="text-[12px] font-bold text-amber-300 mb-1">Brauchst du echten Menschen-Support?</h4>
+                    <h4 className="text-[12px] font-bold text-amber-300 mb-1">{t.aiSupport.escalateTitle}</h4>
                     <p className="text-[10px] text-zinc-400 mb-2.5 leading-relaxed">
-                      Wir machen daraus ein Live-Ticket — der gesamte Chat-Verlauf wird mitgeschickt und bleibt für dich gespeichert.
+                      {t.aiSupport.escalateDesc}
                     </p>
                     <motion.button
                       whileTap={{ scale: 0.97 }}
@@ -739,7 +742,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
                       className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 text-black font-bold text-[11px] disabled:opacity-50"
                     >
                       {creatingTicket ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ticket className="w-3.5 h-3.5" />}
-                      {creatingTicket ? "Erstelle Ticket…" : "Live-Ticket eröffnen"}
+                      {creatingTicket ? t.aiSupport.creatingTicket : t.aiSupport.openTicket}
                       {!creatingTicket && <ArrowRight className="w-3 h-3" />}
                     </motion.button>
                   </div>
@@ -760,7 +763,7 @@ function ChatView({ messages, input, setInput, sending, onSend, attemptCount, sh
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && onSend()}
-            placeholder="Stelle deine Frage…"
+            placeholder={t.aiSupport.askPlaceholder}
             disabled={sending}
             className="flex-1 bg-transparent border-none outline-none text-[13px] text-white placeholder:text-zinc-600 disabled:opacity-50"
           />

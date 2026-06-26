@@ -17,8 +17,11 @@ export async function POST(req: NextRequest) {
     const guard = await requireFeature(session, "aiChat");
     if (!guard.ok) return guard.response;
 
-    const { messages } = (await req.json()) as {
+    const { messages, lang } = (await req.json()) as {
       messages: ChatMessage[];
+      // Vom Client gewählte Oberflächen-Sprache ("de" | "en"). Der Bot
+      // antwortet in dieser Sprache (Wissensbasis bleibt deutsch).
+      lang?: string;
       // attemptCount wird vom Client noch mitgeschickt, aber nicht mehr
       // genutzt — Eskalation entscheidet sich jetzt am Inhalt (siehe unten).
     };
@@ -89,7 +92,9 @@ BEISPIELE (Stil, nicht wörtlich übernehmen):
 ${userContext ? `\nNUTZER-KONTEXT:\n${userContext}\n` : ""}
 ${APP_KNOWLEDGE}
 
-${adminKnowledge && adminKnowledge.trim().length > 0 ? `ZUSÄTZLICHES ADMIN-WISSEN (ergänzt das obige, hat bei Konflikt Vorrang):\n---\n${adminKnowledge}\n---` : ""}`;
+${adminKnowledge && adminKnowledge.trim().length > 0 ? `ZUSÄTZLICHES ADMIN-WISSEN (ergänzt das obige, hat bei Konflikt Vorrang):\n---\n${adminKnowledge}\n---` : ""}
+
+${lang === "en" ? "IMPORTANT — LANGUAGE: The user's interface is set to English. ALWAYS reply in natural, fluent English, even though this knowledge base is written in German. Keep all link paths exactly as given." : "WICHTIG — SPRACHE: Antworte auf Deutsch."}`;
 
     const deepseekMessages = [
       { role: "system", content: systemPrompt },
