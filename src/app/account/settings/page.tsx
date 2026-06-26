@@ -25,6 +25,7 @@ import {
   X,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n, LOCALES, type Locale } from "@/lib/i18n";
 
 interface SessionData {
   isLoggedIn: boolean;
@@ -42,6 +43,7 @@ interface ProfileData {
 
 export default function AccountSettingsPage() {
   const router = useRouter();
+  const { t, lang, setLang } = useI18n();
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<SessionData | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -85,7 +87,7 @@ export default function AccountSettingsPage() {
   // Handler: Google-Account verknuepfen
   const handleLinkGoogle = useCallback(async () => {
     if (!linkInput.includes("@")) {
-      setError("Bitte gueltige E-Mail-Adresse eingeben.");
+      setError(t.settings.invalidEmail);
       return;
     }
     setLinking(true);
@@ -101,20 +103,20 @@ export default function AccountSettingsPage() {
         setProfile((p) => ({ ...(p || {}), linkedGoogleEmail: data.linkedEmail }));
         setShowLinkForm(false);
         setLinkInput("");
-        setSuccess("Google-Konto erfolgreich verknuepft.");
+        setSuccess(t.settings.linkSuccess);
       } else {
-        setError(data.error || "Verknuepfung fehlgeschlagen.");
+        setError(data.error || t.settings.linkFailed);
       }
     } catch {
-      setError("Netzwerkfehler.");
+      setError(t.settings.networkError);
     } finally {
       setLinking(false);
     }
-  }, [linkInput]);
+  }, [linkInput, t]);
 
   // Handler: Verknuepfung loesen
   const handleUnlinkGoogle = useCallback(async () => {
-    if (!confirm("Google-Verknuepfung wirklich loesen? Du kannst dich danach nur noch mit Lizenzschluessel einloggen.")) {
+    if (!confirm(t.settings.unlinkConfirm)) {
       return;
     }
     setLinking(true);
@@ -122,23 +124,33 @@ export default function AccountSettingsPage() {
       const res = await fetch("/api/profile/link-google", { method: "DELETE" });
       if (res.ok) {
         setProfile((p) => ({ ...(p || {}), linkedGoogleEmail: undefined }));
-        setSuccess("Verknuepfung geloest.");
+        setSuccess(t.settings.unlinkSuccess);
       } else {
         const d = await res.json();
-        setError(d.error || "Loeschen fehlgeschlagen.");
+        setError(d.error || t.settings.unlinkFailed);
       }
     } catch {
-      setError("Netzwerkfehler.");
+      setError(t.settings.networkError);
     } finally {
       setLinking(false);
     }
-  }, []);
+  }, [t]);
 
   // Handler: Abmelden
   const handleLogout = useCallback(async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     router.push("/");
   }, [router]);
+
+  // Handler: Sprache umstellen (sofort + im Profil speichern)
+  const changeLang = useCallback((code: Locale) => {
+    setLang(code);
+    fetch("/api/profile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ language: code }),
+    }).catch(() => {});
+  }, [setLang]);
 
   if (loading) {
     return (
@@ -160,9 +172,9 @@ export default function AccountSettingsPage() {
               <SettingsIcon className="w-5 h-5 text-indigo-400" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold">Einstellungen</h1>
+              <h1 className="text-xl sm:text-2xl font-bold">{t.settings.title}</h1>
               <p className="text-zinc-400 text-xs sm:text-sm">
-                Account-Identitaet, Login-Optionen und Sicherheit
+                {t.settings.subtitle}
               </p>
             </div>
           </div>
@@ -194,11 +206,11 @@ export default function AccountSettingsPage() {
         )}
 
         {/* ─── 1. Account-Identitaet ────────────────────── */}
-        <Card icon={Key} title="Account-Identitaet" color="#6366F1">
-          <InfoRow icon={Mail} label="E-Mail" value={kundenEmail || "—"} />
+        <Card icon={Key} title={t.settings.identityCard} color="#6366F1">
+          <InfoRow icon={Mail} label={t.settings.email} value={kundenEmail || "—"} />
           <InfoRow
             icon={Key}
-            label="Lizenzschluessel"
+            label={t.settings.licenseKey}
             value={session?.lizenzschluessel || "—"}
             mono
             copyable
@@ -206,8 +218,8 @@ export default function AccountSettingsPage() {
           {profile?.signupAt && (
             <InfoRow
               icon={Calendar}
-              label="Konto erstellt"
-              value={new Date(profile.signupAt).toLocaleDateString("de-DE", {
+              label={t.settings.createdAt}
+              value={new Date(profile.signupAt).toLocaleDateString(lang === "en" ? "en-GB" : "de-DE", {
                 day: "2-digit",
                 month: "long",
                 year: "numeric",
@@ -218,14 +230,14 @@ export default function AccountSettingsPage() {
             <div className="flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <Shield className="w-3.5 h-3.5 text-amber-400" />
               <span className="text-[11px] font-semibold text-amber-300">
-                Admin-Account
+                {t.settings.adminAccount}
               </span>
             </div>
           )}
         </Card>
 
         {/* ─── 2. Google-Verknuepfung ────────────────────── */}
-        <Card icon={Link2} title="Login mit Google" color="#0EA5E9">
+        <Card icon={Link2} title={t.settings.googleCard} color="#0EA5E9">
           {profile?.linkedGoogleEmail ? (
             <div className="space-y-3">
               <div className="flex items-center gap-3 p-3 rounded-xl border border-green-500/20 bg-green-500/[0.04]">
@@ -242,15 +254,14 @@ export default function AccountSettingsPage() {
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="text-[12px] font-semibold text-green-300">Verknuepft</div>
+                  <div className="text-[12px] font-semibold text-green-300">{t.settings.linked}</div>
                   <div className="text-[11px] text-zinc-400 truncate font-mono">
                     {profile.linkedGoogleEmail}
                   </div>
                 </div>
               </div>
               <p className="text-[11px] text-zinc-500 leading-snug">
-                Du kannst dich jetzt mit diesem Google-Konto einloggen statt
-                jedes Mal den Lizenzschluessel einzugeben.
+                {t.settings.linkedDesc}
               </p>
               <button
                 type="button"
@@ -263,14 +274,13 @@ export default function AccountSettingsPage() {
                 ) : (
                   <Unlink className="w-3.5 h-3.5" />
                 )}
-                Verknuepfung loesen
+                {t.settings.unlink}
               </button>
             </div>
           ) : (
             <div className="space-y-3">
               <p className="text-[12px] text-zinc-400 leading-snug">
-                Verknuepfe ein Google-Konto, dann musst du dich nicht jedes Mal
-                mit dem Lizenzschluessel anmelden.
+                {t.settings.linkDesc}
               </p>
               {!showLinkForm ? (
                 <button
@@ -279,7 +289,7 @@ export default function AccountSettingsPage() {
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-semibold btn-accent"
                 >
                   <Link2 className="w-3.5 h-3.5" />
-                  Google-Konto verknuepfen
+                  {t.settings.linkBtn}
                 </button>
               ) : (
                 <div className="space-y-2">
@@ -297,7 +307,7 @@ export default function AccountSettingsPage() {
                       disabled={linking}
                       className="flex-1 py-2 rounded-xl text-[12px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] transition disabled:opacity-50"
                     >
-                      Abbrechen
+                      {t.settings.cancel}
                     </button>
                     <button
                       type="button"
@@ -306,7 +316,7 @@ export default function AccountSettingsPage() {
                       className="flex-1 py-2 rounded-xl text-[12px] font-semibold btn-accent disabled:opacity-50 flex items-center justify-center gap-1.5"
                     >
                       {linking ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-                      Verknuepfen
+                      {t.settings.link}
                     </button>
                   </div>
                 </div>
@@ -315,31 +325,42 @@ export default function AccountSettingsPage() {
           )}
         </Card>
 
-        {/* ─── 3. Sprache (Platzhalter, i18n vorhanden) ───── */}
-        <Card icon={Globe} title="Sprache" color="#A855F7">
-          <div className="text-[12px] text-zinc-400">
-            Hub-Sprache: <span className="text-zinc-200 font-semibold">Deutsch</span>
+        {/* ─── 3. Sprache (echter Umschalter, in i18n) ───── */}
+        <Card icon={Globe} title={t.settings.languageCard} color="#A855F7">
+          <div className="grid grid-cols-2 gap-2">
+            {LOCALES.map((l) => (
+              <button
+                key={l.code}
+                type="button"
+                onClick={() => changeLang(l.code as Locale)}
+                className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition ${
+                  lang === l.code
+                    ? "border-[#95BF47]/50 bg-[#95BF47]/10 text-white"
+                    : "border-white/10 bg-white/[0.03] text-white/55 hover:text-white hover:border-white/20"
+                }`}
+              >
+                <span className="text-lg leading-none">{l.flag}</span>
+                {l.label}
+              </button>
+            ))}
           </div>
-          <p className="text-[11px] text-zinc-600 mt-1.5 leading-snug">
-            Englisch ist in Vorbereitung &mdash; du kannst es spaeter ueber das
-            Sprach-Toggle in der Top-Bar umschalten.
+          <p className="text-[11px] text-zinc-600 mt-2 leading-snug">
+            {t.settings.languageHint}
           </p>
         </Card>
 
         {/* ─── 4. Danger Zone ────────────────────── */}
-        <Card icon={LogOut} title="Sitzung" color="#EF4444">
+        <Card icon={LogOut} title={t.settings.sessionCard} color="#EF4444">
           <button
             type="button"
             onClick={handleLogout}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[12px] font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Abmelden
+            {t.settings.logout}
           </button>
           <p className="text-[11px] text-zinc-600 mt-2 leading-snug">
-            Schliesst die Sitzung in diesem Browser. Deine Daten bleiben sicher
-            gespeichert &mdash; mit deinem Lizenzschluessel oder Google-Konto
-            kommst du jederzeit wieder rein.
+            {t.settings.logoutDesc}
           </p>
         </Card>
       </div>
