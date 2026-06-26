@@ -29,6 +29,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 
 /* ─── Category Definitions ─────────────────────────────────────── */
 const CATEGORIES = [
@@ -70,6 +71,7 @@ interface SessionInfo {
 /* ─── Page ─────────────────────────────────────────────────────── */
 export default function ChatsPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
@@ -258,15 +260,15 @@ export default function ChatsPage() {
         setNewMessage("");
         await loadMessages(selectedRoom.id);
         if (!session?.isAdmin) {
-          setSuccess("Nachricht gesendet! Wird nach Freigabe sichtbar.");
+          setSuccess(t.community.sent);
           setTimeout(() => setSuccess(""), 4000);
         }
       } else {
         const data = await res.json();
-        setError(data.error || "Fehler beim Senden.");
+        setError(data.error || t.community.errSend);
       }
     } catch {
-      setError("Senden fehlgeschlagen.");
+      setError(t.community.errSendFailed);
     } finally {
       setSending(false);
     }
@@ -418,7 +420,7 @@ export default function ChatsPage() {
                 Community
               </h2>
               <p className="text-[10px] text-zinc-600">
-                {rooms.length} {rooms.length === 1 ? "Kanal" : "Kanäle"}
+                {rooms.length} {rooms.length === 1 ? t.community.channelOne : t.community.channelMany}
               </p>
             </div>
           </div>
@@ -663,12 +665,12 @@ export default function ChatsPage() {
                       <Hash className="w-7 h-7 text-zinc-800" />
                     </div>
                     <p className="text-sm font-semibold text-zinc-400 mb-1">
-                      Willkommen in #{selectedRoom.name}
+                      {t.community.welcomeIn} #{selectedRoom.name}
                     </p>
                     <p className="text-xs text-zinc-700 text-center max-w-[280px]">
                       {isAdmin
                         ? "Poste das erste Bild oder eine Nachricht in diesem Kanal."
-                        : "Noch keine Nachrichten in diesem Kanal."}
+                        : t.community.noMessages}
                     </p>
                   </div>
                 ) : (
@@ -889,7 +891,7 @@ export default function ChatsPage() {
                           type="text"
                           value={senderName}
                           onChange={(e) => setSenderName(e.target.value)}
-                          placeholder="Dein Name..."
+                          placeholder={t.community.yourName}
                           className="w-full bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2 text-xs outline-none focus:border-[#95BF47]/30 transition placeholder:text-zinc-700"
                         />
                       </div>
@@ -908,7 +910,7 @@ export default function ChatsPage() {
                         placeholder={
                           isAdmin
                             ? "Admin-Nachricht schreiben..."
-                            : `Nachricht in #${selectedRoom.name}...`
+                            : `${t.community.messageIn} #${selectedRoom.name}...`
                         }
                         className="flex-1 bg-transparent text-sm px-3 py-2 outline-none placeholder:text-zinc-600"
                         disabled={sending}
@@ -928,7 +930,7 @@ export default function ChatsPage() {
                     </div>
                     {!isAdmin && (
                       <p className="text-[10px] text-zinc-700 mt-1.5 ml-1">
-                        Wird nach Admin-Freigabe sichtbar.
+                        {t.community.afterApproval}
                       </p>
                     )}
                   </div>
@@ -950,10 +952,10 @@ export default function ChatsPage() {
                 </h3>
                 <p className="text-sm text-zinc-600 max-w-[260px] mx-auto leading-relaxed">
                   {rooms.length > 0
-                    ? "Wähle einen Kanal aus der Sidebar."
+                    ? t.community.selectChannel
                     : isAdmin
                       ? "Erstelle deinen ersten Kanal."
-                      : "Noch keine Kanäle vorhanden."}
+                      : t.community.noChannels}
                 </p>
               </div>
             </div>
