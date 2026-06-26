@@ -23,6 +23,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
+import { useI18n } from "@/lib/i18n";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
 import {
   useResilientJob,
@@ -76,6 +77,10 @@ interface UpscaleResponse {
 
 export default function HybridUpscaler() {
   const credits = useCredits();
+  const { t, lang } = useI18n();
+  // Modus-Label lokalisiert (MODES bleibt modul-level, nur die ids).
+  const modeLabel = (id: string) =>
+    id === "photo" ? t.aiTools.upPhoto : id === "faces" ? t.aiTools.upFaces : t.aiTools.upGraphics;
   const job = useResilientJob<UpscaleResponse>("upscale");
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -142,18 +147,24 @@ export default function HybridUpscaler() {
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) {
-        setErrorMsg("Bitte ein Bild auswählen (JPG, PNG, WebP).");
+        setErrorMsg(t.aiTools.errSelectImage);
         return;
       }
       if (file.size > MAX_FILE_SIZE) {
+        const mb = (file.size / 1024 / 1024).toFixed(1);
+        const max = MAX_FILE_SIZE / 1024 / 1024;
         setErrorMsg(
-          `Datei zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_SIZE / 1024 / 1024} MB.`,
+          lang === "en"
+            ? `File too large (${mb} MB). Max ${max} MB.`
+            : `Datei zu groß (${mb} MB). Max ${max} MB.`,
         );
         return;
       }
       if (insufficientCredits) {
         setErrorMsg(
-          `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
+          lang === "en"
+            ? `You need ${cost} credits — you have ${credits.balance}.`
+            : `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
         );
         return;
       }
@@ -178,8 +189,8 @@ export default function HybridUpscaler() {
         console.error("[Upscaler] preprocess failed:", err);
         setErrorMsg(
           err instanceof Error
-            ? `Bild konnte nicht vorbereitet werden: ${err.message}`
-            : "Bild konnte nicht vorbereitet werden.",
+            ? `${t.aiTools.errPrepare} ${err.message}`
+            : t.aiTools.errPrepare,
         );
         setStage("error");
         return;
@@ -193,7 +204,7 @@ export default function HybridUpscaler() {
       await runUpscale(payload, mode, scale);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [insufficientCredits, credits.balance, originalUrl, mode, scale],
+    [insufficientCredits, credits.balance, originalUrl, mode, scale, t, lang],
   );
 
   async function runUpscale(file: File, modeId: UpscaleMode, scaleN: Scale) {
@@ -226,7 +237,7 @@ export default function HybridUpscaler() {
         ? err.message
         : err instanceof Error
           ? err.message
-          : "Unbekannter Fehler bei der Verarbeitung.";
+          : t.aiTools.errUnknown;
       setErrorMsg(msg);
       setStage("error");
     }
@@ -258,7 +269,7 @@ export default function HybridUpscaler() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch {
-      setErrorMsg("Download fehlgeschlagen.");
+      setErrorMsg(t.aiTools.errDownload);
     }
   }
 
@@ -327,13 +338,13 @@ export default function HybridUpscaler() {
               className="text-[17px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
-              Bild hochladen
+              {t.aiTools.uploadImage}
             </h3>
             <p className="text-[12px] text-zinc-400 mt-1.5 max-w-sm leading-relaxed">
-              Drag &amp; Drop oder klicke, um ein Foto auszuwählen
+              {t.aiTools.dragDrop}
             </p>
             <p className="text-[10px] text-zinc-600 mt-0.5">
-              JPG · PNG · WebP · {scale}× Auflösung
+              JPG · PNG · WebP · {scale}× {t.aiTools.upResolution}
             </p>
 
             <button
@@ -350,11 +361,11 @@ export default function HybridUpscaler() {
                 boxShadow: `0 8px 24px -8px ${ACCENT}80, inset 0 1px 0 rgba(255,255,255,0.25)`,
               }}
             >
-              Datei wählen
+              {t.aiTools.chooseFile}
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              {cost} {credits.creditIcon} / Bild
+              {cost} {credits.creditIcon} {t.aiTools.perImage}
             </p>
 
             {insufficientCredits && (
@@ -377,11 +388,12 @@ export default function HybridUpscaler() {
                   <span className="text-[24px]">{credits.creditIcon}</span>
                 </div>
                 <h3 className="text-[18px] font-semibold tracking-tight">
-                  Nicht genug Credits
+                  {t.aiTools.notEnoughCredits}
                 </h3>
                 <p className="text-[13px] text-zinc-400 mt-1.5 max-w-xs">
-                  Pro Bild brauchst du {cost} Credits.
-                  Aktuell verfügbar: {credits.balance.toLocaleString("de-DE")}.
+                  {lang === "en"
+                    ? `You need ${cost} credits per image. Available: ${credits.balance.toLocaleString("en-GB")}.`
+                    : `Pro Bild brauchst du ${cost} Credits. Aktuell verfügbar: ${credits.balance.toLocaleString("de-DE")}.`}
                 </p>
                 <Link
                   href="/credits"
@@ -392,7 +404,7 @@ export default function HybridUpscaler() {
                     boxShadow: `0 8px 24px -8px ${ACCENT}80`,
                   }}
                 >
-                  Credits aufladen
+                  {t.aiTools.topUpCredits}
                 </Link>
               </div>
             )}
@@ -439,16 +451,16 @@ export default function HybridUpscaler() {
               className="mt-3 text-[16px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
-              {stage === "preparing" ? "Bild wird vorbereitet…" : `Auf ${scale}× hochskaliert`}
+              {stage === "preparing" ? t.aiTools.upPreparing : `${scale}× ${t.aiTools.upScaledTo}`}
             </h3>
             <p className="mt-1 text-[11px] text-zinc-400">
               {stage === "preparing"
-                ? "Optimiere die Quelldatei…"
-                : `${MODES.find((m) => m.id === mode)?.label}-Modus · ${elapsedSec}s`}
+                ? t.aiTools.upOptimizing
+                : `${modeLabel(mode)}${t.aiTools.upModeSuffix} · ${elapsedSec}s`}
             </p>
             {stage === "processing" && (
               <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
-                Hochauflösende Bilder können bis zu 90 Sekunden dauern.
+                {t.aiTools.upHighResNote}
               </p>
             )}
           </div>
@@ -493,7 +505,7 @@ export default function HybridUpscaler() {
               }}
             >
               <DownloadIcon />
-              Herunterladen
+              {t.aiTools.download}
             </button>
             <button
               onClick={handleSaveToLibrary}
@@ -506,7 +518,7 @@ export default function HybridUpscaler() {
               }}
             >
               {saving ? <Spinner color="currentColor" small /> : savedToLibrary ? <CheckIcon /> : <FolderIcon />}
-              {savedToLibrary ? "Gespeichert" : saving ? "Speichere…" : "In Mediathek"}
+              {savedToLibrary ? t.aiTools.saved : saving ? t.aiTools.saving : t.aiTools.save}
             </button>
             <button
               onClick={reset}
@@ -516,12 +528,12 @@ export default function HybridUpscaler() {
                 border: "1px solid rgba(255,255,255,0.10)",
               }}
             >
-              Neues Bild
+              {t.aiTools.newImage}
             </button>
           </div>
 
           <p className="text-[10px] text-zinc-500 text-center">
-            Fertig in {elapsedSec}s
+            {t.aiTools.upDoneIn} {elapsedSec}s
             {originalDims && outputDims && ` · ${originalDims.width}×${originalDims.height} → ${outputDims.width}×${outputDims.height}`}
           </p>
         </div>
@@ -541,7 +553,7 @@ export default function HybridUpscaler() {
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <AlertIcon />
             <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-semibold text-red-300">Fehler</div>
+              <div className="text-[15px] font-semibold text-red-300">{t.aiTools.error}</div>
               <div className="text-[13px] text-red-200/90 mt-1 break-words">{errorMsg}</div>
             </div>
           </div>
@@ -568,6 +580,11 @@ function ModePicker({ value, onChange, disabled }: {
   onChange: (m: UpscaleMode) => void;
   disabled: boolean;
 }) {
+  const { t } = useI18n();
+  const mLabel = (id: string) =>
+    id === "photo" ? t.aiTools.upPhoto : id === "faces" ? t.aiTools.upFaces : t.aiTools.upGraphics;
+  const mHint = (id: string) =>
+    id === "photo" ? t.aiTools.upPhotoHint : id === "faces" ? t.aiTools.upFacesHint : t.aiTools.upGraphicsHint;
   const active = MODES.find((m) => m.id === value) ?? MODES[0];
   return (
     <div
@@ -590,17 +607,17 @@ function ModePicker({ value, onChange, disabled }: {
               border: isSelected ? `1px solid ${ACCENT}40` : "1px solid transparent",
               color: isSelected ? ACCENT : "rgba(255,255,255,0.65)",
             }}
-            title={m.hint}
+            title={mHint(m.id)}
           >
             <m.icon color={isSelected ? ACCENT : "currentColor"} />
-            {m.label}
+            {mLabel(m.id)}
           </button>
         );
       })}
 
       {/* Hint row spans full grid */}
       <p className="col-span-3 px-3 pt-1.5 pb-1 text-[10px] text-zinc-500 leading-snug text-center">
-        {active.hint}
+        {mHint(active.id)}
       </p>
     </div>
   );
