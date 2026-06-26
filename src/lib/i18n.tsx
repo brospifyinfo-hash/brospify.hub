@@ -437,6 +437,7 @@ const de = {
     epEditorHelp: "Tippe einen Text in der Vorschau an, ändere ihn und drücke „Übernehmen“. Mit dem „Vorschau“-Knopf kommst du jederzeit zurück.",
     epEditorMode: "Editor-Modus",
     epTapToEdit: "· Tippen zum Bearbeiten",
+    epEditing: "Bearbeitung",
   },
   aiSupport: {
     subtitle: "KI-Chat & deine Support-Tickets",
@@ -1203,6 +1204,7 @@ const en: Translations = {
     epEditorHelp: "Tap a text in the preview, edit it and press “Apply”. Use the “Preview” button to go back any time.",
     epEditorMode: "Editor mode",
     epTapToEdit: "· Tap to edit",
+    epEditing: "Editing",
   },
   aiSupport: {
     subtitle: "AI chat & your support tickets",

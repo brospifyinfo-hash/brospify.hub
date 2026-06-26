@@ -553,7 +553,13 @@ body[data-bsf-mode="edit"] [data-bsf-text] {
 }
 `;
 
-      const fullDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">${fontHead}<style>${baseStyle}</style></head><body>${html}<script>${EDITOR_SCRIPT}<\/script></body></html>`;
+      // In-iframe-Editor-Toolbar-Labels lokalisieren (das Script wird als
+      // String injiziert, hat also keinen Zugriff auf den React-`t`).
+      const localizedScript = EDITOR_SCRIPT
+        .replace('"Bearbeitung"', JSON.stringify(t.emailGen.epEditing))
+        .replace(">Abbrechen<", ">" + t.emailGen.epCancel + "<")
+        .replace(">Übernehmen<", ">" + t.emailGen.epApply + "<");
+      const fullDoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">${fontHead}<style>${baseStyle}</style></head><body>${html}<script>${localizedScript}<\/script></body></html>`;
 
       doc.open();
       doc.write(fullDoc);
