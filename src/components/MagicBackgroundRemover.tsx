@@ -20,6 +20,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
+import { useI18n } from "@/lib/i18n";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
 import {
   BG_PRECISION_OPTIONS,
@@ -74,6 +75,8 @@ interface BgRemoveResponse {
 
 export default function MagicBackgroundRemover() {
   const credits = useCredits();
+  const { t, lang } = useI18n();
+  const precLabel = (id: string) => (id === "hair" ? t.aiTools.bgHair : t.aiTools.bgPrecise);
   const job = useResilientJob<BgRemoveResponse>("bg-remove");
   const [stage, setStage] = useState<Stage>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -185,19 +188,17 @@ export default function MagicBackgroundRemover() {
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) {
-        setErrorMsg("Bitte ein Bild auswählen (JPG, PNG, WebP).");
+        setErrorMsg(t.aiTools.errSelectImage);
         return;
       }
       if (file.size > MAX_FILE_SIZE) {
-        setErrorMsg(
-          `Datei zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_SIZE / 1024 / 1024} MB.`,
-        );
+        const mb = (file.size / 1024 / 1024).toFixed(1);
+        const max = MAX_FILE_SIZE / 1024 / 1024;
+        setErrorMsg(lang === "en" ? `File too large (${mb} MB). Max ${max} MB.` : `Datei zu groß (${mb} MB). Max ${max} MB.`);
         return;
       }
       if (insufficientCredits) {
-        setErrorMsg(
-          `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
-        );
+        setErrorMsg(lang === "en" ? `You need ${cost} credits — you have ${credits.balance}.` : `Du brauchst ${cost} Credits — du hast ${credits.balance}.`);
         return;
       }
 
@@ -217,11 +218,7 @@ export default function MagicBackgroundRemover() {
         payload = await preprocessImage(file);
       } catch (err) {
         console.error("[BgRemover] preprocess failed:", err);
-        setErrorMsg(
-          err instanceof Error
-            ? `Bild konnte nicht vorbereitet werden: ${err.message}`
-            : "Bild konnte nicht vorbereitet werden.",
-        );
+        setErrorMsg(err instanceof Error ? `${t.aiTools.errPrepare} ${err.message}` : t.aiTools.errPrepare);
         setStage("error");
         return;
       }
@@ -234,7 +231,7 @@ export default function MagicBackgroundRemover() {
       await runRemoveBg(payload, precision);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [insufficientCredits, credits.balance, originalUrl, precision],
+    [insufficientCredits, credits.balance, originalUrl, precision, t, lang],
   );
 
   async function runRemoveBg(file: File, precisionId: BgPrecision) {
@@ -265,7 +262,7 @@ export default function MagicBackgroundRemover() {
         ? err.message
         : err instanceof Error
           ? err.message
-          : "Unbekannter Fehler bei der Verarbeitung.";
+          : t.aiTools.errUnknown;
       setErrorMsg(msg);
       setStage("error");
     }
@@ -311,7 +308,7 @@ export default function MagicBackgroundRemover() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch {
-      setErrorMsg("Download fehlgeschlagen.");
+      setErrorMsg(t.aiTools.errDownload);
     }
   }
 
@@ -421,13 +418,13 @@ export default function MagicBackgroundRemover() {
               className="text-[17px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
-              Produkt freistellen
+              {t.aiTools.bgUploadTitle}
             </h3>
             <p className="text-[12px] text-zinc-400 mt-1.5 max-w-sm leading-relaxed">
-              Tippen oder Datei reinziehen
+              {t.aiTools.bgUploadHint}
             </p>
             <p className="text-[10px] text-zinc-600 mt-0.5">
-              JPG · PNG · WebP · transparenter PNG-Output
+              JPG · PNG · WebP · {t.aiTools.bgOutputNote}
             </p>
 
             <button
@@ -444,11 +441,11 @@ export default function MagicBackgroundRemover() {
                 boxShadow: `0 8px 24px -8px ${ACCENT}80, inset 0 1px 0 rgba(255,255,255,0.25)`,
               }}
             >
-              Datei wählen
+              {t.aiTools.chooseFile}
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              {cost} {credits.creditIcon} / Bild
+              {cost} {credits.creditIcon} {t.aiTools.perImage}
             </p>
 
             {insufficientCredits && (
@@ -471,11 +468,12 @@ export default function MagicBackgroundRemover() {
                   <span className="text-[24px]">{credits.creditIcon}</span>
                 </div>
                 <h3 className="text-[18px] font-semibold tracking-tight">
-                  Nicht genug Credits
+                  {t.aiTools.notEnoughCredits}
                 </h3>
                 <p className="text-[13px] text-zinc-400 mt-1.5 max-w-xs">
-                  Pro Bild brauchst du {cost} Credits.
-                  Aktuell: {credits.balance.toLocaleString("de-DE")}.
+                  {lang === "en"
+                    ? `You need ${cost} credits per image. Now: ${credits.balance.toLocaleString("en-GB")}.`
+                    : `Pro Bild brauchst du ${cost} Credits. Aktuell: ${credits.balance.toLocaleString("de-DE")}.`}
                 </p>
                 <Link
                   href="/credits"
@@ -486,7 +484,7 @@ export default function MagicBackgroundRemover() {
                     boxShadow: `0 8px 24px -8px ${ACCENT}80`,
                   }}
                 >
-                  Credits aufladen
+                  {t.aiTools.topUpCredits}
                 </Link>
               </div>
             )}
@@ -529,18 +527,18 @@ export default function MagicBackgroundRemover() {
           <div className="relative z-10 flex flex-col items-center max-w-sm">
             <Spinner color={ACCENT} />
             <h3 className="mt-3 text-[16px] font-semibold tracking-tight text-white">
-              {stage === "preparing" ? "Bild wird vorbereitet…" : "Hintergrund wird entfernt"}
+              {stage === "preparing" ? t.aiTools.upPreparing : t.aiTools.bgRemoving}
             </h3>
             <p className="mt-1 text-[11px] text-zinc-400">
               {stage === "preparing"
-                ? "Optimiere die Quelldatei…"
-                : `${BG_PRECISION_OPTIONS.find((p) => p.id === precision)?.label}-Modus · ${elapsedSec}s`}
+                ? t.aiTools.upOptimizing
+                : `${precLabel(precision)}${t.aiTools.upModeSuffix} · ${elapsedSec}s`}
             </p>
             {stage === "processing" && (
               <p className="mt-1 text-[11px] text-zinc-500 max-w-xs">
                 {precision === "hair"
-                  ? "Haar-Modus: 6–10 Sekunden für perfekte Härchen-Kanten."
-                  : "Präzise-Modus: 5–10 Sekunden für feine Details."}
+                  ? (lang === "en" ? "Hair mode: 6–10 seconds for perfect hair edges." : "Haar-Modus: 6–10 Sekunden für perfekte Härchen-Kanten.")
+                  : (lang === "en" ? "Precise mode: 5–10 seconds for fine details." : "Präzise-Modus: 5–10 Sekunden für feine Details.")}
               </p>
             )}
           </div>
@@ -654,7 +652,7 @@ export default function MagicBackgroundRemover() {
               }}
             >
               {saving ? <Spinner color="currentColor" small /> : savedToLibrary ? <CheckIcon /> : <FolderIcon />}
-              {savedToLibrary ? "Gespeichert" : saving ? "Speichere…" : "In Mediathek"}
+              {savedToLibrary ? t.aiTools.saved : saving ? t.aiTools.saving : t.aiTools.save}
             </button>
             <button
               onClick={reset}
@@ -664,12 +662,14 @@ export default function MagicBackgroundRemover() {
                 border: "1px solid rgba(255,255,255,0.10)",
               }}
             >
-              Neues Bild
+              {t.aiTools.newImage}
             </button>
           </div>
 
           <p className="text-[10px] text-zinc-500 text-center">
-            Fertig in {elapsedSec}s · {bgKind === "transparent" ? "transparenter PNG" : "Hintergrund lokal komponiert (kostet 0 Credits)"}
+            {t.aiTools.upDoneIn} {elapsedSec}s · {bgKind === "transparent"
+              ? (lang === "en" ? "transparent PNG" : "transparenter PNG")
+              : (lang === "en" ? "background composed locally (costs 0 credits)" : "Hintergrund lokal komponiert (kostet 0 Credits)")}
           </p>
         </div>
       )}
@@ -687,7 +687,7 @@ export default function MagicBackgroundRemover() {
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <AlertIcon />
             <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-semibold text-red-300">Fehler</div>
+              <div className="text-[15px] font-semibold text-red-300">{t.aiTools.error}</div>
               <div className="text-[13px] text-red-200/90 mt-1 break-words">
                 {errorMsg}
               </div>
@@ -701,7 +701,7 @@ export default function MagicBackgroundRemover() {
               border: "1px solid rgba(255,255,255,0.10)",
             }}
           >
-            Erneut versuchen
+            {t.aiTools.bgRetry}
           </button>
         </div>
       )}
@@ -720,14 +720,17 @@ function PrecisionToggle({
   onChange: (v: BgPrecision) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
+  const optLabel = (id: string) => (id === "hair" ? t.aiTools.bgHair : t.aiTools.bgPrecise);
+  const optHint = (id: string) => (id === "hair" ? t.aiTools.bgHairHint : t.aiTools.bgPreciseHint);
   return (
     <div className="mb-3">
       <div className="flex items-center justify-between mb-2 px-1">
         <span className="text-[10px] uppercase tracking-[0.16em] font-semibold text-zinc-500">
-          Genauigkeit
+          {t.aiTools.bgAccuracy}
         </span>
         <span className="text-[10.5px] text-zinc-600">
-          gleicher Credit-Preis
+          {t.aiTools.bgSameCost}
         </span>
       </div>
       <div
@@ -770,11 +773,11 @@ function PrecisionToggle({
                   className="text-[12px] font-semibold tracking-tight"
                   style={{ color: active ? "#fff" : "#d4d4d8" }}
                 >
-                  {opt.label}
+                  {optLabel(opt.id)}
                 </span>
               </div>
               <p className="text-[10px] text-zinc-500 mt-1 leading-snug">
-                {opt.hint}
+                {optHint(opt.id)}
               </p>
             </button>
           );
@@ -802,6 +805,13 @@ function BackgroundPanel({
   onBgImageRequest: () => void;
   onBgImageRemove: () => void;
 }) {
+  const { t } = useI18n();
+  // Nur die deutschen Farb-Labels lokalisieren (Tooltips); englische passieren durch.
+  const colorLabel = (id: string, fallback: string): string =>
+    (({
+      white: t.aiTools.cWhite, black: t.aiTools.cBlack, ivory: t.aiTools.cIvory,
+      stone: t.aiTools.cStone, sage: t.aiTools.cSage, "neutral-stone": t.aiTools.cStoneShort,
+    } as Record<string, string>)[id]) ?? fallback;
   return (
     <div
       className="rounded-2xl p-3 space-y-2.5"
@@ -814,11 +824,11 @@ function BackgroundPanel({
         <div className="flex items-center gap-2">
           <div className="w-1 h-4 rounded-full" style={{ background: ACCENT }} />
           <h4 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-300">
-            Hintergrund hinzufügen
+            {t.aiTools.bgAddBackground}
           </h4>
         </div>
         <span className="text-[10px] text-zinc-600 hidden sm:inline">
-          0 Credits · lokal
+          {t.aiTools.bgLocalNote}
         </span>
       </div>
 
@@ -826,20 +836,20 @@ function BackgroundPanel({
       <div className="grid grid-cols-4 gap-1 p-1 rounded-xl bg-white/[0.03] border border-white/[0.06]">
         {([
           { id: "transparent", label: "Transparent" },
-          { id: "color", label: "Farbe" },
+          { id: "color", label: t.aiTools.bgKindColor },
           { id: "gradient", label: "Gradient" },
-          { id: "image", label: "Bild" },
-        ] as { id: BgKind; label: string }[]).map((t) => {
-          const active = t.id === kind;
+          { id: "image", label: t.aiTools.bgKindImage },
+        ] as { id: BgKind; label: string }[]).map((tab) => {
+          const active = tab.id === kind;
           return (
             <button
-              key={t.id}
+              key={tab.id}
               onClick={() => {
-                if (t.id === "image" && !bgImageUrl) {
+                if (tab.id === "image" && !bgImageUrl) {
                   onBgImageRequest();
                   return;
                 }
-                onKind(t.id);
+                onKind(tab.id);
               }}
               className="px-2 py-1.5 rounded-lg text-[11px] font-semibold transition"
               style={{
@@ -848,7 +858,7 @@ function BackgroundPanel({
                 color: active ? ACCENT : "rgba(255,255,255,0.65)",
               }}
             >
-              {t.label}
+              {tab.label}
             </button>
           );
         })}
@@ -870,7 +880,7 @@ function BackgroundPanel({
                     borderColor: active ? "#fff" : "rgba(255,255,255,0.10)",
                     boxShadow: active ? `0 0 0 2px ${ACCENT}55` : undefined,
                   }}
-                  title={c.label}
+                  title={colorLabel(c.id, c.label)}
                 />
               );
             })}
@@ -907,7 +917,7 @@ function BackgroundPanel({
                   borderColor: active ? "#fff" : "rgba(255,255,255,0.10)",
                   boxShadow: active ? `0 0 0 2px ${ACCENT}55` : undefined,
                 }}
-                title={g.label}
+                title={colorLabel(g.id, g.label)}
               />
             );
           })}
