@@ -26,6 +26,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useCredits } from "@/lib/credits";
+import { useI18n } from "@/lib/i18n";
 import { CREDIT_COSTS } from "@/lib/credit-costs";
 import {
   AI_STUDIO_SCENES,
@@ -47,6 +48,31 @@ const CUSTOM_PROMPT_MAX = 500;
 
 type Stage = "upload" | "configure" | "processing" | "done" | "error";
 
+// Englische Szenen-Namen/Hints (Quelle in ai-studio-scenes.ts ist Deutsch).
+// Resolver per scene.id, damit die geteilte Lib nicht angefasst wird.
+const SCENE_EN: Record<string, { label: string; hint: string }> = {
+  podium: { label: "Minimalist pedestal", hint: "Clean studio pedestal, soft light" },
+  studio: { label: "Studio light", hint: "Bright studio background, catchlights" },
+  marble: { label: "Marble", hint: "Polished marble, warm window light" },
+  nature: { label: "Nature", hint: "Eucalyptus, sun flecks, organic" },
+  linen: { label: "Linen table", hint: "Beige linen cloth, cozy" },
+  concrete: { label: "Concrete loft", hint: "Industrial, urban, cool" },
+  wood: { label: "Walnut wood", hint: "Warm wood, soft light" },
+  beach: { label: "Beach", hint: "Bright daylight, soft sand" },
+  "gradient-rose": { label: "Rosé gradient", hint: "Pastel, modern, soft" },
+  midnight: { label: "Midnight studio", hint: "Dark background, moody" },
+  kitchen: { label: "Kitchen counter", hint: "Modern, bright, lifestyle" },
+  bedroom: { label: "Bedroom", hint: "Cozy, warm, lifestyle" },
+  gym: { label: "Fitness / Gym", hint: "Sporty, dynamic, urban" },
+  autumn: { label: "Autumn cozy", hint: "Warm colors, candlelight" },
+};
+function sceneLabel(scene: { id: string; label: string }, lang: string): string {
+  return lang === "en" ? SCENE_EN[scene.id]?.label ?? scene.label : scene.label;
+}
+function sceneHint(scene: { id: string; hint: string }, lang: string): string {
+  return lang === "en" ? SCENE_EN[scene.id]?.hint ?? scene.hint : scene.hint;
+}
+
 interface AiStudioResponse {
   urls?: string[];
   url?: string;
@@ -56,6 +82,7 @@ interface AiStudioResponse {
 
 export default function AiStudio() {
   const credits = useCredits();
+  const { t, lang } = useI18n();
   const job = useResilientJob<AiStudioResponse>("ai-studio");
   const [stage, setStage] = useState<Stage>("upload");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -139,13 +166,13 @@ export default function AiStudio() {
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.type.startsWith("image/")) {
-        setErrorMsg("Bitte ein Bild auswählen (JPG, PNG, WebP).");
+        setErrorMsg(t.aiTools.errSelectImage);
         return;
       }
       if (file.size > MAX_FILE_SIZE) {
-        setErrorMsg(
-          `Datei zu groß (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_SIZE / 1024 / 1024} MB.`,
-        );
+        const mb = (file.size / 1024 / 1024).toFixed(1);
+        const max = MAX_FILE_SIZE / 1024 / 1024;
+        setErrorMsg(lang === "en" ? `File too large (${mb} MB). Max ${max} MB.` : `Datei zu groß (${mb} MB). Max ${max} MB.`);
         return;
       }
 
@@ -162,11 +189,7 @@ export default function AiStudio() {
         payload = await preprocessImage(file);
       } catch (err) {
         console.error("[AiStudio] preprocess failed:", err);
-        setErrorMsg(
-          err instanceof Error
-            ? `Bild konnte nicht vorbereitet werden: ${err.message}`
-            : "Bild konnte nicht vorbereitet werden.",
-        );
+        setErrorMsg(err instanceof Error ? `${t.aiTools.errPrepare} ${err.message}` : t.aiTools.errPrepare);
         setStage("error");
         return;
       }
@@ -193,9 +216,7 @@ export default function AiStudio() {
   async function handleGenerate() {
     if (!preparedFile) return;
     if (insufficientCredits) {
-      setErrorMsg(
-        `Du brauchst ${cost} Credits — du hast ${credits.balance}.`,
-      );
+      setErrorMsg(lang === "en" ? `You need ${cost} credits — you have ${credits.balance}.` : `Du brauchst ${cost} Credits — du hast ${credits.balance}.`);
       return;
     }
     const scene =
@@ -215,14 +236,14 @@ export default function AiStudio() {
         const res = await fetch("/api/ai-studio", { method: "POST", body: fd });
         if (!res.ok && res.status !== 202) {
           const d = await res.json().catch(() => ({}));
-          throw new Error(d?.error || "Konnte nicht starten.");
+          throw new Error(d?.error || t.aiTools.stErrCouldNotStart);
         }
         credits.optimisticDeduct(cost);
         setBgNotice(true);
         setStage("configure");
         setTimeout(() => credits.refresh(), 4000);
       } catch (err) {
-        setErrorMsg(err instanceof Error ? err.message : "Start fehlgeschlagen.");
+        setErrorMsg(err instanceof Error ? err.message : t.aiTools.stErrStartFailed);
         setStage("error");
       }
       return;
@@ -254,7 +275,7 @@ export default function AiStudio() {
           : data.url
             ? [data.url]
             : [];
-      if (urls.length === 0) throw new Error("Keine Bilder erhalten.");
+      if (urls.length === 0) throw new Error(t.aiTools.stErrNoImages);
       if (typeof data.creditsRemaining === "number") {
         credits.setBalance(data.creditsRemaining);
       } else {
@@ -272,7 +293,7 @@ export default function AiStudio() {
         ? err.message
         : err instanceof Error
           ? err.message
-          : "Unbekannter Fehler bei der Verarbeitung.";
+          : t.aiTools.errUnknown;
       setErrorMsg(msg);
       setStage("error");
     }
@@ -290,7 +311,7 @@ export default function AiStudio() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch {
-      setErrorMsg("Download fehlgeschlagen.");
+      setErrorMsg(t.aiTools.errDownload);
     }
   }
 
@@ -301,7 +322,7 @@ export default function AiStudio() {
       {/* ── STAGE: upload (Step 1) ───────────────────────────── */}
       {stage === "upload" && (
         <>
-          <StepHeader step={1} total={3} title="Produktbild hochladen" />
+          <StepHeader step={1} total={3} title={t.aiTools.stStep1} />
           <div
             onDrop={onDrop}
             onDragOver={(e) => {
@@ -345,10 +366,10 @@ export default function AiStudio() {
               className="text-[17px] font-semibold tracking-tight text-white"
               style={{ letterSpacing: "-0.022em" }}
             >
-              Produkt hochladen
+              {t.aiTools.stUploadProduct}
             </h3>
             <p className="text-[12px] text-zinc-400 mt-1.5 max-w-sm leading-relaxed">
-              Tippen oder Datei reinziehen
+              {t.aiTools.bgUploadHint}
             </p>
             <p className="text-[10px] text-zinc-600 mt-0.5">
               JPG · PNG · WebP
@@ -367,11 +388,11 @@ export default function AiStudio() {
                 boxShadow: `0 8px 24px -8px ${ACCENT}80, inset 0 1px 0 rgba(255,255,255,0.25)`,
               }}
             >
-              Datei wählen
+              {t.aiTools.chooseFile}
             </button>
 
             <p className="absolute bottom-3 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-[0.14em] text-zinc-600 whitespace-nowrap">
-              {cost} {credits.creditIcon} / Bild
+              {cost} {credits.creditIcon} {t.aiTools.perImage}
             </p>
           </div>
 
@@ -382,7 +403,7 @@ export default function AiStudio() {
       {/* ── STAGE: configure (Step 2 + Step 3) ───────────────── */}
       {stage === "configure" && originalUrl && (
         <>
-          <StepHeader step={2} total={3} title="Szene & Stil wählen" />
+          <StepHeader step={2} total={3} title={t.aiTools.stStep2} />
 
           {/* Compact preview row */}
           <div
@@ -439,7 +460,7 @@ export default function AiStudio() {
             setOpen={setShowCustomPrompt}
           />
 
-          <StepHeader step={3} total={3} title="Generieren" className="mt-4" />
+          <StepHeader step={3} total={3} title={t.aiTools.stStep3} className="mt-4" />
 
           <button
             onClick={handleGenerate}
@@ -452,7 +473,7 @@ export default function AiStudio() {
             }}
           >
             <SparklesIcon />
-            {bgMode ? "Im Hintergrund generieren" : "Generieren"} · {cost} {credits.creditIcon}
+            {bgMode ? t.aiTools.stBgGenerate : t.aiTools.stGenerate} · {cost} {credits.creditIcon}
           </button>
 
           {/* Hintergrund-Modus-Schalter */}
@@ -464,8 +485,8 @@ export default function AiStudio() {
               <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${bgMode ? "left-[18px]" : "left-0.5"}`} />
             </span>
             <span className="flex-1 min-w-0">
-              <span className="block text-[12px] font-medium text-zinc-200">Im Hintergrund generieren</span>
-              <span className="block text-[10.5px] text-zinc-500 leading-snug">Du kannst den Tab schliessen — das fertige Bild landet automatisch in der Mediathek.</span>
+              <span className="block text-[12px] font-medium text-zinc-200">{t.aiTools.stBgGenerate}</span>
+              <span className="block text-[10.5px] text-zinc-500 leading-snug">{t.aiTools.stBgToggleNote}</span>
             </span>
           </button>
 
@@ -473,8 +494,8 @@ export default function AiStudio() {
             <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.07] px-3.5 py-3">
               <span className="text-[18px] leading-none mt-0.5">🚀</span>
               <p className="text-[12px] text-zinc-200 leading-snug">
-                Läuft im Hintergrund! Du kannst den Tab schliessen — das Ergebnis findest du gleich in der{" "}
-                <a href="/library" className="underline font-medium text-[#95BF47]">Mediathek</a>.
+                {t.aiTools.stBgNotice}{" "}
+                <a href="/library" className="underline font-medium text-[#95BF47]">{t.aiTools.stLibrary}</a>.
               </p>
             </div>
           )}
@@ -491,11 +512,12 @@ export default function AiStudio() {
                 <span className="text-[20px]">{credits.creditIcon}</span>
                 <div className="flex-1 min-w-0">
                   <div className="text-[13px] font-semibold text-amber-200">
-                    Nicht genug Credits
+                    {t.aiTools.notEnoughCredits}
                   </div>
                   <div className="text-[11.5px] text-amber-100/70 mt-0.5">
-                    Pro Generierung brauchst du {cost} Credits.
-                    Aktuell: {credits.balance.toLocaleString("de-DE")}.
+                    {lang === "en"
+                      ? `You need ${cost} credits per generation. Now: ${credits.balance.toLocaleString("en-GB")}.`
+                      : `Pro Generierung brauchst du ${cost} Credits. Aktuell: ${credits.balance.toLocaleString("de-DE")}.`}
                   </div>
                 </div>
               </div>
@@ -507,7 +529,7 @@ export default function AiStudio() {
                   color: "#0a1604",
                 }}
               >
-                Aufladen
+                {t.videoScout.topUp}
               </Link>
             </div>
           )}
@@ -597,11 +619,13 @@ export default function AiStudio() {
                 }}
               >
                 <SparklesIcon small />
-                {resultScene.label}
+                {sceneLabel(resultScene, lang)}
               </span>
             )}
             <span className="text-[11px] text-zinc-500 ml-auto">
-              {resultUrls.length === 1 ? "1 Ergebnis" : `${resultUrls.length} Varianten`}
+              {resultUrls.length === 1
+                ? (lang === "en" ? "1 result" : "1 Ergebnis")
+                : `${resultUrls.length} ${lang === "en" ? "variants" : "Varianten"}`}
             </span>
           </div>
 
@@ -659,7 +683,7 @@ export default function AiStudio() {
           <div className="flex items-start gap-3 flex-1 min-w-0">
             <AlertIcon />
             <div className="flex-1 min-w-0">
-              <div className="text-[15px] font-semibold text-red-300">Fehler</div>
+              <div className="text-[15px] font-semibold text-red-300">{t.aiTools.error}</div>
               <div className="text-[13px] text-red-200/90 mt-1 break-words">
                 {errorMsg}
               </div>
@@ -673,7 +697,7 @@ export default function AiStudio() {
               border: "1px solid rgba(255,255,255,0.10)",
             }}
           >
-            Erneut versuchen
+            {t.aiTools.bgRetry}
           </button>
         </div>
       )}
@@ -746,6 +770,7 @@ function CustomPromptBlock({
   open: boolean;
   setOpen: (o: boolean) => void;
 }) {
+  const { t } = useI18n();
   const remaining = CUSTOM_PROMPT_MAX - value.length;
   return (
     <div className="mt-4">
@@ -769,7 +794,7 @@ function CustomPromptBlock({
           </div>
           <div className="text-left min-w-0">
             <div className="text-[13px] font-semibold text-white truncate">
-              Eigener Prompt
+              {t.aiTools.stCustomPrompt}
               <span className="text-zinc-500 font-normal ml-1.5">
                 (optional)
               </span>
@@ -777,7 +802,7 @@ function CustomPromptBlock({
             <div className="text-[11px] text-zinc-500 mt-0.5 truncate">
               {value
                 ? `${value.slice(0, 60)}${value.length > 60 ? "…" : ""}`
-                : "z. B. „mit Schatten von einer Pflanze rechts"}
+                : t.aiTools.stPromptExample}
             </div>
           </div>
         </div>
@@ -795,7 +820,7 @@ function CustomPromptBlock({
           <textarea
             value={value}
             onChange={(e) => onChange(e.target.value.slice(0, CUSTOM_PROMPT_MAX))}
-            placeholder="Beschreibe Details die zur Szene hinzukommen sollen — auf Deutsch oder Englisch."
+            placeholder={t.aiTools.stPromptPlaceholder}
             rows={3}
             className="w-full rounded-xl px-3 py-2.5 text-[13.5px] outline-none resize-none transition placeholder:text-white/25 leading-relaxed text-white"
             style={{
@@ -805,7 +830,7 @@ function CustomPromptBlock({
           />
           <div className="flex items-center justify-between mt-2 px-1">
             <span className="text-[10.5px] text-zinc-500">
-              wird an die Szene angehängt
+              {t.aiTools.stAppendedToScene}
             </span>
             <span
               className="text-[10.5px] tabular-nums"
@@ -837,6 +862,7 @@ function ResultGallery({
   onDownload: (url: string, idx: number) => void;
   onSave: (url: string, idx: number) => void;
 }) {
+  const { t } = useI18n();
   const cols = urls.length === 1 ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2";
   return (
     <div className={`grid ${cols} gap-2.5`}>
@@ -894,7 +920,7 @@ function ResultGallery({
               ) : (
                 <FolderSmallIcon />
               )}
-              {savedSet.has(idx) ? "Gespeichert" : "Mediathek"}
+              {savedSet.has(idx) ? t.aiTools.saved : t.aiTools.stLibrary}
             </button>
           </div>
         </div>
@@ -912,6 +938,7 @@ function SceneCarousel({
   selected: string;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useI18n();
   const scrollRef = useRef<HTMLDivElement>(null);
 
   function nudge(dir: 1 | -1) {
@@ -953,7 +980,7 @@ function SceneCarousel({
           color: "#fff",
           backdropFilter: "blur(12px)",
         }}
-        aria-label="Zurück scrollen"
+        aria-label={t.aiTools.stScrollBack}
       >
         <ChevronIcon dir="left" />
       </button>
@@ -966,7 +993,7 @@ function SceneCarousel({
           color: "#fff",
           backdropFilter: "blur(12px)",
         }}
-        aria-label="Vor scrollen"
+        aria-label={t.aiTools.stScrollForward}
       >
         <ChevronIcon dir="right" />
       </button>
@@ -987,6 +1014,7 @@ function SceneCard({
   active: boolean;
   onClick: () => void;
 }) {
+  const { lang } = useI18n();
   const v = scene.visual;
 
   return (
@@ -1036,10 +1064,10 @@ function SceneCard({
         }}
       >
         <div className="text-[12.5px] font-semibold text-white truncate">
-          {scene.label}
+          {sceneLabel(scene, lang)}
         </div>
         <div className="text-[10.5px] text-zinc-500 truncate mt-0.5">
-          {scene.hint}
+          {sceneHint(scene, lang)}
         </div>
       </div>
     </button>
