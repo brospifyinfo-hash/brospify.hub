@@ -18,6 +18,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n, type Locale } from "@/lib/i18n";
 
 const ACCENT = "#95BF47";
 
@@ -38,10 +39,10 @@ function formatBytes(n: number): string {
   return `${n} B`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, lang: Locale = "de"): string {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "short", year: "numeric" });
+    return new Date(iso).toLocaleDateString(lang === "en" ? "en-GB" : "de-DE", { day: "2-digit", month: "short", year: "numeric" });
   } catch {
     return "";
   }
@@ -49,6 +50,7 @@ function formatDate(iso: string): string {
 
 export default function ThemesPage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [themes, setThemes] = useState<Theme[] | null>(null);
   const [error, setError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -65,14 +67,14 @@ export default function ThemesPage() {
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
-          setError(data?.error || "Konnte Themes nicht laden.");
+          setError(data?.error || t.themes.errLoad);
           setThemes([]);
           return;
         }
         setThemes(Array.isArray(data.themes) ? data.themes : []);
       } catch {
         if (!cancelled) {
-          setError("Verbindungsfehler.");
+          setError(t.themes.errConnection);
           setThemes([]);
         }
       }
@@ -97,11 +99,10 @@ export default function ThemesPage() {
               Shopify Theme
             </div>
             <h1 className="text-[24px] sm:text-[32px] font-bold tracking-tight text-white leading-tight font-sf-display">
-              Dein Brospify-Theme
+              {t.themes.title}
             </h1>
             <p className="mt-2 text-[12.5px] sm:text-sm text-zinc-400 leading-relaxed max-w-md mx-auto">
-              Lade das aktuelle Theme als ZIP herunter und importiere es in deinen Shopify-Shop. Die
-              Schritt-für-Schritt-Anleitung findest du unter „Hilfe".
+              {t.themes.subtitle}
             </p>
           </header>
 
@@ -116,8 +117,8 @@ export default function ThemesPage() {
               <EmptyCard error={error} />
             ) : (
               <div className="space-y-3">
-                {themes.map((t, i) => (
-                  <ThemeCard key={t.id} theme={t} latest={i === 0} />
+                {themes.map((th, i) => (
+                  <ThemeCard key={th.id} theme={th} latest={i === 0} />
                 ))}
               </div>
             )}
@@ -131,6 +132,7 @@ export default function ThemesPage() {
 // ─── Theme-Karte ─────────────────────────────────────────────────
 
 function ThemeCard({ theme, latest }: { theme: Theme; latest: boolean }) {
+  const { t, lang } = useI18n();
   return (
     <div className="glass-strong rounded-2xl border border-white/[0.08] p-4 sm:p-5 flex items-center gap-3 sm:gap-4">
       <div
@@ -144,14 +146,14 @@ function ThemeCard({ theme, latest }: { theme: Theme; latest: boolean }) {
           <h3 className="text-[14px] sm:text-[15px] font-semibold text-white truncate">{theme.name}</h3>
           {latest && (
             <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#95BF47]/15 text-[#cfe9a3] border border-[#95BF47]/25">
-              Neueste
+              {t.themes.latest}
             </span>
           )}
         </div>
         <div className="mt-0.5 flex items-center gap-2 text-[11px] text-zinc-500 flex-wrap">
           {theme.version && <span className="font-mono">{theme.version}</span>}
           {theme.sizeBytes > 0 && <span>· {formatBytes(theme.sizeBytes)}</span>}
-          {theme.createdAt && <span>· {formatDate(theme.createdAt)}</span>}
+          {theme.createdAt && <span>· {formatDate(theme.createdAt, lang)}</span>}
         </div>
       </div>
       <a
@@ -170,30 +172,15 @@ function ThemeCard({ theme, latest }: { theme: Theme; latest: boolean }) {
 
 // ─── Hilfe-Panel (ausklappbar) ───────────────────────────────────
 
-const STEPS: { title: string; body: string }[] = [
-  {
-    title: "ZIP herunterladen",
-    body: "Lade oben das gewünschte Theme als .zip-Datei herunter. Entpacke sie NICHT — Shopify braucht die ZIP-Datei selbst.",
-  },
-  {
-    title: "Shopify-Theme-Bereich öffnen",
-    body: "Gehe in deinem Shopify-Admin auf „Verkaufskanäle“ → „Onlineshop“ → „Themes“.",
-  },
-  {
-    title: "ZIP hochladen",
-    body: "Klicke bei „Theme-Bibliothek“ auf „Hinzufügen“ → „Vorhandene Theme-Datei hochladen“ (Zip-Datei) und wähle die heruntergeladene Datei.",
-  },
-  {
-    title: "Vorschau & Anpassen",
-    body: "Nach dem Upload erscheint das Theme in der Bibliothek. Über „Anpassen“ kannst du es bearbeiten und in der Vorschau prüfen.",
-  },
-  {
-    title: "Veröffentlichen",
-    body: "Wenn alles passt, klicke beim Theme auf die drei Punkte (…) → „Veröffentlichen“, um es live zu schalten.",
-  },
-];
-
 function HelpPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  const { t } = useI18n();
+  const STEPS = [
+    { title: t.themes.s1t, body: t.themes.s1b },
+    { title: t.themes.s2t, body: t.themes.s2b },
+    { title: t.themes.s3t, body: t.themes.s3b },
+    { title: t.themes.s4t, body: t.themes.s4b },
+    { title: t.themes.s5t, body: t.themes.s5b },
+  ];
   return (
     <div className="glass-strong rounded-2xl border border-white/[0.08] overflow-hidden">
       <button
@@ -204,8 +191,8 @@ function HelpPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) 
           <HelpCircle className="w-4 h-4" style={{ color: ACCENT }} />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[13.5px] font-semibold text-white">Hilfe: Theme in Shopify importieren</div>
-          <div className="text-[11px] text-zinc-500">In 5 Schritten — ca. 2 Minuten</div>
+          <div className="text-[13.5px] font-semibold text-white">{t.themes.helpTitle}</div>
+          <div className="text-[11px] text-zinc-500">{t.themes.helpSub}</div>
         </div>
         <motion.div animate={{ rotate: open ? 180 : 0 }} transition={{ duration: 0.2 }}>
           <ChevronDown className="w-4 h-4 text-zinc-500" />
@@ -242,8 +229,7 @@ function HelpPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) 
               <div className="flex items-start gap-2 rounded-xl bg-[#95BF47]/[0.06] border border-[#95BF47]/15 px-3 py-2.5 mt-1">
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: ACCENT }} />
                 <p className="text-[11.5px] text-zinc-300 leading-snug">
-                  Tipp: Teste das neue Theme zuerst über die Vorschau, bevor du es veröffentlichst — dein
-                  aktuelles Live-Theme bleibt so lange unberührt.
+                  {t.themes.tip}
                 </p>
               </div>
             </div>
@@ -257,6 +243,7 @@ function HelpPanel({ open, onToggle }: { open: boolean; onToggle: () => void }) 
 // ─── Zustände ────────────────────────────────────────────────────
 
 function LoadingCard() {
+  const { t } = useI18n();
   return (
     <div className="glass-strong rounded-2xl border border-white/[0.08] p-8 text-center">
       <motion.span
@@ -266,22 +253,23 @@ function LoadingCard() {
       >
         <Sparkles className="w-6 h-6" style={{ color: ACCENT }} />
       </motion.span>
-      <p className="text-sm text-zinc-400">Lade Themes…</p>
+      <p className="text-sm text-zinc-400">{t.themes.loading}</p>
     </div>
   );
 }
 
 function EmptyCard({ error }: { error?: string }) {
+  const { t } = useI18n();
   return (
     <div className="glass-strong rounded-2xl border border-white/[0.08] p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
         <Package className="w-6 h-6 text-zinc-500" />
       </div>
       <h2 className="text-base font-semibold text-white">
-        {error ? "Konnte nicht laden" : "Noch kein Theme verfügbar"}
+        {error ? t.themes.emptyError : t.themes.emptyTitle}
       </h2>
       <p className="mt-2 text-[13px] text-zinc-400 max-w-sm mx-auto leading-snug">
-        {error || "Aktuell ist kein Theme zum Download hinterlegt. Schau bald wieder vorbei — neue Versionen erscheinen hier automatisch."}
+        {error || t.themes.emptyDesc}
       </p>
     </div>
   );
