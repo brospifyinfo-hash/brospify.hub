@@ -14,10 +14,10 @@ import {
   MessageSquareHeart, Star, Check, Loader2, Send, Coins, Clock, Lock, ArrowRight, ListChecks, AlertTriangle, Ban,
 } from "lucide-react";
 import { useCredits } from "@/lib/credits";
+import { useI18n } from "@/lib/i18n";
 import { FAST_GAP_MS, type SurveyQuestion, type SurveyAnswers } from "@/lib/survey";
 
 const ACCENT = "#95BF47";
-const RATING_LABELS = ["", "gar nicht", "eher nicht", "neutral", "gut", "sehr gut"];
 
 interface SurveyWithStatus {
   id: string;
@@ -32,6 +32,7 @@ interface SurveyWithStatus {
 
 export default function SurveyCard() {
   const credits = useCredits();
+  const { t } = useI18n();
   const [loaded, setLoaded] = useState(false);
   const [surveys, setSurveys] = useState<SurveyWithStatus[]>([]);
   const [phase, setPhase] = useState<"intro" | "active">("intro");
@@ -109,7 +110,7 @@ export default function SurveyCard() {
     if (submitting) return;
     const missing = s.questions.filter((q) => q.required && answers[q.id] === undefined);
     if (missing.length > 0) {
-      setError("Bitte beantworte die markierte Pflichtfrage (⭐).");
+      setError(t.survey.errAnswerRequired);
       return;
     }
     setSubmitting(true);
@@ -122,18 +123,18 @@ export default function SurveyCard() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(data?.error || "Speichern fehlgeschlagen.");
+        setError(data?.error || t.survey.errSave);
         return;
       }
       // 2× durchgeklickt → Umfrage beendet, keine Credits (Terminal-Karte).
       if (data.blocked) {
         setSurveys((list) => list.map((x) => (x.id === s.id ? { ...x, status: "completed" } : x)));
-        setBlockedMsg(data.message || "Diese Umfrage wurde beendet. Es werden keine Credits gutgeschrieben.");
+        setBlockedMsg(data.message || t.survey.blockedFallback);
         return;
       }
       // 1× durchgeklickt → Warnung: in Ruhe neu ausfüllen (Antworten + Timer reset).
       if (data.warning) {
-        setWarning(data.message || "Bitte lies dir die Fragen in Ruhe durch.");
+        setWarning(data.message || t.survey.warnFallback);
         setAnswers({});
         timesRef.current = {};
         startRef.current = Date.now();
@@ -145,7 +146,7 @@ export default function SurveyCard() {
       setPhase("intro");
       setTimeout(() => { setDoneReward(null); setAnswers({}); }, 2800);
     } catch {
-      setError("Verbindungsfehler. Bitte erneut versuchen.");
+      setError(t.survey.errConn);
     } finally {
       setSubmitting(false);
     }
@@ -161,7 +162,7 @@ export default function SurveyCard() {
           <div className="w-12 h-12 rounded-2xl bg-red-500/15 border border-red-500/30 flex items-center justify-center">
             <Ban className="w-6 h-6 text-red-400" />
           </div>
-          <p className="text-[15px] font-bold text-white">Umfrage beendet</p>
+          <p className="text-[15px] font-bold text-white">{t.survey.ended}</p>
           <p className="text-[12.5px] text-zinc-300 max-w-sm leading-snug">{blockedMsg}</p>
         </div>
       </section>
@@ -176,10 +177,10 @@ export default function SurveyCard() {
           <div className="w-14 h-14 rounded-2xl bg-[#95BF47]/15 border border-[#95BF47]/30 flex items-center justify-center">
             <Check className="w-7 h-7" style={{ color: ACCENT }} />
           </div>
-          <p className="text-[16px] font-bold text-white">Danke für dein Feedback! 🙌</p>
+          <p className="text-[16px] font-bold text-white">{t.survey.thanks}</p>
           <p className="text-[13px] text-zinc-300 inline-flex items-center gap-1.5">
             <Coins className="w-4 h-4 text-amber-300" />
-            <span className="font-semibold text-amber-200">+{doneReward} Credits</span> wurden dir gutgeschrieben
+            <span className="font-semibold text-amber-200">+{doneReward} Credits</span> {t.survey.creditedSuffix}
           </p>
         </motion.div>
       </section>
@@ -195,11 +196,11 @@ export default function SurveyCard() {
           <Clock className="w-4 h-4 text-zinc-400" />
         </div>
         <p className="text-[12.5px] text-zinc-300 flex-1 leading-snug">
-          Nächste Umfrage{" "}
+          {t.survey.nextSurvey}{" "}
           <span className="text-white font-medium">
-            {nextLocked.unlocksInDays <= 1 ? "in Kürze" : `in ${nextLocked.unlocksInDays} Tagen`}
+            {nextLocked.unlocksInDays <= 1 ? t.survey.soon : t.survey.inDays.replace("{n}", String(nextLocked.unlocksInDays))}
           </span>{" "}
-          — bringt dir <span className="text-amber-200 font-medium">+{nextLocked.creditReward} Credits</span>.
+          {t.survey.bringsYou} <span className="text-amber-200 font-medium">+{nextLocked.creditReward} Credits</span>.
         </p>
         <Lock className="w-3.5 h-3.5 text-zinc-600 shrink-0" />
       </section>
@@ -221,7 +222,7 @@ export default function SurveyCard() {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-[9px] uppercase tracking-[0.18em] font-bold text-[#95BF47] bg-[#95BF47]/12 border border-[#95BF47]/25 rounded px-1.5 py-0.5">
-              Neue Umfrage
+              {t.survey.newSurvey}
             </span>
             <span className="text-[9px] uppercase tracking-[0.16em] font-bold text-amber-300 bg-amber-500/10 border border-amber-500/25 rounded px-1.5 py-0.5 inline-flex items-center gap-1">
               <Coins className="w-2.5 h-2.5" /> +{current.creditReward} Credits
@@ -237,20 +238,19 @@ export default function SurveyCard() {
           // ── INTRO: aktiv starten ──
           <motion.div key="intro" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="px-4 sm:px-5 pb-5">
             <div className="flex flex-wrap items-center gap-2 mb-4">
-              <Chip icon={ListChecks} text={`${totalQ} Fragen`} />
-              <Chip icon={Clock} text={`~${estMin} Min`} />
+              <Chip icon={ListChecks} text={`${totalQ} ${t.survey.questionsWord}`} />
+              <Chip icon={Clock} text={`~${estMin} ${t.survey.minWord}`} />
               <Chip icon={Coins} text={`+${current.creditReward} Credits`} amber />
             </div>
             <button
               onClick={startSurvey}
               className="btn-deploy w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 text-[14px] font-semibold"
             >
-              Umfrage starten
+              {t.survey.startSurvey}
               <ArrowRight className="w-4 h-4" />
             </button>
             <p className="mt-2.5 text-[10.5px] text-zinc-600 leading-snug">
-              Dein Feedback bestimmt, woran wir als Nächstes arbeiten. Nimm dir kurz Zeit — die Credits
-              gibt&apos;s direkt nach dem Absenden.
+              {t.survey.introNote}
             </p>
           </motion.div>
         ) : (
@@ -265,8 +265,8 @@ export default function SurveyCard() {
             {/* Fortschrittsleiste */}
             <div className="px-4 sm:px-5">
               <div className="flex items-center justify-between text-[10.5px] text-zinc-500 mb-1">
-                <span>Fortschritt</span>
-                <span className="tabular-nums">{answeredCount}/{totalQ} beantwortet</span>
+                <span>{t.survey.progress}</span>
+                <span className="tabular-nums">{answeredCount}/{totalQ} {t.survey.answered}</span>
               </div>
               <div className="h-1.5 rounded-full bg-white/[0.06] overflow-hidden">
                 <motion.div
@@ -299,10 +299,10 @@ export default function SurveyCard() {
                   className="btn-deploy inline-flex items-center justify-center gap-2 px-5 py-2.5 text-[14px] disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Absenden & +{current.creditReward} Credits sichern
+                  {t.survey.submitPre}{current.creditReward} {t.survey.submitPost}
                 </button>
                 {requiredLeft > 0 && (
-                  <span className="text-[11px] text-zinc-500">Noch {requiredLeft} Pflichtfrage{requiredLeft > 1 ? "n" : ""} (⭐)</span>
+                  <span className="text-[11px] text-zinc-500">{t.survey.requiredLeftPre} {requiredLeft} {requiredLeft > 1 ? t.survey.requiredLeftMany : t.survey.requiredLeftOne} (⭐)</span>
                 )}
               </div>
             </div>
@@ -334,6 +334,8 @@ function QuestionField({
   setAnswer: (id: string, v: number | string | string[]) => void;
   toggleMulti: (id: string, option: string) => void;
 }) {
+  const { t } = useI18n();
+  const RATING_LABELS = ["", t.survey.ratingNone, t.survey.ratingRather, t.survey.ratingNeutral, t.survey.ratingGood, t.survey.ratingTop];
   const val = answers[q.id];
   const answered = val !== undefined;
   return (
@@ -349,7 +351,7 @@ function QuestionField({
         <div className="flex-1 min-w-0">
           <label className="block text-[12.5px] font-semibold text-zinc-100 leading-snug">
             {q.label}
-            {q.required && <span className="text-[#95BF47]" title="Pflichtfrage"> ⭐</span>}
+            {q.required && <span className="text-[#95BF47]" title={t.survey.requiredTitle}> ⭐</span>}
             <span className="text-zinc-600 font-normal text-[10.5px]"> · {index}/{total}</span>
           </label>
           {q.hint && <p className="text-[10.5px] text-zinc-500 mt-0.5">{q.hint}</p>}
@@ -428,7 +430,7 @@ function QuestionField({
               onChange={(e) => setAnswer(q.id, e.target.value)}
               rows={3}
               maxLength={1000}
-              placeholder="Deine Antwort…"
+              placeholder={t.survey.yourAnswer}
               className="input-glass w-full text-[12.5px] mt-2 resize-none"
             />
           )}
