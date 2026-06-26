@@ -129,6 +129,10 @@ const SKIP_KEYS = new Set([
   "images", "aliExpressLink", "previewImageUrl", "youtubeUrl", "thumbnail",
   "monat", "preis", "price", "color", "icon", "platform", "type", "status",
   "key", "slug", "email", "lang", "language", "currency", "code",
+  // Lookup-/Enum-Felder, gegen die der Code vergleicht — NICHT übersetzen,
+  // sonst brechen z. B. Compliance-Hinweise (per Kategorie) oder das
+  // Geschlechts-Label (genderSkew = "male"/"female").
+  "category", "kategorie", "genderSkew", "severity", "gender",
 ]);
 
 function isTranslatable(key: string, val: string): boolean {

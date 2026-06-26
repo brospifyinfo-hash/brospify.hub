@@ -140,17 +140,16 @@ const ACCENT = "#95BF47";
 // Künstlich verlangsamte Zieh-Animation — der Drop soll sich wertig
 // anfühlen statt sofort durchzurattern. Dauer in ms.
 const SPIN_MS = 3600;
-// Status-Texte, die während des Ziehens nacheinander durchlaufen.
-const SPIN_STEPS = [
-  "Mische alle Produkte…",
-  "Analysiere Trends & Margen…",
-  "Würfle deinen Drop aus…",
-  "Fast fertig…",
-];
+// Status-Texte während des Ziehens kommen lokalisiert aus t.charts.spin1..4
+// (siehe SpinningStatus).
 
 const MONTH_LABEL_DE = [
   "Jan", "Feb", "Mär", "Apr", "Mai", "Jun",
   "Jul", "Aug", "Sep", "Okt", "Nov", "Dez",
+];
+const MONTH_LABEL_EN = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
 const AD_PLATFORMS: {
@@ -227,7 +226,7 @@ function displayedScore(p: Produkt, v?: ProduktVotes): number {
 export default function ChartsPage() {
   const router = useRouter();
   const credits = useCredits();
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
 
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
@@ -267,13 +266,13 @@ export default function ChartsPage() {
         const data = await res.json();
         if (cancelled) return;
         if (!res.ok) {
-          setError(data?.error || "Konnte nicht laden.");
+          setError(data?.error || t.charts.couldNotLoad);
           return;
         }
         setDrawn(data.drawn ?? []);
         if (typeof data.cost === "number") setCost(data.cost);
       } catch {
-        if (!cancelled) setError("Verbindungsfehler.");
+        if (!cancelled) setError(t.charts.connectionError);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -328,7 +327,7 @@ export default function ChartsPage() {
         return;
       }
       if (!res.ok || !data.produkt) {
-        setError(data?.error || "Zug fehlgeschlagen.");
+        setError(data?.error || t.charts.drawFailed);
         return;
       }
 
@@ -337,11 +336,11 @@ export default function ChartsPage() {
       setRevealed(produkt);
       setDrawn((prev) => [produkt, ...prev.filter((p) => p.id !== produkt.id)]);
     } catch {
-      setError("Verbindungsfehler. Bitte erneut versuchen.");
+      setError(t.charts.connectionRetry);
     } finally {
       setDrawing(false);
     }
-  }, [drawing, credits, lang]);
+  }, [drawing, credits, lang, t]);
 
   // ── Vote-Handler (optimistic + Server) ──
   const getProduktVotes = useCallback(
@@ -431,15 +430,14 @@ export default function ChartsPage() {
               style={{ color: ACCENT }}
             >
               <Sparkles className="w-3 h-3" />
-              Winning Drop
+              {t.charts.badge}
             </div>
             <h1 className="text-[24px] sm:text-[32px] font-bold tracking-tight text-white leading-tight font-sf-display">
-              Zufalls-Generator
+              {t.charts.title}
             </h1>
             <p className="mt-2 text-[12px] sm:text-sm text-zinc-400 leading-snug max-w-md mx-auto">
-              Ein Klick, ein zufälliges Winning-Produkt — jeder Zug kostet{" "}
-              <span className="font-semibold text-white">{cost} Credits</span>. Du kannst kein
-              Produkt doppelt ziehen. Alle Produkt-Details siehst du nach dem Zug.
+              {t.charts.heroPre}{" "}
+              <span className="font-semibold text-white">{cost} {t.charts.creditsWord}</span>. {t.charts.heroPost}
             </p>
           </header>
 
@@ -476,12 +474,12 @@ export default function ChartsPage() {
                           >
                             <Sparkles className="w-4 h-4" />
                           </motion.span>
-                          Ziehe…
+                          {t.charts.drawing}
                         </>
                       ) : (
                         <>
                           <Zap className="w-4 h-4" />
-                          {revealed ? "Nochmal ziehen" : "Produkt ziehen"}
+                          {revealed ? t.charts.drawAgain : t.charts.draw}
                           <span className="font-mono opacity-80">· {cost} {credits.creditIcon}</span>
                         </>
                       )}
@@ -491,25 +489,25 @@ export default function ChartsPage() {
                       <div className="mt-3 text-center rounded-2xl border border-white/[0.08] bg-white/[0.03] py-4 px-4">
                         <Info className="w-5 h-5 mx-auto mb-1.5 text-zinc-400" />
                         <p className="text-sm font-semibold text-white">
-                          Das ist aktuell leider nicht möglich, schau später wieder vorbei.
+                          {t.charts.unavailable}
                         </p>
-                        <p className="text-[11px] text-zinc-500 mt-1">Es wurden keine Credits abgezogen.</p>
+                        <p className="text-[11px] text-zinc-500 mt-1">{t.charts.noCreditsCharged}</p>
                       </div>
                     )}
 
                     {cannotAfford && (
                       <p className="mt-2.5 text-center text-[11px] text-amber-300/90">
-                        Nicht genug Credits ({credits.balance}/{cost}).{" "}
+                        {t.charts.notEnoughCredits} ({credits.balance}/{cost}).{" "}
                         <Link href="/credits" className="underline font-semibold hover:text-amber-200">
-                          Credits aufladen
+                          {t.charts.topUp}
                         </Link>
                       </p>
                     )}
                     {notEnough && !cannotAfford && (
                       <p className="mt-2.5 text-center text-[11px] text-amber-300/90">
-                        Dein Saldo reicht nicht.{" "}
+                        {t.charts.balanceShort}{" "}
                         <Link href="/credits" className="underline font-semibold hover:text-amber-200">
-                          Credits aufladen
+                          {t.charts.topUp}
                         </Link>
                       </p>
                     )}
@@ -527,7 +525,7 @@ export default function ChartsPage() {
                 <section className="mt-7">
                   <div className="flex items-center gap-2 mb-3">
                     <Gift className="w-4 h-4" style={{ color: ACCENT }} />
-                    <h2 className="text-sm font-semibold text-white">Meine Drops</h2>
+                    <h2 className="text-sm font-semibold text-white">{t.charts.myDrops}</h2>
                     <span className="text-[11px] text-zinc-500">({drawn.length})</span>
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 lg:gap-3">
@@ -571,6 +569,7 @@ function DropStage({
   revealed: Produkt | null;
   onOpen: (p: Produkt) => void;
 }) {
+  const { t } = useI18n();
   return (
     <div className="w-full flex items-center justify-center min-h-[220px]">
       <AnimatePresence mode="wait">
@@ -631,7 +630,7 @@ function DropStage({
               <Gift className="w-10 h-10" style={{ color: ACCENT }} />
             </motion.div>
             <p className="mt-4 text-[12px] text-zinc-500 max-w-[15rem]">
-              Drück auf „Produkt ziehen“ und lass den Zufall ein Winning-Produkt für dich aussuchen.
+              {t.charts.idleHint}
             </p>
           </motion.div>
         )}
@@ -644,15 +643,17 @@ function DropStage({
 // sie bei jedem Zug frisch mountet (stepIdx startet bei 0) — so müssen
 // wir kein setState synchron im Effekt aufrufen.
 function SpinningStatus() {
+  const { t } = useI18n();
+  const steps = [t.charts.spin1, t.charts.spin2, t.charts.spin3, t.charts.spin4];
   const [stepIdx, setStepIdx] = useState(0);
   useEffect(() => {
-    const per = Math.max(700, Math.floor(SPIN_MS / SPIN_STEPS.length));
-    const t = setInterval(
-      () => setStepIdx((i) => Math.min(i + 1, SPIN_STEPS.length - 1)),
+    const per = Math.max(700, Math.floor(SPIN_MS / steps.length));
+    const timer = setInterval(
+      () => setStepIdx((i) => Math.min(i + 1, steps.length - 1)),
       per,
     );
-    return () => clearInterval(t);
-  }, []);
+    return () => clearInterval(timer);
+  }, [steps.length]);
   return (
     <AnimatePresence mode="wait">
       <motion.p
@@ -663,7 +664,7 @@ function SpinningStatus() {
         transition={{ duration: 0.25 }}
         className="mt-4 text-[12px] text-zinc-400"
       >
-        {SPIN_STEPS[stepIdx]}
+        {steps[stepIdx]}
       </motion.p>
     </AnimatePresence>
   );
@@ -798,19 +799,19 @@ function ProductImage({ src, alt, className }: { src: string; alt: string; class
 }
 
 function LockedCard() {
+  const { t } = useI18n();
   return (
     <section className="glass-strong rounded-3xl border border-white/[0.08] p-8 text-center">
       <div className="w-14 h-14 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-4">
         <Lock className="w-6 h-6 text-amber-400" />
       </div>
-      <h2 className="text-lg font-semibold text-white">Teil der Brospify Membership</h2>
+      <h2 className="text-lg font-semibold text-white">{t.charts.lockedTitle}</h2>
       <p className="mt-2 text-sm text-zinc-400 max-w-sm mx-auto">
-        Der Zufalls-Generator ist Teil deiner Membership. Aktiviere dein Abo, um Winning-Produkte zu
-        ziehen.
+        {t.charts.lockedDesc}
       </p>
       <Link href="/account/subscription" className="btn-deploy inline-flex items-center gap-2 mt-5 px-5 py-2.5 text-sm">
         <Sparkles className="w-4 h-4" />
-        Membership ansehen
+        {t.charts.viewMembership}
       </Link>
     </section>
   );
@@ -834,6 +835,7 @@ function DetailModal({
   onVote: (direction: "up" | "down") => void;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const allImages = useMemo(
     () => [...new Set([p.bildUrl, ...(p.extra?.images || [])].filter(Boolean))],
     [p],
@@ -910,36 +912,36 @@ function DetailModal({
             {(!p.beschreibung || looksLikeAutoId(p.titel)) && (
               <p className="text-xs text-amber-300/80 bg-amber-500/5 border border-amber-500/15 rounded-lg px-3 py-2 mt-2 flex items-start gap-1.5">
                 <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-                <span>Dieses Produkt hat noch unvollständige Daten. Wir aktualisieren das in Kürze.</span>
+                <span>{t.charts.incompleteData}</span>
               </p>
             )}
           </div>
 
           {p.extra?.stats && (
-            <CollapsibleSection title="Premium Analytics" icon={BarChart3} iconColor="text-[#95BF47]" defaultOpen>
+            <CollapsibleSection title={t.charts.premiumAnalytics} icon={BarChart3} iconColor="text-[#95BF47]" defaultOpen>
               <div className="space-y-3">
-                <StatBar label="Trend-Score" value={p.extra.stats.trendScore} icon={TrendingUp} color="text-[#95BF47]" delay={50} />
-                <StatBar label="Viralitäts-Score" value={p.extra.stats.viralScore} icon={Zap} color="text-purple-400" delay={150} />
-                <StatBar label="Impulskauf-Faktor" value={p.extra.stats.impulseBuyFactor} icon={ShoppingBag} color="text-amber-400" delay={300} />
-                <StatBar label="Problemlöser-Index" value={p.extra.stats.problemSolverIndex} icon={Target} color="text-emerald-400" delay={450} />
-                <StatBar label="Marktsättigung" value={p.extra.stats.marketSaturation} icon={PieChart} color="text-red-400" delay={600} />
+                <StatBar label={t.charts.trendScore} value={p.extra.stats.trendScore} icon={TrendingUp} color="text-[#95BF47]" delay={50} />
+                <StatBar label={t.charts.viralityScore} value={p.extra.stats.viralScore} icon={Zap} color="text-purple-400" delay={150} />
+                <StatBar label={t.charts.impulseFactor} value={p.extra.stats.impulseBuyFactor} icon={ShoppingBag} color="text-amber-400" delay={300} />
+                <StatBar label={t.charts.problemSolver} value={p.extra.stats.problemSolverIndex} icon={Target} color="text-emerald-400" delay={450} />
+                <StatBar label={t.charts.marketSaturation} value={p.extra.stats.marketSaturation} icon={PieChart} color="text-red-400" delay={600} />
               </div>
             </CollapsibleSection>
           )}
 
           {p.extra?.finances && (
-            <CollapsibleSection title="Marge & Finanzen" icon={DollarSign} iconColor="text-emerald-400">
+            <CollapsibleSection title={t.charts.marginFinances} icon={DollarSign} iconColor="text-emerald-400">
               <div className="grid grid-cols-3 gap-3">
                 <div className="text-center">
-                  <div className="text-xs text-zinc-500 mb-1">Einkauf</div>
+                  <div className="text-xs text-zinc-500 mb-1">{t.charts.buy}</div>
                   <div className="text-lg font-bold text-red-400">{p.extra.finances.buyPrice.toFixed(2)}&euro;</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs text-zinc-500 mb-1">Verkauf</div>
+                  <div className="text-xs text-zinc-500 mb-1">{t.charts.sell}</div>
                   <div className="text-lg font-bold text-white">{p.extra.finances.recommendedSellPrice.toFixed(2)}&euro;</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xs text-zinc-500 mb-1">Marge</div>
+                  <div className="text-xs text-zinc-500 mb-1">{t.charts.margin}</div>
                   <div className="text-lg font-bold text-emerald-400">+{marginPercent(p)}%</div>
                   <div className="text-[10px] text-emerald-300/70 tabular-nums">
                     ≈ +{p.extra.finances.profitMargin.toFixed(2)}€
@@ -948,7 +950,7 @@ function DetailModal({
               </div>
               <div className="flex items-center gap-1.5 text-[10px] text-amber-300/90 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1.5 mt-1">
                 <AlertCircle className="w-3 h-3 shrink-0" />
-                <span>Preise sind Richtwerte &mdash; der reale Preis kann schwanken. Marge-% = Aufschlag auf den Einkaufspreis.</span>
+                <span>{t.charts.priceHint}</span>
               </div>
             </CollapsibleSection>
           )}
@@ -957,10 +959,9 @@ function DetailModal({
             <div className="flex items-start gap-2 px-3 py-3 rounded-xl bg-zinc-800/50 border border-zinc-700/50 text-zinc-300">
               <Info className="w-4 h-4 shrink-0 mt-0.5 text-zinc-400" />
               <div className="text-xs leading-relaxed">
-                <strong className="text-zinc-200">Keine erweiterten Daten verfügbar.</strong>
+                <strong className="text-zinc-200">{t.charts.noExtendedData}</strong>
                 <p className="mt-0.5 text-zinc-400">
-                  Dieses Produkt wurde vor dem letzten großen Update angelegt — Beispiel-Ads, Dropshipping-Shop-Beispiele,
-                  Zielgruppen-Analyse, Ad-Strategie und Markt-Daten sind hier nicht verfügbar.
+                  {t.charts.legacyData}
                 </p>
               </div>
             </div>
@@ -1056,6 +1057,7 @@ function StatBar({
 
 // ─── Image Slideshow ─────────────────────────────────────────────
 function ImageSlideshow({ images: initial }: { images: string[] }) {
+  const { t } = useI18n();
   const [broken, setBroken] = useState<Set<string>>(() => new Set());
   const [idx, setIdx] = useState(0);
   const images = useMemo(() => initial.filter((u) => !broken.has(u)), [initial, broken]);
@@ -1064,7 +1066,7 @@ function ImageSlideshow({ images: initial }: { images: string[] }) {
     return (
       <div className="aspect-video bg-white/5 rounded-xl flex flex-col items-center justify-center text-zinc-600 gap-1.5">
         <ShoppingBag className="w-6 h-6" />
-        <span className="text-xs">Kein Bild verfügbar</span>
+        <span className="text-xs">{t.charts.noImage}</span>
       </div>
     );
 
@@ -1142,6 +1144,7 @@ function VoteButtons({
   onVote: (direction: "up" | "down") => void;
   size?: "sm" | "md";
 }) {
+  const { t } = useI18n();
   const s = displayedScore(produkt, votes);
   const isCompact = size === "sm";
   const iconCls = isCompact ? "w-3.5 h-3.5" : "w-4 h-4";
@@ -1157,7 +1160,7 @@ function VoteButtons({
           e.stopPropagation();
           onVote("up");
         }}
-        title="Hochpushen"
+        title={t.charts.upvote}
         className={`${padCls} rounded-l-md transition ${
           upActive ? "text-emerald-300 bg-emerald-500/15" : "text-zinc-400 hover:text-emerald-300 hover:bg-white/5"
         }`}
@@ -1177,7 +1180,7 @@ function VoteButtons({
           e.stopPropagation();
           onVote("down");
         }}
-        title="Runter pushen"
+        title={t.charts.downvote}
         className={`${padCls} rounded-r-md transition ${
           downActive ? "text-red-300 bg-red-500/15" : "text-zinc-400 hover:text-red-300 hover:bg-white/5"
         }`}
@@ -1227,12 +1230,13 @@ function CollapsibleSection({
 
 // ─── Ads Block ───────────────────────────────────────────────────
 function AdsBlock({ ads }: { ads?: ProduktAds }) {
+  const { t } = useI18n();
   const present = AD_PLATFORMS.filter(
     (p) => Array.isArray(ads?.[p.key]) && (ads![p.key] as string[]).length > 0,
   );
   if (present.length === 0) return null;
   return (
-    <CollapsibleSection title="Beispiel-Ads" icon={Megaphone} iconColor="text-purple-300">
+    <CollapsibleSection title={t.charts.exampleAds} icon={Megaphone} iconColor="text-purple-300">
       <div className="space-y-2.5">
         {present.map((p) => {
           const Icon = p.icon;
@@ -1277,11 +1281,12 @@ function DropshippingBlock({
   legacy?: { url: string; title?: string };
   status?: boolean;
 }) {
+  const { t } = useI18n();
   const list = examples && examples.length > 0 ? examples : legacy?.url ? [legacy] : [];
   if (list.length === 0) return null;
   const broken = status === false;
   return (
-    <CollapsibleSection title="Beispiel Dropshipping-Shops" icon={Store} iconColor="text-indigo-300">
+    <CollapsibleSection title={t.charts.exampleStores} icon={Store} iconColor="text-indigo-300">
       <div className="space-y-1.5">
         {list.map((ex) => {
           let host = ex.url;
@@ -1323,9 +1328,10 @@ function AliLinksBlock({
   productOk?: boolean;
   categoryOk?: boolean;
 }) {
+  const { t } = useI18n();
   if (!produktLink && !kategorieLink) return null;
   return (
-    <CollapsibleSection title="AliExpress Supplier" icon={Link2} iconColor="text-orange-300">
+    <CollapsibleSection title={t.charts.aliSupplier} icon={Link2} iconColor="text-orange-300">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {kategorieLink && (
           <div className="space-y-1">
@@ -1336,7 +1342,7 @@ function AliLinksBlock({
               className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-500/5 border border-orange-500/20 text-orange-200 hover:bg-orange-500/10 transition text-sm"
             >
               <BarChart3 className="w-4 h-4 shrink-0" />
-              <span className="flex-1 truncate">Kategorie suchen</span>
+              <span className="flex-1 truncate">{t.charts.searchCategory}</span>
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
             </a>
             {categoryOk === false && <BrokenLinkHint />}
@@ -1351,7 +1357,7 @@ function AliLinksBlock({
               className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-orange-500/10 border border-orange-500/25 text-orange-200 hover:bg-orange-500/15 transition text-sm"
             >
               <ShoppingBag className="w-4 h-4 shrink-0" />
-              <span className="flex-1 truncate">Genaues Produkt</span>
+              <span className="flex-1 truncate">{t.charts.exactProduct}</span>
               <ExternalLink className="w-3.5 h-3.5 shrink-0" />
             </a>
             {productOk === false && <BrokenLinkHint />}
@@ -1364,6 +1370,8 @@ function AliLinksBlock({
 
 // ─── Deep stats (Markt / Saison / Wachstum) ─────────────────────
 function DeepStatsBlock({ ds }: { ds?: ProduktDeepStats }) {
+  const { t, lang } = useI18n();
+  const months = lang === "en" ? MONTH_LABEL_EN : MONTH_LABEL_DE;
   if (!ds) return null;
   const has =
     typeof ds.competition === "number" ||
@@ -1374,21 +1382,21 @@ function DeepStatsBlock({ ds }: { ds?: ProduktDeepStats }) {
   if (!has) return null;
   const peakSet = new Set(ds.peakMonths || []);
   return (
-    <CollapsibleSection title="Markt & Saison" icon={Activity} iconColor="text-purple-300">
+    <CollapsibleSection title={t.charts.marketSeason} icon={Activity} iconColor="text-purple-300">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {typeof ds.competition === "number" && (
-          <MiniMeter label="Konkurrenz" value={ds.competition} invert icon={Crosshair} />
+          <MiniMeter label={t.charts.competition} value={ds.competition} invert icon={Crosshair} />
         )}
         {typeof ds.seasonality === "number" && (
-          <MiniMeter label="Saison" value={ds.seasonality} icon={Calendar} />
+          <MiniMeter label={t.charts.season} value={ds.seasonality} icon={Calendar} />
         )}
         {typeof ds.repeatPurchaseRate === "number" && (
-          <MiniMeter label="Rückkauf" value={ds.repeatPurchaseRate} icon={Award} />
+          <MiniMeter label={t.charts.repurchase} value={ds.repeatPurchaseRate} icon={Award} />
         )}
         {typeof ds.growth90d === "number" && (
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">Wachstum 90T</span>
+              <span className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold">{t.charts.growth90d}</span>
               {ds.growth90d >= 0 ? (
                 <ArrowUpRight className="w-3 h-3 text-emerald-400" />
               ) : (
@@ -1404,9 +1412,9 @@ function DeepStatsBlock({ ds }: { ds?: ProduktDeepStats }) {
       </div>
       {Array.isArray(ds.peakMonths) && ds.peakMonths.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">Peak-Monate</div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">{t.charts.peakMonths}</div>
           <div className="grid grid-cols-12 gap-0.5">
-            {MONTH_LABEL_DE.map((m, i) => {
+            {months.map((m, i) => {
               const isPeak = peakSet.has(i + 1);
               return (
                 <div
@@ -1459,37 +1467,38 @@ function MiniMeter({
 
 // ─── Audience ────────────────────────────────────────────────────
 function AudienceBlock({ a }: { a?: ProduktAudience }) {
+  const { t } = useI18n();
   if (!a) return null;
   const has = a.primary || a.ageRange || a.painPoint || (a.interests && a.interests.length > 0);
   if (!has) return null;
   const genderLabel =
-    a.genderSkew === "male" ? "Männlich" : a.genderSkew === "female" ? "Weiblich" : "Ausgeglichen";
+    a.genderSkew === "male" ? t.charts.male : a.genderSkew === "female" ? t.charts.female : t.charts.balanced;
   return (
-    <CollapsibleSection title="Zielgruppe & Targeting" icon={Users} iconColor="text-blue-300">
+    <CollapsibleSection title={t.charts.audienceTargeting} icon={Users} iconColor="text-blue-300">
       {a.primary && <div className="text-sm text-zinc-200 font-medium">{a.primary}</div>}
       <div className="grid grid-cols-2 gap-2">
         {a.ageRange && (
           <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-1.5">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">Alter</div>
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">{t.charts.age}</div>
             <div className="text-sm font-bold text-zinc-100">{a.ageRange}</div>
           </div>
         )}
         {a.genderSkew && (
           <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-1.5">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">Geschlecht</div>
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">{t.charts.gender}</div>
             <div className="text-sm font-bold text-zinc-100">{genderLabel}</div>
           </div>
         )}
       </div>
       {a.painPoint && (
         <div className="rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2 text-xs text-zinc-300 leading-relaxed">
-          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">Pain-Point</div>
+          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-0.5">{t.charts.painPoint}</div>
           {a.painPoint}
         </div>
       )}
       {Array.isArray(a.interests) && a.interests.length > 0 && (
         <div>
-          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">Targeting-Interessen</div>
+          <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-semibold mb-1">{t.charts.targetingInterests}</div>
           <div className="flex flex-wrap gap-1.5">
             {a.interests.map((i) => (
               <span
@@ -1509,26 +1518,27 @@ function AudienceBlock({ a }: { a?: ProduktAudience }) {
 
 // ─── Ad strategy ─────────────────────────────────────────────────
 function AdStrategyBlock({ s }: { s?: ProduktAdStrategy }) {
+  const { t } = useI18n();
   if (!s) return null;
   const has =
     s.dailyMinEur || s.dailyRecommendedEur || s.estimatedCpmEur || s.bestFormat || (s.adHooks && s.adHooks.length > 0);
   if (!has) return null;
   return (
-    <CollapsibleSection title="Ad-Strategie" icon={Megaphone} iconColor="text-amber-300">
+    <CollapsibleSection title={t.charts.adStrategy} icon={Megaphone} iconColor="text-amber-300">
       <div className="grid grid-cols-3 gap-2">
-        <BudgetTile label="Min/Tag" value={`${s.dailyMinEur || 0}€`} sub="Validierung" color="#94A3B8" />
-        <BudgetTile label="Empfohlen/Tag" value={`${s.dailyRecommendedEur || 0}€`} sub="Skalierung" color="#F59E0B" />
-        <BudgetTile label="CPM" value={`${(s.estimatedCpmEur ?? 0).toFixed(2)}€`} sub="geschätzt" color="#A855F7" />
+        <BudgetTile label={t.charts.dailyMin} value={`${s.dailyMinEur || 0}€`} sub={t.charts.validation} color="#94A3B8" />
+        <BudgetTile label={t.charts.dailyRecommended} value={`${s.dailyRecommendedEur || 0}€`} sub={t.charts.scaling} color="#F59E0B" />
+        <BudgetTile label="CPM" value={`${(s.estimatedCpmEur ?? 0).toFixed(2)}€`} sub={t.charts.estimated} color="#A855F7" />
       </div>
       {s.bestFormat && (
         <div className="rounded-lg bg-amber-500/5 border border-amber-500/20 px-3 py-2 text-xs text-amber-100">
-          <div className="text-[9px] uppercase tracking-widest text-amber-300/70 font-semibold mb-0.5">Bestes Format</div>
+          <div className="text-[9px] uppercase tracking-widest text-amber-300/70 font-semibold mb-0.5">{t.charts.bestFormat}</div>
           {s.bestFormat}
         </div>
       )}
       {Array.isArray(s.adHooks) && s.adHooks.length > 0 && (
         <div className="space-y-1.5">
-          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">Hook-Beispiele</div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold">{t.charts.hookExamples}</div>
           {s.adHooks.map((h, i) => (
             <div key={i} className="flex items-start gap-2 rounded-lg bg-white/[0.03] border border-white/10 px-2.5 py-2">
               <span className="shrink-0 text-[9px] font-bold text-amber-300 mt-0.5">#{i + 1}</span>
@@ -1540,7 +1550,7 @@ function AdStrategyBlock({ s }: { s?: ProduktAdStrategy }) {
       {typeof s.testDurationDays === "number" && s.testDurationDays > 0 && (
         <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
           <Eye className="w-3 h-3" />
-          Empfohlene Testdauer: <strong className="text-zinc-300">{s.testDurationDays} Tage</strong>
+          {t.charts.recommendedTestDuration} <strong className="text-zinc-300">{s.testDurationDays} {t.charts.days}</strong>
         </div>
       )}
     </CollapsibleSection>
@@ -1561,10 +1571,11 @@ function BudgetTile({ label, value, sub, color }: { label: string; value: string
 
 // ─── Broken link hint ────────────────────────────────────────────
 function BrokenLinkHint() {
+  const { t } = useI18n();
   return (
     <div className="flex items-start gap-1.5 text-[10px] text-amber-300/90 bg-amber-500/5 border border-amber-500/15 rounded-lg px-2 py-1.5">
       <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-      <span>Hinweis: Dieser Link ist evtl. nicht mehr verfügbar.</span>
+      <span>{t.charts.brokenLinkHint}</span>
     </div>
   );
 }
@@ -1697,6 +1708,7 @@ const COMPLIANCE_HINTS: Record<string, ComplianceHint> = {
 };
 
 function ComplianceBlock({ category }: { category: string }) {
+  const { t } = useI18n();
   const cat = (category || "").trim();
   const hint = COMPLIANCE_HINTS[cat];
   const sevColor =
@@ -1707,13 +1719,13 @@ function ComplianceBlock({ category }: { category: string }) {
         : "text-zinc-300 bg-white/5 border-white/10";
   const sevLabel =
     hint?.severity === "high"
-      ? "Hohe Compliance-Anforderung"
+      ? t.charts.complianceHigh
       : hint?.severity === "medium"
-        ? "Mittlere Compliance-Anforderung"
-        : "Standard-Pflichten";
+        ? t.charts.complianceMid
+        : t.charts.complianceStd;
   return (
     <CollapsibleSection
-      title="Rechtliche Hinweise & Compliance"
+      title={t.charts.compliance}
       icon={Scale}
       iconColor="text-amber-300"
       badge={
@@ -1731,7 +1743,7 @@ function ComplianceBlock({ category }: { category: string }) {
         {hint && (
           <div className="space-y-2">
             <div className="text-[10px] uppercase tracking-widest text-amber-300/80 font-semibold">
-              Spezifisch für „{cat}“
+              {t.charts.complianceSpecific} „{cat}“
             </div>
             <ul className="space-y-1.5">
               {hint.items.map((item, i) => (
@@ -1744,7 +1756,7 @@ function ComplianceBlock({ category }: { category: string }) {
           </div>
         )}
         <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">Gilt für alle Produkte</div>
+          <div className="text-[10px] uppercase tracking-widest text-zinc-400 font-semibold">{t.charts.complianceGeneric}</div>
           <ul className="space-y-1.5">
             {GENERIC_COMPLIANCE.map((item, i) => (
               <li key={i} className="flex items-start gap-2 text-[11px] text-zinc-300 leading-snug">
@@ -1755,9 +1767,7 @@ function ComplianceBlock({ category }: { category: string }) {
           </ul>
         </div>
         <p className="text-[10px] text-zinc-500 italic leading-relaxed border-t border-amber-500/10 pt-3">
-          Dies sind allgemeine Hinweise und ersetzen KEINE Rechtsberatung. Bei Unklarheiten unbedingt einen Anwalt für
-          IT-/Vertriebsrecht oder die zuständige Marktüberwachungs­behörde kontaktieren. Beim Dropshipping aus
-          Nicht-EU-Ländern bist du als Verkäufer faktisch Importeur und haftest für die Konformität.
+          {t.charts.complianceDisclaimer}
         </p>
       </div>
     </CollapsibleSection>
