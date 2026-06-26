@@ -21,6 +21,7 @@ import {
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Code2,
@@ -97,6 +98,8 @@ export default function EmailStudioPage() {
 
 function EmailStudio() {
   const router = useRouter();
+  const { t } = useI18n();
+  const catLabel = (c: string) => (c === "transactional" ? t.emailGen.catTransactional : CATEGORY_LABELS[c as keyof typeof CATEGORY_LABELS]);
   const searchParams = useSearchParams();
   const credits = useCredits();
 
@@ -179,7 +182,7 @@ function EmailStudio() {
         ? err.message
         : err instanceof Error
           ? err.message
-          : "Netzwerkfehler.";
+          : t.emailGen.errNetwork;
       setGenError(msg);
     } finally {
       setGenerating(false);
@@ -264,7 +267,7 @@ function EmailStudio() {
             <div className="lg:sticky lg:top-[80px]">
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">
-                  Konfiguration
+                  {t.emailGen.config}
                 </span>
                 <span className="ml-auto inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono text-white/55 bg-white/[0.04] border border-white/[0.06]">
                   <Coins className="w-2.5 h-2.5" />
@@ -328,8 +331,8 @@ function EmailStudio() {
                         }`}
                       />
                       {generated.source === "deepseek"
-                        ? "DeepSeek KI generiert"
-                        : "Deterministischer Fallback"}
+                        ? t.emailGen.sourceAi
+                        : t.emailGen.sourceFallback}
                     </div>
                     <button
                       onClick={handleGenerate}
@@ -337,7 +340,7 @@ function EmailStudio() {
                       className="inline-flex items-center gap-1.5 text-[12px] text-white/45 hover:text-white/80 transition disabled:opacity-40"
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
-                      Neu generieren
+                      {t.emailGen.regenerate}
                       <span className="font-mono text-[10px] text-white/30 ml-1">
                         -{CREDIT_LIMITS.EMAIL_GENERATE}
                       </span>
@@ -353,14 +356,14 @@ function EmailStudio() {
                       onClick={() => setView("preview")}
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      Vorschau
+                      {t.emailGen.preview}
                     </button>
                     <button
                       data-active={view === "source"}
                       onClick={() => setView("source")}
                     >
                       <Code2 className="w-3.5 h-3.5" />
-                      Liquid-Quelle
+                      {t.emailGen.liquidSource}
                     </button>
                   </div>
                   {view === "source" && (
@@ -371,12 +374,12 @@ function EmailStudio() {
                       {copied ? (
                         <>
                           <Check className="w-3.5 h-3.5 text-emerald-300" />
-                          Kopiert
+                          {t.emailGen.copied}
                         </>
                       ) : (
                         <>
                           <Copy className="w-3.5 h-3.5" />
-                          Kopieren
+                          {t.emailGen.copy}
                         </>
                       )}
                     </button>
@@ -425,7 +428,7 @@ function EmailStudio() {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="font-sf-display text-[17px] font-semibold tracking-tight">
-                        Code zum Kopieren
+                        {t.emailGen.codeToCopy}
                       </h3>
                       <p className="text-[13px] text-white/50 mt-1 leading-relaxed">
                         Kopiere Betreff und HTML-Code und füge sie in Shopify unter{" "}
@@ -436,14 +439,14 @@ function EmailStudio() {
                   </div>
 
                   <CopyCodeBlock
-                    label="Betreff"
+                    label={t.emailGen.subject}
                     value={generated.subject}
                     copied={copiedSubject}
                     onCopy={copySubject}
                     multiline={false}
                   />
                   <CopyCodeBlock
-                    label="HTML-Code (Liquid)"
+                    label={t.emailGen.htmlCode}
                     value={generated.liquid}
                     copied={copied}
                     onCopy={copySource}
@@ -468,7 +471,7 @@ function EmailStudio() {
                     ) : (
                       <FolderHeart className="w-3.5 h-3.5" />
                     )}
-                    {savedToLibrary ? "In Mediathek gespeichert" : savingToLibrary ? "Speichere…" : "In Mediathek speichern"}
+                    {savedToLibrary ? t.emailGen.savedToLib : savingToLibrary ? t.emailGen.saving : t.emailGen.saveToLib}
                   </button>
                 </div>
               </>
@@ -493,18 +496,18 @@ function EmailStudio() {
               {/* Template stats */}
               <div className="glass-email p-5 space-y-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-white/40">
-                  Template-Info
+                  {t.emailGen.templateInfo}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { label: "Kategorie", value: CATEGORY_LABELS[tpl.category] },
+                    { label: t.emailGen.category, value: catLabel(tpl.category) },
                     { label: "Badge", value: tpl.contextBadge },
                     {
-                      label: "Variablen",
-                      value: `${tpl.liquidVariables.length} verfügbar`,
+                      label: t.emailGen.variables,
+                      value: `${tpl.liquidVariables.length} ${t.emailGen.available}`,
                     },
                     {
-                      label: "API-Name",
+                      label: t.emailGen.apiName,
                       value: tpl.shopifyName.replace(/_/g, " "),
                     },
                   ].map(({ label, value }) => (
@@ -818,6 +821,7 @@ function ReasonPicker({
   tpl: EmailTemplateDef;
   compact?: boolean;
 }) {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -940,7 +944,7 @@ function ReasonPicker({
                   <button
                     type="button"
                     onClick={() => setOpen(false)}
-                    aria-label="Schließen"
+                    aria-label={t.emailGen.close}
                     className="w-10 h-10 -mt-0.5 inline-flex items-center justify-center rounded-xl text-white/55 active:bg-white/[0.06]"
                   >
                     <X className="w-4 h-4" />
