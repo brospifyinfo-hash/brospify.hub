@@ -380,8 +380,8 @@ export default function ProfilePage() {
                   <Coins className="w-5 h-5" style={{ color: creditColor }} />
                 </div>
                 <div className="min-w-0">
-                  <h3 className="text-sm font-bold">Credit-Guthaben</h3>
-                  <p className="text-[10px] text-zinc-500">Wird verbraucht beim Generieren – jederzeit aufladbar.</p>
+                  <h3 className="text-sm font-bold">{t.profile.creditBalance}</h3>
+                  <p className="text-[10px] text-zinc-500">{t.profile.creditBalanceSub}</p>
                 </div>
               </div>
               <div className="text-right shrink-0">
@@ -412,16 +412,14 @@ export default function ProfilePage() {
               className="btn-accent w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold text-sm"
             >
               <Plus className="w-4 h-4" />
-              {emptyBalance ? "Credits aufladen" : "Mehr Credits kaufen"}
+              {emptyBalance ? t.profile.topUpCredits : t.profile.buyMore}
               <ChevronRight className="w-4 h-4 -mr-1" />
             </Link>
 
             {(emptyBalance || lowBalance) && (
               <div className="mt-3 text-[11px] text-amber-300/90 flex items-start gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 mt-px shrink-0" />
-                <span>{emptyBalance
-                  ? "Dein Guthaben ist leer – AI-Tools sind blockiert, bis du Credits nachlädst."
-                  : "Wenig Guthaben – lade rechtzeitig auf, damit deine Tools nicht blockieren."}</span>
+                <span>{emptyBalance ? t.profile.balanceEmpty : t.profile.balanceLow}</span>
               </div>
             )}
           </motion.div>
@@ -519,7 +517,7 @@ export default function ProfilePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-bold flex items-center gap-2">
                 <Ticket className="w-5 h-5 text-amber-400" />
-                Meine Support-Tickets
+                {t.profile.myTickets}
               </h2>
               <button
                 onClick={refreshTickets}
@@ -527,7 +525,7 @@ export default function ProfilePage() {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:text-white bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] transition-all disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${ticketsRefreshing ? "animate-spin" : ""}`} />
-                Aktualisieren
+                {t.profile.refresh}
               </button>
             </div>
             {ticketsLoading ? (
@@ -535,7 +533,7 @@ export default function ProfilePage() {
                 <Loader2 className="w-5 h-5 animate-spin text-zinc-500" />
               </div>
             ) : tickets.length === 0 ? (
-              <p className="text-sm text-zinc-600 py-4 text-center">Keine Tickets vorhanden.</p>
+              <p className="text-sm text-zinc-600 py-4 text-center">{t.profile.noTickets}</p>
             ) : (
               <div className="space-y-2">
                 {tickets.map((ticket) => (
@@ -563,14 +561,14 @@ export default function ProfilePage() {
                           ticket.status === "open" ? "text-amber-400" :
                           ticket.status === "resolved" ? "text-emerald-400" : "text-zinc-500"
                         }`}>
-                          {ticket.status === "open" ? "Offen" : ticket.status === "resolved" ? "Gelöst" : "Geschlossen"}
+                          {ticket.status === "open" ? t.profile.ticketOpen : ticket.status === "resolved" ? t.profile.ticketResolved : t.profile.ticketClosed}
                         </span>
                         <span className="text-[10px] text-zinc-600 flex items-center gap-1">
                           <Clock className="w-2.5 h-2.5" />
-                          {new Date(ticket.updatedAt).toLocaleDateString("de-DE")}
+                          {new Date(ticket.updatedAt).toLocaleDateString(lang === "en" ? "en-GB" : "de-DE")}
                         </span>
                         <span className="text-[10px] text-zinc-600">
-                          {ticket.messages.length} Nachr.
+                          {ticket.messages.length} {t.profile.msgsShort}
                         </span>
                       </div>
                     </div>

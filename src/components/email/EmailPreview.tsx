@@ -28,6 +28,7 @@ import {
   useState,
 } from "react";
 import { Smartphone, Monitor, Coins, Pencil, Eye } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
 
 interface EmailPreviewProps {
   liquid: string;
@@ -514,6 +515,7 @@ const EDITOR_SCRIPT = `(function(){
 
 export const EmailPreview = forwardRef<EmailPreviewHandle, EmailPreviewProps>(
   function EmailPreview({ liquid, subject, fontStack, onTextEdit }, ref) {
+    const { t } = useI18n();
     const [view, setView] = useState<ViewMode>("desktop");
     const [editorOn, setEditorOn] = useState(false);
     const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -627,15 +629,15 @@ body[data-bsf-mode="edit"] [data-bsf-text] {
             {editorOn ? (
               <>
                 <Pencil className="w-3.5 h-3.5" strokeWidth={2.4} />
-                Editor-Modus
+                {t.emailGen.epEditorMode}
                 <span className="inline-block w-1.5 h-1.5 rounded-full bg-black/45" />
               </>
             ) : (
               <>
                 <Eye className="w-3.5 h-3.5" strokeWidth={2.2} />
-                Vorschau
+                {t.emailGen.preview}
                 <span className="inline-flex items-center gap-1 text-[10.5px] font-medium text-white/45 ml-1">
-                  · Tippen zum Bearbeiten
+                  {t.emailGen.epTapToEdit}
                 </span>
               </>
             )}
@@ -668,12 +670,7 @@ body[data-bsf-mode="edit"] [data-bsf-text] {
         {editorOn && (
           <div className="mb-3 flex items-start gap-2 px-3 py-2.5 rounded-xl bg-[#95BF47]/8 border border-[#95BF47]/20 text-[12px] leading-snug text-white/75">
             <Pencil className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#95BF47]" />
-            <span>
-              Tippe einen Text in der Vorschau an, ändere ihn und drücke{" "}
-              <em className="not-italic text-white/90">Übernehmen</em>. Mit dem{" "}
-              <em className="not-italic text-white/90">Vorschau</em>-Knopf
-              kommst du jederzeit zurück.
-            </span>
+            <span>{t.emailGen.epEditorHelp}</span>
           </div>
         )}
 
@@ -755,9 +752,9 @@ body[data-bsf-mode="edit"] [data-bsf-text] {
             <span className="inline-flex items-center gap-1.5">
               <Coins className="w-3 h-3" />
               <span className="hidden sm:inline">
-                Manuelle Text-Bearbeitung ist kostenlos
+                {t.emailGen.epTextEditsFull}
               </span>
-              <span className="sm:hidden">Text-Edits gratis</span>
+              <span className="sm:hidden">{t.emailGen.epTextEditsFree}</span>
             </span>
             <span>{frameWidth}px</span>
           </div>
