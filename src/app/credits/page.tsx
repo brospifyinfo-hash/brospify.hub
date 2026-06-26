@@ -25,6 +25,7 @@ import {
   Loader2,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
+import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
 import {
   CREDIT_PACKAGES,
@@ -45,6 +46,7 @@ interface ProfileInfo {
 export default function CreditsPage() {
   const router = useRouter();
   const credits = useCredits();
+  const { t } = useI18n();
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -142,7 +144,7 @@ export default function CreditsPage() {
       if (!res.ok) {
         setVoucherStatus({
           kind: "error",
-          message: data.error || "Code konnte nicht eingelöst werden.",
+          message: data.error || t.credits.redeemError,
         });
         return;
       }
@@ -154,7 +156,7 @@ export default function CreditsPage() {
         credits.refresh();
       }
     } catch {
-      setVoucherStatus({ kind: "error", message: "Verbindungsfehler – bitte erneut versuchen." });
+      setVoucherStatus({ kind: "error", message: t.credits.connError });
     }
   }
 
@@ -199,14 +201,13 @@ export default function CreditsPage() {
         >
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/[0.08] bg-white/[0.03] text-[10.5px] uppercase tracking-[0.18em] text-white/55 mb-5">
             <Sparkles className="w-3 h-3 text-[#95BF47]" />
-            Credit-Aufladung
+            {t.credits.eyebrow}
           </div>
           <h1 className="font-sf-display text-4xl md:text-6xl font-bold tracking-[-0.025em] leading-[1.05] max-w-3xl">
-            Lade dein <span className="bg-gradient-to-r from-[#95BF47] to-[#c8e87a] bg-clip-text text-transparent">Brospify-Konto</span> auf.
+            {t.credits.h1a} <span className="bg-gradient-to-r from-[#95BF47] to-[#c8e87a] bg-clip-text text-transparent">{t.credits.h1account}</span> {t.credits.h1b}
           </h1>
           <p className="text-white/55 text-[15px] mt-4 max-w-xl leading-relaxed">
-            Wähle ein Paket oder löse einen Gutschein-Code ein. Dein Guthaben wird
-            unmittelbar nach dem Bezahlvorgang gutgeschrieben.
+            {t.credits.subtitle}
           </p>
         </motion.div>
 
@@ -230,11 +231,11 @@ export default function CreditsPage() {
 
             {/* Trust strip */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <TrustItem icon={Zap} title="Sofort verfügbar">
-                Echtzeit-Gutschrift nach erfolgreichem Bezahlvorgang.
+              <TrustItem icon={Zap} title={t.credits.trust1Title}>
+                {t.credits.trust1Body}
               </TrustItem>
-              <TrustItem icon={ShieldCheck} title="Sichere Bezahlung">
-                Abwicklung über den offiziellen Brospify-Shopify-Checkout.
+              <TrustItem icon={ShieldCheck} title={t.credits.trust2Title}>
+                {t.credits.trust2Body}
               </TrustItem>
             </div>
           </div>
@@ -243,9 +244,9 @@ export default function CreditsPage() {
           <div className="space-y-3.5">
             <div className="flex items-baseline justify-between mb-1">
               <h2 className="text-[13px] uppercase tracking-[0.18em] font-semibold text-white/55">
-                Pakete
+                {t.credits.packages}
               </h2>
-              <span className="text-[11px] text-white/30">Einmalzahlung · inkl. MwSt.</span>
+              <span className="text-[11px] text-white/30">{t.credits.oneTimeTax}</span>
             </div>
             {packages.map((pkg, idx) => (
               <PackageRow
@@ -270,14 +271,14 @@ export default function CreditsPage() {
         >
           <ShieldCheck className="w-5 h-5 text-[#95BF47] mt-0.5 shrink-0" />
           <div className="text-[13.5px] leading-relaxed text-white/75">
-            <span className="font-semibold text-white">Hinweis: </span>
-            Diese Credits sind nur in Verbindung mit einem Brospify Abo nutzbar.
+            <span className="font-semibold text-white">{t.credits.hintLabel}</span>
+            {t.credits.hintBody}
           </div>
         </motion.div>
 
         {checkoutEmail && (
           <p className="mt-6 text-[11px] text-white/30 text-center">
-            Checkout vorausgefüllt mit{" "}
+            {t.credits.prefilledWith}{" "}
             <span className="font-mono text-white/55">{checkoutEmail}</span>
           </p>
         )}
@@ -309,6 +310,7 @@ function BalanceCard({
   loading: boolean;
   email: string;
 }) {
+  const { t } = useI18n();
   const empty = balance <= 0 && !loading;
   return (
     <motion.div
@@ -331,7 +333,7 @@ function BalanceCard({
       <div className="relative">
         <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.18em] text-white/45 mb-3">
           <Coins className="w-3.5 h-3.5 text-[#95BF47]" />
-          Aktuelles Guthaben
+          {t.credits.balanceLabel}
         </div>
 
         <div className="flex items-baseline gap-2.5">
@@ -350,11 +352,11 @@ function BalanceCard({
         {empty ? (
           <p className="mt-4 text-[13px] text-amber-200/85 leading-relaxed">
             <AlertTriangle className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
-            Dein Guthaben ist leer – AI-Tools sind blockiert. Lade auf, um wieder loszulegen.
+            {t.credits.emptyMsg}
           </p>
         ) : (
           <p className="mt-4 text-[13px] text-white/50 leading-relaxed">
-            Dein Guthaben verfällt nicht – verbrauchte Credits werden in Echtzeit aktualisiert.
+            {t.credits.balanceMsg}
           </p>
         )}
 
@@ -388,6 +390,7 @@ function VoucherCard({
   onSubmit: (e: React.FormEvent) => void;
   onDismissStatus: () => void;
 }) {
+  const { t } = useI18n();
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -401,10 +404,10 @@ function VoucherCard({
     >
       <div className="flex items-center gap-2 text-[10.5px] uppercase tracking-[0.18em] text-white/45 mb-1.5">
         <Ticket className="w-3.5 h-3.5 text-[#95BF47]" />
-        Gutschein einlösen
+        {t.credits.voucherEyebrow}
       </div>
       <h3 className="font-sf-display text-xl font-semibold tracking-tight mb-4">
-        Hast du einen Code?
+        {t.credits.voucherQuestion}
       </h3>
 
       <form onSubmit={onSubmit} className="flex flex-col sm:flex-row gap-2.5">
@@ -416,7 +419,7 @@ function VoucherCard({
               onDismissStatus();
             }
           }}
-          placeholder="z. B. WELCOME50"
+          placeholder={t.credits.voucherPlaceholder}
           maxLength={64}
           className="flex-1 rounded-xl px-4 py-3 text-[14px] font-mono tracking-wider uppercase outline-none transition placeholder:text-white/20 placeholder:font-sans placeholder:tracking-normal placeholder:normal-case"
           style={{
@@ -434,7 +437,7 @@ function VoucherCard({
           ) : (
             <Ticket className="w-4 h-4" />
           )}
-          Einlösen
+          {t.credits.redeem}
         </button>
       </form>
 
@@ -449,7 +452,7 @@ function VoucherCard({
           >
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             <span>
-              <span className="font-semibold">+{status.credits.toLocaleString("de-DE")} Credits</span> wurden gutgeschrieben.
+              <span className="font-semibold">+{status.credits.toLocaleString("de-DE")} Credits</span> {t.credits.creditedSuffix}
             </span>
           </motion.div>
         )}
@@ -487,6 +490,7 @@ function PackageRow({
   hasEmail: boolean;
   onBuy: () => void;
 }) {
+  const { t } = useI18n();
   const featured = pkg.id === "pro";
   const max = pkg.id === "max";
 
@@ -533,7 +537,7 @@ function PackageRow({
                 {pkg.priceLabel}
               </span>
               <span className="text-[10.5px] text-white/35 uppercase tracking-[0.12em]">
-                einmalig
+                {t.credits.oneTime}
               </span>
             </div>
           </div>
@@ -545,12 +549,12 @@ function PackageRow({
             className={`shrink-0 inline-flex items-center justify-center gap-1.5 px-4 md:px-5 h-11 md:h-12 rounded-xl font-semibold text-[13.5px] transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${
               featured ? "btn-deploy" : "btn-accent"
             }`}
-            title={hasEmail ? "Zur Kasse" : "Kein E-Mail-Profil hinterlegt"}
+            title={hasEmail ? t.credits.toCheckout : t.credits.noEmailProfile}
           >
             {redirecting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              "Kaufen"
+              t.credits.buy
             )}
           </button>
         </div>
