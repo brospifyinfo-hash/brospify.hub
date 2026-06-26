@@ -29,6 +29,7 @@ import {
 import Link from "next/link";
 import Navigation from "@/components/Navigation";
 import { tierFromSku, TIER_DISPLAY_LABEL, DEFAULT_TIERS, type TierKey } from "@/lib/tiers-shared";
+import { useI18n, type Locale } from "@/lib/i18n";
 
 interface CreditTransaction {
   ts: string;
@@ -68,6 +69,11 @@ const SHOPIFY_PORTAL_URL = process.env.NEXT_PUBLIC_SHOPIFY_CUSTOMER_PORTAL_URL |
 
 export default function AccountSubscriptionPage() {
   const router = useRouter();
+  const { t, lang } = useI18n();
+  const CANCEL_REASONS = [
+    t.subscription.rTooExpensive, t.subscription.rNotEnough, t.subscription.rMissingFeatures,
+    t.subscription.rTechnical, t.subscription.rTemporary, t.subscription.rOther,
+  ];
   const [loading, setLoading] = useState(true);
   const [planSku, setPlanSku] = useState("");
   const [profile, setProfile] = useState<ProfileWithSub | null>(null);
@@ -93,11 +99,11 @@ export default function AccountSubscriptionPage() {
 
   const tierKey = tierFromSku(planSku);
   const tier = (tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null) || null;
-  const tierLabel = tierKey ? TIER_DISPLAY_LABEL[tierKey] : "Kein Abo";
+  const tierLabel = tierKey ? TIER_DISPLAY_LABEL[tierKey] : t.subscription.noPlan;
 
   const isCanceled = !!profile?.tierCanceledAt;
   const isExpired = !!(profile?.subscriptionEndsAt && new Date(profile.subscriptionEndsAt) < new Date());
-  const statusLabel = isExpired ? "Abgelaufen" : isCanceled ? "Gekuendigt" : tierKey ? "Aktiv" : "Inaktiv";
+  const statusLabel = isExpired ? t.subscription.statusExpired : isCanceled ? t.subscription.statusCanceled : tierKey ? t.subscription.statusActive : t.subscription.statusInactive;
 
   // Verbleibende Tage bis subscriptionEndsAt (für die prominente Anzeige).
   const daysLeft = profile?.subscriptionEndsAt
@@ -149,9 +155,9 @@ export default function AccountSubscriptionPage() {
             <Coins className="w-5 h-5 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold">Abo verwalten</h1>
+            <h1 className="text-xl sm:text-2xl font-bold">{t.subscription.title}</h1>
             <p className="text-zinc-400 text-xs sm:text-sm">
-              Status, Verlaengerung, Kuendigung und Verlauf
+              {t.subscription.subtitle}
             </p>
           </div>
         </motion.div>
@@ -171,24 +177,24 @@ export default function AccountSubscriptionPage() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <KPICard
             icon={Coins}
-            label="Aktuelles Guthaben"
-            value={balance.toLocaleString("de-DE")}
+            label={t.subscription.currentBalance}
+            value={balance.toLocaleString(localeOf(lang))}
             suffix="Credits"
             color="#F59E0B"
             highlight
           />
           <KPICard
             icon={TrendingUp}
-            label="Automatisch"
-            value={creditCycle ? creditCycle.recurringAmount.toLocaleString("de-DE") : "—"}
-            suffix={creditCycle ? `Credits / ${creditCycle.periodDays} Tage` : ""}
+            label={t.subscription.auto}
+            value={creditCycle ? creditCycle.recurringAmount.toLocaleString(localeOf(lang)) : "—"}
+            suffix={creditCycle ? `${t.subscription.creditsPer} ${creditCycle.periodDays} ${t.subscription.daysWord}` : ""}
             color="#10B981"
           />
           <KPICard
             icon={Receipt}
-            label="Insgesamt erworben"
-            value={(profile?.credits?.totalPurchased || 0).toLocaleString("de-DE")}
-            suffix="seit Beginn"
+            label={t.subscription.totalPurchased}
+            value={(profile?.credits?.totalPurchased || 0).toLocaleString(localeOf(lang))}
+            suffix={t.subscription.sinceStart}
             color="#6366F1"
           />
         </div>
@@ -204,35 +210,35 @@ export default function AccountSubscriptionPage() {
             <div className="space-y-3">
               <h2 className="text-[13px] font-bold flex items-center gap-2 text-zinc-200">
                 <Calendar className="w-4 h-4 text-zinc-500" />
-                Zeitleiste
+                {t.subscription.timeline}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <TimelineRow
-                  label="Abo seit"
-                  value={profile?.tierSince ? formatDate(profile.tierSince) : "—"}
+                  label={t.subscription.subSince}
+                  value={profile?.tierSince ? formatDate(profile.tierSince, lang) : "—"}
                   icon={Calendar}
                 />
                 <TimelineRow
-                  label="Letzte Aufladung"
-                  value={profile?.lastSubscriptionRefillAt ? formatRelative(profile.lastSubscriptionRefillAt) : "Noch keine"}
+                  label={t.subscription.lastRefill}
+                  value={profile?.lastSubscriptionRefillAt ? formatRelative(profile.lastSubscriptionRefillAt, lang) : t.subscription.noneYet}
                   icon={RefreshCcw}
                 />
                 {!isCanceled && !isExpired && profile?.subscriptionEndsAt && (
                   <TimelineRow
-                    label="Naechste Verlaengerung"
-                    value={`${formatDate(profile.subscriptionEndsAt)} (${formatRelative(profile.subscriptionEndsAt)})`}
+                    label={t.subscription.nextRenewal}
+                    value={`${formatDate(profile.subscriptionEndsAt, lang)} (${formatRelative(profile.subscriptionEndsAt, lang)})`}
                     icon={Sparkles}
                     highlight
-                    note="Verlängert deinen Zugang — Credits kommen separat alle 28 Tage"
+                    note={t.subscription.renewalNote}
                   />
                 )}
                 {isCanceled && !isExpired && profile?.subscriptionEndsAt && (
                   <TimelineRow
-                    label="Zugriff bis"
-                    value={`${formatDate(profile.subscriptionEndsAt)} (${formatRelative(profile.subscriptionEndsAt)})`}
+                    label={t.subscription.accessUntil}
+                    value={`${formatDate(profile.subscriptionEndsAt, lang)} (${formatRelative(profile.subscriptionEndsAt, lang)})`}
                     icon={ShieldOff}
                     warning
-                    note="Danach laeuft das Abo aus, keine neuen Credits"
+                    note={t.subscription.expiryNote}
                   />
                 )}
               </div>
@@ -245,7 +251,7 @@ export default function AccountSubscriptionPage() {
           <div className="space-y-3">
             <h2 className="text-[13px] font-bold flex items-center gap-2 text-zinc-200">
               <Sparkles className="w-4 h-4 text-zinc-500" />
-              Aktionen
+              {t.subscription.actions}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {/* Credits aufladen */}
@@ -254,7 +260,7 @@ export default function AccountSubscriptionPage() {
                 className="flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-semibold bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 transition"
               >
                 <Plus className="w-4 h-4" />
-                Credits aufladen
+                {t.subscription.topUp}
               </Link>
 
               {/* Abo abschliessen */}
@@ -264,7 +270,7 @@ export default function AccountSubscriptionPage() {
                   className="flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-semibold bg-gradient-to-r from-[#95BF47]/15 to-emerald-500/15 hover:from-[#95BF47]/25 hover:to-emerald-500/25 text-[#95BF47] border border-[#95BF47]/25 transition"
                 >
                   <Crown className="w-4 h-4" />
-                  Membership abschliessen
+                  {t.subscription.completeMembership}
                 </Link>
               )}
 
@@ -275,14 +281,13 @@ export default function AccountSubscriptionPage() {
                   className="flex items-center justify-center gap-2 py-3 rounded-xl text-[12px] font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-300 border border-red-500/20 transition"
                 >
                   <ShieldOff className="w-4 h-4" />
-                  Abo kündigen
+                  {t.subscription.cancelSub}
                 </button>
               )}
             </div>
             {tierKey && !isCanceled && (
               <p className="text-[10.5px] text-zinc-600 leading-snug">
-                Kuendigung erfolgt direkt im Shopify-Kundenkonto. Du behaeltst
-                Zugriff bis zum Ende der bereits bezahlten Periode.
+                {t.subscription.cancelHint}
               </p>
             )}
           </div>
@@ -294,7 +299,7 @@ export default function AccountSubscriptionPage() {
             <div className="space-y-3">
               <h2 className="text-[13px] font-bold flex items-center gap-2 text-zinc-200">
                 <Receipt className="w-4 h-4 text-zinc-500" />
-                Verlauf <span className="text-zinc-600 font-normal">(letzte 30 Tage)</span>
+                {t.subscription.history} <span className="text-zinc-600 font-normal">{t.subscription.last30}</span>
               </h2>
               <div className="space-y-1">
                 {recentTx.map((tx, idx) => (
@@ -318,10 +323,9 @@ export default function AccountSubscriptionPage() {
             onClick={(e) => e.stopPropagation()}
             className="w-full sm:max-w-md bg-zinc-900 border-t sm:border border-zinc-800 rounded-t-2xl sm:rounded-2xl p-5 sm:p-6"
           >
-            <h2 className="text-lg font-bold text-white">Abo kündigen</h2>
+            <h2 className="text-lg font-bold text-white">{t.subscription.cancelSub}</h2>
             <p className="mt-1 text-[12px] text-zinc-400 leading-snug">
-              Schade, dass du gehst. Bitte wähle einen Grund — danach leiten wir dich zu Shopify
-              weiter, wo du die Kündigung abschließt.
+              {t.subscription.cancelIntro}
             </p>
 
             <div className="mt-4 space-y-1.5">
@@ -352,14 +356,14 @@ export default function AccountSubscriptionPage() {
                 onClick={() => !canceling && setCancelOpen(false)}
                 className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold bg-white/[0.05] border border-white/10 text-zinc-300 hover:bg-white/[0.08] transition"
               >
-                Doch behalten
+                {t.subscription.keepIt}
               </button>
               <button
                 onClick={confirmCancel}
                 disabled={!cancelReason || canceling}
                 className="flex-1 py-2.5 rounded-xl text-[12px] font-semibold bg-red-500/15 border border-red-500/25 text-red-300 hover:bg-red-500/25 transition disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1.5"
               >
-                {canceling ? "Weiterleiten…" : "Weiter zu Shopify"}
+                {canceling ? t.subscription.redirecting : t.subscription.continueShopify}
                 {!canceling && <ExternalLink className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -370,18 +374,10 @@ export default function AccountSubscriptionPage() {
   );
 }
 
-const CANCEL_REASONS = [
-  "Zu teuer",
-  "Ich nutze es nicht genug",
-  "Mir fehlen Funktionen",
-  "Technische Probleme",
-  "Nur vorübergehend / Pause",
-  "Anderer Grund",
-];
-
 // ─── Credit-Zyklus (28-Tage-Gutschrift, grafische Timeline) ──────
 
 function CreditCycleCard({ cycle }: { cycle: CreditCycle }) {
+  const { t, lang } = useI18n();
   const days = cycle.periodDays;
   const daysLeft = cycle.daysUntilNext ?? days;
   const daysDone = Math.max(0, Math.min(days, days - daysLeft));
@@ -427,36 +423,37 @@ function CreditCycleCard({ cycle }: { cycle: CreditCycle }) {
                 className="absolute -translate-x-1/2 text-[9px] text-zinc-600 tabular-nums"
                 style={{ left: `${Math.min(100, (d / days) * 100)}%` }}
               >
-                {d === 0 ? "Start" : `T${d}`}
+                {d === 0 ? t.subscription.cycleStart : `T${d}`}
               </span>
             ))}
           </div>
           <div className="flex justify-between text-[10.5px] text-zinc-500 mt-1">
-            <span>Tag {daysDone} von {days}</span>
+            <span>{t.subscription.dayWord} {daysDone} {t.subscription.cycleOf} {days}</span>
             <span>
-              {cycle.nextGrantAt ? `Nächste: ${formatDate(cycle.nextGrantAt)}` : ""}
+              {cycle.nextGrantAt ? `${t.subscription.cycleNext} ${formatDate(cycle.nextGrantAt, lang)}` : ""}
             </span>
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <div className="p-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02]">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Letzte Gutschrift</div>
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">{t.subscription.lastGrant}</div>
             <div className="text-[12.5px] text-zinc-200 mt-0.5">
-              {cycle.lastGrantAt ? formatRelative(cycle.lastGrantAt) : "Noch keine (Willkommens-Bonus war der Start)"}
+              {cycle.lastGrantAt ? formatRelative(cycle.lastGrantAt, lang) : t.subscription.noGrantYet}
             </div>
           </div>
           <div className="p-2.5 rounded-xl border border-white/[0.05] bg-white/[0.02]">
-            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">Bisher erhalten</div>
+            <div className="text-[9px] uppercase tracking-widest text-zinc-500 font-bold">{t.subscription.receivedSoFar}</div>
             <div className="text-[12.5px] text-zinc-200 mt-0.5 tabular-nums">
-              {cycle.periodsGranted}× {cycle.recurringAmount.toLocaleString("de-DE")} Credits
+              {cycle.periodsGranted}× {cycle.recurringAmount.toLocaleString(localeOf(lang))} Credits
             </div>
           </div>
         </div>
 
         <p className="text-[10.5px] text-zinc-600 leading-snug">
-          Jeder Account bekommt beim ersten Login 1.500 Credits und danach automatisch alle {days} Tage
-          {" "}{cycle.recurringAmount.toLocaleString("de-DE")} Credits dazu — unabhängig vom Abo-Status.
+          {lang === "en"
+            ? `Every account gets 1,500 credits on first login and then ${cycle.recurringAmount.toLocaleString("en-GB")} more credits automatically every ${days} days — regardless of subscription status.`
+            : `Jeder Account bekommt beim ersten Login 1.500 Credits und danach automatisch alle ${days} Tage ${cycle.recurringAmount.toLocaleString("de-DE")} Credits dazu — unabhängig vom Abo-Status.`}
         </p>
       </div>
     </Card>
@@ -476,6 +473,7 @@ function PlanHero({
   tier: typeof DEFAULT_TIERS[number] | null;
   daysLeft: number | null;
 }) {
+  const { t, lang } = useI18n();
   const gradient = tierKey
     ? "from-amber-500/15 via-amber-500/8 to-transparent"
     : "from-zinc-500/8 to-transparent";
@@ -494,14 +492,14 @@ function PlanHero({
       <div className="relative p-5 sm:p-6">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Aktueller Plan</div>
+            <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">{t.subscription.currentPlan}</div>
             <div className="text-3xl sm:text-4xl font-black tracking-tight flex items-center gap-2">
               {tierKey && <Crown className="w-6 h-6 text-amber-300" />}
               {tierLabel}
             </div>
             {tier && (
               <div className="text-[12px] text-zinc-500 mt-1">
-                {tier.priceMonthlyEur} EUR / Monat · {tier.monthlyCreditAllowance.toLocaleString("de-DE")} Credits / Monat
+                {tier.priceMonthlyEur} EUR {t.subscription.perMonth} · {tier.monthlyCreditAllowance.toLocaleString(localeOf(lang))} {t.subscription.creditsPerMonth}
               </div>
             )}
           </div>
@@ -516,8 +514,8 @@ function PlanHero({
           <div className="mt-4 inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-white/[0.05] border border-white/[0.10]">
             <Calendar className={`w-4 h-4 ${isCanceled ? "text-amber-400" : "text-green-400"}`} />
             <span className="text-[13px] text-zinc-200">
-              {isCanceled ? "Zugriff noch" : "Abo läuft noch"}{" "}
-              <span className="font-bold text-white">{daysLeft} {daysLeft === 1 ? "Tag" : "Tage"}</span>
+              {isCanceled ? t.subscription.accessStill : t.subscription.subStillRuns}{" "}
+              <span className="font-bold text-white">{daysLeft} {daysLeft === 1 ? t.subscription.dayWord : t.subscription.daysWord}</span>
             </span>
           </div>
         )}
@@ -606,17 +604,18 @@ function TimelineRow({
 // ─── Transaction Row ─────────────────────────────────────────────
 
 function TxRow({ tx }: { tx: CreditTransaction }) {
+  const { t, lang } = useI18n();
   const isPositive = tx.delta > 0;
   const typeLabel = {
-    starter: "Willkommens-Bonus",
-    subscription: "Monats-Credits",
-    recurring: "28-Tage-Gutschrift",
-    survey: "Umfrage-Bonus",
-    topup: "Aufladung",
-    voucher: "Code eingeloest",
-    "admin-grant": "Admin-Gutschrift",
-    "admin-revoke": "Admin-Abzug",
-    deduct: "Tool-Nutzung",
+    starter: t.subscription.txStarter,
+    subscription: t.subscription.txSubscription,
+    recurring: t.subscription.txRecurring,
+    survey: t.subscription.txSurvey,
+    topup: t.subscription.txTopup,
+    voucher: t.subscription.txVoucher,
+    "admin-grant": t.subscription.txAdminGrant,
+    "admin-revoke": t.subscription.txAdminRevoke,
+    deduct: t.subscription.txDeduct,
   }[tx.type] || tx.type;
 
   return (
@@ -631,7 +630,7 @@ function TxRow({ tx }: { tx: CreditTransaction }) {
           {typeLabel}
           {tx.reason && <span className="text-zinc-500 font-normal"> · {tx.reason}</span>}
         </div>
-        <div className="text-[10px] text-zinc-600">{formatDateTime(tx.ts)}</div>
+        <div className="text-[10px] text-zinc-600">{formatDateTime(tx.ts, lang)}</div>
       </div>
       <div className={`font-mono text-sm font-bold tabular-nums ${isPositive ? "text-green-400" : "text-red-400"}`}>
         {isPositive ? "+" : ""}{tx.delta.toLocaleString("de-DE")}
@@ -642,31 +641,36 @@ function TxRow({ tx }: { tx: CreditTransaction }) {
 
 // ─── Helpers ────────────────────────────────────────────────────
 
-function formatDate(iso: string): string {
+function localeOf(lang: Locale): string {
+  return lang === "en" ? "en-GB" : "de-DE";
+}
+
+function formatDate(iso: string, lang: Locale = "de"): string {
   if (!iso) return "—";
   try {
-    return new Date(iso).toLocaleDateString("de-DE", { day: "2-digit", month: "long", year: "numeric" });
+    return new Date(iso).toLocaleDateString(localeOf(lang), { day: "2-digit", month: "long", year: "numeric" });
   } catch { return iso; }
 }
 
-function formatDateTime(iso: string): string {
+function formatDateTime(iso: string, lang: Locale = "de"): string {
   if (!iso) return "";
   try {
-    return new Date(iso).toLocaleString("de-DE", {
+    return new Date(iso).toLocaleString(localeOf(lang), {
       day: "2-digit", month: "2-digit", year: "2-digit",
       hour: "2-digit", minute: "2-digit",
     });
   } catch { return iso; }
 }
 
-function formatRelative(iso: string): string {
+function formatRelative(iso: string, lang: Locale = "de"): string {
   if (!iso) return "";
-  const t = new Date(iso).getTime();
-  if (!Number.isFinite(t)) return "";
-  const diffDays = Math.round((t - Date.now()) / 86400000);
-  if (Math.abs(diffDays) < 1) return "heute";
-  if (diffDays === 1) return "morgen";
-  if (diffDays === -1) return "gestern";
-  if (diffDays > 0) return `in ${diffDays} Tagen`;
-  return `vor ${Math.abs(diffDays)} Tagen`;
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return "";
+  const en = lang === "en";
+  const diffDays = Math.round((ts - Date.now()) / 86400000);
+  if (Math.abs(diffDays) < 1) return en ? "today" : "heute";
+  if (diffDays === 1) return en ? "tomorrow" : "morgen";
+  if (diffDays === -1) return en ? "yesterday" : "gestern";
+  if (diffDays > 0) return en ? `in ${diffDays} days` : `in ${diffDays} Tagen`;
+  return en ? `${Math.abs(diffDays)} days ago` : `vor ${Math.abs(diffDays)} Tagen`;
 }
