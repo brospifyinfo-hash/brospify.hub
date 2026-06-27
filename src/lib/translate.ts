@@ -191,3 +191,88 @@ export async function localizeObject<T>(obj: T, lang: Lang): Promise<T> {
   const [out] = await localizeArray([obj], lang);
   return out;
 }
+
+// ─── Timeout-sichere Varianten ───────────────────────────────────
+// Die Übersetzung läuft inline im Request. Ein KALTER Cache (Produkt
+// noch nie auf Englisch gezogen) würde sonst den kompletten Produkt-
+// inhalt synchron per KI übersetzen — bei vielen Strings dauert das zu
+// lange und der Serverless-Request läuft in den Timeout (genau der Grund,
+// warum der Produkt-Drop auf Englisch „nicht ging"). Diese Wrapper geben
+// nach `timeoutMs` den deutschen Originaltext zurück, statt hart zu
+// scheitern; die eigentliche Übersetzung läuft im Hintergrund weiter und
+// füllt den Cache, sodass der NÄCHSTE Aufruf sofort Englisch liefert.
+
+function withTimeout<T>(p: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) { settled = true; resolve(fallback); }
+    }, ms);
+    p.then((v) => { if (!settled) { settled = true; clearTimeout(timer); resolve(v); } })
+      .catch(() => { if (!settled) { settled = true; clearTimeout(timer); resolve(fallback); } });
+  });
+}
+
+/** localizeArray, das bei Überschreiten von `timeoutMs` die Originale
+ *  (Deutsch) zurückgibt statt zu blockieren. Bricht NIE den Aufrufer ab. */
+export async function localizeArraySafe<T>(items: T[], lang: Lang, timeoutMs = 12_000): Promise<T[]> {
+  if (lang === "de" || items.length === 0) return items;
+  return withTimeout(localizeArray(items, lang), timeoutMs, items);
+}
+
+/** localizeObject mit Timeout-Fallback auf das Original. */
+export async function localizeObjectSafe<T>(obj: T, lang: Lang, timeoutMs = 12_000): Promise<T> {
+  if (lang === "de" || obj == null) return obj;
+  return withTimeout(localizeObject(obj, lang), timeoutMs, obj);
+}
+
+// ─── Cache vorwärmen (Produkte) ──────────────────────────────────
+
+/** Übersetzbare Felder EINES Produkts. Genau die Strings, die der
+ *  Produkt-Drop später übersetzt (titel, beschreibung, alles in extra).
+ *  preis/sku/links/monat sind über SKIP_KEYS ohnehin ausgenommen. */
+function productStrings(p: { titel?: unknown; beschreibung?: unknown; extra?: unknown }): string[] {
+  const slots: Slot[] = [];
+  collect({ titel: p.titel ?? "", beschreibung: p.beschreibung ?? "", extra: p.extra ?? {} }, "", slots);
+  return Array.from(new Set(slots.map((s) => s.value)));
+}
+
+/**
+ * Wärmt den Übersetzungs-Cache für EIN Produkt vor (Quelle DE → `lang`).
+ * Cache-bewusst: übersetzt nur die noch NICHT gecachten Strings und kostet
+ * dadurch nur beim ersten Mal etwas. Best-effort (Timeout/Fehler werden
+ * verschluckt). Gibt `true` zurück, wenn tatsächlich übersetzt wurde
+ * (= das Produkt war noch nicht vollständig im Cache) — nützlich fürs
+ * Backfill, um Fortschritt zu zählen.
+ */
+export async function warmProductTranslation(
+  p: { titel?: unknown; beschreibung?: unknown; extra?: unknown },
+  lang: Lang,
+  timeoutMs = 45_000,
+): Promise<boolean> {
+  if (lang === "de") return false;
+  const strings = productStrings(p);
+  if (strings.length === 0) return false;
+  const cache = await loadCache(lang);
+  const missing = strings.filter((s) => !cache.has(hash(s)));
+  if (missing.length === 0) return false; // schon vollständig übersetzt
+  try {
+    await withTimeout(translateBatch(missing, lang).then(() => undefined), timeoutMs, undefined);
+  } catch {
+    /* best-effort — Cache wurde so weit wie möglich gefüllt */
+  }
+  return true;
+}
+
+/** Liest nur (kein KI-Aufruf): Hat das Produkt noch nicht gecachte Strings,
+ *  muss also noch (teilweise) übersetzt werden? Fürs Backfill-Statusbild. */
+export async function productNeedsTranslation(
+  p: { titel?: unknown; beschreibung?: unknown; extra?: unknown },
+  lang: Lang,
+): Promise<boolean> {
+  if (lang === "de") return false;
+  const strings = productStrings(p);
+  if (strings.length === 0) return false;
+  const cache = await loadCache(lang);
+  return strings.some((s) => !cache.has(hash(s)));
+}

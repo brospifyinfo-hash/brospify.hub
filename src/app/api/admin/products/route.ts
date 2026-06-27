@@ -8,8 +8,24 @@ import {
   getProduktByRowIndex,
   type Produkt,
 } from "@/lib/sheets";
+import { warmProductTranslation } from "@/lib/translate";
 
 export const dynamic = "force-dynamic";
+// Beim Anlegen/Ändern wird zusätzlich die englische Übersetzung vorbereitet
+// (KI, gecached). Das braucht etwas Zeit — daher mehr Headroom.
+export const maxDuration = 60;
+
+// Bereitet die englische Übersetzung eines Produkts vor und füllt den
+// Cache, damit der Produkt-Drop auf Englisch SOFORT funktioniert (statt
+// erst beim ersten Zug live zu übersetzen). Best-effort: Fehler/Timeout
+// blockieren das Speichern NIE.
+async function prepareEnglish(p: { titel?: unknown; beschreibung?: unknown; extra?: unknown }) {
+  try {
+    await warmProductTranslation(p, "en");
+  } catch (e) {
+    console.warn("[Admin products] EN pre-translation skipped:", e);
+  }
+}
 
 // Bumpen wenn der Bug wieder auftaucht — Frontend zeigt das in der
 // Console, damit wir SOFORT sehen ob Vercel den neuen Code serviert.
@@ -280,6 +296,9 @@ export async function POST(req: NextRequest) {
       console.warn("[Admin POST] post-save verification skipped:", e);
     }
 
+    // Englische Übersetzung vorbereiten (Cache vorwärmen) — best-effort.
+    await prepareEnglish({ titel, beschreibung: body.description || body.beschreibung || "", extra });
+
     return NextResponse.json({
       success: true,
       version: HANDLER_VERSION,
@@ -359,6 +378,9 @@ export async function PUT(req: NextRequest) {
     } catch (e) {
       console.warn("[Admin PUT] post-save verification skipped:", e);
     }
+
+    // Geänderte Inhalte → englische Übersetzung neu vorbereiten (best-effort).
+    await prepareEnglish({ titel, beschreibung: body.description || body.beschreibung || "", extra });
 
     return NextResponse.json({
       success: true,

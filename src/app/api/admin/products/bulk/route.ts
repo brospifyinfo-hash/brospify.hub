@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { bulkAddProdukte } from "@/lib/sheets";
+import { warmProductTranslation } from "@/lib/translate";
+
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const session = await getSession();
@@ -50,7 +53,28 @@ export async function POST(req: NextRequest) {
     });
 
     await bulkAddProdukte(produkte);
-    return NextResponse.json({ success: true, count: produkte.length, message: `${produkte.length} Produkte importiert.` });
+
+    // Englische Übersetzungen vorbereiten (Cache vorwärmen), damit der
+    // Produkt-Drop auf Englisch sofort funktioniert. Best-effort mit
+    // Zeitbudget — was nicht mehr reinpasst, holt das Backfill
+    // (/api/admin/products/translate-all) oder der erste Zug nach.
+    let warmed = 0;
+    const startedAt = Date.now();
+    for (const p of produkte) {
+      if (Date.now() - startedAt > 90_000) break;
+      try {
+        if (await warmProductTranslation(p, "en")) warmed++;
+      } catch {
+        /* best-effort */
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: produkte.length,
+      translatedEn: warmed,
+      message: `${produkte.length} Produkte importiert${warmed ? `, ${warmed} davon auf Englisch vorbereitet` : ""}.`,
+    });
   } catch (error) {
     console.error("Bulk import error:", error);
     return NextResponse.json({ error: "Fehler beim Import." }, { status: 500 });

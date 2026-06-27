@@ -25,10 +25,13 @@ import {
   type Produkt,
 } from "@/lib/sheets";
 import { getCreditCost } from "@/lib/credit-config-server";
-import { localizeArray, localizeObject, type Lang } from "@/lib/translate";
+import { localizeArraySafe, localizeObjectSafe, type Lang } from "@/lib/translate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+// Etwas mehr Headroom für eine evtl. nötige Inline-KI-Übersetzung (kalter
+// Cache). Im Normalfall ist der Cache warm und der Zug ist sofort da.
+export const maxDuration = 60;
 
 // Zielsprache aus ?lang= lesen. Englisch → Produktinhalte werden per KI
 // übersetzt (gecached); Deutsch = Originaltext, keine Übersetzung.
@@ -96,7 +99,10 @@ export async function GET(req: NextRequest) {
     .reverse()
     .map(project);
   // Bei Englisch die Produktinhalte per KI übersetzen (gecached, fail-safe).
-  const drawn = await localizeArray(drawnRaw, lang);
+  // Timeout-sicher: dauert die Übersetzung zu lange (kalter Cache), kommt
+  // die deutsche Historie zurück statt eines Fehlers; der Cache füllt sich
+  // im Hintergrund für den nächsten Aufruf.
+  const drawn = await localizeArraySafe(drawnRaw, lang);
   const remainingCount = all.filter((p) => !drawnSet.has(p.id)).length;
 
   return NextResponse.json(
@@ -141,7 +147,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ok: true,
-        produkt: await localizeObject(project(pick), lang),
+        produkt: await localizeObjectSafe(project(pick), lang),
         creditsRemaining: undefined,
         drawnCount: 0,
         totalCount,
@@ -249,7 +255,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(
     {
       ok: true,
-      produkt: await localizeObject(project(pick), lang),
+      produkt: await localizeObjectSafe(project(pick), lang),
       creditsRemaining,
       drawnCount: newDrawnCount,
       totalCount,

@@ -11,7 +11,7 @@ import {
   TrendingDown, TrendingUp, ArrowDownCircle, ArrowUpCircle, Sparkles,
   Clock, Crown, UserCog, ScrollText, Eye, ArrowRightLeft, Repeat, Euro,
   Code2, GraduationCap, Lightbulb, MessageCircle, Wand2, ChevronDown,
-  Link2, Percent, Star, Rocket, ListChecks,
+  Link2, Percent, Star, Rocket, ListChecks, Languages,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
@@ -1932,6 +1932,38 @@ export default function AdminPage() {
     finally { setLinkCheckRunning(false); }
   }
 
+  // Wärmt den englischen Übersetzungs-Cache für ALLE Produkte vor, damit
+  // der Produkt-Drop auf Englisch sofort lädt. Ruft den Backfill-Endpoint
+  // so oft auf, bis er "done" meldet (er arbeitet pro Aufruf mit Zeitbudget).
+  const [enTranslating, setEnTranslating] = useState(false);
+  async function handleTranslateAllEnglish() {
+    if (enTranslating) return;
+    setEnTranslating(true); setError(""); setSuccess("");
+    try {
+      const status = await fetch("/api/admin/products/translate-all").then((r) => r.json()).catch(() => null);
+      if (status?.ok && status.pending === 0) {
+        setSuccess(`Alle ${status.total} Produkte sind bereits auf Englisch vorbereitet.`);
+        setTimeout(() => setSuccess(""), 6000);
+        return;
+      }
+      let translated = 0;
+      for (let pass = 0; pass < 50; pass++) {
+        const res = await fetch("/api/admin/products/translate-all", { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { setError(data.error || "Übersetzung fehlgeschlagen."); return; }
+        translated += data.translatedNow || 0;
+        if (data.done) {
+          setSuccess(`Fertig — alle Produkte sind auf Englisch vorbereitet (${translated} neu übersetzt).`);
+          setTimeout(() => setSuccess(""), 8000);
+          return;
+        }
+        setSuccess(`Übersetze Produkte auf Englisch… ${translated} fertig, läuft weiter…`);
+      }
+      setError("Übersetzung gestoppt (zu viele Durchläufe) — bitte erneut starten.");
+    } catch { setError("Übersetzung fehlgeschlagen."); }
+    finally { setEnTranslating(false); }
+  }
+
   // Repariert Produktzeilen, in denen Titel und Preis vertauscht
   // gespeichert wurden (titel = "prod_xxx", preis = echter Titel).
   // Erst Dry-Run zum Vorschauen, dann ein zweiter Klick committet.
@@ -3578,6 +3610,10 @@ export default function AdminPage() {
             KI-Produkt finden
           </button>
           <button onClick={() => setBulkModal(true)} className="flex items-center gap-2 px-4 py-2.5 glass hover:bg-white/10 border border-white/10 rounded-xl text-sm font-medium transition"><Upload className="w-4 h-4" />JSON Bulk Import</button>
+          <button onClick={handleTranslateAllEnglish} disabled={enTranslating} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-blue-500/10 border border-blue-500/25 text-blue-200 hover:bg-blue-500/15 transition disabled:opacity-50" title="Bereitet für alle Produkte die englische Übersetzung vor (Cache vorwärmen), damit der Produkt-Drop auf Englisch sofort lädt.">
+            {enTranslating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
+            Auf Englisch übersetzen
+          </button>
           <button onClick={handleManualLinkCheck} disabled={linkCheckRunning} className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium bg-amber-500/10 border border-amber-500/25 text-amber-200 hover:bg-amber-500/15 transition disabled:opacity-50" title="Pingt alle Produktlinks an und schreibt extra.linkStatus">
             {linkCheckRunning ? <Loader2 className="w-4 h-4 animate-spin" /> : <Power className="w-4 h-4" />}
             Linkcheck jetzt
