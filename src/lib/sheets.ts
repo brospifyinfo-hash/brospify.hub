@@ -1283,6 +1283,9 @@ export interface ProduktExtra {
   adStrategy?: ProduktAdStrategy;
   /** User-Voting-Score: ups + downs + manualBoost. */
   votes?: ProduktVotes;
+  /** KI-generierte Theme-Landingpage-Texte (Platzhalter-Key → Wert).
+   *  Befüllt von der Maker-Checker-Pipeline, genutzt vom Theme-Export. */
+  themeCopy?: Record<string, string>;
 }
 
 export interface Produkt {

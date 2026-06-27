@@ -75,6 +75,7 @@ THEME — [Theme](/themes)
 - Handy: untere Leiste "Theme". Desktop: Profil-Menü → "Shop".
 - Lädt das aktuelle Brospify-Shopify-Theme als ZIP herunter (neueste Version oben; die 10 neuesten werden vorgehalten).
 - Ein ausklappbares "Hilfe"-Panel erklärt den Import in Shopify (Onlineshop → Themes → ZIP hochladen → Vorschau → Veröffentlichen).
+- NEU: Auf [Theme](/themes) gibt es zusätzlich den Bereich "Fertiges Produkt-Theme" — der Kunde wählt eines seiner im [Produkt Search](/charts) gezogenen Produkte + eine Hauptfarbe + eine Schriftart und lädt eine FERTIG befüllte Shopify-Theme-ZIP herunter: die komplette Landingpage (Headline, Vorteile, Bewertungen, FAQ etc.) ist bereits mit KI-Verkaufstexten zu DIESEM Produkt gefüllt, Farbe und Schrift sind gesetzt. Danach nur noch in Shopify importieren + das eigene Produkt zuweisen. Kostet KEINE Credits. Hinweis: Die Texte werden vom Brospify-Team pro Produkt vorbereitet — erscheint die Meldung "noch kein Theme verfügbar", ist das Produkt noch in Vorbereitung.
 
 COMMUNITY — [Community](/chats)
 - Community-Chat zum Austausch mit anderen Mitgliedern (Text und Bilder).

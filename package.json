@@ -18,6 +18,7 @@
     "@tiptap/starter-kit": "^3.22.2",
     "@upscalerjs/default-model": "^1.0.0",
     "@vercel/blob": "^2.3.3",
+    "adm-zip": "^0.5.17",
     "framer-motion": "^12.38.0",
     "googleapis": "^171.4.0",
     "iron-session": "^8.0.4",
@@ -31,6 +32,7 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/adm-zip": "^0.5.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

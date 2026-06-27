@@ -109,6 +109,11 @@ export default function ThemesPage() {
           {/* Hilfe-Dropdown */}
           <HelpPanel open={helpOpen} onToggle={() => setHelpOpen((v) => !v)} />
 
+          {/* Fertiges Produkt-Theme bauen */}
+          <div className="mt-5">
+            <ThemeBuilderCard />
+          </div>
+
           {/* Theme-Liste */}
           <div className="mt-5">
             {themes === null ? (
@@ -271,6 +276,166 @@ function EmptyCard({ error }: { error?: string }) {
       <p className="mt-2 text-[13px] text-zinc-400 max-w-sm mx-auto leading-snug">
         {error || t.themes.emptyDesc}
       </p>
+    </div>
+  );
+}
+
+// ─── Produkt-Theme-Builder ───────────────────────────────────────
+// Kunde wählt ein gezogenes Produkt + Farbe + Schrift → lädt ein fertig
+// befülltes Shopify-Theme (KI-Texte + Branding) über /api/theme-export.
+
+const BUILDER_FONTS = [
+  { value: "work_sans_n4", label: "Work Sans" },
+  { value: "acme_n4", label: "Acme" },
+  { value: "assistant_n4", label: "Assistant" },
+  { value: "montserrat_n4", label: "Montserrat" },
+  { value: "poppins_n4", label: "Poppins" },
+  { value: "roboto_n4", label: "Roboto" },
+];
+
+function ThemeBuilderCard() {
+  const { t, lang } = useI18n();
+  const [products, setProducts] = useState<{ id: string; titel: string }[]>([]);
+  const [productId, setProductId] = useState("");
+  const [color, setColor] = useState("#95BF47");
+  const [font, setFont] = useState("work_sans_n4");
+  const [building, setBuilding] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/charts/draw?lang=${lang}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const list = Array.isArray(d.drawn)
+          ? (d.drawn as { id: string; titel: string }[]).map((p) => ({ id: p.id, titel: p.titel }))
+          : [];
+        setProducts(list);
+        if (list[0]) setProductId((prev) => prev || list[0].id);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [lang]);
+
+  async function handleDownload() {
+    if (!productId || building) return;
+    setBuilding(true);
+    setMsg(null);
+    try {
+      const res = await fetch(
+        `/api/theme-export?productId=${encodeURIComponent(productId)}&color=${encodeURIComponent(color)}&font=${encodeURIComponent(font)}`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setMsg({
+          kind: "err",
+          text: res.status === 409 ? t.themes.builderNoCopy : data?.error || t.themes.builderErr,
+        });
+        return;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objUrl;
+      const cd = res.headers.get("Content-Disposition") || "";
+      const fileMatch = cd.match(/filename="(.+?)"/);
+      a.download = fileMatch ? fileMatch[1] : "theme.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(objUrl);
+      setMsg({ kind: "ok", text: t.themes.builderDone });
+    } catch {
+      setMsg({ kind: "err", text: t.themes.builderErr });
+    } finally {
+      setBuilding(false);
+    }
+  }
+
+  return (
+    <div className="glass-strong rounded-2xl border border-[#95BF47]/20 p-4 sm:p-5" style={{ background: "var(--accent-light)" }}>
+      <div className="flex items-center gap-2 mb-1">
+        <Sparkles className="w-4 h-4" style={{ color: ACCENT }} />
+        <h3 className="text-[14px] sm:text-[15px] font-semibold text-white">{t.themes.builderTitle}</h3>
+      </div>
+      <p className="text-[12px] text-zinc-400 leading-snug mb-4">{t.themes.builderSub}</p>
+
+      {products.length === 0 ? (
+        <p className="text-[12.5px] text-zinc-400">{t.themes.builderNoProducts}</p>
+      ) : (
+        <>
+          <div className="grid sm:grid-cols-3 gap-3">
+            <label className="block">
+              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
+              <select
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+              >
+                {products.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-zinc-900">
+                    {p.titel}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderColor}</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="w-10 h-9 rounded-lg bg-transparent border border-white/10 p-0.5 cursor-pointer"
+                />
+                <input
+                  type="text"
+                  value={color}
+                  onChange={(e) => setColor(e.target.value)}
+                  className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                />
+              </div>
+            </label>
+            <label className="block">
+              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFont}</span>
+              <select
+                value={font}
+                onChange={(e) => setFont(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+              >
+                {BUILDER_FONTS.map((f) => (
+                  <option key={f.value} value={f.value} className="bg-zinc-900">
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <button
+            onClick={handleDownload}
+            disabled={building || !productId}
+            className="btn-deploy mt-4 w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-[13px] disabled:opacity-50"
+          >
+            {building ? (
+              <Sparkles className="w-4 h-4 animate-pulse" />
+            ) : (
+              <Download className="w-4 h-4" />
+            )}
+            <span>{building ? t.themes.builderBuilding : t.themes.builderDownload}</span>
+          </button>
+
+          {msg && (
+            <p className={`mt-2 text-[12px] ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>
+              {msg.text}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

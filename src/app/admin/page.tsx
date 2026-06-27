@@ -481,6 +481,7 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [editModal, setEditModal] = useState(false);
+  const [genThemeBusy, setGenThemeBusy] = useState(false);
   const [editProduct, setEditProduct] = useState<EditProduct | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [bulkModal, setBulkModal] = useState(false);
@@ -1693,6 +1694,32 @@ export default function AdminPage() {
 
   function openNew() { setAiEvidence(""); setEditProduct({ ...EMPTY, stats: { ...EMPTY.stats }, finances: { ...EMPTY.finances }, images: [] }); setIsNew(true); setEditModal(true); }
   function openEdit(p: Produkt) { setAiEvidence(""); setEditProduct(produktToEdit(p)); setIsNew(false); setEditModal(true); }
+
+  // KI-Theme-Texte (Maker-Checker-Pipeline) für das aktuell bearbeitete
+  // Produkt generieren und in extra.themeCopy speichern. Danach kann der
+  // Kunde auf /themes ein fertig befülltes Theme für dieses Produkt laden.
+  async function handleGenerateThemeCopy() {
+    if (!editProduct || isNew || !editProduct.rowIndex) {
+      setError("Bitte das Produkt zuerst speichern, dann Theme-Texte generieren.");
+      return;
+    }
+    setGenThemeBusy(true); setError(""); setSuccess("");
+    try {
+      const res = await fetch("/api/admin/products/generate-theme-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rowIndex: editProduct.rowIndex }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Theme-Texte-Generierung fehlgeschlagen."); return; }
+      setSuccess(`Theme-Texte erstellt (${data.keys} Felder, Validator: ${data.isValid ? "ok" : "überarbeitet"}). ${data.feedback || ""}`.trim());
+      setTimeout(() => setSuccess(""), 8000);
+    } catch {
+      setError("Theme-Texte-Generierung fehlgeschlagen.");
+    } finally {
+      setGenThemeBusy(false);
+    }
+  }
 
   async function handleSave() {
     if (!editProduct) return;
@@ -3882,6 +3909,13 @@ export default function AdminPage() {
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Speichern</>}
                 </button>
               </div>
+              {!isNew && (
+                <button onClick={handleGenerateThemeCopy} disabled={genThemeBusy} title="Erzeugt per Maker-Checker-KI die Landingpage-Texte für das Kunden-Theme dieses Produkts."
+                  className="w-full mt-2 py-2.5 bg-[#95BF47]/15 hover:bg-[#95BF47]/25 border border-[#95BF47]/30 text-[#cfe9a3] disabled:opacity-50 rounded-xl text-sm font-medium transition flex items-center justify-center gap-2">
+                  {genThemeBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Languages className="w-4 h-4" />}
+                  KI-Theme-Texte generieren
+                </button>
+              )}
             </motion.div>
           </motion.div>
         )}
