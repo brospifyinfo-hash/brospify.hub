@@ -1,18 +1,27 @@
 // ─── /api/theme-export ────────────────────────────────────────────
-// Kunden-Download: baut aus der Master-Schablone ein personalisiertes
-// Shopify-Theme (Produkt-Texte aus extra.themeCopy + Hauptfarbe + Schrift)
-// und liefert es als .zip.
+// Kunden-Download (POST, weil Credits abgezogen werden): baut aus der
+// Master-Schablone ein personalisiertes Shopify-Theme (Produkt-Texte aus
+// extra.themeCopy + komplette Farb-Palette + Schrift) und liefert es als .zip.
 //
-//   GET ?productId=&color=%23rrggbb&font=work_sans_n4
+//   POST { productId, colors: { button, buttonText, background, text, accent }, font }
 //
 // Voraussetzung: Der Kunde hat das Produkt gezogen (drawnProducts) ODER ist
 // Admin, und für das Produkt wurden bereits Theme-Texte generiert.
+// Kostet CREDIT_COSTS.THEME_EXPORT Credits pro Build (Admins kostenlos).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
+import {
+  getAllProdukte,
+  findKundeByKey,
+  getCreditsState,
+  deductCredits,
+  type Produkt,
+  type KundeProfile,
+} from "@/lib/sheets";
+import { getCreditCost } from "@/lib/credit-config-server";
 import { getMasterThemeZip } from "@/lib/theme-master";
-import { buildThemeZip, isValidHex, isValidFontHandle } from "@/lib/theme-inject";
+import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,20 +38,26 @@ function slugify(name: string): string {
   );
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session.isLoggedIn) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  const url = req.nextUrl.searchParams;
-  const productId = url.get("productId") || "";
-  const color = url.get("color") || "";
-  const font = url.get("font") || "";
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Ungültiger Body." }, { status: 400 });
+  }
+
+  const productId = body.productId || "";
+  const font = body.font || "";
+  const colors = body.colors;
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
-  if (!isValidHex(color)) {
-    return NextResponse.json({ error: "Ungültige Farbe (erwartet Hex wie #95bf47)." }, { status: 400 });
+  if (!isValidColors(colors)) {
+    return NextResponse.json({ error: "Ungültige Farben (alle als Hex #rrggbb)." }, { status: 400 });
   }
   if (!isValidFontHandle(font)) {
     return NextResponse.json({ error: "Ungültige Schriftart." }, { status: 400 });
@@ -58,21 +73,6 @@ export async function GET(req: NextRequest) {
   }
   if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
 
-  // Autorisierung: Admin ODER Produkt vom Kunden gezogen.
-  if (!session.isAdmin) {
-    if (!session.lizenzschluessel) {
-      return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
-    }
-    const kunde = await findKundeByKey(session.lizenzschluessel);
-    const drawn = Array.isArray(kunde?.profile?.drawnProducts) ? kunde!.profile.drawnProducts : [];
-    if (!drawn.includes(produkt.id)) {
-      return NextResponse.json(
-        { error: "Dieses Produkt hast du noch nicht gezogen." },
-        { status: 403 },
-      );
-    }
-  }
-
   // Theme-Texte vorhanden?
   const themeCopy = produkt.extra?.themeCopy;
   if (!themeCopy || Object.keys(themeCopy).length === 0) {
@@ -82,24 +82,69 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Autorisierung + Credits (Admins frei, ohne Abzug).
+  let chargeRow: number | null = null;
+  let chargeProfile: import("@/lib/sheets").KundeProfile | null = null;
+  let cost = 0;
+  if (!session.isAdmin) {
+    if (!session.lizenzschluessel) {
+      return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
+    }
+    const kunde = await findKundeByKey(session.lizenzschluessel);
+    if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
+
+    const drawn = Array.isArray(kunde.profile?.drawnProducts) ? kunde.profile.drawnProducts : [];
+    if (!drawn.includes(produkt.id)) {
+      return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
+    }
+
+    cost = await getCreditCost("THEME_EXPORT");
+    const balance = getCreditsState(kunde.profile).balance;
+    if (cost > 0 && balance < cost) {
+      return NextResponse.json(
+        { error: `Nicht genug Credits — ein Theme-Build kostet ${cost}. Du hast ${balance}.`, creditsRemaining: balance },
+        { status: 402 },
+      );
+    }
+    chargeRow = kunde.rowIndex;
+    chargeProfile = kunde.profile;
+  }
+
   // Master-Theme laden + injizieren.
+  let zip: Buffer;
   try {
     const master = await getMasterThemeZip();
-    const zip = buildThemeZip(master, { themeCopy, color, font });
-    const fileName = `${slugify(produkt.titel)}-theme.zip`;
-
-    return new Response(new Uint8Array(zip), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/zip",
-        "Content-Disposition": `attachment; filename="${fileName}"`,
-        "Content-Length": String(zip.length),
-        "Cache-Control": "no-store",
-      },
-    });
+    zip = buildThemeZip(master, { themeCopy, colors: colors as ThemeColors, font });
   } catch (err) {
     console.error("[theme-export] build failed:", err);
     const msg = err instanceof Error ? err.message : "Theme-Erstellung fehlgeschlagen.";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
+
+  // Credits abziehen (erst NACH erfolgreichem Build → kein Abzug bei Fehler).
+  if (chargeRow !== null && chargeProfile && cost > 0) {
+    try {
+      const result = await deductCredits(chargeRow, chargeProfile, cost, "theme-export");
+      if (!result.success) {
+        return NextResponse.json(
+          { error: `Nicht genug Credits — ein Theme-Build kostet ${cost}.`, creditsRemaining: result.remaining },
+          { status: 402 },
+        );
+      }
+    } catch (err) {
+      console.error("[theme-export] deduct failed:", err);
+      return NextResponse.json({ error: "Credit-Abzug fehlgeschlagen." }, { status: 500 });
+    }
+  }
+
+  const fileName = `${slugify(produkt.titel)}-theme.zip`;
+  return new Response(new Uint8Array(zip), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/zip",
+      "Content-Disposition": `attachment; filename="${fileName}"`,
+      "Content-Length": String(zip.length),
+      "Cache-Control": "no-store",
+    },
+  });
 }

@@ -293,14 +293,32 @@ const BUILDER_FONTS = [
   { value: "roboto_n4", label: "Roboto" },
 ];
 
+type ThemeColors = { button: string; buttonText: string; background: string; text: string; accent: string };
+const DEFAULT_COLORS: ThemeColors = {
+  button: "#95BF47",
+  buttonText: "#FFFFFF",
+  background: "#FFFFFF",
+  text: "#121212",
+  accent: "#95BF47",
+};
+
 function ThemeBuilderCard() {
   const { t, lang } = useI18n();
   const [products, setProducts] = useState<{ id: string; titel: string }[]>([]);
   const [productId, setProductId] = useState("");
-  const [color, setColor] = useState("#95BF47");
+  const [colors, setColors] = useState<ThemeColors>(DEFAULT_COLORS);
   const [font, setFont] = useState("work_sans_n4");
+  const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
+    { key: "button", label: t.themes.builderColorButton },
+    { key: "buttonText", label: t.themes.builderColorButtonText },
+    { key: "background", label: t.themes.builderColorBackground },
+    { key: "text", label: t.themes.builderColorText },
+    { key: "accent", label: t.themes.builderColorAccent },
+  ];
 
   useEffect(() => {
     let cancelled = false;
@@ -315,26 +333,43 @@ function ThemeBuilderCard() {
         if (list[0]) setProductId((prev) => prev || list[0].id);
       })
       .catch(() => {});
+    fetch("/api/credit-config", { cache: "no-store" })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return;
+        const c = d?.costs?.THEME_EXPORT;
+        setCost(Number.isFinite(c) ? c : 100);
+      })
+      .catch(() => setCost(100));
     return () => {
       cancelled = true;
     };
   }, [lang]);
+
+  function setColor(key: keyof ThemeColors, value: string) {
+    setColors((prev) => ({ ...prev, [key]: value }));
+  }
 
   async function handleDownload() {
     if (!productId || building) return;
     setBuilding(true);
     setMsg(null);
     try {
-      const res = await fetch(
-        `/api/theme-export?productId=${encodeURIComponent(productId)}&color=${encodeURIComponent(color)}&font=${encodeURIComponent(font)}`,
-        { cache: "no-store" },
-      );
+      const res = await fetch("/api/theme-export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ productId, colors, font }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setMsg({
-          kind: "err",
-          text: res.status === 409 ? t.themes.builderNoCopy : data?.error || t.themes.builderErr,
-        });
+        const text =
+          res.status === 409
+            ? t.themes.builderNoCopy
+            : res.status === 402
+              ? data?.error || t.themes.builderNotEnough
+              : data?.error || t.themes.builderErr;
+        setMsg({ kind: "err", text });
         return;
       }
       const blob = await res.blob();
@@ -368,7 +403,7 @@ function ThemeBuilderCard() {
         <p className="text-[12.5px] text-zinc-400">{t.themes.builderNoProducts}</p>
       ) : (
         <>
-          <div className="grid sm:grid-cols-3 gap-3">
+          <div className="grid sm:grid-cols-2 gap-3">
             <label className="block">
               <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
               <select
@@ -382,23 +417,6 @@ function ThemeBuilderCard() {
                   </option>
                 ))}
               </select>
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderColor}</span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="w-10 h-9 rounded-lg bg-transparent border border-white/10 p-0.5 cursor-pointer"
-                />
-                <input
-                  type="text"
-                  value={color}
-                  onChange={(e) => setColor(e.target.value)}
-                  className="flex-1 min-w-0 bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
-                />
-              </div>
             </label>
             <label className="block">
               <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFont}</span>
@@ -416,18 +434,42 @@ function ThemeBuilderCard() {
             </label>
           </div>
 
-          <button
-            onClick={handleDownload}
-            disabled={building || !productId}
-            className="btn-deploy mt-4 w-full sm:w-auto flex items-center justify-center gap-2 px-5 py-2.5 text-[13px] disabled:opacity-50"
-          >
-            {building ? (
-              <Sparkles className="w-4 h-4 animate-pulse" />
-            ) : (
-              <Download className="w-4 h-4" />
+          <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderColors}</span>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {COLOR_FIELDS.map((f) => (
+              <div key={f.key}>
+                <span className="block text-[10px] text-zinc-500 mb-1">{f.label}</span>
+                <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-1.5 py-1">
+                  <input
+                    type="color"
+                    value={colors[f.key]}
+                    onChange={(e) => setColor(f.key, e.target.value)}
+                    className="w-7 h-7 rounded bg-transparent border-0 p-0 cursor-pointer shrink-0"
+                  />
+                  <input
+                    type="text"
+                    value={colors[f.key]}
+                    onChange={(e) => setColor(f.key, e.target.value)}
+                    className="w-full min-w-0 bg-transparent text-[11px] text-white outline-none"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleDownload}
+              disabled={building || !productId}
+              className="btn-deploy flex items-center justify-center gap-2 px-5 py-2.5 text-[13px] disabled:opacity-50"
+            >
+              {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
+              <span>{building ? t.themes.builderBuilding : t.themes.builderDownload}</span>
+            </button>
+            {cost !== null && cost > 0 && (
+              <span className="text-[11.5px] text-zinc-400">{t.themes.builderCost.replace("{n}", String(cost))}</span>
             )}
-            <span>{building ? t.themes.builderBuilding : t.themes.builderDownload}</span>
-          </button>
+          </div>
 
           {msg && (
             <p className={`mt-2 text-[12px] ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>

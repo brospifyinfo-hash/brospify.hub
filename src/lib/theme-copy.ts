@@ -1,27 +1,26 @@
 import "server-only";
-import Anthropic from "@anthropic-ai/sdk";
-import { anthropicCostUsd, recordUsd } from "@/lib/provider-usage";
 import {
   PRODUCT_COPY_SPEC,
-  AI_KEYS,
   ENGLISH_EXAMPLES,
   coerceToSpec,
   type ThemeCopy,
 } from "@/lib/theme-placeholders";
 
 // ─────────────────────────────────────────────────────────────────
-// Maker-Checker-KI-Pipeline für die Produkt-Theme-Texte.
+// Maker-Checker-KI-Pipeline für die Produkt-Theme-Texte — via DeepSeek.
 //
 //   1. Creator   → generiert verkaufsstarke Platzhalter-Texte (JSON, Keys =
 //                  exakt unsere Theme-Platzhalter).
 //   2. Validator → prüft den Entwurf gegen Best-Practice-Beispiele und gibt
 //                  {isValid, feedback, correctedJson} zurück.
 //
-// Strukturierter JSON-Output via `output_config.json_schema` (wie translate.ts)
-// → kein fragiles Freitext-Parsing. Kosten werden über recordUsd gebucht.
+// DeepSeek-Chat (api.deepseek.com) im JSON-Modus (`response_format:
+// json_object`). Robustes Parsing + coerceToSpec füllt fehlende Keys, sodass
+// das Theme nie mit unvollständigen Texten endet.
 // ─────────────────────────────────────────────────────────────────
 
-const MODEL = "claude-sonnet-4-6";
+const DEEPSEEK_URL = "https://api.deepseek.com/chat/completions";
+const MODEL = "deepseek-chat";
 
 export interface CopyPipelineInput {
   name: string;
@@ -35,39 +34,46 @@ export interface CopyPipelineResult {
   copy: ThemeCopy; // finales correctedJson → wird gespeichert
 }
 
-function stringProps(keys: string[]) {
-  const properties: Record<string, { type: "string" }> = {};
-  for (const k of keys) properties[k] = { type: "string" };
-  return { properties, required: keys };
-}
+async function deepseekJson(
+  system: string,
+  user: string,
+  temperature: number,
+): Promise<Record<string, unknown>> {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+  if (!apiKey) throw new Error("DEEPSEEK_API_KEY fehlt — KI-Theme-Texte nicht verfügbar.");
 
-function getClient(): Anthropic {
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) throw new Error("ANTHROPIC_API_KEY fehlt — KI-Theme-Texte nicht verfügbar.");
-  return new Anthropic({ apiKey: key });
-}
-
-async function claudeJson<T>(opts: {
-  system: string;
-  user: string;
-  schema: Record<string, unknown>;
-  maxTokens: number;
-}): Promise<T> {
-  const client = getClient();
-  const msg = await client.messages.create({
-    model: MODEL,
-    max_tokens: opts.maxTokens,
-    thinking: { type: "disabled" },
-    output_config: { format: { type: "json_schema", schema: opts.schema } },
-    system: opts.system,
-    messages: [{ role: "user", content: opts.user }],
+  const res = await fetch(DEEPSEEK_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model: MODEL,
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: user },
+      ],
+      temperature,
+      max_tokens: 4000,
+      response_format: { type: "json_object" },
+    }),
   });
-  await recordUsd("anthropic", anthropicCostUsd(MODEL, msg.usage));
-  const text = msg.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
-    .join("");
-  return JSON.parse(text) as T;
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`DeepSeek-Fehler ${res.status}: ${text.slice(0, 200)}`);
+  }
+
+  const data = await res.json();
+  const content: string = data?.choices?.[0]?.message?.content || "";
+  if (!content.trim()) throw new Error("DeepSeek lieferte eine leere Antwort.");
+
+  try {
+    return JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    // json_object liefert eigentlich valides JSON — als Fallback erstes {…} schneiden.
+    const m = content.match(/\{[\s\S]*\}/);
+    if (m) return JSON.parse(m[0]) as Record<string, unknown>;
+    throw new Error("DeepSeek-Antwort war kein gültiges JSON.");
+  }
 }
 
 // ─────────────────────────── Creator ──────────────────────────────
@@ -78,24 +84,21 @@ async function runCreator(input: CopyPipelineInput): Promise<ThemeCopy> {
     "Du bist ein weltklasse Direct-Response-Copywriter für deutsche Dropshipping-Shops.",
     "Schreibe knackige, nutzenorientierte, conversion-starke Texte auf DEUTSCH (per du).",
     "Keine leeren Superlative, keine Emojis im Fließtext. Wo HTML angegeben ist (z. B.",
-    "<p>, <strong>) darf es genutzt werden. Fülle jeden Platzhalter passend zum Produkt.",
+    "<p>, <strong>) darf es genutzt werden.",
     "",
-    "Bedeutung der Keys:",
+    "Gib AUSSCHLIESSLICH ein JSON-Objekt zurück, dessen Keys EXAKT diese sind",
+    "(keine zusätzlichen, keine fehlenden). Werte sind reine Strings:",
     keyList,
   ].join("\n");
 
   const user = [
     `Produktname: ${input.name}`,
     `Produkt-Briefing: ${input.brief || "(kein Briefing — leite aus dem Namen ab)"}`,
+    "",
+    "Antworte als JSON-Objekt mit genau diesen Keys.",
   ].join("\n");
 
-  const schema = {
-    type: "object",
-    ...stringProps(AI_KEYS),
-    additionalProperties: false,
-  };
-
-  const json = await claudeJson<Record<string, unknown>>({ system, user, schema, maxTokens: 3000 });
+  const json = await deepseekJson(system, user, 0.7);
   return coerceToSpec(json);
 }
 
@@ -113,10 +116,13 @@ async function runValidator(draft: ThemeCopy): Promise<ValidatorResult> {
     "Bewerte den JSON-Entwurf anhand der Best-Practice-Beispiele (Tone of Voice &",
     "Conversion-Psychologie: Nutzen vor Features, Klarheit, glaubwürdiger Social Proof,",
     "starke CTAs, kein Hype/keine !!!).",
-    "isValid=true nur, wenn der Entwurf bereits stark ist.",
-    "feedback: kurze, konkrete Begründung (1–3 Sätze, deutsch).",
-    "correctedJson MUSS alle Original-Keys enthalten (verbessert oder unverändert),",
-    "Sprache Deutsch + erlaubtes HTML beibehalten.",
+    "",
+    "Gib AUSSCHLIESSLICH ein JSON-Objekt nach EXAKT diesem Schema zurück:",
+    '{"isValid": boolean, "feedback": "string", "correctedJson": { … dieselben Keys, verbessert … }}',
+    "- isValid=true nur, wenn der Entwurf bereits stark ist.",
+    "- feedback: kurze, konkrete Begründung (1–3 Sätze, deutsch).",
+    "- correctedJson MUSS alle Original-Keys enthalten (verbessert oder unverändert),",
+    "  Sprache Deutsch + erlaubtes HTML beibehalten.",
   ].join("\n");
 
   const user = [
@@ -125,30 +131,36 @@ async function runValidator(draft: ThemeCopy): Promise<ValidatorResult> {
     "",
     "ZU PRÜFENDER ENTWURF (JSON):",
     JSON.stringify(draft, null, 2),
+    "",
+    "Antworte als JSON mit isValid, feedback, correctedJson.",
   ].join("\n");
 
-  const schema = {
-    type: "object",
-    properties: {
-      isValid: { type: "boolean" },
-      feedback: { type: "string" },
-      correctedJson: { type: "object", ...stringProps(AI_KEYS), additionalProperties: false },
-    },
-    required: ["isValid", "feedback", "correctedJson"],
-    additionalProperties: false,
+  const raw = await deepseekJson(system, user, 0.2);
+  return {
+    isValid: typeof raw.isValid === "boolean" ? raw.isValid : false,
+    feedback: typeof raw.feedback === "string" ? raw.feedback : "",
+    correctedJson:
+      raw.correctedJson && typeof raw.correctedJson === "object"
+        ? (raw.correctedJson as Record<string, string>)
+        : {},
   };
-
-  return claudeJson<ValidatorResult>({ system, user, schema, maxTokens: 3500 });
 }
 
 // ─────────────────────────── Orchestrator ─────────────────────────
 
-/** Lässt ein Produkt durch Creator → Validator laufen. */
+/** Lässt ein Produkt durch Creator → Validator laufen (DeepSeek). */
 export async function generateThemeCopy(input: CopyPipelineInput): Promise<CopyPipelineResult> {
   if (!input?.name?.trim()) throw new Error("Produktname fehlt.");
 
   const draft = await runCreator({ name: input.name.trim(), brief: input.brief?.trim() });
-  const review = await runValidator(draft);
+
+  let review: ValidatorResult;
+  try {
+    review = await runValidator(draft);
+  } catch {
+    // Validator-Fehler darf die Pipeline nicht killen — Entwurf verwenden.
+    review = { isValid: true, feedback: "Validator übersprungen (Entwurf übernommen).", correctedJson: {} };
+  }
 
   const copy = coerceToSpec({ ...draft, ...review.correctedJson });
   return { draft, isValid: Boolean(review.isValid), feedback: String(review.feedback || ""), copy };

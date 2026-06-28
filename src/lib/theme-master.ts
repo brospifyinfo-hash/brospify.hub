@@ -27,13 +27,23 @@ export async function getMasterThemeZip(): Promise<Buffer> {
     return cached;
   }
 
-  const filePath = path.join(process.cwd(), FILE_NAME);
-  try {
-    cached = await fs.readFile(filePath);
-    return cached;
-  } catch {
-    throw new Error(
-      `Master-Theme nicht gefunden (${FILE_NAME} im Repo-Root oder ENV MASTER_THEME_URL setzen).`,
-    );
+  // Mehrere Kandidaten, falls das File-Tracing den Pfad anders auflöst.
+  const candidates = [
+    path.join(process.cwd(), FILE_NAME),
+    path.join(process.cwd(), "..", FILE_NAME),
+    path.join(__dirname, FILE_NAME),
+    path.join(__dirname, "..", "..", "..", FILE_NAME),
+  ];
+  for (const p of candidates) {
+    try {
+      cached = await fs.readFile(p);
+      return cached;
+    } catch {
+      /* nächsten Pfad probieren */
+    }
   }
+  throw new Error(
+    `Master-Theme nicht gefunden (${FILE_NAME}). Gesucht in: ${candidates.join(" | ")}. ` +
+      "Alternativ ENV MASTER_THEME_URL auf eine erreichbare ZIP setzen.",
+  );
 }

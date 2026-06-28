@@ -25,6 +25,10 @@ export const CREDIT_COSTS = {
   VIDEO_SCOUT_1: 40,
   VIDEO_SCOUT_2: 70,
   VIDEO_SCOUT_3: 95,
+  // Personalisiertes Produkt-Theme: Kunde lädt auf /themes eine fertig
+  // befüllte Shopify-Theme-ZIP (KI-Texte + eigene Farb-Palette + Schrift).
+  // Pro Build/Download fällig (jede Farb-/Schrift-Anpassung = neuer Build).
+  THEME_EXPORT: 100,
 } as const;
 
 // Welcome grant — jeder Kunde bekommt das EINMALIG beim ersten Login.
