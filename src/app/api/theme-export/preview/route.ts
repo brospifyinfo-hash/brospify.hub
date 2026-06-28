@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
 import { getPlaceholderValues } from "@/lib/theme-placeholders";
+import { getMasterThemeZip } from "@/lib/theme-master";
+import { readActiveSections } from "@/lib/theme-inject";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +61,15 @@ export async function GET(req: NextRequest) {
   const comparePrice =
     sell && sell > 0 ? `${(Math.round(sell * 1.6 * 100) / 100).toFixed(2).replace(".", ",")}€` : "";
 
+  // Echte aktive Sections (1:1 aus dem Theme, Tokens ersetzt) für die Vorschau.
+  let sections: { home: unknown[]; product: unknown[] } = { home: [], product: [] };
+  try {
+    const master = await getMasterThemeZip();
+    sections = readActiveSections(master, produkt.extra?.themeCopy || {});
+  } catch (err) {
+    console.error("[theme-preview] readActiveSections failed:", err);
+  }
+
   return NextResponse.json(
     {
       title: produkt.titel,
@@ -67,6 +78,8 @@ export async function GET(req: NextRequest) {
       images: httpImages(produkt),
       hasCopy: Boolean(produkt.extra?.themeCopy && Object.keys(produkt.extra.themeCopy).length),
       copy: getPlaceholderValues(produkt.extra?.themeCopy),
+      home: sections.home,
+      product: sections.product,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

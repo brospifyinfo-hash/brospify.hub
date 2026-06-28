@@ -154,6 +154,40 @@ export function getPlaceholderValues(themeCopy?: ThemeCopy | null): ThemeCopy {
   return { ...DEFAULTS, ...(themeCopy || {}) };
 }
 
+// ─── Farb-Palette → Section-Settings (geteilt: Inject UND Live-Vorschau) ──
+// Damit das, was der Kunde in der Vorschau sieht, EXAKT dem Download
+// entspricht, nutzen beide dieselbe Rollen-Zuordnung: bestimmte Setting-Keys
+// (in den aktiven Sections) werden auf eine Palette-Rolle umgefärbt.
+
+export interface ColorPalette {
+  button: string;
+  buttonText: string;
+  background: string;
+  text: string;
+  accent: string;
+}
+
+export const RECOLOR_ROLES = {
+  accent: [
+    "accent_color", "star_color", "wave_color", "underline_color", "dot_active",
+    "pin_color", "color_accent", "btn_border_color", "box2_badge_bg",
+    "badge_bg_color", "box_border_color", "heading_highlight_color",
+  ],
+  button: ["btn_bg_color", "button_bg", "btn_primary_bg", "cta_bg"],
+  buttonText: ["btn_text_color", "button_text_color", "btn_primary_text"],
+} as const;
+
+const COLORISH = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,\s%]+\))$/;
+
+/** Liefert die Palette-Farbe für einen Setting-Key — oder null (Wert behalten). */
+export function recolorByRole(key: string, value: string, palette: ColorPalette): string | null {
+  if (typeof value !== "string" || !COLORISH.test(value)) return null;
+  if ((RECOLOR_ROLES.accent as readonly string[]).includes(key)) return palette.accent;
+  if ((RECOLOR_ROLES.button as readonly string[]).includes(key)) return palette.button;
+  if ((RECOLOR_ROLES.buttonText as readonly string[]).includes(key)) return palette.buttonText;
+  return null;
+}
+
 /** Stellt sicher, dass nur die Spec-Keys vorhanden sind (fehlende → Token). */
 export function coerceToSpec(obj: Record<string, unknown> | null | undefined): ThemeCopy {
   const out: ThemeCopy = {};

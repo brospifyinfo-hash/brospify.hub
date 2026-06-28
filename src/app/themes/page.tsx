@@ -428,83 +428,86 @@ function ThemeBuilderCard() {
       {products.length === 0 ? (
         <p className="text-[12.5px] text-zinc-400">{t.themes.builderNoProducts}</p>
       ) : (
-        <>
-          <div className="grid sm:grid-cols-2 gap-3">
-            <label className="block">
-              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
-              <select
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-zinc-900">
-                    {p.titel}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFont}</span>
-              <select
-                value={font}
-                onChange={(e) => setFont(e.target.value)}
-                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
-              >
-                {BUILDER_FONTS.map((f) => (
-                  <option key={f.value} value={f.value} className="bg-zinc-900">
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_1fr] lg:gap-5 lg:items-start">
+          {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
+          <div className="order-2 lg:order-1">
+            <div className="grid sm:grid-cols-2 gap-3">
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
+                <select
+                  value={productId}
+                  onChange={(e) => setProductId(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                >
+                  {products.map((p) => (
+                    <option key={p.id} value={p.id} className="bg-zinc-900">
+                      {p.titel}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFont}</span>
+                <select
+                  value={font}
+                  onChange={(e) => setFont(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                >
+                  {BUILDER_FONTS.map((f) => (
+                    <option key={f.value} value={f.value} className="bg-zinc-900">
+                      {f.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
 
-          <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderColors}</span>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-            {COLOR_FIELDS.map((f) => (
-              <div key={f.key}>
-                <span className="block text-[10px] text-zinc-500 mb-1">{f.label}</span>
-                <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-1.5 py-1">
-                  <input
-                    type="color"
-                    value={colors[f.key]}
-                    onChange={(e) => setColor(f.key, e.target.value)}
-                    className="w-7 h-7 rounded bg-transparent border-0 p-0 cursor-pointer shrink-0"
-                  />
-                  <input
-                    type="text"
-                    value={colors[f.key]}
-                    onChange={(e) => setColor(f.key, e.target.value)}
-                    className="w-full min-w-0 bg-transparent text-[11px] text-white outline-none"
-                  />
+            <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderColors}</span>
+            <div className="grid grid-cols-2 gap-2">
+              {COLOR_FIELDS.map((f) => (
+                <div key={f.key}>
+                  <span className="block text-[10px] text-zinc-500 mb-1">{f.label}</span>
+                  <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-1.5 py-1">
+                    <input
+                      type="color"
+                      value={colors[f.key]}
+                      onChange={(e) => setColor(f.key, e.target.value)}
+                      className="w-7 h-7 rounded bg-transparent border-0 p-0 cursor-pointer shrink-0"
+                    />
+                    <input
+                      type="text"
+                      value={colors[f.key]}
+                      onChange={(e) => setColor(f.key, e.target.value)}
+                      className="w-full min-w-0 bg-transparent text-[11px] text-white outline-none"
+                    />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button
-              onClick={handleDownload}
-              disabled={building || !productId}
-              className="btn-deploy flex items-center justify-center gap-2 px-5 py-2.5 text-[13px] disabled:opacity-50"
-            >
-              {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
-              <span>{building ? t.themes.builderBuilding : t.themes.builderDownload}</span>
-            </button>
-            {cost !== null && cost > 0 && (
-              <span className="text-[11.5px] text-zinc-400">{t.themes.builderCost.replace("{n}", String(cost))}</span>
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <button
+                onClick={handleDownload}
+                disabled={building || !productId}
+                className="btn-deploy flex items-center justify-center gap-2 px-5 py-2.5 text-[13px] disabled:opacity-50"
+              >
+                {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
+                <span>{building ? t.themes.builderBuilding : t.themes.builderDownload}</span>
+              </button>
+              {cost !== null && cost > 0 && (
+                <span className="text-[11.5px] text-zinc-400">{t.themes.builderCost.replace("{n}", String(cost))}</span>
+              )}
+            </div>
+
+            {msg && (
+              <p className={`mt-2 text-[12px] ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>
+                {msg.text}
+              </p>
             )}
           </div>
 
-          {msg && (
-            <p className={`mt-2 text-[12px] ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>
-              {msg.text}
-            </p>
-          )}
-
-          {/* Live-Vorschau */}
-          <div className="mt-5">
+          {/* ── Live-Vorschau (Desktop: rechts sticky · Handy: oben sticky) ── */}
+          <div className="order-1 lg:order-2 mb-4 lg:mb-0 sticky top-2 lg:top-4 self-start z-10">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[12px] font-semibold text-white flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" style={{ color: ACCENT }} />
@@ -515,12 +518,12 @@ function ThemeBuilderCard() {
             {preview ? (
               <ThemePreview data={preview} colors={colors} font={font} />
             ) : (
-              <div className="h-[180px] flex items-center justify-center text-[12px] text-zinc-500 border border-white/10 rounded-xl">
+              <div className="h-[300px] flex items-center justify-center text-[12px] text-zinc-500 border border-white/10 rounded-xl">
                 {previewLoading ? t.themes.builderPreviewLoading : "—"}
               </div>
             )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );

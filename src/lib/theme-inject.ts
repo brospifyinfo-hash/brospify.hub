@@ -1,6 +1,11 @@
 import "server-only";
 import AdmZip from "adm-zip";
-import { getPlaceholderValues, type ThemeCopy } from "@/lib/theme-placeholders";
+import {
+  getPlaceholderValues,
+  recolorByRole,
+  type ThemeCopy,
+  type ColorPalette,
+} from "@/lib/theme-placeholders";
 
 // ─────────────────────────────────────────────────────────────────
 // Theme-Injection-Engine (in-memory, Vercel-tauglich).
@@ -14,31 +19,11 @@ const ACTIVE_TEMPLATES = ["templates/index.json", "templates/product.json"];
 const SETTINGS_PATH = "config/settings_data.json";
 const COLOR_SCHEME_KEYS = ["scheme-1", "scheme-2", "scheme-3", "scheme-4", "scheme-5"];
 
-// Section-Setting-Keys, die als „Akzent" gelten und auf die Akzentfarbe
-// umgefärbt werden (dekorative Farben, kein Layout-Risiko).
-const ACCENT_KEYS = new Set([
-  "accent_color", "star_color", "wave_color", "underline_color",
-  "dot_active", "pin_color", "color_accent", "btn_border_color",
-  "box2_badge_bg", "badge_bg_color",
-]);
-
 const HEX_RE = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;
 const FONT_HANDLE_RE = /^[a-z0-9_]+$/;
 const TOKEN_RE = /\[\[([A-Z0-9_]+)\]\]/g;
-const COLORISH_RE = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,\s%]+\))$/;
 
-export interface ThemeColors {
-  /** Buttons & Primärfarbe. */
-  button: string;
-  /** Textfarbe auf Buttons. */
-  buttonText: string;
-  /** Seiten-Hintergrund. */
-  background: string;
-  /** Allgemeine Textfarbe. */
-  text: string;
-  /** Akzente: Wellen, Sterne, Unterstreichungen, Highlights. */
-  accent: string;
-}
+export type ThemeColors = ColorPalette;
 
 export interface InjectOptions {
   themeCopy: ThemeCopy;
@@ -76,7 +61,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
     const entry = findEntry(zip, tplPath);
     if (!entry) continue;
     const data = JSON.parse(entry.getData().toString("utf8"));
-    injectTemplateData(data, values, opts.colors.accent);
+    injectTemplateData(data, values, opts.colors);
     zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
   }
 
@@ -96,7 +81,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
 function injectTemplateData(
   data: { order?: string[]; sections?: Record<string, unknown> },
   values: ThemeCopy,
-  accent: string,
+  palette: ColorPalette,
 ) {
   const order = Array.isArray(data.order) ? data.order : [];
   const sections = (data.sections || {}) as Record<string, { disabled?: boolean } & Record<string, unknown>>;
@@ -104,7 +89,7 @@ function injectTemplateData(
     const section = sections[sectionId];
     if (!section || section.disabled === true) continue; // nur AKTIVE Sections
     replaceTokensDeep(section, values);
-    recolorAccentsDeep(section, accent);
+    recolorByRoleDeep(section, palette);
   }
 }
 
@@ -129,21 +114,75 @@ function replaceTokens(str: string, values: ThemeCopy): string {
   );
 }
 
-/** Setzt Akzent-Setting-Keys (dekorativ) auf die Akzentfarbe. */
-function recolorAccentsDeep(node: unknown, accent: string): void {
+/** Färbt Setting-Keys gemäß ihrer Palette-Rolle um (Akzent/Button/Button-Text).
+ *  Exakt dieselbe Logik nutzt die Live-Vorschau → Vorschau = Download. */
+function recolorByRoleDeep(node: unknown, palette: ColorPalette): void {
   if (Array.isArray(node)) {
-    for (const item of node) recolorAccentsDeep(item, accent);
+    for (const item of node) recolorByRoleDeep(item, palette);
   } else if (node && typeof node === "object") {
     const obj = node as Record<string, unknown>;
     for (const k of Object.keys(obj)) {
       const v = obj[k];
-      if (typeof v === "string" && ACCENT_KEYS.has(k) && COLORISH_RE.test(v)) {
-        obj[k] = accent;
+      if (typeof v === "string") {
+        const mapped = recolorByRole(k, v, palette);
+        if (mapped !== null) obj[k] = mapped;
       } else if (v && typeof v === "object") {
-        recolorAccentsDeep(v, accent);
+        recolorByRoleDeep(v, palette);
       }
     }
   }
+}
+
+// ─── Aktive Sections fürs Frontend lesen (für die Live-Vorschau) ───
+
+export interface PreviewSection {
+  id: string;
+  type: string;
+  settings: Record<string, unknown>;
+  blocks?: Record<string, { type: string; settings: Record<string, unknown> }>;
+  block_order?: string[];
+}
+
+function readTemplateSections(zip: AdmZip, tplPath: string, values: ThemeCopy): PreviewSection[] {
+  const entry = findEntry(zip, tplPath);
+  if (!entry) return [];
+  let data: { order?: string[]; sections?: Record<string, unknown> };
+  try {
+    data = JSON.parse(entry.getData().toString("utf8"));
+  } catch {
+    return [];
+  }
+  const order = Array.isArray(data.order) ? data.order : [];
+  const sections = (data.sections || {}) as Record<string, { disabled?: boolean } & Record<string, unknown>>;
+  const out: PreviewSection[] = [];
+  for (const id of order) {
+    const sec = sections[id];
+    if (!sec || sec.disabled === true) continue;
+    // Tokens ersetzen (Texte). Farben werden clientseitig live gesetzt.
+    replaceTokensDeep(sec, values);
+    out.push({
+      id,
+      type: String(sec.type || ""),
+      settings: (sec.settings as Record<string, unknown>) || {},
+      blocks: sec.blocks as PreviewSection["blocks"],
+      block_order: sec.block_order as string[] | undefined,
+    });
+  }
+  return out;
+}
+
+/** Liest die aktiven Sections von index.json + product.json (Tokens ersetzt)
+ *  fürs Rendern der Live-Vorschau. */
+export function readActiveSections(
+  masterZip: Buffer,
+  themeCopy: ThemeCopy,
+): { home: PreviewSection[]; product: PreviewSection[] } {
+  const zip = new AdmZip(masterZip);
+  const values = getPlaceholderValues(themeCopy);
+  return {
+    home: readTemplateSections(zip, "templates/index.json", values),
+    product: readTemplateSections(zip, "templates/product.json", values),
+  };
 }
 
 // ─── Palette + Schrift in settings_data.json ───────────────────────
