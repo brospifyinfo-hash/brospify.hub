@@ -28,7 +28,8 @@ export type ThemeColors = ColorPalette;
 export interface InjectOptions {
   themeCopy: ThemeCopy;
   colors: ThemeColors;
-  font: string;
+  font: string; // Body-Schrift
+  headingFont?: string; // Überschriften-Schrift (default = Body)
 }
 
 export function isValidHex(color: string): boolean {
@@ -69,7 +70,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
   const settingsEntry = findEntry(zip, SETTINGS_PATH);
   if (settingsEntry) {
     const data = JSON.parse(settingsEntry.getData().toString("utf8"));
-    injectSettingsData(data, opts.colors, opts.font);
+    injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font);
     zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
   }
 
@@ -191,9 +192,10 @@ function injectSettingsData(
   data: { current?: Record<string, unknown> },
   colors: ThemeColors,
   font: string,
+  headingFont: string,
 ): void {
   const current = (data.current = (data.current || {}) as Record<string, unknown>);
-  current.type_header_font = font;
+  current.type_header_font = headingFont;
   current.type_body_font = font;
 
   const schemes = (current.color_schemes = (current.color_schemes || {}) as Record<

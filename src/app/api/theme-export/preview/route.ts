@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; page?: string; colors?: Partial<ThemeColors>; font?: string };
+  let body: { productId?: string; page?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string };
   try {
     body = await req.json();
   } catch {
@@ -52,6 +52,7 @@ export async function POST(req: NextRequest) {
   const page = body.page === "product" ? "product.json" : "index.json";
   const colors = body.colors;
   const font = body.font && RENDER_FONTS[body.font] ? body.font : "work_sans_n4";
+  const headingFont = body.headingFont && RENDER_FONTS[body.headingFont] ? body.headingFont : font;
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
   if (!isValidColors(colors) || !isValidFontHandle(font)) {
@@ -99,6 +100,7 @@ export async function POST(req: NextRequest) {
       product: renderProduct,
       palette: colors as ThemeColors,
       font,
+      headingFont,
     });
     return NextResponse.json({ html }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {

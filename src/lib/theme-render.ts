@@ -26,6 +26,15 @@ export const RENDER_FONTS: Record<string, { family: string; param: string }> = {
   montserrat_n4: { family: "Montserrat", param: "Montserrat:wght@400;600;800" },
   poppins_n4: { family: "Poppins", param: "Poppins:wght@400;600;800" },
   roboto_n4: { family: "Roboto", param: "Roboto:wght@400;500;700" },
+  inter_n4: { family: "Inter", param: "Inter:wght@400;600;800" },
+  lato_n4: { family: "Lato", param: "Lato:wght@400;700;900" },
+  nunito_n4: { family: "Nunito", param: "Nunito:wght@400;600;800" },
+  raleway_n4: { family: "Raleway", param: "Raleway:wght@400;600;800" },
+  oswald_n4: { family: "Oswald", param: "Oswald:wght@400;600;700" },
+  bebas_neue_n4: { family: "Bebas Neue", param: "Bebas+Neue" },
+  playfair_n4: { family: "Playfair Display", param: "Playfair+Display:wght@400;600;800" },
+  merriweather_n4: { family: "Merriweather", param: "Merriweather:wght@400;700;900" },
+  dmsans_n4: { family: "DM Sans", param: "DM+Sans:wght@400;600;700" },
 };
 
 const PLACEHOLDER_IMG =
@@ -132,6 +141,11 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
         emitter.write("<style>");
         yield eng.renderer.renderTemplates(this.tpls, ctx, emitter);
         emitter.write("</style>");
+      } else if (name === "javascript") {
+        // Section-JS einbetten — die Custom-Elements (slider/gallery/…) brauchen es.
+        emitter.write("<script>");
+        yield eng.renderer.renderTemplates(this.tpls, ctx, emitter);
+        emitter.write("</script>");
       } else if (name === "form") {
         emitter.write("<form>");
         yield eng.renderer.renderTemplates(this.tpls, ctx, emitter);
@@ -139,7 +153,7 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
       } else if (name === "paginate") {
         yield eng.renderer.renderTemplates(this.tpls, ctx, emitter);
       }
-      // schema / javascript → nichts ausgeben
+      // schema → nichts ausgeben
     },
   });
   for (const tg of ["schema", "javascript", "style", "stylesheet", "form", "paginate"]) {
@@ -233,7 +247,7 @@ function hexToColorObj(hex: string) {
 function fontObj(family: string) {
   return { family, fallback_families: "sans-serif", style: "normal", weight: "400", toString: () => family };
 }
-function buildSettings(settingsData: Record<string, unknown>, palette: ColorPalette, fontFamily: string) {
+function buildSettings(settingsData: Record<string, unknown>, palette: ColorPalette, bodyFamily: string, headingFamily: string) {
   const s: Record<string, unknown> = JSON.parse(JSON.stringify(settingsData));
   const schemesObj = (settingsData.color_schemes as Record<string, { settings?: Record<string, string> }>) || {};
   s.color_schemes = Object.keys(schemesObj).map((id) => {
@@ -251,8 +265,8 @@ function buildSettings(settingsData: Record<string, unknown>, palette: ColorPale
       },
     };
   });
-  s.type_body_font = fontObj(fontFamily);
-  s.type_header_font = fontObj(fontFamily);
+  s.type_body_font = fontObj(bodyFamily);
+  s.type_header_font = fontObj(headingFamily);
   return s;
 }
 
@@ -372,7 +386,8 @@ export interface RenderPageOpts {
   themeCopy: ThemeCopy;
   product: RenderProduct;
   palette: ColorPalette;
-  font: string;
+  font: string; // Body-Schrift
+  headingFont?: string; // Überschriften-Schrift (default = Body)
 }
 
 export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): Promise<string> {
@@ -380,8 +395,10 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
   const env = CACHE;
   env.productImagesRef.current = opts.product.images;
 
-  const fontMeta = RENDER_FONTS[opts.font] || RENDER_FONTS.work_sans_n4;
-  const settings = buildSettings(env.settingsData, opts.palette, fontMeta.family);
+  const bodyMeta = RENDER_FONTS[opts.font] || RENDER_FONTS.work_sans_n4;
+  const headMeta = RENDER_FONTS[opts.headingFont || ""] || bodyMeta;
+  const fontMeta = { param: headMeta.param === bodyMeta.param ? bodyMeta.param : `${headMeta.param}&family=${bodyMeta.param}` };
+  const settings = buildSettings(env.settingsData, opts.palette, bodyMeta.family, headMeta.family);
   const product = buildProductObj(opts.product);
 
   // IMAGE_URL-Tokens mit echten Produktbildern füllen (sonst leere Bilder).
@@ -454,13 +471,26 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
 
   const fontLink = `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${fontMeta.param}&display=swap">`;
   const resetCss = `<style>html{scroll-behavior:auto}img{max-width:100%;height:auto}a{cursor:default}.shopify-section{position:relative}</style>`;
+  // Minimaler Shopify-JS-Stub, damit das eingebettete Theme-JS nicht crasht.
+  const shopifyStub = `<script>window.Shopify=window.Shopify||{};Shopify.designMode=false;Shopify.routes=Shopify.routes||{root:'/'};Shopify.locale='de';Shopify.currency={active:'EUR',rate:'1.0'};Shopify.country='DE';Shopify.shop='preview.myshopify.com';window.ShopifyAnalytics=window.ShopifyAnalytics||{lib:{track:function(){},page:function(){}}};</script>`;
+
+  // Bindet die Theme-JS-Assets inline ein (Custom-Elements brauchen sie). Externe
+  // (https) bzw. nicht vorhandene Skripte werden verworfen.
+  const inlineScripts = (html: string) =>
+    html.replace(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>/gi, (_m, src: string) => {
+      const nm = String(src).replace(/^.*\//, "").replace(/\?.*$/, "");
+      if (!/\.js$/i.test(nm) || /^https?:/i.test(src)) return "";
+      const js = readEntry(env.zip, `assets/${nm}`);
+      return js ? `<script>\n${js}\n</script>` : "";
+    });
 
   // DAS GANZE theme.liquid rendern → Head 1:1 (beide Style-Blöcke, base.css,
   // alle CSS-Variablen) + Body-Wrapper. header-/footer-group werden über das
   // section/sections-Stub übersprungen.
   try {
     let doc = String(await env.engine.parseAndRender(env.themeLiquid, { ...ctxBase, content_for_layout: body }));
-    doc = doc.replace(/<head([^>]*)>/i, `<head$1>${fontLink}${resetCss}`);
+    doc = inlineScripts(doc);
+    doc = doc.replace(/<head([^>]*)>/i, `<head$1>${fontLink}${resetCss}${shopifyStub}`);
     return doc;
   } catch (err) {
     console.error("[theme-render] theme.liquid render failed, fallback:", err);

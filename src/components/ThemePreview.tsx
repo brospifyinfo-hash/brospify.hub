@@ -36,7 +36,7 @@ export default function ThemePreview({
       </div>
       <div className="tpvf-stage">
         {html ? (
-          <iframe className="tpvf-iframe" title="Theme-Vorschau" sandbox="" srcDoc={html} />
+          <iframe className="tpvf-iframe" title="Theme-Vorschau" sandbox="allow-scripts allow-same-origin" srcDoc={html} />
         ) : (
           <div className="tpvf-empty">{loading ? "…" : "—"}</div>
         )}

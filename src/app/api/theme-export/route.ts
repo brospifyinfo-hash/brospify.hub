@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string };
   try {
     body = await req.json();
   } catch {
@@ -56,13 +56,14 @@ export async function POST(req: NextRequest) {
 
   const productId = body.productId || "";
   const font = body.font || "";
+  const headingFont = body.headingFont || font;
   const colors = body.colors;
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
   if (!isValidColors(colors)) {
     return NextResponse.json({ error: "Ungültige Farben (alle als Hex #rrggbb)." }, { status: 400 });
   }
-  if (!isValidFontHandle(font)) {
+  if (!isValidFontHandle(font) || !isValidFontHandle(headingFont)) {
     return NextResponse.json({ error: "Ungültige Schriftart." }, { status: 400 });
   }
 
@@ -128,7 +129,7 @@ export async function POST(req: NextRequest) {
   let zip: Buffer;
   try {
     const master = await getMasterThemeZip();
-    zip = buildThemeZip(master, { themeCopy, colors: colors as ThemeColors, font });
+    zip = buildThemeZip(master, { themeCopy, colors: colors as ThemeColors, font, headingFont });
   } catch (err) {
     console.error("[theme-export] build failed:", err);
     const msg = err instanceof Error ? err.message : "Theme-Erstellung fehlgeschlagen.";

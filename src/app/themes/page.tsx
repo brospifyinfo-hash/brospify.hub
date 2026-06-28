@@ -287,11 +287,20 @@ function EmptyCard({ error }: { error?: string }) {
 
 const BUILDER_FONTS = [
   { value: "work_sans_n4", label: "Work Sans" },
-  { value: "acme_n4", label: "Acme" },
-  { value: "assistant_n4", label: "Assistant" },
-  { value: "montserrat_n4", label: "Montserrat" },
   { value: "poppins_n4", label: "Poppins" },
+  { value: "montserrat_n4", label: "Montserrat" },
+  { value: "inter_n4", label: "Inter" },
   { value: "roboto_n4", label: "Roboto" },
+  { value: "lato_n4", label: "Lato" },
+  { value: "nunito_n4", label: "Nunito" },
+  { value: "raleway_n4", label: "Raleway" },
+  { value: "dmsans_n4", label: "DM Sans" },
+  { value: "assistant_n4", label: "Assistant" },
+  { value: "oswald_n4", label: "Oswald" },
+  { value: "bebas_neue_n4", label: "Bebas Neue" },
+  { value: "playfair_n4", label: "Playfair Display" },
+  { value: "merriweather_n4", label: "Merriweather" },
+  { value: "acme_n4", label: "Acme" },
 ];
 
 type ThemeColors = { button: string; buttonText: string; background: string; text: string; accent: string };
@@ -309,6 +318,7 @@ function ThemeBuilderCard() {
   const [productId, setProductId] = useState("");
   const [colors, setColors] = useState<ThemeColors>(DEFAULT_COLORS);
   const [font, setFont] = useState("work_sans_n4");
+  const [headingFont, setHeadingFont] = useState("montserrat_n4");
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -364,7 +374,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, page: previewPage, colors, font }),
+        body: JSON.stringify({ productId, page: previewPage, colors, font, headingFont }),
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -380,7 +390,7 @@ function ThemeBuilderCard() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [productId, previewPage, colors, font]);
+  }, [productId, previewPage, colors, font, headingFont]);
 
   function setColor(key: keyof ThemeColors, value: string) {
     setColors((prev) => ({ ...prev, [key]: value }));
@@ -395,7 +405,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font }),
+        body: JSON.stringify({ productId, colors, font, headingFont }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -441,32 +451,42 @@ function ThemeBuilderCard() {
         <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_1fr] lg:gap-5 lg:items-start">
           {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
           <div className="order-2 lg:order-1">
-            <div className="grid sm:grid-cols-2 gap-3">
+            <label className="block">
+              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
+              <select
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+              >
+                {products.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-zinc-900">
+                    {p.titel}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="grid grid-cols-2 gap-3 mt-3">
               <label className="block">
-                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
+                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontHeading}</span>
                 <select
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                  value={headingFont}
+                  onChange={(e) => setHeadingFont(e.target.value)}
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
                 >
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id} className="bg-zinc-900">
-                      {p.titel}
-                    </option>
+                  {BUILDER_FONTS.map((f) => (
+                    <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>
                   ))}
                 </select>
               </label>
               <label className="block">
-                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFont}</span>
+                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontBody}</span>
                 <select
                   value={font}
                   onChange={(e) => setFont(e.target.value)}
-                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
                 >
                   {BUILDER_FONTS.map((f) => (
-                    <option key={f.value} value={f.value} className="bg-zinc-900">
-                      {f.label}
-                    </option>
+                    <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>
                   ))}
                 </select>
               </label>
