@@ -20,6 +20,7 @@ import {
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview from "@/components/ThemePreview";
+import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID } from "@/lib/theme-styles";
 
 const ACCENT = "#95BF47";
 
@@ -304,21 +305,15 @@ const BUILDER_FONTS = [
 ];
 
 type ThemeColors = { button: string; buttonText: string; background: string; text: string; accent: string };
-const DEFAULT_COLORS: ThemeColors = {
-  button: "#95BF47",
-  buttonText: "#FFFFFF",
-  background: "#FFFFFF",
-  text: "#121212",
-  accent: "#95BF47",
-};
 
 function ThemeBuilderCard() {
   const { t, lang } = useI18n();
   const [products, setProducts] = useState<{ id: string; titel: string }[]>([]);
   const [productId, setProductId] = useState("");
-  const [colors, setColors] = useState<ThemeColors>(DEFAULT_COLORS);
-  const [font, setFont] = useState("work_sans_n4");
-  const [headingFont, setHeadingFont] = useState("montserrat_n4");
+  const [styleId, setStyleId] = useState(DEFAULT_STYLE_ID);
+  const [colors, setColors] = useState<ThemeColors>(getThemeStyle(DEFAULT_STYLE_ID).palette);
+  const [font, setFont] = useState(getThemeStyle(DEFAULT_STYLE_ID).bodyFont);
+  const [headingFont, setHeadingFont] = useState(getThemeStyle(DEFAULT_STYLE_ID).headingFont);
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -374,7 +369,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, page: previewPage, colors, font, headingFont }),
+        body: JSON.stringify({ productId, page: previewPage, colors, font, headingFont, style: styleId }),
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -390,10 +385,21 @@ function ThemeBuilderCard() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [productId, previewPage, colors, font, headingFont]);
+  }, [productId, previewPage, colors, font, headingFont, styleId]);
 
   function setColor(key: keyof ThemeColors, value: string) {
     setColors((prev) => ({ ...prev, [key]: value }));
+  }
+
+  // Stil wählen → setzt Palette + Schriften auf die Style-Defaults (danach
+  // einzeln anpassbar). `styleId` steuert zusätzlich Section-Sichtbarkeit +
+  // globale Settings serverseitig.
+  function pickStyle(id: string) {
+    const s = getThemeStyle(id);
+    setStyleId(id);
+    setColors(s.palette);
+    setFont(s.bodyFont);
+    setHeadingFont(s.headingFont);
   }
 
   async function handleDownload() {
@@ -405,7 +411,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont }),
+        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -451,6 +457,23 @@ function ThemeBuilderCard() {
         <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_1fr] lg:gap-5 lg:items-start">
           {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
           <div className="order-2 lg:order-1">
+            <span className="block text-[11px] text-zinc-500 mb-1.5">{t.themes.builderStyle}</span>
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {THEME_STYLES.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => pickStyle(s.id)}
+                  className={`text-left rounded-lg border px-3 py-2 transition ${
+                    styleId === s.id
+                      ? "border-[#95BF47]/60 bg-[#95BF47]/10"
+                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
+                  }`}
+                >
+                  <span className="block text-[12.5px] font-semibold text-white">{s.label}</span>
+                  <span className="block text-[10px] text-zinc-500 leading-tight">{s.hint}</span>
+                </button>
+              ))}
+            </div>
             <label className="block">
               <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
               <select

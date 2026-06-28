@@ -30,6 +30,8 @@ export interface InjectOptions {
   colors: ThemeColors;
   font: string; // Body-Schrift
   headingFont?: string; // Überschriften-Schrift (default = Body)
+  hiddenTypes?: string[]; // Section-Typen, die der Style ausblendet (→ disabled)
+  settingOverrides?: Record<string, number | string>; // globale Style-Settings
 }
 
 export function isValidHex(color: string): boolean {
@@ -56,21 +58,22 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
 
   const zip = new AdmZip(masterZip);
   const values = getPlaceholderValues(opts.themeCopy);
+  const hidden = new Set(opts.hiddenTypes || []);
 
-  // Texte + Akzentfarben injizieren.
+  // Texte + Palette injizieren; vom Style ausgeblendete Sections disablen.
   for (const tplPath of ACTIVE_TEMPLATES) {
     const entry = findEntry(zip, tplPath);
     if (!entry) continue;
     const data = JSON.parse(entry.getData().toString("utf8"));
-    injectTemplateData(data, values, opts.colors);
+    injectTemplateData(data, values, opts.colors, hidden);
     zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
   }
 
-  // Palette + Schrift in den globalen Settings.
+  // Palette + Schrift + Style-Settings in den globalen Settings.
   const settingsEntry = findEntry(zip, SETTINGS_PATH);
   if (settingsEntry) {
     const data = JSON.parse(settingsEntry.getData().toString("utf8"));
-    injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font);
+    injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font, opts.settingOverrides);
     zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
   }
 
@@ -83,12 +86,15 @@ function injectTemplateData(
   data: { order?: string[]; sections?: Record<string, unknown> },
   values: ThemeCopy,
   palette: ColorPalette,
+  hidden: Set<string>,
 ) {
   const order = Array.isArray(data.order) ? data.order : [];
-  const sections = (data.sections || {}) as Record<string, { disabled?: boolean } & Record<string, unknown>>;
+  const sections = (data.sections || {}) as Record<string, { disabled?: boolean; type?: string } & Record<string, unknown>>;
   for (const sectionId of order) {
     const section = sections[sectionId];
-    if (!section || section.disabled === true) continue; // nur AKTIVE Sections
+    if (!section) continue;
+    if (section.type && hidden.has(section.type)) { section.disabled = true; continue; } // Style blendet aus
+    if (section.disabled === true) continue; // nur AKTIVE Sections
     replaceTokensDeep(section, values);
     recolorByRoleDeep(section, palette);
   }
@@ -193,10 +199,12 @@ function injectSettingsData(
   colors: ThemeColors,
   font: string,
   headingFont: string,
+  settingOverrides?: Record<string, number | string>,
 ): void {
   const current = (data.current = (data.current || {}) as Record<string, unknown>);
   current.type_header_font = headingFont;
   current.type_body_font = font;
+  if (settingOverrides) Object.assign(current, settingOverrides); // Style: Radius/Spacing/…
 
   const schemes = (current.color_schemes = (current.color_schemes || {}) as Record<
     string,

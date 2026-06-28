@@ -24,6 +24,7 @@ import { getCreditCost } from "@/lib/credit-config-server";
 import { getMasterThemeZip } from "@/lib/theme-master";
 import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
+import { getThemeStyle } from "@/lib/theme-styles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string };
   try {
     body = await req.json();
   } catch {
@@ -58,6 +59,7 @@ export async function POST(req: NextRequest) {
   const font = body.font || "";
   const headingFont = body.headingFont || font;
   const colors = body.colors;
+  const style = getThemeStyle(body.style);
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
   if (!isValidColors(colors)) {
@@ -129,7 +131,14 @@ export async function POST(req: NextRequest) {
   let zip: Buffer;
   try {
     const master = await getMasterThemeZip();
-    zip = buildThemeZip(master, { themeCopy, colors: colors as ThemeColors, font, headingFont });
+    zip = buildThemeZip(master, {
+      themeCopy,
+      colors: colors as ThemeColors,
+      font,
+      headingFont,
+      hiddenTypes: style.hiddenTypes,
+      settingOverrides: style.settingOverrides,
+    });
   } catch (err) {
     console.error("[theme-export] build failed:", err);
     const msg = err instanceof Error ? err.message : "Theme-Erstellung fehlgeschlagen.";

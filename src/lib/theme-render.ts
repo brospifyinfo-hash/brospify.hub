@@ -343,6 +343,9 @@ function fillSettings(settings: Record<string, unknown>, schemaSettings: any[], 
     if (!def || !def.id || def.type === "header" || def.type === "paragraph") continue;
     const id: string = def.id;
     if (IMG_TYPES.has(def.type)) {
+      // Icons/Logos/SVGs NICHT durch Beispielbilder ersetzen — die sollen so
+      // bleiben wie im Theme. Nur „echte" Bild-Slots füllen.
+      if (/icon|logo|svg|badge/i.test(id)) continue;
       settings[id] = imageObject(pickImg()); // leere/Shopify-Bilder → echtes Beispielbild
       continue;
     }
@@ -388,6 +391,9 @@ export interface RenderPageOpts {
   palette: ColorPalette;
   font: string; // Body-Schrift
   headingFont?: string; // Überschriften-Schrift (default = Body)
+  limitSections?: number; // Vorschau: nur die ersten N Content-Sections (0 = alle)
+  hiddenTypes?: string[]; // Section-Typen, die der Style ausblendet
+  settingOverrides?: Record<string, unknown>; // globale settings-Overrides (Style)
 }
 
 export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): Promise<string> {
@@ -399,6 +405,7 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
   const headMeta = RENDER_FONTS[opts.headingFont || ""] || bodyMeta;
   const fontMeta = { param: headMeta.param === bodyMeta.param ? bodyMeta.param : `${headMeta.param}&family=${bodyMeta.param}` };
   const settings = buildSettings(env.settingsData, opts.palette, bodyMeta.family, headMeta.family);
+  if (opts.settingOverrides) Object.assign(settings, opts.settingOverrides); // Style-Overrides (Radius/Spacing …)
   const product = buildProductObj(opts.product);
 
   // IMAGE_URL-Tokens mit echten Produktbildern füllen (sonst leere Bilder).
@@ -437,10 +444,14 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
 
   // Aktive Sections rendern: Tokens ersetzt + Recolor + Schema-Defaults gemerged
   // + leere Texte/Bilder mit Beispielen gefüllt. Pro Section fehlertolerant.
+  const hidden = new Set(opts.hiddenTypes || []);
+  const limit = opts.limitSections || 0;
+  let contentCount = 0;
   let body = "";
   for (const id of order) {
     const sec = tplJson.sections[id];
     if (!sec || sec.disabled === true) continue;
+    if (hidden.has(sec.type)) continue; // vom gewählten Style ausgeblendet
     const liquidSrc = readEntry(env.zip, `sections/${sec.type}.liquid`);
     if (!liquidSrc || !liquidSrc.trim()) continue; // leere/fehlende Sections überspringen
     /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -464,9 +475,11 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
     try {
       const html = await env.engine.parseAndRender(liquidSrc, { ...ctxBase, section: buildSectionObj(id, secClone) });
       body += `<div class="shopify-section">${html}</div>\n`;
+      if (sec.type !== "wave") contentCount++; // Wellen zählen nicht als „Section"
     } catch {
       /* einzelne Section überspringen statt alles zu brechen */
     }
+    if (limit > 0 && contentCount >= limit) break; // Vorschau: nur die ersten N
   }
 
   const fontLink = `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${fontMeta.param}&display=swap">`;
