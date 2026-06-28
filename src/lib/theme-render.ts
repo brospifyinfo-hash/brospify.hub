@@ -43,6 +43,7 @@ interface ThemeEnv {
   themeLiquid: string;
   settingsData: Record<string, unknown>;
   productImagesRef: { current: string[] };
+  translate: (key: string) => string;
 }
 let CACHE: ThemeEnv | null = null;
 
@@ -55,14 +56,27 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
   const zip = new AdmZip(masterZip);
   const productImagesRef = { current: [] as string[] };
 
-  // Locale fürs t-Filter.
+  // Locale fürs t-Filter UND zum Auflösen von Schema-`t:`-Defaults: Storefront
+  // (*.default.json) + Schema (*.default.schema.json) zusammenführen.
   let locale: Record<string, unknown> = {};
-  const localeEntry = zip.getEntries().find((e) => /^locales\/[a-z-]+\.default\.json$/.test(e.entryName));
-  if (localeEntry) {
-    try {
-      locale = JSON.parse(localeEntry.getData().toString("utf8"));
-    } catch {
-      /* ignore */
+  const deepMerge = (a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> => {
+    for (const k of Object.keys(b)) {
+      const bv = b[k];
+      if (bv && typeof bv === "object" && !Array.isArray(bv)) {
+        const av = a[k] && typeof a[k] === "object" ? (a[k] as Record<string, unknown>) : {};
+        a[k] = deepMerge(av, bv as Record<string, unknown>);
+      } else a[k] = bv;
+    }
+    return a;
+  };
+  for (const re of [/^locales\/[a-z-]+\.default\.json$/, /^locales\/[a-z-]+\.default\.schema\.json$/]) {
+    const entry = zip.getEntries().find((e) => re.test(e.entryName));
+    if (entry) {
+      try {
+        locale = deepMerge(locale, JSON.parse(entry.getData().toString("utf8")));
+      } catch {
+        /* ignore */
+      }
     }
   }
   const tLookup = (key: string): string | null => {
@@ -141,6 +155,10 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
     return (n / 100).toFixed(2).replace(".", ",") + " €";
   };
   const assetImg = (v: unknown) => {
+    if (v && typeof v === "object") {
+      const o = v as { src?: string; url?: string };
+      if (o.src || o.url) return String(o.src || o.url);
+    }
     const s = String(v ?? "");
     if (/^https?:/.test(s)) return s;
     return productImagesRef.current[0] || PLACEHOLDER_IMG;
@@ -201,7 +219,8 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
   const styleBlock = a >= 0 && b >= 0 ? themeLiquid.slice(a, b + "{% endstyle %}".length) : "";
   const baseCss = readEntry(zip, "assets/base.css") || "";
 
-  return { engine, zip, baseCss, styleBlock, themeLiquid, settingsData: settingsRoot, productImagesRef };
+  const translate = (key: string) => tLookup(key) || String(key).split(".").pop()!.replace(/_/g, " ");
+  return { engine, zip, baseCss, styleBlock, themeLiquid, settingsData: settingsRoot, productImagesRef, translate };
 }
 
 // ─── Farb-/Settings-Helfer ───
@@ -266,6 +285,64 @@ function buildSectionObj(id: string, sec: { type: string; settings?: Record<stri
   });
   return { id, settings: sec.settings || {}, blocks, location: "template", index: 0, index0: 0, shopify_attributes: "" };
 }
+
+// ─── Leere Settings logisch füllen (wie Shopify: Schema-Defaults + Beispiele) ──
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function imageObject(url: string) {
+  return {
+    src: url, url, width: 1200, height: 1200, aspect_ratio: 1, alt: "", id: 1, media_type: "image",
+    preview_image: { src: url, url, width: 1200, height: 1200, aspect_ratio: 1 },
+    toString: () => url,
+  };
+}
+
+const SCHEMA_CACHE = new Map<string, { settings: any[]; blocks: { type: string; settings?: any[] }[] } | null>();
+function getSchema(type: string, src: string) {
+  if (SCHEMA_CACHE.has(type)) return SCHEMA_CACHE.get(type)!;
+  const m = src.match(/\{%-?\s*schema\s*-?%\}([\s\S]*?)\{%-?\s*endschema\s*-?%\}/);
+  let parsed: { settings?: any[]; blocks?: any[] } | null = null;
+  if (m) {
+    try { parsed = JSON.parse(m[1]); } catch { parsed = null; }
+  }
+  const result = parsed ? { settings: parsed.settings || [], blocks: parsed.blocks || [] } : null;
+  SCHEMA_CACHE.set(type, result);
+  return result;
+}
+
+const IMG_TYPES = new Set(["image_picker"]);
+const TEXT_TYPES = new Set(["text", "textarea", "richtext", "inline_richtext", "html", "liquid"]);
+function exampleText(id: string, label?: unknown): string {
+  const k = (id + " " + (typeof label === "string" ? label : "")).toLowerCase();
+  if (/sub|unter/.test(k)) return "Ein kurzer Untertitel für deine Vorschau";
+  if (/head|title|titel|über/.test(k)) return "Beispiel-Überschrift";
+  if (/button|btn|cta|link|label/.test(k)) return "Mehr erfahren";
+  if (/desc|text|body|content|absatz|para/.test(k)) return "Beispieltext für die Vorschau — hier steht später dein Inhalt.";
+  if (/price|preis/.test(k)) return "29,99€";
+  if (/name|autor|author/.test(k)) return "Sarah M.";
+  if (/quote|review|bewert/.test(k)) return "Absolut überzeugt — klare Empfehlung!";
+  return "Beispiel";
+}
+/** Merged Schema-Defaults in die Settings (wie Shopify) und füllt leere
+ *  Text-/Bild-Settings mit Beispielen, damit keine Lücken bleiben. */
+function fillSettings(settings: Record<string, unknown>, schemaSettings: any[], pickImg: () => string, resolveT: (k: string) => string) {
+  for (const def of schemaSettings || []) {
+    if (!def || !def.id || def.type === "header" || def.type === "paragraph") continue;
+    const id: string = def.id;
+    if (IMG_TYPES.has(def.type)) {
+      settings[id] = imageObject(pickImg()); // leere/Shopify-Bilder → echtes Beispielbild
+      continue;
+    }
+    const cur = settings[id];
+    const empty = cur === undefined || cur === null || (typeof cur === "string" && cur.trim() === "");
+    if (!empty) continue;
+    // Schema-Default (Shopify-`t:`-Übersetzungskeys auflösen).
+    let dv = def.default;
+    if (typeof dv === "string" && dv.startsWith("t:")) dv = resolveT(dv.slice(2));
+    if (dv !== undefined && dv !== "") settings[id] = dv;
+    else if (TEXT_TYPES.has(def.type)) settings[id] = exampleText(id, def.label);
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function buildProductObj(p: RenderProduct) {
   const imgs = (p.images.length ? p.images : [PLACEHOLDER_IMG]).map((url) => ({
@@ -335,15 +412,38 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
   const tplJson = JSON.parse(readEntry(env.zip, `templates/${opts.template}`) || "{}");
   const order: string[] = Array.isArray(tplJson.order) ? tplJson.order : [];
 
-  // Aktive Sections rendern (Tokens ersetzt + Recolor), pro Section fehlertolerant.
+  // Beispielbilder zum Füllen leerer Bild-Settings (zyklisch durch die echten
+  // Produktbilder, sonst Platzhalter).
+  const prodImgs = opts.product.images.length ? opts.product.images : [PLACEHOLDER_IMG];
+  let imgIdx = 0;
+  const pickImg = () => prodImgs[imgIdx++ % prodImgs.length];
+
+  // Aktive Sections rendern: Tokens ersetzt + Recolor + Schema-Defaults gemerged
+  // + leere Texte/Bilder mit Beispielen gefüllt. Pro Section fehlertolerant.
   let body = "";
   for (const id of order) {
     const sec = tplJson.sections[id];
     if (!sec || sec.disabled === true) continue;
     const liquidSrc = readEntry(env.zip, `sections/${sec.type}.liquid`);
     if (!liquidSrc || !liquidSrc.trim()) continue; // leere/fehlende Sections überspringen
-    const secClone = JSON.parse(JSON.stringify(sec));
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const secClone: any = JSON.parse(JSON.stringify(sec));
     transformDeep(secClone, values, opts.palette);
+    const schema = getSchema(sec.type, liquidSrc);
+    if (schema) {
+      if (!secClone.settings) secClone.settings = {};
+      fillSettings(secClone.settings, schema.settings, pickImg, env.translate);
+      if (secClone.blocks) {
+        for (const bid of Object.keys(secClone.blocks)) {
+          const bl = secClone.blocks[bid];
+          if (!bl) continue;
+          if (!bl.settings) bl.settings = {};
+          const bdef = (schema.blocks || []).find((x: any) => x.type === bl.type);
+          if (bdef) fillSettings(bl.settings, bdef.settings || [], pickImg, env.translate);
+        }
+      }
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
     try {
       const html = await env.engine.parseAndRender(liquidSrc, { ...ctxBase, section: buildSectionObj(id, secClone) });
       body += `<div class="shopify-section">${html}</div>\n`;
