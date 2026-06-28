@@ -16,16 +16,19 @@ import {
   findKundeByKey,
   getCreditsState,
   deductCredits,
+  updateProduktExtra,
   type Produkt,
   type KundeProfile,
 } from "@/lib/sheets";
 import { getCreditCost } from "@/lib/credit-config-server";
 import { getMasterThemeZip } from "@/lib/theme-master";
+import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// On-demand-Textgenerierung (2 DeepSeek-Calls) + Theme-Build → mehr Headroom.
+export const maxDuration = 120;
 
 function slugify(name: string): string {
   return (
@@ -73,15 +76,6 @@ export async function POST(req: NextRequest) {
   }
   if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
 
-  // Theme-Texte vorhanden?
-  const themeCopy = produkt.extra?.themeCopy;
-  if (!themeCopy || Object.keys(themeCopy).length === 0) {
-    return NextResponse.json(
-      { error: "Für dieses Produkt wurden noch keine Theme-Texte erstellt." },
-      { status: 409 },
-    );
-  }
-
   // Autorisierung + Credits (Admins frei, ohne Abzug).
   let chargeRow: number | null = null;
   let chargeProfile: import("@/lib/sheets").KundeProfile | null = null;
@@ -108,6 +102,26 @@ export async function POST(req: NextRequest) {
     }
     chargeRow = kunde.rowIndex;
     chargeProfile = kunde.profile;
+  }
+
+  // Theme-Texte: vorhandene nutzen ODER on-demand per DeepSeek generieren —
+  // so scheitert der Download nie an "noch keine Texte". Generierte Texte
+  // werden für künftige Builds am Produkt gecached.
+  let themeCopy = produkt.extra?.themeCopy;
+  if (!themeCopy || Object.keys(themeCopy).length === 0) {
+    try {
+      const result = await generateThemeCopy({ name: produkt.titel, brief: produkt.beschreibung });
+      themeCopy = result.copy;
+      try {
+        await updateProduktExtra(produkt.rowIndex, { ...produkt.extra, themeCopy: result.copy });
+      } catch (e) {
+        console.warn("[theme-export] themeCopy cache write failed:", e);
+      }
+    } catch (err) {
+      console.error("[theme-export] on-demand generation failed:", err);
+      const msg = err instanceof Error ? err.message : "Theme-Texte konnten nicht erstellt werden.";
+      return NextResponse.json({ error: `Texterstellung fehlgeschlagen: ${msg}` }, { status: 502 });
+    }
   }
 
   // Master-Theme laden + injizieren.
