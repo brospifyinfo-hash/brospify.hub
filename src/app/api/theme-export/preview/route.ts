@@ -1,18 +1,21 @@
 // ─── /api/theme-export/preview ───────────────────────────────────
-// Liefert die Daten für die Live-Vorschau des Produkt-Themes: Titel, Preis,
-// Produktbilder + die zusammengeführten Theme-Texte (echte KI-Texte, falls
-// vorhanden — sonst Defaults/Produkt-Fallbacks). KOSTENLOS, kein Credit, kein
-// KI-Call (rein lesend), damit die Vorschau sofort lädt.
+// Rendert die ECHTE Theme-Seite (Home oder Produkt) serverseitig per Liquid
+// und liefert fertiges HTML für die Live-Vorschau (iframe). Farb-Palette +
+// Schrift werden wie beim Download angewandt. Kostenlos, kein Credit, kein
+// KI-Call.
+//
+//   POST { productId, page: "home"|"product", colors:{…}, font }
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
-import { getPlaceholderValues } from "@/lib/theme-placeholders";
 import { getMasterThemeZip } from "@/lib/theme-master";
-import { readActiveSections } from "@/lib/theme-inject";
+import { renderThemePage, RENDER_FONTS, type RenderProduct } from "@/lib/theme-render";
+import { isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 function httpImages(produkt: Produkt): string[] {
   const out: string[] = [];
@@ -21,17 +24,39 @@ function httpImages(produkt: Produkt): string[] {
   };
   push(produkt.bildUrl);
   for (const u of produkt.extra?.images || []) push(u);
-  return out.slice(0, 6);
+  return out.slice(0, 8);
 }
 
-export async function GET(req: NextRequest) {
+/** "29,99 €" / "29.99" / 2999 → Cent. */
+function toCents(price: string): number {
+  const cleaned = String(price).replace(/[^\d.,]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+  const eur = parseFloat(cleaned);
+  if (!Number.isFinite(eur) || eur <= 0) return 2999;
+  return Math.round(eur * 100);
+}
+
+export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session.isLoggedIn) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  const productId = req.nextUrl.searchParams.get("productId") || "";
+  let body: { productId?: string; page?: string; colors?: Partial<ThemeColors>; font?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Ungültiger Body." }, { status: 400 });
+  }
+
+  const productId = body.productId || "";
+  const page = body.page === "product" ? "product.json" : "index.json";
+  const colors = body.colors;
+  const font = body.font && RENDER_FONTS[body.font] ? body.font : "work_sans_n4";
+
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
+  if (!isValidColors(colors) || !isValidFontHandle(font)) {
+    return NextResponse.json({ error: "Ungültige Vorschau-Parameter." }, { status: 400 });
+  }
 
   let produkt: Produkt | undefined;
   try {
@@ -54,33 +79,31 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const fin = produkt.extra?.finances;
-  const sell = fin?.recommendedSellPrice;
-  const price = produkt.preis || (sell ? String(sell) : "");
-  // Grober „Statt"-Preis für die Vorschau (nur Optik): Verkaufspreis × 1.6.
-  const comparePrice =
-    sell && sell > 0 ? `${(Math.round(sell * 1.6 * 100) / 100).toFixed(2).replace(".", ",")}€` : "";
+  const priceCents = toCents(produkt.preis);
+  const sell = produkt.extra?.finances?.recommendedSellPrice;
+  const compareCents = sell && sell > 0 ? Math.round(sell * 1.6 * 100) : Math.round(priceCents * 1.6);
 
-  // Echte aktive Sections (1:1 aus dem Theme, Tokens ersetzt) für die Vorschau.
-  let sections: { home: unknown[]; product: unknown[] } = { home: [], product: [] };
+  const renderProduct: RenderProduct = {
+    title: produkt.titel || "Produkt",
+    priceCents,
+    compareCents,
+    images: httpImages(produkt),
+    descriptionHtml: produkt.beschreibung || "",
+  };
+
   try {
     const master = await getMasterThemeZip();
-    sections = readActiveSections(master, produkt.extra?.themeCopy || {});
+    const html = await renderThemePage(master, {
+      template: page,
+      themeCopy: produkt.extra?.themeCopy || {},
+      product: renderProduct,
+      palette: colors as ThemeColors,
+      font,
+    });
+    return NextResponse.json({ html }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
-    console.error("[theme-preview] readActiveSections failed:", err);
+    console.error("[theme-preview] render failed:", err);
+    const msg = err instanceof Error ? err.message : "Vorschau konnte nicht erstellt werden.";
+    return NextResponse.json({ error: msg }, { status: 500 });
   }
-
-  return NextResponse.json(
-    {
-      title: produkt.titel,
-      price,
-      comparePrice,
-      images: httpImages(produkt),
-      hasCopy: Boolean(produkt.extra?.themeCopy && Object.keys(produkt.extra.themeCopy).length),
-      copy: getPlaceholderValues(produkt.extra?.themeCopy),
-      home: sections.home,
-      product: sections.product,
-    },
-    { headers: { "Cache-Control": "no-store" } },
-  );
 }

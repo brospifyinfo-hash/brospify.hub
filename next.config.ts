@@ -11,6 +11,7 @@ const nextConfig: NextConfig = {
   // lesen kann. Pfad relativ zum Projekt-Root.
   outputFileTracingIncludes: {
     "/api/theme-export": ["./master-theme.zip"],
+    "/api/theme-export/preview": ["./master-theme.zip"],
   },
   // Das dynamische, vom Admin hochladbare Favicon kommt über /api/favicon.
   // Browser fragen zusätzlich automatisch /favicon.ico an → dorthin umleiten.
