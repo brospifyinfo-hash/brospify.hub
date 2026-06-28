@@ -12,7 +12,7 @@ import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
 import { getMasterThemeZip } from "@/lib/theme-master";
 import { renderThemePage, RENDER_FONTS, type RenderProduct } from "@/lib/theme-render";
 import { isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
-import { getThemeStyle } from "@/lib/theme-styles";
+import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; page?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string };
+  let body: { productId?: string; page?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number };
   try {
     body = await req.json();
   } catch {
@@ -55,6 +55,7 @@ export async function POST(req: NextRequest) {
   const font = body.font && RENDER_FONTS[body.font] ? body.font : "work_sans_n4";
   const headingFont = body.headingFont && RENDER_FONTS[body.headingFont] ? body.headingFont : font;
   const style = getThemeStyle(body.style);
+  const radius = typeof body.radius === "number" ? body.radius : radiusForStyle(style);
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
   if (!isValidColors(colors) || !isValidFontHandle(font)) {
@@ -105,7 +106,7 @@ export async function POST(req: NextRequest) {
       headingFont,
       limitSections: 4, // Vorschau: nur die ersten Sections
       hiddenTypes: style.hiddenTypes,
-      settingOverrides: style.settingOverrides,
+      settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
     });
     return NextResponse.json({ html }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {

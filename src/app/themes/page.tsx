@@ -20,7 +20,7 @@ import {
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview from "@/components/ThemePreview";
-import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID } from "@/lib/theme-styles";
+import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, RADIUS_OPTIONS, radiusForStyle } from "@/lib/theme-styles";
 
 const ACCENT = "#95BF47";
 
@@ -314,6 +314,7 @@ function ThemeBuilderCard() {
   const [colors, setColors] = useState<ThemeColors>(getThemeStyle(DEFAULT_STYLE_ID).palette);
   const [font, setFont] = useState(getThemeStyle(DEFAULT_STYLE_ID).bodyFont);
   const [headingFont, setHeadingFont] = useState(getThemeStyle(DEFAULT_STYLE_ID).headingFont);
+  const [radius, setRadius] = useState(radiusForStyle(getThemeStyle(DEFAULT_STYLE_ID)));
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
@@ -369,7 +370,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, page: previewPage, colors, font, headingFont, style: styleId }),
+        body: JSON.stringify({ productId, page: previewPage, colors, font, headingFont, style: styleId, radius }),
       })
         .then((r) => (r.ok ? r.json() : null))
         .then((d) => {
@@ -385,7 +386,7 @@ function ThemeBuilderCard() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [productId, previewPage, colors, font, headingFont, styleId]);
+  }, [productId, previewPage, colors, font, headingFont, styleId, radius]);
 
   function setColor(key: keyof ThemeColors, value: string) {
     setColors((prev) => ({ ...prev, [key]: value }));
@@ -400,6 +401,7 @@ function ThemeBuilderCard() {
     setColors(s.palette);
     setFont(s.bodyFont);
     setHeadingFont(s.headingFont);
+    setRadius(radiusForStyle(s));
   }
 
   async function handleDownload() {
@@ -411,7 +413,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId }),
+        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -513,6 +515,23 @@ function ThemeBuilderCard() {
                   ))}
                 </select>
               </label>
+            </div>
+
+            <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderCorners}</span>
+            <div className="grid grid-cols-3 gap-2">
+              {RADIUS_OPTIONS.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => setRadius(r.value)}
+                  className={`rounded-lg border px-2 py-2 text-[12px] font-medium transition ${
+                    radius === r.value
+                      ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white"
+                      : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
+                  }`}
+                >
+                  {r.label}
+                </button>
+              ))}
             </div>
 
             <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderColors}</span>

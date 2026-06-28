@@ -325,20 +325,48 @@ function getSchema(type: string, src: string) {
 
 const IMG_TYPES = new Set(["image_picker"]);
 const TEXT_TYPES = new Set(["text", "textarea", "richtext", "inline_richtext", "html", "liquid"]);
-function exampleText(id: string, label?: unknown): string {
+// Polierte, realistische Beispiel-Copy (rotiert) — sieht aus wie ein echter
+// Shop, nicht wie Dev-Platzhalter („Beispieltext").
+const EX_COPY: Record<string, string[]> = {
+  heading: ["Spürbar besser im Alltag", "Qualität, die man fühlt", "Dafür wirst du es lieben", "Mehr als nur ein Produkt", "Das macht den Unterschied"],
+  sub: ["Von tausenden Kunden geliebt", "Premium-Qualität, fairer Preis", "Entwickelt für deinen Alltag", "Darum lohnt es sich"],
+  body: [
+    "Hochwertige Materialien und ein durchdachtes Design — für ein Ergebnis, das du jeden Tag spürst.",
+    "Wir verbinden Funktion mit Stil, damit du dich auf das Wesentliche konzentrieren kannst.",
+    "Sorgfältig ausgewählt, fair produziert und gemacht, um lange zu halten.",
+    "Einfach, durchdacht und zuverlässig — genau so, wie du es brauchst.",
+  ],
+  button: ["Jetzt entdecken", "Mehr erfahren", "Jetzt sichern", "Zum Angebot"],
+  quote: [
+    "Beste Entscheidung seit langem — ich nutze es täglich.",
+    "Top Qualität, blitzschnelle Lieferung. Klare Empfehlung!",
+    "Hat meine Erwartungen wirklich übertroffen.",
+    "Endlich ein Produkt, das hält was es verspricht.",
+    "Würde ich jederzeit wieder kaufen. Fünf Sterne!",
+  ],
+  name: ["Sarah M.", "Tom K.", "Laura B.", "Nico W.", "Julia S.", "Petra H."],
+  loc: ["München", "Berlin", "Hamburg", "Köln", "Frankfurt", "Stuttgart"],
+  date: ["vor 2 Tagen", "vor 1 Woche", "vor 3 Tagen", "vor 5 Tagen", "vor 4 Tagen"],
+  label: ["Qualität", "Design", "Komfort", "Haltbarkeit", "Preis-Leistung"],
+};
+function exampleText(id: string, label: unknown, idx: number): string {
   const k = (id + " " + (typeof label === "string" ? label : "")).toLowerCase();
-  if (/sub|unter/.test(k)) return "Ein kurzer Untertitel für deine Vorschau";
-  if (/head|title|titel|über/.test(k)) return "Beispiel-Überschrift";
-  if (/button|btn|cta|link|label/.test(k)) return "Mehr erfahren";
-  if (/desc|text|body|content|absatz|para/.test(k)) return "Beispieltext für die Vorschau — hier steht später dein Inhalt.";
-  if (/price|preis/.test(k)) return "29,99€";
-  if (/name|autor|author/.test(k)) return "Sarah M.";
-  if (/quote|review|bewert/.test(k)) return "Absolut überzeugt — klare Empfehlung!";
-  return "Beispiel";
+  const pick = (arr: string[]) => arr[idx % arr.length];
+  if (/(sub|unter|eyebrow|subtitle|subheading|lede)/.test(k)) return pick(EX_COPY.sub);
+  if (/(button|btn|cta)/.test(k)) return pick(EX_COPY.button);
+  if (/(quote|review|bewert|message|testimonial)/.test(k)) return pick(EX_COPY.quote);
+  if (/(author|autor|^name|_name)/.test(k)) return pick(EX_COPY.name);
+  if (/(location|^ort|_ort|city|stadt)/.test(k)) return pick(EX_COPY.loc);
+  if (/(date|datum)/.test(k)) return pick(EX_COPY.date);
+  if (/(price|preis|amount)/.test(k)) return "29,99€";
+  if (/(head|title|titel|über|headline|heading)/.test(k)) return pick(EX_COPY.heading);
+  if (/(desc|text|body|content|absatz|para|info|antwort)/.test(k)) return pick(EX_COPY.body);
+  if (/label/.test(k)) return pick(EX_COPY.label);
+  return pick(EX_COPY.heading);
 }
 /** Merged Schema-Defaults in die Settings (wie Shopify) und füllt leere
  *  Text-/Bild-Settings mit Beispielen, damit keine Lücken bleiben. */
-function fillSettings(settings: Record<string, unknown>, schemaSettings: any[], pickImg: () => string, resolveT: (k: string) => string) {
+function fillSettings(settings: Record<string, unknown>, schemaSettings: any[], pickImg: () => string, resolveT: (k: string) => string, idxRef: { n: number }) {
   for (const def of schemaSettings || []) {
     if (!def || !def.id || def.type === "header" || def.type === "paragraph") continue;
     const id: string = def.id;
@@ -356,7 +384,7 @@ function fillSettings(settings: Record<string, unknown>, schemaSettings: any[], 
     let dv = def.default;
     if (typeof dv === "string" && dv.startsWith("t:")) dv = resolveT(dv.slice(2));
     if (dv !== undefined && dv !== "") settings[id] = dv;
-    else if (TEXT_TYPES.has(def.type)) settings[id] = exampleText(id, def.label);
+    else if (TEXT_TYPES.has(def.type)) settings[id] = exampleText(id, def.label, idxRef.n++);
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -441,6 +469,7 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
   const prodImgs = opts.product.images.length ? opts.product.images : [PLACEHOLDER_IMG];
   let imgIdx = 0;
   const pickImg = () => prodImgs[imgIdx++ % prodImgs.length];
+  const idxRef = { n: 0 }; // rotiert die Beispiel-Copy über alle Sections hinweg
 
   // Aktive Sections rendern: Tokens ersetzt + Recolor + Schema-Defaults gemerged
   // + leere Texte/Bilder mit Beispielen gefüllt. Pro Section fehlertolerant.
@@ -460,14 +489,14 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
     const schema = getSchema(sec.type, liquidSrc);
     if (schema) {
       if (!secClone.settings) secClone.settings = {};
-      fillSettings(secClone.settings, schema.settings, pickImg, env.translate);
+      fillSettings(secClone.settings, schema.settings, pickImg, env.translate, idxRef);
       if (secClone.blocks) {
         for (const bid of Object.keys(secClone.blocks)) {
           const bl = secClone.blocks[bid];
           if (!bl) continue;
           if (!bl.settings) bl.settings = {};
           const bdef = (schema.blocks || []).find((x: any) => x.type === bl.type);
-          if (bdef) fillSettings(bl.settings, bdef.settings || [], pickImg, env.translate);
+          if (bdef) fillSettings(bl.settings, bdef.settings || [], pickImg, env.translate, idxRef);
         }
       }
     }

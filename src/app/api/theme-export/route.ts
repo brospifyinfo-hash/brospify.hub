@@ -24,7 +24,7 @@ import { getCreditCost } from "@/lib/credit-config-server";
 import { getMasterThemeZip } from "@/lib/theme-master";
 import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
-import { getThemeStyle } from "@/lib/theme-styles";
+import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number };
   try {
     body = await req.json();
   } catch {
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
   const headingFont = body.headingFont || font;
   const colors = body.colors;
   const style = getThemeStyle(body.style);
+  const radius = typeof body.radius === "number" ? body.radius : radiusForStyle(style);
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
   if (!isValidColors(colors)) {
@@ -137,7 +138,7 @@ export async function POST(req: NextRequest) {
       font,
       headingFont,
       hiddenTypes: style.hiddenTypes,
-      settingOverrides: style.settingOverrides,
+      settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
     });
   } catch (err) {
     console.error("[theme-export] build failed:", err);

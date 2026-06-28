@@ -86,3 +86,29 @@ export const DEFAULT_STYLE_ID = "modern";
 export function getThemeStyle(id: string | undefined): ThemeStyle {
   return THEME_STYLES.find((s) => s.id === id) || THEME_STYLES[0];
 }
+
+// ─── Ecken-Stil (zusätzliche Kunden-Anpassung über den Style hinweg) ──
+export const RADIUS_OPTIONS = [
+  { id: "sharp", label: "Kantig", value: 0 },
+  { id: "soft", label: "Leicht", value: 10 },
+  { id: "round", label: "Rund", value: 28 },
+];
+
+/** Baut die Radius-bezogenen settings_data-Overrides aus einem Px-Wert. */
+export function radiusOverrides(r: number): Record<string, number> {
+  const v = Math.max(0, Math.min(40, Math.round(Number.isFinite(r) ? r : 8)));
+  return {
+    buttons_radius: v,
+    card_corner_radius: v > 0 ? v + 2 : 0,
+    media_radius: v,
+    inputs_radius: Math.min(v, 12),
+    badge_corner_radius: v,
+    variant_pills_radius: v > 0 ? 40 : 0,
+  };
+}
+
+/** Default-Radius eines Stils (für die Vorbelegung im UI). */
+export function radiusForStyle(style: ThemeStyle): number {
+  const r = style.settingOverrides.buttons_radius;
+  return typeof r === "number" ? r : 8;
+}
