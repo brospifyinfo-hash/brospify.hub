@@ -40,6 +40,7 @@ interface ThemeEnv {
   zip: AdmZip;
   baseCss: string;
   styleBlock: string;
+  themeLiquid: string;
   settingsData: Record<string, unknown>;
   productImagesRef: { current: string[] };
 }
@@ -200,7 +201,7 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
   const styleBlock = a >= 0 && b >= 0 ? themeLiquid.slice(a, b + "{% endstyle %}".length) : "";
   const baseCss = readEntry(zip, "assets/base.css") || "";
 
-  return { engine, zip, baseCss, styleBlock, settingsData: settingsRoot, productImagesRef };
+  return { engine, zip, baseCss, styleBlock, themeLiquid, settingsData: settingsRoot, productImagesRef };
 }
 
 // ─── Farb-/Settings-Helfer ───
@@ -327,16 +328,12 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
     blank: false,
   };
 
+  // Objekte, die der theme.liquid-Head/Body referenziert.
+  ctxBase.content_for_header = "";
+  ctxBase.localization = { available_countries: [], available_languages: [], country: {}, language: {} };
+
   const tplJson = JSON.parse(readEntry(env.zip, `templates/${opts.template}`) || "{}");
   const order: string[] = Array.isArray(tplJson.order) ? tplJson.order : [];
-
-  // Head-Style-Block (Farbschema-Variablen + Fonts + Spacing) rendern.
-  let headStyle = "";
-  try {
-    headStyle = String(await env.engine.parseAndRender(env.styleBlock, ctxBase));
-  } catch {
-    headStyle = "";
-  }
 
   // Aktive Sections rendern (Tokens ersetzt + Recolor), pro Section fehlertolerant.
   let body = "";
@@ -355,13 +352,27 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
     }
   }
 
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${fontMeta.param}&display=swap">
-${headStyle}
-<style>${env.baseCss}</style>
-<style>:root{scroll-behavior:auto}body{margin:0}img{max-width:100%;height:auto}.shopify-section{position:relative}a{cursor:default}</style>
-</head><body class="gradient color-scheme-1">
-<main id="MainContent">${body}</main>
-</body></html>`;
+  const fontLink = `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=${fontMeta.param}&display=swap">`;
+  const resetCss = `<style>html{scroll-behavior:auto}img{max-width:100%;height:auto}a{cursor:default}.shopify-section{position:relative}</style>`;
+
+  // DAS GANZE theme.liquid rendern → Head 1:1 (beide Style-Blöcke, base.css,
+  // alle CSS-Variablen) + Body-Wrapper. header-/footer-group werden über das
+  // section/sections-Stub übersprungen.
+  try {
+    let doc = String(await env.engine.parseAndRender(env.themeLiquid, { ...ctxBase, content_for_layout: body }));
+    doc = doc.replace(/<head([^>]*)>/i, `<head$1>${fontLink}${resetCss}`);
+    return doc;
+  } catch (err) {
+    console.error("[theme-render] theme.liquid render failed, fallback:", err);
+    // Fallback: nur Style-Block + base.css + Sections.
+    let headStyle = "";
+    try {
+      headStyle = String(await env.engine.parseAndRender(env.styleBlock, ctxBase));
+    } catch {
+      /* ignore */
+    }
+    return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+${fontLink}${headStyle}<style>${env.baseCss}</style>${resetCss}
+</head><body class="gradient color-scheme-1"><main id="MainContent">${body}</main></body></html>`;
+  }
 }
