@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
+import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 
 const ACCENT = "#95BF47";
 
@@ -311,6 +312,8 @@ function ThemeBuilderCard() {
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -345,6 +348,29 @@ function ThemeBuilderCard() {
       cancelled = true;
     };
   }, [lang]);
+
+  // Vorschau-Daten (Bilder/Preis/Texte) laden, sobald ein Produkt gewählt ist.
+  useEffect(() => {
+    if (!productId) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewLoading(true);
+    fetch(`/api/theme-export/preview?productId=${encodeURIComponent(productId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        setPreview(d && d.copy ? (d as PreviewData) : null);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [productId]);
 
   function setColor(key: keyof ThemeColors, value: string) {
     setColors((prev) => ({ ...prev, [key]: value }));
@@ -476,6 +502,24 @@ function ThemeBuilderCard() {
               {msg.text}
             </p>
           )}
+
+          {/* Live-Vorschau */}
+          <div className="mt-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[12px] font-semibold text-white flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                {t.themes.builderPreview}
+              </span>
+              <span className="text-[10px] text-zinc-500 hidden sm:inline">{t.themes.builderPreviewHint}</span>
+            </div>
+            {preview ? (
+              <ThemePreview data={preview} colors={colors} font={font} />
+            ) : (
+              <div className="h-[180px] flex items-center justify-center text-[12px] text-zinc-500 border border-white/10 rounded-xl">
+                {previewLoading ? t.themes.builderPreviewLoading : "—"}
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>
