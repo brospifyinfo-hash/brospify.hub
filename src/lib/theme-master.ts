@@ -47,3 +47,22 @@ export async function getMasterThemeZip(): Promise<Buffer> {
       "Alternativ ENV MASTER_THEME_URL auf eine erreichbare ZIP setzen.",
   );
 }
+
+// ─── Hochgeladenes Theme als Editor-Basis ──────────────────────────
+// Lädt eine Theme-ZIP von einer URL (Vercel Blob) und cached sie pro URL
+// (Blobs sind unveränderlich → sicher). Validiert den ZIP-Header (PK).
+const urlCache = new Map<string, Buffer>();
+
+export async function fetchThemeZipFromUrl(url: string): Promise<Buffer> {
+  const hit = urlCache.get(url);
+  if (hit) return hit;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`Theme-Download fehlgeschlagen (${res.status}).`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  // ZIP beginnt mit "PK" (0x50 0x4B) — Schutz vor HTML-Fehlerseiten etc.
+  if (buf.length < 4 || buf[0] !== 0x50 || buf[1] !== 0x4b) {
+    throw new Error("Heruntergeladene Datei ist kein gültiges ZIP.");
+  }
+  urlCache.set(url, buf);
+  return buf;
+}

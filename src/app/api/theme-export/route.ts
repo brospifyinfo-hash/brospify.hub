@@ -17,11 +17,12 @@ import {
   getCreditsState,
   deductCredits,
   updateProduktExtra,
+  getAllThemes,
   type Produkt,
   type KundeProfile,
 } from "@/lib/sheets";
 import { getCreditCost } from "@/lib/credit-config-server";
-import { getMasterThemeZip } from "@/lib/theme-master";
+import { getMasterThemeZip, fetchThemeZipFromUrl } from "@/lib/theme-master";
 import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
@@ -30,6 +31,23 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 // On-demand-Textgenerierung (2 DeepSeek-Calls) + Theme-Build → mehr Headroom.
 export const maxDuration = 120;
+
+// Editor-Basis: das ZULETZT hochgeladene Theme (Admin → /admin/themes), damit
+// der Editor sofort auf dem Theme arbeitet, das der Admin bereitgestellt hat.
+// Fällt auf die eingebaute Brospify-Schablone zurück, wenn nichts hochgeladen
+// wurde oder der Download scheitert.
+async function resolveEditorBase(): Promise<{ zip: Buffer; source: string }> {
+  try {
+    const themes = await getAllThemes();
+    const latest = themes
+      .filter((t) => /^https?:\/\//i.test(t.url || ""))
+      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))[0];
+    if (latest) return { zip: await fetchThemeZipFromUrl(latest.url), source: latest.name || "Upload" };
+  } catch (e) {
+    console.warn("[theme-export] hochgeladenes Theme nicht nutzbar, nutze Schablone:", e);
+  }
+  return { zip: await getMasterThemeZip(), source: "Schablone" };
+}
 
 function slugify(name: string): string {
   return (
@@ -128,10 +146,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Master-Theme laden + injizieren.
+  // Basis-Theme laden (hochgeladenes Theme bevorzugt) + injizieren.
   let zip: Buffer;
   try {
-    const master = await getMasterThemeZip();
+    const { zip: master, source } = await resolveEditorBase();
+    console.log(`[theme-export] Basis-Theme: ${source}`);
     zip = buildThemeZip(master, {
       themeCopy,
       colors: colors as ThemeColors,

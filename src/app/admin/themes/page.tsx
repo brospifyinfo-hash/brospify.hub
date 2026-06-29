@@ -160,6 +160,16 @@ export default function AdminThemesPage() {
               <span className="text-zinc-200 font-medium">10 neuesten</span> behalten — ältere
               verschwinden automatisch aus der Kundenliste.
             </p>
+            <p className="mt-2 text-[12.5px] text-[#cfe9a3] flex items-start gap-1.5">
+              <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+              <span>
+                Das <span className="font-semibold">neueste hochgeladene Theme</span> wird automatisch
+                zur Basis des Theme-Editors: Kunden passen es auf{" "}
+                <span className="text-zinc-200">/themes</span> mit eigenen Farben, Schriften, Ecken &
+                KI-Produkttexten an und laden es fertig herunter. Ohne Upload wird die eingebaute
+                Brospify-Schablone verwendet — der Editor funktioniert also sofort.
+              </span>
+            </p>
           </header>
 
           {/* Upload-Form */}
@@ -255,8 +265,8 @@ export default function AdminThemesPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-[13.5px] font-semibold text-white truncate">{t.name}</span>
                         {i === 0 && (
-                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#95BF47]/15 text-[#cfe9a3]">
-                            Neueste
+                          <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#95BF47]/15 text-[#cfe9a3] whitespace-nowrap">
+                            Neueste · Editor-Basis
                           </span>
                         )}
                       </div>

@@ -17,7 +17,6 @@ import {
 
 const ACTIVE_TEMPLATES = ["templates/index.json", "templates/product.json"];
 const SETTINGS_PATH = "config/settings_data.json";
-const COLOR_SCHEME_KEYS = ["scheme-1", "scheme-2", "scheme-3", "scheme-4", "scheme-5"];
 
 const HEX_RE = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/;
 const FONT_HANDLE_RE = /^[a-z0-9_]+$/;
@@ -61,20 +60,30 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
   const hidden = new Set(opts.hiddenTypes || []);
 
   // Texte + Palette injizieren; vom Style ausgeblendete Sections disablen.
+  // Pro Template defensiv — ein kaputtes/fremdes Template darf den Build nicht
+  // abbrechen (Ziel: läuft auf JEDEM hochgeladenen Theme).
   for (const tplPath of ACTIVE_TEMPLATES) {
     const entry = findEntry(zip, tplPath);
     if (!entry) continue;
-    const data = JSON.parse(entry.getData().toString("utf8"));
-    injectTemplateData(data, values, opts.colors, hidden);
-    zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
+    try {
+      const data = JSON.parse(entry.getData().toString("utf8"));
+      injectTemplateData(data, values, opts.colors, hidden);
+      zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
+    } catch (e) {
+      console.warn(`[theme-inject] Template übersprungen (${tplPath}):`, e);
+    }
   }
 
   // Palette + Schrift + Style-Settings in den globalen Settings.
   const settingsEntry = findEntry(zip, SETTINGS_PATH);
   if (settingsEntry) {
-    const data = JSON.parse(settingsEntry.getData().toString("utf8"));
-    injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font, opts.settingOverrides);
-    zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
+    try {
+      const data = JSON.parse(settingsEntry.getData().toString("utf8"));
+      injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font, opts.settingOverrides);
+      zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
+    } catch (e) {
+      console.warn("[theme-inject] settings_data.json übersprungen:", e);
+    }
   }
 
   return zip.toBuffer();
@@ -204,23 +213,34 @@ function injectSettingsData(
   const current = (data.current = (data.current || {}) as Record<string, unknown>);
   current.type_header_font = headingFont;
   current.type_body_font = font;
-  if (settingOverrides) Object.assign(current, settingOverrides); // Style: Radius/Spacing/…
+  // Style-Overrides (Radius/Spacing/…) nur setzen, wenn das Theme den Key kennt
+  // ODER es ein bekannter Standard-Key ist — schadet sonst nicht, kann aber bei
+  // exotischen Themes ignoriert werden. Wir setzen sie tolerant immer.
+  if (settingOverrides) Object.assign(current, settingOverrides);
 
-  const schemes = (current.color_schemes = (current.color_schemes || {}) as Record<
-    string,
-    { settings?: Record<string, unknown> }
-  >);
-  for (const key of COLOR_SCHEME_KEYS) {
-    const scheme = schemes[key];
-    if (!scheme || !scheme.settings) continue;
-    // Buttons + Button-Text in JEDEM Schema.
-    scheme.settings.button = colors.button;
-    scheme.settings.button_label = colors.buttonText;
-    scheme.settings.secondary_button_label = colors.button;
-    // Hintergrund + Text nur im Primär-Schema (dunkle Schemata bleiben dunkel).
-    if (key === "scheme-1") {
-      scheme.settings.background = colors.background;
-      scheme.settings.text = colors.text;
+  // Farbschemata: NICHT auf scheme-1..5 festnageln — jedes Theme benennt sie
+  // anders (Dawn: "scheme-1", neuere: "background-1"/"accent-1", custom: …).
+  // Wir laufen über ALLE vorhandenen Schemata und färben Buttons überall;
+  // Hintergrund/Text setzen wir nur im ERSTEN Schema (damit dunkle Schemata
+  // dunkel bleiben). So „funktioniert" die Farbanpassung auf jedem Theme.
+  const schemes = current.color_schemes;
+  if (schemes && typeof schemes === "object") {
+    const keys = Object.keys(schemes as Record<string, unknown>);
+    let isFirst = true;
+    for (const key of keys) {
+      const scheme = (schemes as Record<string, { settings?: Record<string, unknown> }>)[key];
+      if (!scheme || !scheme.settings || typeof scheme.settings !== "object") continue;
+      const s = scheme.settings;
+      // Buttons + Button-Text nur überschreiben, wenn der Key existiert
+      // (so bauen wir keine fremden Keys ins Theme, die Shopify ignoriert).
+      if ("button" in s) s.button = colors.button;
+      if ("button_label" in s) s.button_label = colors.buttonText;
+      if ("secondary_button_label" in s) s.secondary_button_label = colors.button;
+      if (isFirst) {
+        if ("background" in s) s.background = colors.background;
+        if ("text" in s) s.text = colors.text;
+        isFirst = false;
+      }
     }
   }
 }
