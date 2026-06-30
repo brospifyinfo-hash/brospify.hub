@@ -1,6 +1,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
+import { getAllThemes } from "@/lib/sheets";
 
 // ─────────────────────────────────────────────────────────────────
 // Liefert das Master-Theme (Schablone) als Zip-Buffer.
@@ -65,4 +66,23 @@ export async function fetchThemeZipFromUrl(url: string): Promise<Buffer> {
   }
   urlCache.set(url, buf);
   return buf;
+}
+
+// Editor-Basis: das ZULETZT vom Admin hochgeladene Theme (/admin/themes,
+// Vercel Blob). Fallback = eingebaute Brospify-Schablone. `key` identifiziert
+// das Theme stabil (URL bzw. "bundled") — fürs Env-Caching im Renderer, damit
+// ein neues Upload sofort ein frisches Env bekommt.
+export async function getEditorBaseThemeZip(): Promise<{ zip: Buffer; source: string; key: string }> {
+  try {
+    const themes = await getAllThemes();
+    const latest = themes
+      .filter((t) => /^https?:\/\//i.test(t.url || ""))
+      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))[0];
+    if (latest) {
+      return { zip: await fetchThemeZipFromUrl(latest.url), source: latest.name || "Upload", key: latest.url };
+    }
+  } catch (e) {
+    console.warn("[theme-master] hochgeladenes Theme nicht nutzbar, nutze Schablone:", e);
+  }
+  return { zip: await getMasterThemeZip(), source: "Schablone", key: "bundled" };
 }

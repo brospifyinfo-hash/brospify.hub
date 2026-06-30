@@ -149,9 +149,50 @@ export const ENGLISH_EXAMPLES = [
   { note: "CTA = action + value, short and confident.", good: "CLAIM MY DISCOUNT", bad: "Submit" },
 ];
 
-/** Finale Werte für die Injection: Defaults ⊕ Produkt-Texte. */
+/**
+ * Beispiel-Texte für die AI-Keys (PRODUCT_COPY_SPEC) — greifen NUR, wenn für
+ * ein Produkt (noch) kein generierter Text vorliegt. So steht in Vorschau UND
+ * Download nie ein rohes `[[SLIDE_1_HEADING]]` o. Ä. Echte Produkt-Texte
+ * überschreiben diese Beispiele.
+ */
+export const AI_EXAMPLE: ThemeCopy = {
+  SLIDE_1_HEADING: "Spürbar besser — ab dem ersten Tag",
+  SLIDE_1_SUBHEADING: "Der einfache Weg zu einem Ergebnis, das du wirklich merkst.",
+  SLIDE_1_BTN_TEXT: "JETZT SICHERN",
+  EXPLAIN_SUBTITLE: "Warum funktioniert es?",
+  EXPLAIN_TITLE: "So einfach geht's",
+  EXPLAIN_TEXT: "Durchdachtes Design trifft <strong>Premium-Qualität</strong> — für ein Ergebnis, das du jeden Tag spürst.",
+  BRAND_TITLE: "Qualität, der tausende vertrauen",
+  BRAND_DESCRIPTION: "<p>Wir entwickeln Produkte, die halten, was sie versprechen — fair produziert und sorgfältig getestet.</p>",
+  CONTENT_HEADING: "Gemacht für deinen Alltag",
+  CONTENT_TEXT: "<p>Einfach, zuverlässig und durchdacht bis ins Detail — damit du dich auf das Wesentliche konzentrieren kannst.</p>",
+  PRODUCT_USP_1: "Kostenloser Versand",
+  PRODUCT_USP_2: "30 Tage Rückgabe",
+  PRODUCT_USP_3: "Sichere Bezahlung",
+  PRODUCT_USP_4: "Premium-Qualität",
+  PRODUCT_STOCK_TEXT: "Nur noch wenige verfügbar",
+  BUNDLE_HEADING: "Wähle dein Paket",
+  ACCORDION_1_HEADING: "Häufige Fragen",
+  ACCORDION_1_CONTENT: "<p>Alles, was du wissen musst — klar und ehrlich beantwortet.</p>",
+  INFO_TAB_1_BODY: "<p>Hochwertige Materialien, durchdachtes Design und eine Verarbeitung, die überzeugt.</p>",
+  REVIEWS_HEADING: "DAS SAGEN UNSERE KUNDEN",
+  PARALLAX_HEADLINE: "Erlebe den Unterschied",
+  PARALLAX_TEXT: "<p>Tausende haben es schon entdeckt — <strong>jetzt bist du dran.</strong></p>",
+};
+
+const RAW_TOKEN_RE = /^\[\[[A-Z0-9_]+\]\]$/;
+
+/** Finale Werte für die Injection: Defaults ⊕ AI-Beispiele ⊕ echte Produkt-Texte.
+ *  Leere oder als rohes `[[TOKEN]]` gespeicherte Produkt-Werte werden ignoriert,
+ *  damit sie die Beispiel-Defaults nicht „überschreiben". */
 export function getPlaceholderValues(themeCopy?: ThemeCopy | null): ThemeCopy {
-  return { ...DEFAULTS, ...(themeCopy || {}) };
+  const clean: ThemeCopy = {};
+  if (themeCopy) {
+    for (const [k, v] of Object.entries(themeCopy)) {
+      if (typeof v === "string" && v.trim() && !RAW_TOKEN_RE.test(v.trim())) clean[k] = v;
+    }
+  }
+  return { ...DEFAULTS, ...AI_EXAMPLE, ...clean };
 }
 
 // ─── Farb-Palette → Section-Settings (geteilt: Inject UND Live-Vorschau) ──

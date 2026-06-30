@@ -1,41 +1,57 @@
 // ─── /api/theme-export/preview ───────────────────────────────────
-// Liefert SAUBERE Daten für den Live-Vorschau-Mockup (eine Produkt-Ansicht):
-// Titel, Preis, Bild + Verkaufstexte. Nutzt die generierten themeCopy-Texte,
-// wenn vorhanden — sonst polierte Beispiele. Niemals rohe [[TOKEN]]. Schnell
-// (kein Liquid-Render). Kostenlos, kein Credit.
+// Rendert die PRODUKTSEITE 1:1 aus dem Editor-Basis-Theme (zuletzt
+// hochgeladenes Theme bzw. Schablone) als echtes Liquid-HTML für die Live-
+// Vorschau. Farben/Schriften/Ecken/Stil werden exakt wie beim Download
+// angewandt → Vorschau = Download. Verkaufstexte aus themeCopy (fehlt etwas,
+// greifen polierte Beispiel-Defaults — nie ein rohes [[TOKEN]]). Kostenlos.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
+import { getEditorBaseThemeZip } from "@/lib/theme-master";
+import { renderThemePage, type RenderProduct } from "@/lib/theme-render";
+import { isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
+import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
-function firstHttpImage(p: Produkt): string {
-  if (p.bildUrl && /^https?:\/\//i.test(p.bildUrl)) return p.bildUrl;
-  for (const u of p.extra?.images || []) if (/^https?:\/\//i.test(u)) return u;
-  return "";
-}
 function httpImages(p: Produkt): string[] {
   const out: string[] = [];
   const push = (u?: string) => { if (u && /^https?:\/\//i.test(u) && !out.includes(u)) out.push(u); };
   push(p.bildUrl);
   for (const u of p.extra?.images || []) push(u);
-  return out.slice(0, 4);
+  return out.slice(0, 7);
 }
-function fmtPrice(price: string): string {
-  const cleaned = String(price).replace(/[^\d.,]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
+function toCents(s: string): number {
+  const cleaned = String(s).replace(/[^\d.,]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
   const eur = parseFloat(cleaned);
-  if (!Number.isFinite(eur) || eur <= 0) return "29,99 €";
-  return eur.toFixed(2).replace(".", ",") + " €";
+  return Number.isFinite(eur) && eur > 0 ? Math.round(eur * 100) : 2999;
 }
 
-export async function GET(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session.isLoggedIn) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
-  const productId = req.nextUrl.searchParams.get("productId") || "";
+
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Ungültiger Body." }, { status: 400 });
+  }
+
+  const productId = body.productId || "";
+  const font = isValidFontHandle(body.font || "") ? (body.font as string) : "work_sans_n4";
+  const headingFont = isValidFontHandle(body.headingFont || "") ? (body.headingFont as string) : font;
+  const colors: ThemeColors = isValidColors(body.colors)
+    ? (body.colors as ThemeColors)
+    : { button: "#111111", buttonText: "#ffffff", background: "#ffffff", text: "#1a1a1a", accent: "#2f6bff" };
+  const style = getThemeStyle(body.style);
+  const radius = typeof body.radius === "number" ? body.radius : radiusForStyle(style);
+
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
 
   let produkt: Produkt | undefined;
@@ -56,41 +72,35 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const tc = produkt.extra?.themeCopy || {};
-  // themeCopy-Wert nur nutzen, wenn nicht leer und kein rohes [[TOKEN]].
-  const cp = (key: string, fb: string): string => {
-    const v = tc[key];
-    return typeof v === "string" && v.trim() && !/^\[\[[A-Z0-9_]+\]\]$/.test(v) ? v : fb;
+  const desc = (produkt.beschreibung || "").trim();
+  const product: RenderProduct = {
+    title: produkt.titel || "Dein Produkt",
+    priceCents: toCents(produkt.preis),
+    compareCents: Math.round(toCents(produkt.preis) * 1.6),
+    images: httpImages(produkt),
+    descriptionHtml: desc ? (/<\w+/.test(desc) ? desc : `<p>${desc}</p>`) : "<p>Hochwertiges Produkt — sorgfältig ausgewählt und gemacht, um zu überzeugen.</p>",
   };
-  const stripHtml = (s: string) => s.replace(/<[^>]+>/g, "").trim();
 
-  const fin = produkt.extra?.finances;
-  const sell = fin?.recommendedSellPrice;
-  const price = fmtPrice(produkt.preis);
-  const comparePrice = sell && sell > 0 ? `${(Math.round(sell * 1.6 * 100) / 100).toFixed(2).replace(".", ",")} €` : "";
-
-  return NextResponse.json(
-    {
-      title: produkt.titel || "Dein Produkt",
-      price,
-      comparePrice,
-      image: firstHttpImage(produkt),
-      images: httpImages(produkt),
-      badge: cp("PRODUCT_BADGE_TEXT", "BESTSELLER"),
-      headline: cp("SLIDE_1_HEADING", produkt.titel || "Spürbar besser im Alltag"),
-      subline: cp("SLIDE_1_SUBHEADING", "Premium-Qualität, die du jeden Tag spürst — von tausenden Kunden geliebt."),
-      cta: cp("SLIDE_1_BTN_TEXT", "In den Warenkorb"),
-      stock: cp("PRODUCT_STOCK_TEXT", "Auf Lager — sofort lieferbar"),
-      ratingText: cp("PRODUCT_RATING_TEXT", "361 Bewertungen"),
-      usps: [
-        cp("PRODUCT_USP_1", "Kostenloser Versand"),
-        cp("PRODUCT_USP_2", "30 Tage Rückgaberecht"),
-        cp("PRODUCT_USP_3", "Sichere Bezahlung"),
-        cp("PRODUCT_USP_4", "Premium-Qualität"),
-      ],
-      reviewQuote: stripHtml(cp("REVIEW2_1_QUOTE", "Beste Entscheidung seit langem — ich nutze es täglich!")),
-      reviewAuthor: cp("REVIEW2_1_AUTHOR", "Sarah M."),
-    },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  try {
+    const { zip, key } = await getEditorBaseThemeZip();
+    const html = await renderThemePage(
+      zip,
+      {
+        template: "product.json",
+        themeCopy: produkt.extra?.themeCopy || {},
+        product,
+        palette: colors,
+        font,
+        headingFont,
+        hiddenTypes: style.hiddenTypes,
+        settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
+        // kein limitSections → ganze Produktseite 1:1
+      },
+      key,
+    );
+    return NextResponse.json({ html }, { headers: { "Cache-Control": "no-store" } });
+  } catch (err) {
+    console.error("[theme-preview] render failed:", err);
+    return NextResponse.json({ error: "Vorschau konnte nicht gerendert werden." }, { status: 500 });
+  }
 }

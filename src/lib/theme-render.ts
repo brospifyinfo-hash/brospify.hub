@@ -54,7 +54,21 @@ interface ThemeEnv {
   productImagesRef: { current: string[] };
   translate: (key: string) => string;
 }
-let CACHE: ThemeEnv | null = null;
+// Pro Editor-Basis-Theme (gebündelt ODER hochgeladen) ein eigenes, gecachtes
+// Env. Keyed nach Theme-Identität (URL/„bundled"), max. 3 Themes im Speicher.
+const ENV_CACHE = new Map<string, ThemeEnv>();
+function getEnv(masterZip: Buffer, cacheKey: string): ThemeEnv {
+  let env = ENV_CACHE.get(cacheKey);
+  if (!env) {
+    env = buildEnv(masterZip);
+    ENV_CACHE.set(cacheKey, env);
+    if (ENV_CACHE.size > 3) {
+      const oldest = ENV_CACHE.keys().next().value;
+      if (oldest !== undefined) ENV_CACHE.delete(oldest);
+    }
+  }
+  return env;
+}
 
 function readEntry(zip: AdmZip, name: string): string | null {
   const e = zip.getEntry(name);
@@ -424,9 +438,8 @@ export interface RenderPageOpts {
   settingOverrides?: Record<string, unknown>; // globale settings-Overrides (Style)
 }
 
-export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): Promise<string> {
-  if (!CACHE) CACHE = buildEnv(masterZip);
-  const env = CACHE;
+export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts, cacheKey = "bundled"): Promise<string> {
+  const env = getEnv(masterZip, cacheKey);
   env.productImagesRef.current = opts.product.images;
 
   const bodyMeta = RENDER_FONTS[opts.font] || RENDER_FONTS.work_sans_n4;
@@ -529,11 +542,16 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
   // DAS GANZE theme.liquid rendern → Head 1:1 (beide Style-Blöcke, base.css,
   // alle CSS-Variablen) + Body-Wrapper. header-/footer-group werden über das
   // section/sections-Stub übersprungen.
+  // Safety-Net: falls doch noch ein rohes [[TOKEN]] durchrutscht (Key ohne
+  // Default), entfernen statt anzeigen — in der Vorschau soll NIE ein Token
+  // sichtbar sein.
+  const stripTokens = (s: string) => s.replace(/\[\[[A-Z0-9_]+\]\]/g, "");
+
   try {
     let doc = String(await env.engine.parseAndRender(env.themeLiquid, { ...ctxBase, content_for_layout: body }));
     doc = inlineScripts(doc);
     doc = doc.replace(/<head([^>]*)>/i, `<head$1>${fontLink}${resetCss}${shopifyStub}`);
-    return doc;
+    return stripTokens(doc);
   } catch (err) {
     console.error("[theme-render] theme.liquid render failed, fallback:", err);
     // Fallback: nur Style-Block + base.css + Sections.
@@ -543,8 +561,8 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts): 
     } catch {
       /* ignore */
     }
-    return `<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    return stripTokens(`<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 ${fontLink}${headStyle}<style>${env.baseCss}</style>${resetCss}
-</head><body class="gradient color-scheme-1"><main id="MainContent">${body}</main></body></html>`;
+</head><body class="gradient color-scheme-1"><main id="MainContent">${body}</main></body></html>`);
   }
 }
