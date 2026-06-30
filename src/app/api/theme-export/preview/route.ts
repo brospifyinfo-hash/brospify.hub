@@ -1,57 +1,44 @@
 // ─── /api/theme-export/preview ───────────────────────────────────
-// Rendert die PRODUKTSEITE 1:1 aus dem Editor-Basis-Theme (zuletzt
-// hochgeladenes Theme bzw. Schablone) als echtes Liquid-HTML für die Live-
-// Vorschau. Farben/Schriften/Ecken/Stil werden exakt wie beim Download
-// angewandt → Vorschau = Download. Verkaufstexte aus themeCopy (fehlt etwas,
-// greifen polierte Beispiel-Defaults — nie ein rohes [[TOKEN]]). Kostenlos.
+// Liefert die DATEN für die getreue Nachbildung der Produktseiten-Oberseite
+// (main-product: Galerie + Infospalte bis VOR der Beschreibung). Texte aus
+// themeCopy, sonst polierte Defaults — nie ein rohes [[TOKEN]]. Kostenlos,
+// kein Liquid-Render (zuverlässig, schnell). Theming passiert clientseitig.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
-import { getEditorBaseThemeZip } from "@/lib/theme-master";
-import { renderThemePage, type RenderProduct } from "@/lib/theme-render";
-import { isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
-import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
 function httpImages(p: Produkt): string[] {
   const out: string[] = [];
   const push = (u?: string) => { if (u && /^https?:\/\//i.test(u) && !out.includes(u)) out.push(u); };
   push(p.bildUrl);
   for (const u of p.extra?.images || []) push(u);
-  return out.slice(0, 7);
+  return out.slice(0, 5);
 }
-function toCents(s: string): number {
+function toEur(s: string): number {
   const cleaned = String(s).replace(/[^\d.,]/g, "").replace(/\.(?=\d{3}\b)/g, "").replace(",", ".");
   const eur = parseFloat(cleaned);
-  return Number.isFinite(eur) && eur > 0 ? Math.round(eur * 100) : 2999;
+  return Number.isFinite(eur) && eur > 0 ? eur : 29.99;
+}
+function eur(n: number): string {
+  return n.toFixed(2).replace(".", ",") + " €";
+}
+function dateIn(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  if (days === 0) return "Heute";
+  if (days === 1) return "Morgen";
+  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "long" }).format(d);
 }
 
-export async function POST(req: NextRequest) {
+export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session.isLoggedIn) {
-    return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
-  }
+  if (!session.isLoggedIn) return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number };
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "Ungültiger Body." }, { status: 400 });
-  }
-
-  const productId = body.productId || "";
-  const font = isValidFontHandle(body.font || "") ? (body.font as string) : "work_sans_n4";
-  const headingFont = isValidFontHandle(body.headingFont || "") ? (body.headingFont as string) : font;
-  const colors: ThemeColors = isValidColors(body.colors)
-    ? (body.colors as ThemeColors)
-    : { button: "#111111", buttonText: "#ffffff", background: "#ffffff", text: "#1a1a1a", accent: "#2f6bff" };
-  const style = getThemeStyle(body.style);
-  const radius = typeof body.radius === "number" ? body.radius : radiusForStyle(style);
-
+  const productId = req.nextUrl.searchParams.get("productId") || "";
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
 
   let produkt: Produkt | undefined;
@@ -72,35 +59,59 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const desc = (produkt.beschreibung || "").trim();
-  const product: RenderProduct = {
-    title: produkt.titel || "Dein Produkt",
-    priceCents: toCents(produkt.preis),
-    compareCents: Math.round(toCents(produkt.preis) * 1.6),
-    images: httpImages(produkt),
-    descriptionHtml: desc ? (/<\w+/.test(desc) ? desc : `<p>${desc}</p>`) : "<p>Hochwertiges Produkt — sorgfältig ausgewählt und gemacht, um zu überzeugen.</p>",
+  const tc = produkt.extra?.themeCopy || {};
+  const cp = (key: string, fb: string): string => {
+    const v = tc[key];
+    return typeof v === "string" && v.trim() && !/^\[\[[A-Z0-9_]+\]\]$/.test(v) ? v : fb;
   };
+  const stripHtml = (s: string) => s.replace(/<[^>]+>/g, "").trim();
 
-  try {
-    const { zip, key } = await getEditorBaseThemeZip();
-    const html = await renderThemePage(
-      zip,
-      {
-        template: "product.json",
-        themeCopy: produkt.extra?.themeCopy || {},
-        product,
-        palette: colors,
-        font,
-        headingFont,
-        hiddenTypes: style.hiddenTypes,
-        settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
-        // kein limitSections → ganze Produktseite 1:1
-      },
-      key,
-    );
-    return NextResponse.json({ html }, { headers: { "Cache-Control": "no-store" } });
-  } catch (err) {
-    console.error("[theme-preview] render failed:", err);
-    return NextResponse.json({ error: "Vorschau konnte nicht gerendert werden." }, { status: 500 });
-  }
+  const base = toEur(produkt.preis);
+  // Mengen-Bundles aus dem Basispreis (Staffelrabatt) — wie ein echter Shop.
+  const bundles = [
+    { qty: 1, label: "1 Stück", total: base, badge: "", popular: false, save: 0 },
+    { qty: 2, label: "2 Stück", total: base * 2 * 0.85, badge: "Beliebt", popular: true, save: 15 },
+    { qty: 3, label: "3 Stück", total: base * 3 * 0.75, badge: "Bestes Angebot", popular: false, save: 25 },
+  ].map((b) => ({
+    label: b.label,
+    badge: b.badge,
+    popular: b.popular,
+    price: eur(b.total),
+    perUnit: eur(b.total / b.qty) + " / Stück",
+    save: b.save ? `-${b.save}%` : "",
+  }));
+
+  return NextResponse.json(
+    {
+      title: produkt.titel || "Dein Produkt",
+      images: httpImages(produkt),
+      badge: cp("PRODUCT_BADGE_TEXT", "BESTSELLER"),
+      urgencyPrefix: "Bestelle innerhalb der nächsten",
+      urgencyTime: "1 Std. 8 Min.",
+      urgencySuffix: "— Versand noch heute!",
+      ratingValue: "4.9",
+      ratingText: cp("PRODUCT_RATING_TEXT", "361 Bewertungen"),
+      usps: [
+        cp("PRODUCT_USP_1", "Kostenloser Versand"),
+        cp("PRODUCT_USP_2", "30 Tage Rückgaberecht"),
+        cp("PRODUCT_USP_3", "Sichere Bezahlung"),
+        cp("PRODUCT_USP_4", "Premium-Qualität"),
+      ],
+      stock: cp("PRODUCT_STOCK_TEXT", "Auf Lager — nur noch wenige verfügbar"),
+      price: eur(base),
+      comparePrice: eur(base * 1.6),
+      bundleHeading: cp("BUNDLE_HEADING", "Wähle dein Paket & spare"),
+      bundles,
+      cta: cp("SLIDE_1_BTN_TEXT", "In den Warenkorb"),
+      giftTitle: cp("GIFT_TITLE", "Sichere dir dein Gratis-Geschenk"),
+      giftSubtitle: cp("GIFT_SUBTITLE", "Bei jeder Bestellung — solange der Vorrat reicht."),
+      timeline: [
+        { label: "Bestellt", date: dateIn(0) },
+        { label: "Versendet", date: dateIn(1) },
+        { label: "Zugestellt", date: dateIn(3) },
+      ],
+      reviewQuote: stripHtml(cp("REVIEW2_1_QUOTE", "Beste Entscheidung seit langem — ich nutze es täglich!")),
+    },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }

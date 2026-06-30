@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
-import ThemePreview from "@/components/ThemePreview";
+import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, RADIUS_OPTIONS, radiusForStyle } from "@/lib/theme-styles";
 
 const ACCENT = "#95BF47";
@@ -318,7 +318,7 @@ function ThemeBuilderCard() {
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
-  const [previewHtml, setPreviewHtml] = useState("");
+  const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
@@ -355,38 +355,30 @@ function ThemeBuilderCard() {
     };
   }, [lang]);
 
-  // Echte PRODUKTSEITE rendern lassen (1:1 aus dem Editor-Basis-Theme) —
-  // debounced bei jeder Einstellungsänderung. Farben/Schriften/Ecken/Stil
-  // wirken serverseitig exakt wie beim Download.
+  // Vorschau-DATEN (Titel/Preis/Bilder/Texte) laden — NUR bei Produktwechsel.
+  // Farben, Schriften, Ecken & Stil wirken rein clientseitig über CSS-Variablen
+  // in der Nachbildung → sofortige Vorschau ohne Server-Runde.
   useEffect(() => {
     if (!productId) {
-      setPreviewHtml("");
+      setPreviewData(null);
       return;
     }
     let cancelled = false;
     setPreviewLoading(true);
-    const timer = setTimeout(() => {
-      fetch("/api/theme-export/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius }),
+    fetch(`/api/theme-export/preview?productId=${encodeURIComponent(productId)}`, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        if (d && typeof d.title === "string") setPreviewData(d as PreviewData);
       })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (cancelled) return;
-          if (d && typeof d.html === "string") setPreviewHtml(d.html);
-        })
-        .catch(() => {})
-        .finally(() => {
-          if (!cancelled) setPreviewLoading(false);
-        });
-    }, 500);
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
     return () => {
       cancelled = true;
-      clearTimeout(timer);
     };
-  }, [productId, colors, font, headingFont, styleId, radius]);
+  }, [productId]);
 
   function setColor(key: keyof ThemeColors, value: string) {
     setColors((prev) => ({ ...prev, [key]: value }));
@@ -588,7 +580,11 @@ function ThemeBuilderCard() {
               <span className="text-[10px] text-zinc-500 hidden sm:inline">{t.themes.builderPreviewHint}</span>
             </div>
             <ThemePreview
-              html={previewHtml}
+              data={previewData}
+              colors={colors}
+              headingFont={headingFont}
+              bodyFont={font}
+              radius={radius}
               loading={previewLoading}
               label={t.themes.builderPageProduct}
             />
