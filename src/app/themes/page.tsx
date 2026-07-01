@@ -24,6 +24,7 @@ import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, radiusForStyle } from "@/lib/theme-styles";
+import { PRODUCT_SECTIONS } from "@/lib/theme-sections";
 
 const ACCENT = "#95BF47";
 
@@ -93,7 +94,7 @@ export default function ThemesPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="max-w-3xl mx-auto px-3 sm:px-5 py-4 sm:py-7 lg:py-9">
+        <div className="max-w-5xl mx-auto px-3 sm:px-5 py-4 sm:py-7 lg:py-9">
           {/* Header */}
           <header className="mb-5 sm:mb-7 text-center">
             <div
@@ -343,6 +344,8 @@ function ThemeBuilderCard() {
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
+  const [hiddenSections, setHiddenSections] = useState<string[]>([]);
+  const [sectionHeadings, setSectionHeadings] = useState<Record<string, string>>({});
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -430,6 +433,13 @@ function ThemeBuilderCard() {
     setRadius(randFrom([0, 4, 8, 14, 22, 30]));
   }
 
+  function toggleSection(type: string) {
+    setHiddenSections((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
+  }
+  function setSectionHeading(type: string, value: string) {
+    setSectionHeadings((prev) => ({ ...prev, [type]: value }));
+  }
+
   async function handleDownload() {
     if (!productId || building) return;
     setBuilding(true);
@@ -439,7 +449,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius }),
+        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -482,7 +492,7 @@ function ThemeBuilderCard() {
       {products.length === 0 ? (
         <p className="text-[12.5px] text-zinc-400">{t.themes.builderNoProducts}</p>
       ) : (
-        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:gap-5 lg:items-start">
+        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:gap-6 lg:items-start">
           {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
           <div className="order-2 lg:order-1">
             {/* 1. Produktauswahl ZUERST */}
@@ -595,6 +605,38 @@ function ThemeBuilderCard() {
               ))}
             </div>
 
+            {/* 6. Sektionen ein-/ausblenden + Überschrift bearbeiten */}
+            <span className="block text-[11px] text-zinc-500 mt-4 mb-1.5">{t.themes.builderSections}</span>
+            <div className="space-y-2">
+              {PRODUCT_SECTIONS.map((s) => {
+                const visible = !hiddenSections.includes(s.type);
+                return (
+                  <div key={s.type} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[12.5px] font-medium text-white">{s.label}</span>
+                      <button
+                        onClick={() => toggleSection(s.type)}
+                        role="switch"
+                        aria-checked={visible}
+                        aria-label={s.label}
+                        className={`relative w-9 h-5 rounded-full transition shrink-0 ${visible ? "bg-[#95BF47]" : "bg-white/15"}`}
+                      >
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${visible ? "translate-x-4" : ""}`} />
+                      </button>
+                    </div>
+                    {visible && (
+                      <input
+                        value={sectionHeadings[s.type] ?? ""}
+                        onChange={(e) => setSectionHeading(s.type, e.target.value)}
+                        placeholder={s.defaultHeading}
+                        className="mt-2 w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 onClick={handleDownload}
@@ -648,6 +690,8 @@ function ThemeBuilderCard() {
               loading={previewLoading}
               label={t.themes.builderPageProduct}
               viewMode={viewMode}
+              hiddenSections={hiddenSections}
+              sectionHeadings={sectionHeadings}
             />
           </div>
         </div>

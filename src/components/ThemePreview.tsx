@@ -1,6 +1,20 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { PRODUCT_SECTIONS } from "@/lib/theme-sections";
+
+// Statischer Beispiel-Inhalt für die zusätzlichen Produktseiten-Sektionen.
+const PV_REVIEWS = [
+  { q: "Beste Entscheidung seit langem — ich nutze es täglich!", a: "Sarah M.", l: "München" },
+  { q: "Top Qualität, blitzschnelle Lieferung. Klare Empfehlung!", a: "Tom K.", l: "Berlin" },
+  { q: "Hat meine Erwartungen wirklich übertroffen.", a: "Laura B.", l: "Hamburg" },
+];
+const PV_FAQ = [
+  { q: "Wie schnell wird geliefert?", a: "Versand innerhalb von 24 Stunden, Lieferung in 1–3 Werktagen." },
+  { q: "Kann ich zurückgeben?", a: "Ja — 30 Tage Geld-zurück-Garantie, ohne Wenn und Aber." },
+  { q: "Ist die Bezahlung sicher?", a: "Absolut. SSL-verschlüsselt, mit PayPal, Klarna & Kreditkarte." },
+];
+const PV_BRAND = "Wir entwickeln Produkte, die halten, was sie versprechen — fair produziert, sorgfältig getestet und von tausenden Kunden geliebt.";
 
 // ─────────────────────────────────────────────────────────────────
 // Live-Vorschau: GETREUE Nachbildung der Produktseiten-Oberseite (main-product
@@ -82,10 +96,13 @@ function PayMark({ name }: { name: string }) {
 
 export default function ThemePreview({
   data, colors, headingFont, bodyFont, radius, loading, label, viewMode = "desktop",
+  hiddenSections = [], sectionHeadings = {},
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
+  hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
 }) {
+  const hidden = new Set(hiddenSections);
   const [imgIdx, setImgIdx] = useState(0);
   const [bundleIdx, setBundleIdx] = useState(1);
   const [giftOpen, setGiftOpen] = useState(true);
@@ -116,7 +133,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont]);
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings)]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -254,6 +271,85 @@ export default function ThemePreview({
               </div>
             </div>
           </div>
+
+          {/* Weitere Produktseiten-Sektionen — ein-/ausblendbar, editierbare Überschrift */}
+          {PRODUCT_SECTIONS.map((sec) => {
+            if (hidden.has(sec.type)) return null;
+            const h = sectionHeadings[sec.type] || sec.defaultHeading;
+            if (sec.type === "reviews2") {
+              return (
+                <div key={sec.type} className="pm-sec">
+                  <h2 className="pm-sec-h">{h}</h2>
+                  <div className="pm-rev-sum"><span className="pm-stars">★★★★★</span> <strong>4.9</strong> <span>· 361 Bewertungen</span></div>
+                  <div className="pm-rev-grid">
+                    {PV_REVIEWS.map((r, i) => (
+                      <div key={i} className="pm-rev-card">
+                        <span className="pm-stars">★★★★★</span>
+                        <p className="pm-rev-q">„{r.q}"</p>
+                        <span className="pm-rev-a">{r.a} · {r.l}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            if (sec.type === "bro-info-tabs") {
+              return (
+                <div key={sec.type} className="pm-sec">
+                  <h2 className="pm-sec-h">{h}</h2>
+                  <div className="pm-faq">
+                    {PV_FAQ.map((f, i) => (
+                      <div key={i} className="pm-faq-item">
+                        <div className="pm-faq-q"><span>{f.q}</span><span className="pm-faq-plus">+</span></div>
+                        <div className="pm-faq-a">{f.a}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            if (sec.type === "brospify-hero") {
+              return (
+                <div key={sec.type} className="pm-sec pm-brand">
+                  <div className="pm-brand-media">{data.images[1] ? <img src={data.images[1]} alt="" /> : <div className="pm-noimg">Bild</div>}</div>
+                  <div className="pm-brand-txt">
+                    <h2 className="pm-sec-h" style={{ textAlign: "left", marginBottom: 10 }}>{h}</h2>
+                    <p className="pm-brand-p">{PV_BRAND}</p>
+                    <button className="pm-cta" style={{ maxWidth: 220 }}>Mehr erfahren</button>
+                  </div>
+                </div>
+              );
+            }
+            if (sec.type === "vids") {
+              return (
+                <div key={sec.type} className="pm-sec">
+                  <h2 className="pm-sec-h">{h}</h2>
+                  <div className="pm-vids">
+                    {(data.images.length ? data.images : [""]).slice(0, 3).map((u, i) => (
+                      <div key={i} className="pm-vid">{u ? <img src={u} alt="" /> : <span />}<span className="pm-play">▶</span></div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            if (sec.type === "featured-collection") {
+              return (
+                <div key={sec.type} className="pm-sec">
+                  <h2 className="pm-sec-h">{h}</h2>
+                  <div className="pm-feat">
+                    {(data.images.length ? data.images : [""]).slice(0, 4).map((u, i) => (
+                      <div key={i} className="pm-feat-card">
+                        <div className="pm-feat-img">{u ? <img src={u} alt="" /> : <span />}</div>
+                        <span className="pm-feat-title">{data.title}</span>
+                        <span className="pm-feat-price">{data.price}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })}
         </div>
       )}
       </div>
@@ -353,6 +449,34 @@ const CSS = `
 .pm-step-label{font-size:11.5px;font-weight:700}
 .pm-step-date{font-size:10.5px;opacity:.55}
 
+/* ── Zusätzliche Produktseiten-Sektionen (unter der Kaufbox) ── */
+.pm-sec{margin-top:34px;padding-top:32px;border-top:1px solid color-mix(in srgb,var(--pv-text) 9%,transparent)}
+.pm-sec-h{font-family:var(--pv-h);font-weight:800;font-size:22px;letter-spacing:-.02em;text-align:center;margin:0 0 18px}
+.pm-rev-sum{display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;margin:-8px 0 18px;opacity:.85}
+.pm-rev-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pm-rev-card{background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));border:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent);border-radius:min(var(--pv-r),16px);padding:16px}
+.pm-rev-q{font-size:13px;line-height:1.5;margin:8px 0 10px;font-weight:500}
+.pm-rev-a{font-size:11.5px;font-weight:700;opacity:.6}
+.pm-faq{display:flex;flex-direction:column;gap:10px;max-width:640px;margin:0 auto}
+.pm-faq-item{background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));border:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent);border-radius:min(var(--pv-r),14px);padding:14px 16px}
+.pm-faq-q{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13.5px;font-weight:700}
+.pm-faq-plus{color:var(--pv-accent);font-size:18px;font-weight:400;flex:0 0 auto}
+.pm-faq-a{font-size:12.5px;line-height:1.55;opacity:.7;margin-top:8px}
+.pm-brand{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:center}
+.pm-brand-media{aspect-ratio:4/3;border-radius:var(--pv-r);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 7%,var(--pv-bg))}
+.pm-brand-media img{width:100%;height:100%;object-fit:cover;display:block}
+.pm-brand-p{font-size:14px;line-height:1.6;opacity:.78;margin:0 0 16px}
+.pm-vids{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.pm-vid{position:relative;aspect-ratio:9/13;border-radius:min(var(--pv-r),16px);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 8%,var(--pv-bg))}
+.pm-vid img{width:100%;height:100%;object-fit:cover;display:block}
+.pm-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.9);color:#111;display:flex;align-items:center;justify-content:center;font-size:15px;padding-left:3px}
+.pm-feat{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.pm-feat-card{display:flex;flex-direction:column;gap:6px}
+.pm-feat-img{aspect-ratio:1;border-radius:min(var(--pv-r),14px);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 7%,var(--pv-bg))}
+.pm-feat-img img{width:100%;height:100%;object-fit:cover;display:block}
+.pm-feat-title{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-feat-price{font-size:12.5px;font-weight:800}
+
 .pm-mobile .pm-stage{padding:16px}
 .pm-mobile .pm-grid{grid-template-columns:1fr;gap:16px}
 .pm-mobile .pm-gallery{position:static}
@@ -362,4 +486,9 @@ const CSS = `
 .pm-mobile .pm-bundle{padding:12px 13px;gap:10px}
 .pm-mobile .pm-bundle-img{width:40px;height:40px}
 .pm-mobile .pm-pay{gap:6px}
+.pm-mobile .pm-rev-grid{grid-template-columns:1fr}
+.pm-mobile .pm-vids{grid-template-columns:repeat(3,1fr)}
+.pm-mobile .pm-feat{grid-template-columns:1fr 1fr}
+.pm-mobile .pm-brand{grid-template-columns:1fr;gap:14px}
+.pm-mobile .pm-sec-h{font-size:19px}
 `;

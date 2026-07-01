@@ -25,6 +25,7 @@ import { getEditorBaseThemeZip } from "@/lib/theme-master";
 import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
+import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string> };
   try {
     body = await req.json();
   } catch {
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
   const colors = body.colors;
   const style = getThemeStyle(body.style);
   const radius = typeof body.radius === "number" ? body.radius : radiusForStyle(style);
+  // Vom Kunden ausgeblendete Sektionen + editierte Überschriften.
+  const userHidden = Array.isArray(body.hiddenSections) ? body.hiddenSections.filter((s) => typeof s === "string") : [];
+  const headingCopy = sectionHeadingsToThemeCopy(body.sectionHeadings);
 
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
   if (!isValidColors(colors)) {
@@ -134,11 +138,11 @@ export async function POST(req: NextRequest) {
     const { zip: master, source } = await getEditorBaseThemeZip();
     console.log(`[theme-export] Basis-Theme: ${source}`);
     zip = buildThemeZip(master, {
-      themeCopy,
+      themeCopy: { ...themeCopy, ...headingCopy },
       colors: colors as ThemeColors,
       font,
       headingFont,
-      hiddenTypes: style.hiddenTypes,
+      hiddenTypes: [...style.hiddenTypes, ...userHidden],
       settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
     });
   } catch (err) {
