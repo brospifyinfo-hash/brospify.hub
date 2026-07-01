@@ -265,7 +265,7 @@ export default function ThemePreview({
 const CSS = `
 .pm-root{width:100%}
 .pm-outer{position:relative;overflow:hidden;width:100%}
-.pm-canvas{transform-origin:top left;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;background:#fbfbfc;box-shadow:0 16px 46px -24px rgba(0,0,0,.55)}
+.pm-canvas{position:absolute;top:0;left:0;transform-origin:top left;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;background:#fbfbfc;box-shadow:0 16px 46px -24px rgba(0,0,0,.55)}
 .pm-canvas,.pm-canvas *,.pm-canvas *::before,.pm-canvas *::after{box-sizing:border-box}
 .pm-bar{display:flex;align-items:center;gap:12px;padding:7px 12px;background:#f2f2f4;border-bottom:1px solid rgba(0,0,0,.06)}
 .pm-dots{display:flex;gap:5px}.pm-dots span{width:8px;height:8px;border-radius:50%;background:#d4d4d8}

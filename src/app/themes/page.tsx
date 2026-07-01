@@ -482,7 +482,7 @@ function ThemeBuilderCard() {
       {products.length === 0 ? (
         <p className="text-[12.5px] text-zinc-400">{t.themes.builderNoProducts}</p>
       ) : (
-        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_1fr] lg:gap-5 lg:items-start">
+        <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)] lg:gap-5 lg:items-start">
           {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
           <div className="order-2 lg:order-1">
             {/* 1. Produktauswahl ZUERST */}

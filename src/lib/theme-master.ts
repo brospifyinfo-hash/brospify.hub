@@ -1,6 +1,7 @@
 import "server-only";
 import { promises as fs } from "fs";
 import path from "path";
+import AdmZip from "adm-zip";
 import { getAllThemes } from "@/lib/sheets";
 
 // ─────────────────────────────────────────────────────────────────
@@ -68,21 +69,43 @@ export async function fetchThemeZipFromUrl(url: string): Promise<Buffer> {
   return buf;
 }
 
-// Editor-Basis: das ZULETZT vom Admin hochgeladene Theme (/admin/themes,
-// Vercel Blob). Fallback = eingebaute Brospify-Schablone. `key` identifiziert
-// das Theme stabil (URL bzw. "bundled") — fürs Env-Caching im Renderer, damit
-// ein neues Upload sofort ein frisches Env bekommt.
+// Prüft, ob ein hochgeladenes ZIP ein echtes Brospify-Theme MIT Produktseite
+// ist (und nicht z. B. ein leeres Standard-Dawn). Nur dann taugt es als Basis
+// für den Editor — sonst käme ein Theme ohne die Brospify-Produktseite raus.
+function isBrospifyTheme(buf: Buffer): boolean {
+  try {
+    const zip = new AdmZip(buf);
+    const e = zip.getEntry("templates/product.json");
+    if (!e) return false;
+    const data = JSON.parse(e.getData().toString("utf8")) as { sections?: Record<string, { type?: string }> };
+    const types = Object.values(data.sections || {}).map((s) => String(s.type || ""));
+    // Kennzeichen der Brospify-Produktseite (Custom-Sections der Schablone).
+    return types.some((t) => /bro-info-tabs|brospify-hero|reviews2|vids|scrollingbild/.test(t));
+  } catch {
+    return false;
+  }
+}
+
+// Editor-Basis: das ZULETZT vom Admin hochgeladene Theme (/admin/themes) —
+// ABER nur, wenn es ein echtes Brospify-Theme mit Produktseite ist. Sonst (oder
+// wenn nichts Passendes hochgeladen wurde) die eingebaute Brospify-Schablone,
+// die garantiert die vollständige, funktionierende Produktseite enthält.
+// `key` identifiziert das Theme stabil (URL bzw. "bundled") fürs Env-Caching.
 export async function getEditorBaseThemeZip(): Promise<{ zip: Buffer; source: string; key: string }> {
   try {
     const themes = await getAllThemes();
-    const latest = themes
+    const candidates = themes
       .filter((t) => /^https?:\/\//i.test(t.url || ""))
-      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""))[0];
-    if (latest) {
-      return { zip: await fetchThemeZipFromUrl(latest.url), source: latest.name || "Upload", key: latest.url };
+      .sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || ""));
+    for (const t of candidates) {
+      const zip = await fetchThemeZipFromUrl(t.url);
+      if (isBrospifyTheme(zip)) {
+        return { zip, source: t.name || "Upload", key: t.url };
+      }
+      console.warn(`[theme-master] Upload „${t.name}" ist kein Brospify-Theme mit Produktseite — übersprungen.`);
     }
   } catch (e) {
-    console.warn("[theme-master] hochgeladenes Theme nicht nutzbar, nutze Schablone:", e);
+    console.warn("[theme-master] hochgeladene Themes nicht nutzbar, nutze Schablone:", e);
   }
   return { zip: await getMasterThemeZip(), source: "Schablone", key: "bundled" };
 }
