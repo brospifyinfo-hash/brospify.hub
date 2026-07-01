@@ -18,11 +18,12 @@ import {
   CheckCircle2,
   Monitor,
   Smartphone,
+  Shuffle,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
-import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, RADIUS_OPTIONS, radiusForStyle } from "@/lib/theme-styles";
+import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, radiusForStyle } from "@/lib/theme-styles";
 
 const ACCENT = "#95BF47";
 
@@ -308,6 +309,25 @@ const BUILDER_FONTS = [
 
 type ThemeColors = { button: string; buttonText: string; background: string; text: string; accent: string };
 
+function randFrom<T>(arr: readonly T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const k = (n: number) => (n + h / 30) % 12;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const c = l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+    return Math.round(255 * c).toString(16).padStart(2, "0");
+  };
+  return `#${f(0)}${f(8)}${f(4)}`;
+}
+/** Kräftiger, gut lesbarer Zufalls-Akzent (HSL → Hex). */
+function randomAccent(): string {
+  return hslToHex(Math.floor(Math.random() * 360), 62 + Math.floor(Math.random() * 20), 45 + Math.floor(Math.random() * 12));
+}
+
 function ThemeBuilderCard() {
   const { t, lang } = useI18n();
   const [products, setProducts] = useState<{ id: string; titel: string }[]>([]);
@@ -399,6 +419,17 @@ function ThemeBuilderCard() {
     setRadius(radiusForStyle(s));
   }
 
+  // Zufallsgenerator: zufälliger Stil als Basis + frisch gewürfelter Akzent,
+  // Schriften und Ecken → große Varianz, bleibt aber stimmig/lesbar.
+  function randomize() {
+    const s = randFrom(THEME_STYLES);
+    setStyleId(s.id);
+    setColors({ ...s.palette, accent: randomAccent() });
+    setHeadingFont(randFrom(BUILDER_FONTS).value);
+    setFont(randFrom(BUILDER_FONTS).value);
+    setRadius(randFrom([0, 4, 8, 14, 22, 30]));
+  }
+
   async function handleDownload() {
     if (!productId || building) return;
     setBuilding(true);
@@ -454,8 +485,34 @@ function ThemeBuilderCard() {
         <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,360px)_1fr] lg:gap-5 lg:items-start">
           {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
           <div className="order-2 lg:order-1">
-            <span className="block text-[11px] text-zinc-500 mb-1.5">{t.themes.builderStyle}</span>
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            {/* 1. Produktauswahl ZUERST */}
+            <label className="block">
+              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
+              <select
+                value={productId}
+                onChange={(e) => setProductId(e.target.value)}
+                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+              >
+                {products.map((p) => (
+                  <option key={p.id} value={p.id} className="bg-zinc-900">
+                    {p.titel}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {/* 2. Stil + Zufallsgenerator */}
+            <div className="flex items-center justify-between mt-4 mb-1.5">
+              <span className="text-[11px] text-zinc-500">{t.themes.builderStyle}</span>
+              <button
+                onClick={randomize}
+                title={t.themes.builderRandomHint}
+                className="flex items-center gap-1 text-[11px] font-semibold text-[#cfe9a3] hover:text-white transition rounded-md border border-[#95BF47]/30 bg-[#95BF47]/10 px-2 py-1"
+              >
+                <Shuffle className="w-3 h-3" /> {t.themes.builderRandom}
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
               {THEME_STYLES.map((s) => (
                 <button
                   key={s.id}
@@ -471,20 +528,8 @@ function ThemeBuilderCard() {
                 </button>
               ))}
             </div>
-            <label className="block">
-              <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
-              <select
-                value={productId}
-                onChange={(e) => setProductId(e.target.value)}
-                className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
-              >
-                {products.map((p) => (
-                  <option key={p.id} value={p.id} className="bg-zinc-900">
-                    {p.titel}
-                  </option>
-                ))}
-              </select>
-            </label>
+
+            {/* 3. Schriften */}
             <div className="grid grid-cols-2 gap-3 mt-3">
               <label className="block">
                 <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontHeading}</span>
@@ -512,22 +557,20 @@ function ThemeBuilderCard() {
               </label>
             </div>
 
-            <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderCorners}</span>
-            <div className="grid grid-cols-3 gap-2">
-              {RADIUS_OPTIONS.map((r) => (
-                <button
-                  key={r.id}
-                  onClick={() => setRadius(r.value)}
-                  className={`rounded-lg border px-2 py-2 text-[12px] font-medium transition ${
-                    radius === r.value
-                      ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white"
-                      : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
-                  }`}
-                >
-                  {r.label}
-                </button>
-              ))}
+            {/* 4. Ecken (feiner Slider) */}
+            <div className="flex items-center justify-between mt-3 mb-1.5">
+              <span className="text-[11px] text-zinc-500">{t.themes.builderCorners}</span>
+              <span className="text-[11px] font-mono text-zinc-400">{radius}px</span>
             </div>
+            <input
+              type="range"
+              min={0}
+              max={40}
+              step={1}
+              value={radius}
+              onChange={(e) => setRadius(Number(e.target.value))}
+              className="w-full accent-[#95BF47] cursor-pointer"
+            />
 
             <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderColors}</span>
             <div className="grid grid-cols-2 gap-2">
