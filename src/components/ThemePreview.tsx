@@ -3,51 +3,40 @@
 import { useEffect, useState, type CSSProperties } from "react";
 
 // ─────────────────────────────────────────────────────────────────
-// Live-Vorschau: GETREUE Nachbildung der Produktseiten-Oberseite (main-product:
-// Galerie + Infospalte bis VOR der Beschreibung). Kein Liquid/iframe — rein
-// clientseitig, damit es immer zuverlässig lädt. Farben/Schriften/Ecken wirken
-// SOFORT über CSS-Variablen. Blockreihenfolge wie im echten Theme: Dringlichkeit
-// → Titel → Bewertung → Vorteile → Lager → Preis → Bundles → Kaufen → Zahlarten
-// → Gratis-Geschenk → Liefer-Timeline.
+// Live-Vorschau: GETREUE Nachbildung der Produktseiten-Oberseite (main-product
+// bis VOR der Beschreibung) — Reihenfolge, Inhalte & Icons wie im echten
+// Brospify-Theme: Angebots-Hinweis → Titel → Bewertung → Vorteile (Emoji-Kreise)
+// → Lager → Preis → Bundle → Kaufen → Zahlarten → Gratis-Geschenk → Countdown-
+// Timeline. Rein clientseitig (lädt immer), voll über CSS-Variablen gethemt,
+// responsive für PC & Handy.
 // ─────────────────────────────────────────────────────────────────
 
-export interface PreviewBundle {
-  label: string;
-  badge: string;
-  popular: boolean;
-  price: string;
-  perUnit: string;
-  save: string;
-}
+export interface PreviewBundle { label: string; price: string; perUnit: string; badge: string; save: string; popular: boolean }
 export interface PreviewData {
   title: string;
   images: string[];
   badge: string;
-  urgencyPrefix: string;
-  urgencyTime: string;
-  urgencySuffix: string;
+  offerEndText: string;
   ratingValue: string;
   ratingText: string;
-  usps: string[];
+  benefits: { emoji: string; text: string }[];
   stock: string;
   price: string;
   comparePrice: string;
+  discount: string;
   bundleHeading: string;
   bundles: PreviewBundle[];
   cta: string;
+  payHeading: string;
   giftTitle: string;
   giftSubtitle: string;
-  timeline: { label: string; date: string }[];
-  reviewQuote: string;
+  countdownPrefix: string;
+  countdown: string;
+  countdownSuffix: string;
+  timeline: { icon: string; label: string; date: string }[];
 }
 
-export interface ThemeColors {
-  button: string;
-  buttonText: string;
-  background: string;
-  text: string;
-  accent: string;
-}
+export interface ThemeColors { button: string; buttonText: string; background: string; text: string; accent: string }
 
 const FONT_FAMILY: Record<string, string> = {
   work_sans_n4: "'Work Sans'", poppins_n4: "'Poppins'", montserrat_n4: "'Montserrat'",
@@ -58,41 +47,32 @@ const FONT_FAMILY: Record<string, string> = {
 };
 const GOOGLE_ALL =
   "https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;600;800&family=Poppins:wght@400;600;800&family=Montserrat:wght@400;600;800&family=Inter:wght@400;600;800&family=Roboto:wght@400;500;700&family=Lato:wght@400;700;900&family=Nunito:wght@400;600;800&family=Raleway:wght@400;600;800&family=DM+Sans:wght@400;600;700&family=Assistant:wght@400;600;800&family=Oswald:wght@400;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;600;800&family=Merriweather:wght@400;700;900&family=Acme&display=swap";
-
 function ensureFonts() {
   if (typeof document === "undefined" || document.getElementById("tpv-allfonts")) return;
   const link = document.createElement("link");
-  link.id = "tpv-allfonts";
-  link.rel = "stylesheet";
-  link.href = GOOGLE_ALL;
+  link.id = "tpv-allfonts"; link.rel = "stylesheet"; link.href = GOOGLE_ALL;
   document.head.appendChild(link);
 }
 
-const Check = () => (
-  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+const ICON: Record<string, string> = {
+  bag: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z M3 6h18 M16 10a4 4 0 0 1-8 0",
+  truck: "M1 3h15v13H1z M16 8h4l3 3v5h-7 M5.5 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z M18.5 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
+  package: "M12 2 3 7v10l9 5 9-5V7Z M3 7l9 5 9-5 M12 12v10",
+};
+const Ic = ({ d, s = 16 }: { d: string; s?: number }) => (
+  <svg viewBox="0 0 24 24" width={s} height={s} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    {d.split(" M").map((seg, i) => <path key={i} d={(i ? "M" : "") + seg} />)}
+  </svg>
 );
-const Stars = () => <span className="pm-stars">★★★★★</span>;
 
 export default function ThemePreview({
-  data,
-  colors,
-  headingFont,
-  bodyFont,
-  radius,
-  loading,
-  label,
+  data, colors, headingFont, bodyFont, radius, loading, label,
 }: {
-  data: PreviewData | null;
-  colors: ThemeColors;
-  headingFont: string;
-  bodyFont: string;
-  radius: number;
-  loading: boolean;
-  label: string;
+  data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
+  radius: number; loading: boolean; label: string;
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [bundleIdx, setBundleIdx] = useState(1);
-
   useEffect(() => { ensureFonts(); }, []);
   useEffect(() => {
     setImgIdx(0);
@@ -101,11 +81,8 @@ export default function ThemePreview({
   }, [data]);
 
   const rootStyle = {
-    "--pv-bg": colors.background,
-    "--pv-text": colors.text,
-    "--pv-btn": colors.button,
-    "--pv-btnText": colors.buttonText,
-    "--pv-accent": colors.accent,
+    "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
+    "--pv-btnText": colors.buttonText, "--pv-accent": colors.accent,
     "--pv-h": `${FONT_FAMILY[headingFont] || "'Work Sans'"}, sans-serif`,
     "--pv-b": `${FONT_FAMILY[bodyFont] || "'Work Sans'"}, sans-serif`,
     "--pv-r": `${Math.max(0, radius)}px`,
@@ -127,7 +104,7 @@ export default function ThemePreview({
       ) : (
         <div className="pm-stage">
           <div className="pm-grid">
-            {/* ── Galerie ── */}
+            {/* Galerie */}
             <div className="pm-gallery">
               <div className="pm-main">
                 {data.badge && <span className="pm-badge">{data.badge}</span>}
@@ -144,24 +121,23 @@ export default function ThemePreview({
               )}
             </div>
 
-            {/* ── Infospalte (bis VOR der Beschreibung) ── */}
+            {/* Infospalte (bis VOR der Beschreibung) */}
             <div className="pm-info">
-              <div className="pm-urgency">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-                {data.urgencyPrefix} <strong>{data.urgencyTime}</strong> {data.urgencySuffix}
-              </div>
+              {data.offerEndText && <div className="pm-offer">🔥 {data.offerEndText}</div>}
 
               <h1 className="pm-title">{data.title}</h1>
 
               <div className="pm-rating">
-                <Stars />
+                <span className="pm-stars">★★★★★</span>
                 <strong>{data.ratingValue}</strong>
                 <span>· {data.ratingText}</span>
               </div>
 
-              <div className="pm-usps">
-                {data.usps.filter(Boolean).slice(0, 4).map((u, i) => (
-                  <div key={i} className="pm-usp"><span className="pm-check"><Check /></span>{u}</div>
+              <div className="pm-benefits">
+                {data.benefits.slice(0, 4).map((b, i) => (
+                  <div key={i} className="pm-benefit">
+                    <span className="pm-bic">{b.emoji}</span>{b.text}
+                  </div>
                 ))}
               </div>
 
@@ -172,10 +148,9 @@ export default function ThemePreview({
               <div className="pm-price">
                 <strong>{data.price}</strong>
                 <s>{data.comparePrice}</s>
-                <span className="pm-save">Spare 38%</span>
+                <span className="pm-save">{data.discount}</span>
               </div>
 
-              {/* Bundle-Auswahl */}
               <div className="pm-bundle-head">{data.bundleHeading}</div>
               <div className="pm-bundles">
                 {data.bundles.map((b, i) => (
@@ -194,30 +169,28 @@ export default function ThemePreview({
                 ))}
               </div>
 
-              <button className="pm-cta">{data.cta}</button>
+              <button className="pm-cta">
+                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+                {data.cta}
+              </button>
 
+              <div className="pm-pay-head">{data.payHeading}</div>
               <div className="pm-pay">
-                {["VISA", "Mastercard", "PayPal", "Klarna", "Apple Pay", "G Pay"].map((p) => (
-                  <span key={p}>{p}</span>
-                ))}
+                {["VISA", "Mastercard", "PayPal", "Klarna", "Apple Pay", "G Pay"].map((p) => <span key={p}>{p}</span>)}
               </div>
 
-              {/* Gratis-Geschenk */}
               <div className="pm-gift">
-                <span className="pm-gift-ic">
-                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 12v8H4v-8" /><path d="M2 7h20v5H2z" /><path d="M12 22V7" /><path d="M12 7S10.5 2 8 4s4 3 4 3M12 7s1.5-5 4-3-4 3-4 3" /></svg>
-                </span>
-                <span>
-                  <strong>{data.giftTitle}</strong>
-                  <em>{data.giftSubtitle}</em>
-                </span>
+                <span className="pm-gift-ic">🎁</span>
+                <span><strong>{data.giftTitle}</strong><em>{data.giftSubtitle}</em></span>
               </div>
 
-              {/* Liefer-Timeline */}
+              <div className="pm-countdown">
+                {data.countdownPrefix} <strong>{data.countdown}</strong> {data.countdownSuffix}
+              </div>
               <div className="pm-timeline">
                 {data.timeline.map((s, i) => (
                   <div key={i} className="pm-step">
-                    <span className="pm-step-dot" />
+                    <span className="pm-step-ic"><Ic d={ICON[s.icon] || ICON.bag} s={17} /></span>
                     <span className="pm-step-label">{s.label}</span>
                     <span className="pm-step-date">{s.date}</span>
                   </div>
@@ -241,8 +214,8 @@ const CSS = `
 @keyframes pm-rot{to{transform:rotate(360deg)}}
 .pm-empty{height:360px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;background:#fafafa}
 
-.pm-stage{background:var(--pv-bg);color:var(--pv-text);font-family:var(--pv-b);padding:22px}
-.pm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:26px;align-items:start}
+.pm-stage{background:var(--pv-bg);color:var(--pv-text);font-family:var(--pv-b);padding:20px;max-height:72vh;overflow-y:auto}
+.pm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:24px;align-items:start}
 
 .pm-gallery{position:sticky;top:0}
 .pm-main{position:relative;aspect-ratio:1;border-radius:var(--pv-r);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 6%,var(--pv-bg))}
@@ -250,61 +223,69 @@ const CSS = `
 .pm-noimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:.4}
 .pm-badge{position:absolute;top:12px;left:12px;z-index:2;background:var(--pv-accent);color:#fff;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;border-radius:min(var(--pv-r),30px)}
 .pm-thumbs{display:flex;gap:8px;margin-top:10px}
-.pm-thumb{width:58px;height:58px;border-radius:min(var(--pv-r),12px);overflow:hidden;border:2px solid transparent;background:color-mix(in srgb,var(--pv-text) 6%,var(--pv-bg));cursor:pointer;padding:0}
+.pm-thumb{width:56px;height:56px;flex:0 0 auto;border-radius:min(var(--pv-r),12px);overflow:hidden;border:2px solid transparent;background:color-mix(in srgb,var(--pv-text) 6%,var(--pv-bg));cursor:pointer;padding:0}
 .pm-thumb.on{border-color:var(--pv-accent)}
 .pm-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 
 .pm-info{min-width:0}
-.pm-urgency{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;margin-bottom:12px;opacity:.9}
-.pm-urgency strong{color:var(--pv-accent)}
-.pm-title{font-family:var(--pv-h);font-weight:800;font-size:27px;line-height:1.1;letter-spacing:-.02em;margin:0 0 10px}
-.pm-rating{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:14px;opacity:.85}
+.pm-offer{display:inline-block;background:color-mix(in srgb,#d9534f 12%,var(--pv-bg));color:#d9534f;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:min(var(--pv-r),20px);margin-bottom:12px}
+.pm-title{font-family:var(--pv-h);font-weight:800;font-size:27px;line-height:1.12;letter-spacing:-.02em;margin:0 0 10px}
+.pm-rating{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:16px;opacity:.9}
 .pm-rating strong{font-weight:700}
 .pm-stars{color:var(--pv-accent);letter-spacing:1px;font-size:14px}
-.pm-usps{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px;margin-bottom:14px}
-.pm-usp{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:500}
-.pm-check{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--pv-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center}
-.pm-stock{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;margin-bottom:14px}
-.pm-dot{width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px color-mix(in srgb,#22c55e 25%,transparent)}
-.pm-divider{height:1px;background:color-mix(in srgb,var(--pv-text) 12%,transparent);margin:0 0 14px}
-.pm-price{display:flex;align-items:baseline;gap:10px;margin-bottom:16px}
-.pm-price strong{font-family:var(--pv-h);font-size:30px;font-weight:800}
-.pm-price s{opacity:.4;font-size:17px}
-.pm-save{background:color-mix(in srgb,var(--pv-accent) 16%,transparent);color:var(--pv-accent);font-size:11px;font-weight:800;padding:3px 8px;border-radius:min(var(--pv-r),20px)}
 
-.pm-bundle-head{font-family:var(--pv-h);font-weight:700;font-size:14px;margin-bottom:9px}
-.pm-bundles{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
-.pm-bundle{position:relative;display:flex;align-items:center;gap:12px;width:100%;text-align:left;cursor:pointer;background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));border:2px solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),16px);padding:12px 14px;font-family:inherit;color:inherit}
+.pm-benefits{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+.pm-benefit{display:flex;align-items:center;gap:11px;font-size:13.5px;font-weight:600}
+.pm-bic{width:30px;height:30px;flex:0 0 auto;border-radius:50%;background:color-mix(in srgb,var(--pv-text) 88%,#000);display:inline-flex;align-items:center;justify-content:center;font-size:15px;line-height:1}
+
+.pm-stock{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;margin-bottom:16px}
+.pm-dot{width:9px;height:9px;border-radius:50%;background:#00c853;box-shadow:0 0 0 3px color-mix(in srgb,#00c853 25%,transparent)}
+.pm-divider{height:1px;background:color-mix(in srgb,var(--pv-text) 12%,transparent);margin:0 0 16px}
+
+.pm-price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.pm-price strong{font-family:var(--pv-h);font-size:31px;font-weight:800}
+.pm-price s{opacity:.4;font-size:17px}
+.pm-save{background:color-mix(in srgb,var(--pv-accent) 16%,transparent);color:var(--pv-accent);font-size:12px;font-weight:800;padding:3px 9px;border-radius:min(var(--pv-r),20px)}
+
+.pm-bundle-head{font-family:var(--pv-h);font-weight:700;font-size:14px;margin-bottom:10px}
+.pm-bundles{display:flex;flex-direction:column;gap:10px;margin-bottom:18px}
+.pm-bundle{position:relative;display:flex;align-items:center;gap:12px;width:100%;text-align:left;cursor:pointer;background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));border:2px solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),16px);padding:13px 15px;font-family:inherit;color:inherit}
 .pm-bundle.on{border-color:var(--pv-accent);background:color-mix(in srgb,var(--pv-accent) 7%,var(--pv-bg))}
-.pm-bundle-badge{position:absolute;top:-9px;right:12px;background:var(--pv-accent);color:#fff;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:20px}
-.pm-radio{width:18px;height:18px;flex:0 0 auto;border-radius:50%;border:2px solid color-mix(in srgb,var(--pv-text) 30%,transparent)}
-.pm-bundle.on .pm-radio{border-color:var(--pv-accent);background:radial-gradient(circle at center,var(--pv-accent) 0 5px,transparent 6px)}
+.pm-bundle-badge{position:absolute;top:-9px;right:14px;background:var(--pv-accent);color:#fff;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:20px}
+.pm-radio{width:19px;height:19px;flex:0 0 auto;border-radius:50%;border:2px solid color-mix(in srgb,var(--pv-text) 30%,transparent)}
+.pm-bundle.on .pm-radio{border-color:var(--pv-accent);box-shadow:inset 0 0 0 3px var(--pv-bg),inset 0 0 0 9px var(--pv-accent)}
 .pm-bundle-main{display:flex;flex-direction:column;min-width:0}
-.pm-bundle-label{font-size:14px;font-weight:700}
+.pm-bundle-label{font-size:14.5px;font-weight:700}
 .pm-bundle-per{font-size:11px;opacity:.6}
 .pm-bundle-right{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end}
-.pm-bundle-price{font-size:15px;font-weight:800}
+.pm-bundle-price{font-size:15.5px;font-weight:800}
 .pm-bundle-save{font-size:10.5px;font-weight:800;color:var(--pv-accent)}
 
-.pm-cta{display:block;width:100%;background:var(--pv-btn);color:var(--pv-btnText);border:0;font-family:var(--pv-b);font-weight:800;font-size:15.5px;padding:15px;border-radius:var(--pv-r);cursor:pointer;letter-spacing:.01em}
-.pm-pay{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin:12px 0 16px}
-.pm-pay span{font-size:9px;font-weight:700;opacity:.5;border:1px solid color-mix(in srgb,var(--pv-text) 18%,transparent);border-radius:5px;padding:3px 7px}
+.pm-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--pv-btn);color:var(--pv-btnText);border:0;font-family:var(--pv-b);font-weight:800;font-size:15.5px;padding:15px;border-radius:var(--pv-r);cursor:pointer;letter-spacing:.01em}
+.pm-pay-head{text-align:center;font-size:11px;opacity:.55;margin:14px 0 8px;font-weight:600}
+.pm-pay{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:18px}
+.pm-pay span{font-size:9px;font-weight:700;opacity:.55;border:1px solid color-mix(in srgb,var(--pv-text) 18%,transparent);border-radius:5px;padding:3px 7px}
 
-.pm-gift{display:flex;align-items:center;gap:11px;border:1px dashed color-mix(in srgb,var(--pv-accent) 50%,transparent);background:color-mix(in srgb,var(--pv-accent) 6%,var(--pv-bg));border-radius:min(var(--pv-r),16px);padding:12px 14px;margin-bottom:16px}
-.pm-gift-ic{width:34px;height:34px;flex:0 0 auto;border-radius:50%;background:var(--pv-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center}
+.pm-gift{display:flex;align-items:center;gap:11px;border:1px dashed color-mix(in srgb,var(--pv-accent) 50%,transparent);background:color-mix(in srgb,var(--pv-accent) 6%,var(--pv-bg));border-radius:min(var(--pv-r),16px);padding:12px 14px;margin-bottom:18px}
+.pm-gift-ic{width:36px;height:36px;flex:0 0 auto;border-radius:50%;background:color-mix(in srgb,var(--pv-accent) 16%,var(--pv-bg));display:inline-flex;align-items:center;justify-content:center;font-size:18px}
 .pm-gift strong{display:block;font-size:13px;font-weight:700}
-.pm-gift em{display:block;font-size:11.5px;opacity:.65;font-style:normal}
+.pm-gift em{display:block;font-size:11.5px;opacity:.65;font-style:normal;line-height:1.35}
 
-.pm-timeline{display:flex;justify-content:space-between;position:relative;padding-top:6px}
-.pm-timeline:before{content:"";position:absolute;top:11px;left:12%;right:12%;height:2px;background:color-mix(in srgb,var(--pv-text) 14%,transparent)}
-.pm-step{display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;z-index:1;flex:1}
-.pm-step-dot{width:11px;height:11px;border-radius:50%;background:var(--pv-accent);box-shadow:0 0 0 3px color-mix(in srgb,var(--pv-accent) 22%,transparent)}
+.pm-countdown{text-align:center;font-size:12.5px;font-weight:600;margin-bottom:10px}
+.pm-countdown strong{color:var(--pv-accent)}
+.pm-timeline{display:flex;justify-content:space-between;position:relative;padding:0 4px}
+.pm-timeline:before{content:"";position:absolute;top:17px;left:16%;right:16%;height:2px;background:color-mix(in srgb,var(--pv-text) 14%,transparent)}
+.pm-step{display:flex;flex-direction:column;align-items:center;gap:5px;position:relative;z-index:1;flex:1}
+.pm-step-ic{width:35px;height:35px;border-radius:50%;background:var(--pv-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center}
 .pm-step-label{font-size:11.5px;font-weight:700}
 .pm-step-date{font-size:10.5px;opacity:.55}
 
-@media(max-width:720px){
+@media(max-width:760px){
+  .pm-stage{padding:16px;max-height:none}
   .pm-grid{grid-template-columns:1fr;gap:16px}
   .pm-gallery{position:static}
+  .pm-main{max-width:340px;margin:0 auto}
   .pm-title{font-size:23px}
+  .pm-price strong{font-size:27px}
 }
 `;

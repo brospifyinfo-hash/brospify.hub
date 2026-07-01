@@ -1,8 +1,8 @@
 // ─── /api/theme-export/preview ───────────────────────────────────
 // Liefert die DATEN für die getreue Nachbildung der Produktseiten-Oberseite
-// (main-product: Galerie + Infospalte bis VOR der Beschreibung). Texte aus
-// themeCopy, sonst polierte Defaults — nie ein rohes [[TOKEN]]. Kostenlos,
-// kein Liquid-Render (zuverlässig, schnell). Theming passiert clientseitig.
+// (main-product bis VOR der Beschreibung). Inhalte/Reihenfolge/Icons exakt wie
+// im echten Brospify-Theme; Verkaufstexte aus themeCopy, sonst die Theme-
+// Defaults — nie ein rohes [[TOKEN]]. Kostenlos, kein Liquid (zuverlässig).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
@@ -23,15 +23,13 @@ function toEur(s: string): number {
   const eur = parseFloat(cleaned);
   return Number.isFinite(eur) && eur > 0 ? eur : 29.99;
 }
-function eur(n: number): string {
-  return n.toFixed(2).replace(".", ",") + " €";
-}
-function dateIn(days: number): string {
+const money = (n: number) => n.toFixed(2).replace(".", ",") + " €";
+function dateIn(days: number, withWeekday = false): string {
   const d = new Date();
   d.setDate(d.getDate() + days);
   if (days === 0) return "Heute";
   if (days === 1) return "Morgen";
-  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "long" }).format(d);
+  return new Intl.DateTimeFormat("de-DE", withWeekday ? { weekday: "short", day: "2-digit", month: "long" } : { day: "2-digit", month: "long" }).format(d);
 }
 
 export async function GET(req: NextRequest) {
@@ -64,53 +62,57 @@ export async function GET(req: NextRequest) {
     const v = tc[key];
     return typeof v === "string" && v.trim() && !/^\[\[[A-Z0-9_]+\]\]$/.test(v) ? v : fb;
   };
-  const stripHtml = (s: string) => s.replace(/<[^>]+>/g, "").trim();
 
   const base = toEur(produkt.preis);
-  // Mengen-Bundles aus dem Basispreis (Staffelrabatt) — wie ein echter Shop.
-  const bundles = [
-    { qty: 1, label: "1 Stück", total: base, badge: "", popular: false, save: 0 },
-    { qty: 2, label: "2 Stück", total: base * 2 * 0.85, badge: "Beliebt", popular: true, save: 15 },
-    { qty: 3, label: "3 Stück", total: base * 3 * 0.75, badge: "Bestes Angebot", popular: false, save: 25 },
-  ].map((b) => ({
-    label: b.label,
-    badge: b.badge,
-    popular: b.popular,
-    price: eur(b.total),
-    perUnit: eur(b.total / b.qty) + " / Stück",
-    save: b.save ? `-${b.save}%` : "",
-  }));
+  const compare = base * 1.6;
+  // Mengen-Bundles wie im echten bundle_selector (1×, 2× -15 %, 3× -25 %).
+  const mk = (qty: number, disc: number, badge: string, popular: boolean) => {
+    const total = base * qty * (1 - disc / 100);
+    return { label: `${qty} Stück`, price: money(total), perUnit: money(total / qty) + " / Stück", badge, save: disc ? `-${disc}%` : "", popular };
+  };
 
   return NextResponse.json(
     {
       title: produkt.titel || "Dein Produkt",
       images: httpImages(produkt),
       badge: cp("PRODUCT_BADGE_TEXT", "BESTSELLER"),
-      urgencyPrefix: "Bestelle innerhalb der nächsten",
-      urgencyTime: "1 Std. 8 Min.",
-      urgencySuffix: "— Versand noch heute!",
+      // 1. urgency_text (oben, rot)
+      offerEndText: `Angebot endet am ${dateIn(2)}`,
+      // 4. rating
       ratingValue: "4.9",
       ratingText: cp("PRODUCT_RATING_TEXT", "361 Bewertungen"),
-      usps: [
-        cp("PRODUCT_USP_1", "Kostenloser Versand"),
-        cp("PRODUCT_USP_2", "30 Tage Rückgaberecht"),
-        cp("PRODUCT_USP_3", "Sichere Bezahlung"),
-        cp("PRODUCT_USP_4", "Premium-Qualität"),
+      // 5. benefits_list (Emoji in dunklen Kreisen)
+      benefits: [
+        { emoji: "🚚", text: cp("PRODUCT_USP_1", "Kostenloser Blitzversand") },
+        { emoji: "↩️", text: cp("PRODUCT_USP_2", "30 Tage Rückgaberecht") },
+        { emoji: "🛡️", text: cp("PRODUCT_USP_3", "100% Sichere Bezahlung") },
+        { emoji: "⭐", text: cp("PRODUCT_USP_4", "Premium-Qualität") },
       ],
-      stock: cp("PRODUCT_STOCK_TEXT", "Auf Lager — nur noch wenige verfügbar"),
-      price: eur(base),
-      comparePrice: eur(base * 1.6),
-      bundleHeading: cp("BUNDLE_HEADING", "Wähle dein Paket & spare"),
-      bundles,
+      // 6. stock
+      stock: cp("PRODUCT_STOCK_TEXT", "Auf Lager – Sofort verfügbar"),
+      // 9. price
+      price: money(base),
+      comparePrice: money(compare),
+      discount: `-${Math.round((1 - base / compare) * 100)}%`,
+      // 10. bundle_selector
+      bundleHeading: cp("BUNDLE_HEADING", "Zeitlich begrenztes Angebot"),
+      bundles: [mk(1, 0, "", false), mk(2, 15, "Am beliebtesten", true), mk(3, 25, "Bestes Angebot", false)],
+      // 11. buy_buttons
       cta: cp("SLIDE_1_BTN_TEXT", "In den Warenkorb"),
-      giftTitle: cp("GIFT_TITLE", "Sichere dir dein Gratis-Geschenk"),
-      giftSubtitle: cp("GIFT_SUBTITLE", "Bei jeder Bestellung — solange der Vorrat reicht."),
+      // 12. payment_icons
+      payHeading: "Sicher bezahlen mit",
+      // 13. free_gift
+      giftTitle: cp("GIFT_TITLE", "Sichere dir dein Geschenk"),
+      giftSubtitle: cp("GIFT_SUBTITLE", "Wähle einen Artikel aus — er wird deinem Warenkorb kostenlos hinzugefügt."),
+      // 14. delivery_timeline (Countdown + Bestellt/Versendet/Zugestellt)
+      countdownPrefix: "Wenn du innerhalb",
+      countdown: "1 Std. 8 Min.",
+      countdownSuffix: "bestellst!",
       timeline: [
-        { label: "Bestellt", date: dateIn(0) },
-        { label: "Versendet", date: dateIn(1) },
-        { label: "Zugestellt", date: dateIn(3) },
+        { icon: "bag", label: "Bestellt", date: dateIn(0) },
+        { icon: "truck", label: "Versendet", date: dateIn(1) },
+        { icon: "package", label: "Zugestellt", date: dateIn(3) },
       ],
-      reviewQuote: stripHtml(cp("REVIEW2_1_QUOTE", "Beste Entscheidung seit langem — ich nutze es täglich!")),
     },
     { headers: { "Cache-Control": "no-store" } },
   );
