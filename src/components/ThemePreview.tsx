@@ -11,7 +11,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 // responsive für PC & Handy.
 // ─────────────────────────────────────────────────────────────────
 
-export interface PreviewBundle { label: string; price: string; perUnit: string; badge: string; save: string; popular: boolean }
+export interface PreviewBundle { qty: number; name: string; image: string; price: string; compareTotal: string; perUnit: string; save: string; badge: string; popular: boolean }
 export interface PreviewData {
   title: string;
   images: string[];
@@ -30,6 +30,7 @@ export interface PreviewData {
   payHeading: string;
   giftTitle: string;
   giftSubtitle: string;
+  giftItems: { image: string; price: string }[];
   countdownPrefix: string;
   countdown: string;
   countdownSuffix: string;
@@ -65,6 +66,20 @@ const Ic = ({ d, s = 16 }: { d: string; s?: number }) => (
   </svg>
 );
 
+// Zahlarten-Logos wie im Theme (echte Markenfarben, in weißen Kästchen).
+const PAY_ORDER = ["visa", "mc", "klarna", "paypal", "apple", "gpay"];
+function PayMark({ name }: { name: string }) {
+  switch (name) {
+    case "visa": return <b style={{ color: "#1a1f71", fontStyle: "italic", fontWeight: 800, fontSize: 12.5, letterSpacing: "-.4px" }}>VISA</b>;
+    case "mc": return <span style={{ display: "inline-flex", alignItems: "center" }}><span style={{ width: 15, height: 15, borderRadius: "50%", background: "#eb001b" }} /><span style={{ width: 15, height: 15, borderRadius: "50%", background: "#f79e1b", marginLeft: -6, mixBlendMode: "multiply" }} /></span>;
+    case "klarna": return <b style={{ background: "#ffb3c7", color: "#0a0a0a", fontWeight: 800, fontSize: 10, padding: "2px 5px", borderRadius: 4 }}>Klarna.</b>;
+    case "paypal": return <b style={{ fontStyle: "italic", fontWeight: 800, fontSize: 11.5 }}><span style={{ color: "#003087" }}>Pay</span><span style={{ color: "#0070e0" }}>Pal</span></b>;
+    case "apple": return <b style={{ display: "inline-flex", alignItems: "center", gap: 2, fontWeight: 600, fontSize: 11.5, color: "#000" }}><svg viewBox="0 0 24 24" width="11" height="13" fill="#000"><path d="M17.05 12.04c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.09-2.01-3.76-2.04-1.6-.16-3.12.94-3.93.94-.81 0-2.06-.92-3.39-.9-1.74.03-3.35 1.01-4.25 2.57-1.81 3.14-.46 7.79 1.3 10.34.86 1.25 1.88 2.65 3.22 2.6 1.29-.05 1.78-.83 3.34-.83 1.56 0 2 .83 3.37.81 1.39-.03 2.27-1.27 3.12-2.53.98-1.45 1.39-2.85 1.41-2.92-.03-.01-2.71-1.04-2.74-4.13zM14.53 4.6c.71-.86 1.19-2.06 1.06-3.25-1.02.04-2.26.68-2.99 1.54-.66.76-1.23 1.98-1.08 3.14 1.14.09 2.3-.58 3.01-1.43z" /></svg>Pay</b>;
+    case "gpay": return <b style={{ fontWeight: 700, fontSize: 11.5 }}><span style={{ color: "#4285F4" }}>G</span>&nbsp;<span style={{ color: "#3c4043" }}>Pay</span></b>;
+    default: return null;
+  }
+}
+
 export default function ThemePreview({
   data, colors, headingFont, bodyFont, radius, loading, label,
 }: {
@@ -73,6 +88,7 @@ export default function ThemePreview({
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [bundleIdx, setBundleIdx] = useState(1);
+  const [giftOpen, setGiftOpen] = useState(true);
   useEffect(() => { ensureFonts(); }, []);
   useEffect(() => {
     setImgIdx(0);
@@ -157,13 +173,15 @@ export default function ThemePreview({
                   <button key={i} className={`pm-bundle ${i === bundleIdx ? "on" : ""}`} onClick={() => setBundleIdx(i)}>
                     {b.badge && <span className="pm-bundle-badge">{b.badge}</span>}
                     <span className="pm-radio" />
+                    {b.image ? <img className="pm-bundle-img" src={b.image} alt="" /> : <span className="pm-bundle-img" />}
                     <span className="pm-bundle-main">
-                      <span className="pm-bundle-label">{b.label}</span>
-                      <span className="pm-bundle-per">{b.perUnit}</span>
+                      <span className="pm-bundle-name"><span className="pm-qty">×{b.qty}</span> {b.name}</span>
+                      {b.perUnit && <span className="pm-bundle-per">{b.perUnit}</span>}
+                      <span className="pm-bundle-save">{b.save}</span>
                     </span>
                     <span className="pm-bundle-right">
                       <span className="pm-bundle-price">{b.price}</span>
-                      {b.save && <span className="pm-bundle-save">{b.save}</span>}
+                      <s className="pm-bundle-comp">{b.compareTotal}</s>
                     </span>
                   </button>
                 ))}
@@ -176,12 +194,26 @@ export default function ThemePreview({
 
               <div className="pm-pay-head">{data.payHeading}</div>
               <div className="pm-pay">
-                {["VISA", "Mastercard", "PayPal", "Klarna", "Apple Pay", "G Pay"].map((p) => <span key={p}>{p}</span>)}
+                {PAY_ORDER.map((p) => <span key={p} className="pm-pay-box"><PayMark name={p} /></span>)}
               </div>
 
+              {/* Gratis-Geschenk (Accordion-Karte wie im Theme) */}
               <div className="pm-gift">
-                <span className="pm-gift-ic">🎁</span>
-                <span><strong>{data.giftTitle}</strong><em>{data.giftSubtitle}</em></span>
+                <button className="pm-gift-head" onClick={() => setGiftOpen((o) => !o)}>
+                  <span className="pm-gift-txt"><strong>{data.giftTitle}</strong><em>{data.giftSubtitle}</em></span>
+                  <svg className={`pm-gift-chev ${giftOpen ? "open" : ""}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+                </button>
+                {giftOpen && (
+                  <div className="pm-gift-grid">
+                    {data.giftItems.map((g, i) => (
+                      <div key={i} className="pm-gift-card">
+                        <span className="pm-gift-price">{g.price}</span>
+                        {g.image ? <img src={g.image} alt="" /> : <span className="pm-gift-ph" />}
+                        <span className="pm-gift-check" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="pm-countdown">
@@ -254,22 +286,34 @@ const CSS = `
 .pm-bundle-badge{position:absolute;top:-9px;right:14px;background:var(--pv-accent);color:#fff;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:20px}
 .pm-radio{width:19px;height:19px;flex:0 0 auto;border-radius:50%;border:2px solid color-mix(in srgb,var(--pv-text) 30%,transparent)}
 .pm-bundle.on .pm-radio{border-color:var(--pv-accent);box-shadow:inset 0 0 0 3px var(--pv-bg),inset 0 0 0 9px var(--pv-accent)}
-.pm-bundle-main{display:flex;flex-direction:column;min-width:0}
-.pm-bundle-label{font-size:14.5px;font-weight:700}
-.pm-bundle-per{font-size:11px;opacity:.6}
-.pm-bundle-right{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end}
+.pm-bundle-img{width:44px;height:44px;flex:0 0 auto;border-radius:min(var(--pv-r),10px);object-fit:cover;background:color-mix(in srgb,var(--pv-text) 7%,var(--pv-bg))}
+.pm-bundle-main{display:flex;flex-direction:column;min-width:0;gap:1px}
+.pm-bundle-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-qty{background:color-mix(in srgb,var(--pv-text) 88%,#000);color:var(--pv-bg);font-size:10px;font-weight:800;padding:1px 5px;border-radius:5px;margin-right:3px}
+.pm-bundle-per{font-size:11px;opacity:.55}
+.pm-bundle-save{font-size:11px;font-weight:800;color:#16a34a}
+.pm-bundle-right{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;flex:0 0 auto}
 .pm-bundle-price{font-size:15.5px;font-weight:800}
-.pm-bundle-save{font-size:10.5px;font-weight:800;color:var(--pv-accent)}
+.pm-bundle-comp{font-size:11px;opacity:.4}
 
 .pm-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:var(--pv-btn);color:var(--pv-btnText);border:0;font-family:var(--pv-b);font-weight:800;font-size:15.5px;padding:15px;border-radius:var(--pv-r);cursor:pointer;letter-spacing:.01em}
 .pm-pay-head{text-align:center;font-size:11px;opacity:.55;margin:14px 0 8px;font-weight:600}
-.pm-pay{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:18px}
-.pm-pay span{font-size:9px;font-weight:700;opacity:.55;border:1px solid color-mix(in srgb,var(--pv-text) 18%,transparent);border-radius:5px;padding:3px 7px}
+.pm-pay{display:flex;flex-wrap:wrap;gap:7px;justify-content:center;margin-bottom:18px}
+.pm-pay-box{display:inline-flex;align-items:center;justify-content:center;min-width:44px;height:28px;padding:0 8px;background:#fff;border:1px solid rgba(0,0,0,.1);border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
 
-.pm-gift{display:flex;align-items:center;gap:11px;border:1px dashed color-mix(in srgb,var(--pv-accent) 50%,transparent);background:color-mix(in srgb,var(--pv-accent) 6%,var(--pv-bg));border-radius:min(var(--pv-r),16px);padding:12px 14px;margin-bottom:18px}
-.pm-gift-ic{width:36px;height:36px;flex:0 0 auto;border-radius:50%;background:color-mix(in srgb,var(--pv-accent) 16%,var(--pv-bg));display:inline-flex;align-items:center;justify-content:center;font-size:18px}
-.pm-gift strong{display:block;font-size:13px;font-weight:700}
-.pm-gift em{display:block;font-size:11.5px;opacity:.65;font-style:normal;line-height:1.35}
+.pm-gift{border:1px solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),16px);background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg));margin-bottom:18px;overflow:hidden}
+.pm-gift-head{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:transparent;border:0;cursor:pointer;padding:13px 15px;font-family:inherit;color:inherit}
+.pm-gift-txt{min-width:0}
+.pm-gift-txt strong{display:block;font-size:13.5px;font-weight:700}
+.pm-gift-txt em{display:block;font-size:11.5px;opacity:.6;font-style:normal;line-height:1.35}
+.pm-gift-chev{margin-left:auto;flex:0 0 auto;transition:transform .2s;opacity:.6}
+.pm-gift-chev.open{transform:rotate(180deg)}
+.pm-gift-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;padding:0 15px 15px}
+.pm-gift-card{position:relative;aspect-ratio:1;border-radius:min(var(--pv-r),12px);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 7%,var(--pv-bg));border:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent)}
+.pm-gift-card img{width:100%;height:100%;object-fit:cover;display:block}
+.pm-gift-ph{display:block;width:100%;height:100%}
+.pm-gift-price{position:absolute;top:6px;right:6px;z-index:1;background:color-mix(in srgb,var(--pv-text) 88%,#000);color:var(--pv-bg);font-size:10px;font-weight:800;padding:2px 6px;border-radius:20px}
+.pm-gift-check{position:absolute;bottom:6px;left:6px;width:16px;height:16px;border-radius:4px;background:#fff;border:1.5px solid rgba(0,0,0,.25)}
 
 .pm-countdown{text-align:center;font-size:12.5px;font-weight:600;margin-bottom:10px}
 .pm-countdown strong{color:var(--pv-accent)}

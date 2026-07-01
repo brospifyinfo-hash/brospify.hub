@@ -65,16 +65,30 @@ export async function GET(req: NextRequest) {
 
   const base = toEur(produkt.preis);
   const compare = base * 1.6;
-  // Mengen-Bundles wie im echten bundle_selector (1×, 2× -15 %, 3× -25 %).
+  const imgs = httpImages(produkt);
+  const title = produkt.titel || "Dein Produkt";
+  // Mengen-Bundles wie im echten bundle_selector: Bild + „×N" + „Nx Name" +
+  // „Du sparst …"(grün) + Preis + Vergleichspreis. Badge nur bei 2×.
   const mk = (qty: number, disc: number, badge: string, popular: boolean) => {
     const total = base * qty * (1 - disc / 100);
-    return { label: `${qty} Stück`, price: money(total), perUnit: money(total / qty) + " / Stück", badge, save: disc ? `-${disc}%` : "", popular };
+    const comp = base * qty * 1.6;
+    return {
+      qty,
+      name: `${qty}x ${title}`,
+      image: imgs[(qty - 1) % Math.max(imgs.length, 1)] || "",
+      price: money(total),
+      compareTotal: money(comp),
+      perUnit: qty > 1 ? `nur ${money(total / qty)} / Stk` : "",
+      save: `Du sparst ${money(comp - total)}`,
+      badge,
+      popular,
+    };
   };
 
   return NextResponse.json(
     {
-      title: produkt.titel || "Dein Produkt",
-      images: httpImages(produkt),
+      title,
+      images: imgs,
       badge: cp("PRODUCT_BADGE_TEXT", "BESTSELLER"),
       // 1. urgency_text (oben, rot)
       offerEndText: `Angebot endet am ${dateIn(2)}`,
@@ -96,14 +110,15 @@ export async function GET(req: NextRequest) {
       discount: `-${Math.round((1 - base / compare) * 100)}%`,
       // 10. bundle_selector
       bundleHeading: cp("BUNDLE_HEADING", "Zeitlich begrenztes Angebot"),
-      bundles: [mk(1, 0, "", false), mk(2, 15, "Am beliebtesten", true), mk(3, 25, "Bestes Angebot", false)],
+      bundles: [mk(1, 0, "", false), mk(2, 15, "Am beliebtesten", true), mk(3, 25, "", false)],
       // 11. buy_buttons
       cta: cp("SLIDE_1_BTN_TEXT", "In den Warenkorb"),
       // 12. payment_icons
       payHeading: "Sicher bezahlen mit",
       // 13. free_gift
       giftTitle: cp("GIFT_TITLE", "Sichere dir dein Geschenk"),
-      giftSubtitle: cp("GIFT_SUBTITLE", "Wähle einen Artikel aus — er wird deinem Warenkorb kostenlos hinzugefügt."),
+      giftSubtitle: cp("GIFT_SUBTITLE", "Wähle einen Artikel aus und er wird deinem Warenkorb kostenlos hinzugefügt."),
+      giftItems: [0, 1, 2].map((i) => ({ image: imgs[i % Math.max(imgs.length, 1)] || "", price: "0,00 €" })),
       // 14. delivery_timeline (Countdown + Bestellt/Versendet/Zugestellt)
       countdownPrefix: "Wenn du innerhalb",
       countdown: "1 Std. 8 Min.",
