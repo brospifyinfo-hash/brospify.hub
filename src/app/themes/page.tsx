@@ -16,6 +16,8 @@ import {
   ChevronDown,
   Package,
   CheckCircle2,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
@@ -320,6 +322,7 @@ function ThemeBuilderCard() {
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -572,12 +575,26 @@ function ThemeBuilderCard() {
 
           {/* ── Live-Vorschau (Desktop: rechts sticky · Handy: oben sticky) ── */}
           <div className="order-1 lg:order-2 mb-4 lg:mb-0 sticky top-2 lg:top-4 self-start z-10">
-            <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center justify-between mb-2 gap-2">
               <span className="text-[12px] font-semibold text-white flex items-center gap-1.5">
                 <Sparkles className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                 {t.themes.builderPreview}
               </span>
-              <span className="text-[10px] text-zinc-500 hidden sm:inline">{t.themes.builderPreviewHint}</span>
+              {/* PC / Handy-Umschalter */}
+              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                <button
+                  onClick={() => setViewMode("desktop")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${viewMode === "desktop" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                >
+                  <Monitor className="w-3.5 h-3.5" /> {t.themes.builderViewDesktop}
+                </button>
+                <button
+                  onClick={() => setViewMode("mobile")}
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium transition ${viewMode === "mobile" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" /> {t.themes.builderViewMobile}
+                </button>
+              </div>
             </div>
             <ThemePreview
               data={previewData}
@@ -587,6 +604,7 @@ function ThemeBuilderCard() {
               radius={radius}
               loading={previewLoading}
               label={t.themes.builderPageProduct}
+              viewMode={viewMode}
             />
           </div>
         </div>

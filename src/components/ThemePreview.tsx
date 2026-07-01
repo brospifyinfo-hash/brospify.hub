@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 
 // ─────────────────────────────────────────────────────────────────
 // Live-Vorschau: GETREUE Nachbildung der Produktseiten-Oberseite (main-product
@@ -81,10 +81,10 @@ function PayMark({ name }: { name: string }) {
 }
 
 export default function ThemePreview({
-  data, colors, headingFont, bodyFont, radius, loading, label,
+  data, colors, headingFont, bodyFont, radius, loading, label, viewMode = "desktop",
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
-  radius: number; loading: boolean; label: string;
+  radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [bundleIdx, setBundleIdx] = useState(1);
@@ -95,6 +95,28 @@ export default function ThemePreview({
     const pop = data?.bundles?.findIndex((b) => b.popular) ?? -1;
     setBundleIdx(pop >= 0 ? pop : 1);
   }, [data]);
+
+  // Feste „Gerätebreite" (Desktop 1080px / Handy 390px) und passgenaue Skalierung
+  // in die Vorschau-Spalte — so hängt das Layout NICHT an der Viewport-Breite,
+  // sondern zeigt echt, wie es auf PC bzw. Handy aussieht.
+  const outerRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [box, setBox] = useState({ scale: 1, height: 0 });
+  const targetW = viewMode === "mobile" ? 390 : 1080;
+  useLayoutEffect(() => {
+    const outer = outerRef.current, canvas = canvasRef.current;
+    if (!outer || !canvas) return;
+    const compute = () => {
+      const cw = outer.clientWidth;
+      const scale = Math.min(1, cw / targetW);
+      setBox({ scale, height: canvas.offsetHeight * scale });
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(outer);
+    ro.observe(canvas);
+    return () => ro.disconnect();
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -109,6 +131,8 @@ export default function ThemePreview({
   return (
     <div className="pm-root" style={rootStyle}>
       <style>{CSS}</style>
+      <div ref={outerRef} className="pm-outer" style={{ height: box.height || undefined }}>
+      <div ref={canvasRef} className={`pm-canvas pm-${viewMode}`} style={{ width: targetW, transform: `scale(${box.scale})` }}>
       <div className="pm-bar">
         <div className="pm-dots"><span /><span /><span /></div>
         <span className="pm-tab">{label}</span>
@@ -232,12 +256,17 @@ export default function ThemePreview({
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   );
 }
 
 const CSS = `
-.pm-root{border:1px solid rgba(255,255,255,.07);border-radius:12px;overflow:hidden;background:#fbfbfc;box-shadow:0 16px 46px -24px rgba(0,0,0,.55)}
+.pm-root{width:100%}
+.pm-outer{position:relative;overflow:hidden;width:100%}
+.pm-canvas{transform-origin:top left;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;background:#fbfbfc;box-shadow:0 16px 46px -24px rgba(0,0,0,.55)}
+.pm-canvas,.pm-canvas *,.pm-canvas *::before,.pm-canvas *::after{box-sizing:border-box}
 .pm-bar{display:flex;align-items:center;gap:12px;padding:7px 12px;background:#f2f2f4;border-bottom:1px solid rgba(0,0,0,.06)}
 .pm-dots{display:flex;gap:5px}.pm-dots span{width:8px;height:8px;border-radius:50%;background:#d4d4d8}
 .pm-tab{font-size:11px;font-weight:600;color:#1d1d1f;border-bottom:2px solid #1d1d1f;padding:2px 2px 4px}
@@ -246,8 +275,8 @@ const CSS = `
 @keyframes pm-rot{to{transform:rotate(360deg)}}
 .pm-empty{height:360px;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px;background:#fafafa}
 
-.pm-stage{background:var(--pv-bg);color:var(--pv-text);font-family:var(--pv-b);padding:20px;max-height:72vh;overflow-y:auto}
-.pm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:24px;align-items:start}
+.pm-stage{background:var(--pv-bg);color:var(--pv-text);font-family:var(--pv-b);padding:24px}
+.pm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:26px;align-items:start}
 
 .pm-gallery{position:sticky;top:0}
 .pm-main{position:relative;aspect-ratio:1;border-radius:var(--pv-r);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 6%,var(--pv-bg))}
@@ -324,12 +353,13 @@ const CSS = `
 .pm-step-label{font-size:11.5px;font-weight:700}
 .pm-step-date{font-size:10.5px;opacity:.55}
 
-@media(max-width:760px){
-  .pm-stage{padding:16px;max-height:none}
-  .pm-grid{grid-template-columns:1fr;gap:16px}
-  .pm-gallery{position:static}
-  .pm-main{max-width:340px;margin:0 auto}
-  .pm-title{font-size:23px}
-  .pm-price strong{font-size:27px}
-}
+.pm-mobile .pm-stage{padding:16px}
+.pm-mobile .pm-grid{grid-template-columns:1fr;gap:16px}
+.pm-mobile .pm-gallery{position:static}
+.pm-mobile .pm-main{max-width:100%}
+.pm-mobile .pm-title{font-size:24px}
+.pm-mobile .pm-price strong{font-size:28px}
+.pm-mobile .pm-bundle{padding:12px 13px;gap:10px}
+.pm-mobile .pm-bundle-img{width:40px;height:40px}
+.pm-mobile .pm-pay{gap:6px}
 `;
