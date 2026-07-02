@@ -8,6 +8,7 @@ import {
 } from "@/lib/theme-placeholders";
 import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIcon } from "@/lib/theme-icons";
+import { COPY_BINDINGS } from "@/lib/theme-copy-bindings";
 
 const BUYBOX_TYPES = new Set(BUYBOX_BLOCKS.map((b) => b.type));
 
@@ -74,6 +75,10 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
     if (!entry) continue;
     try {
       const data = JSON.parse(entry.getData().toString("utf8"));
+      // Typ-basierte Copy-Bindings: schreibt die tokenisierten Werte an die
+      // richtigen Stellen — funktioniert damit auch auf ROHEN Theme-Basen
+      // (ohne [[Tokens]]); die Token-Injection direkt danach füllt sie.
+      applyCopyBindings(data, /product\.json$/.test(tplPath) ? "product" : "index");
       injectTemplateData(data, values, opts.colors, hidden);
       if (/product\.json$/.test(tplPath)) {
         applyBuyboxLayout(data, opts.buyboxOrder, opts.hiddenBlocks);
@@ -106,7 +111,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
 // Accordions, Variant-Picker …) bleiben an ihrer Position; die verwalteten
 // Slots werden mit der Nutzer-Reihenfolge gefüllt (ausgeblendete entfallen).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[]): void {
+export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[]): void {
   const hasOrder = Array.isArray(order) && order.length > 0;
   const hasHidden = Array.isArray(hiddenBlocks) && hiddenBlocks.length > 0;
   if (!hasOrder && !hasHidden) return;
@@ -146,7 +151,7 @@ function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[])
 
 // Setzt die gewählten Vorteile-Icons (als Emoji) in den benefits_list-Block der
 // main-product-Section — so zeigt auch das heruntergeladene Theme die Icons.
-function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
+export function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
   if (!Array.isArray(benefitIcons) || !benefitIcons.length) return;
   const sections = data?.sections;
   if (!sections || typeof sections !== "object") return;
@@ -163,6 +168,53 @@ function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+// ─── Copy-Bindings typ-basiert anwenden ────────────────────────────
+// Setzt die tokenisierten Werte der Original-Schablone an die passenden
+// Positionen: (Section-Typ, Block-Typ, Setting-Key, n-tes Vorkommen) — in
+// order-/block_order-Reihenfolge gezählt, exakt wie bei der Extraktion.
+// Dadurch bekommt JEDE Brospify-Basis (auch rohe Shopify-Exporte ohne
+// [[Tokens]]) die KI-Texte an die richtigen Stellen.
+
+export function applyCopyBindings(
+  data: { order?: string[]; sections?: Record<string, unknown> },
+  tpl: "index" | "product",
+): void {
+  const byPos = new Map<string, string>();
+  for (const b of COPY_BINDINGS) {
+    if (b.tpl === tpl) byPos.set(`${b.sectionType}|${b.blockType}|${b.key}|${b.occurrence}`, b.value);
+  }
+  if (!byPos.size) return;
+
+  const occ = new Map<string, number>();
+  const order = Array.isArray(data.order) ? data.order : [];
+  const sections = (data.sections || {}) as Record<
+    string,
+    { type?: string; settings?: Record<string, unknown>; blocks?: Record<string, { type?: string; settings?: Record<string, unknown> }>; block_order?: string[] }
+  >;
+  for (const sid of order) {
+    const sec = sections[sid];
+    if (!sec) continue;
+    const sType = String(sec.type || "");
+    const visit = (bType: string, settings?: Record<string, unknown>) => {
+      if (!settings) return;
+      for (const [k, v] of Object.entries(settings)) {
+        if (typeof v !== "string") continue;
+        const okey = `${sType}|${bType}|${k}`;
+        const n = occ.get(okey) || 0;
+        occ.set(okey, n + 1);
+        const tokenized = byPos.get(`${okey}|${n}`);
+        if (tokenized !== undefined) settings[k] = tokenized;
+      }
+    };
+    visit("", sec.settings);
+    const blockOrder = Array.isArray(sec.block_order) ? sec.block_order : Object.keys(sec.blocks || {});
+    for (const bid of blockOrder) {
+      const blk = sec.blocks?.[bid];
+      if (blk) visit(String(blk.type || ""), blk.settings);
+    }
+  }
+}
 
 // ─── Texte (Tokens) + Akzentfarben NUR in aktiven order-Sections ───
 
@@ -184,7 +236,7 @@ function injectTemplateData(
   }
 }
 
-function replaceTokensDeep(node: unknown, values: ThemeCopy): void {
+export function replaceTokensDeep(node: unknown, values: ThemeCopy): void {
   if (Array.isArray(node)) {
     for (let i = 0; i < node.length; i++) {
       if (typeof node[i] === "string") node[i] = replaceTokens(node[i] as string, values);
@@ -207,7 +259,7 @@ function replaceTokens(str: string, values: ThemeCopy): string {
 
 /** Färbt Setting-Keys gemäß ihrer Palette-Rolle um (Akzent/Button/Button-Text).
  *  Exakt dieselbe Logik nutzt die Live-Vorschau → Vorschau = Download. */
-function recolorByRoleDeep(node: unknown, palette: ColorPalette): void {
+export function recolorByRoleDeep(node: unknown, palette: ColorPalette): void {
   if (Array.isArray(node)) {
     for (const item of node) recolorByRoleDeep(item, palette);
   } else if (node && typeof node === "object") {
@@ -278,7 +330,7 @@ export function readActiveSections(
 
 // ─── Palette + Schrift in settings_data.json ───────────────────────
 
-function injectSettingsData(
+export function injectSettingsData(
   data: { current?: Record<string, unknown> },
   colors: ThemeColors,
   font: string,
@@ -322,7 +374,7 @@ function injectSettingsData(
 
 // ─── Zip-Eintrag tolerant finden (Pfad-Trenner-agnostisch) ─────────
 
-function findEntry(zip: AdmZip, wanted: string): AdmZip.IZipEntry | null {
+export function findEntry(zip: AdmZip, wanted: string): AdmZip.IZipEntry | null {
   const direct = zip.getEntry(wanted);
   if (direct) return direct;
   const norm = wanted.replace(/\\/g, "/");

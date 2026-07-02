@@ -3,6 +3,8 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIcon, DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import type { SectionInstance } from "@/lib/theme-doc";
+import SectionReplica, { REPLICA_CSS } from "@/components/theme-editor/SectionReplica";
 
 // Rendert ein Bibliotheks-Icon als SVG (currentColor).
 function BIcon({ id }: { id: string }) {
@@ -109,12 +111,18 @@ export default function ThemePreview({
   data, colors, headingFont, bodyFont, radius, loading, label, viewMode = "desktop",
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
+  docSections, selectedUid, onSelectSection, onInsertAt,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
   hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
   buyboxOrder?: string[]; hiddenBlocks?: string[];
   shadow?: number; border?: number; iconStyle?: string; benefitIcons?: string[];
+  /** Editor-Modus: dokumentgesteuerte Sections (statt PRODUCT_SECTIONS). */
+  docSections?: SectionInstance[];
+  selectedUid?: string | null;
+  onSelectSection?: (uid: string | null) => void;
+  onInsertAt?: (index: number) => void;
 }) {
   const hidden = new Set(hiddenSections);
   const hiddenBlk = new Set(hiddenBlocks);
@@ -151,7 +159,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|")]);
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -336,15 +344,40 @@ export default function ThemePreview({
             </div>
 
             {/* Infospalte — konfigurationsgesteuert (Reihenfolge + Sichtbarkeit) */}
-            <div className="pm-info">
+            <div
+              className={`pm-info ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === "__buybox" ? "pm-selected" : ""}`}
+              onClick={onSelectSection ? (e) => { e.stopPropagation(); onSelectSection("__buybox"); } : undefined}
+            >
               {order.filter((t) => !hiddenBlk.has(t)).map((t) => (
                 <Fragment key={t}>{renderBlock(t)}</Fragment>
               ))}
             </div>
           </div>
 
-          {/* Weitere Produktseiten-Sektionen — ein-/ausblendbar, editierbare Überschrift */}
-          {PRODUCT_SECTIONS.map((sec) => {
+          {/* ── Editor-Modus: dokumentgesteuerte Sections + Einfüge-Punkte ── */}
+          {docSections
+            ? (
+              <>
+                {onInsertAt && <InsertBar onClick={() => onInsertAt(0)} />}
+                {docSections.map((inst, i) => (
+                  <Fragment key={inst.uid}>
+                    <div
+                      data-section-uid={inst.uid}
+                      className={`pm-docsec ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === inst.uid ? "pm-selected" : ""}`}
+                      onClick={onSelectSection ? (e) => { e.stopPropagation(); onSelectSection(inst.uid); } : undefined}
+                    >
+                      <SectionReplica
+                        instance={inst}
+                        ctx={{ images: data.images, title: data.title, price: data.price, palette: colors }}
+                      />
+                    </div>
+                    {onInsertAt && <InsertBar onClick={() => onInsertAt(i + 1)} />}
+                  </Fragment>
+                ))}
+              </>
+            )
+            : /* Legacy-Modus: feste Produktseiten-Sektionen (alter Builder) */
+          PRODUCT_SECTIONS.map((sec) => {
             if (hidden.has(sec.type)) return null;
             const h = sectionHeadings[sec.type] || sec.defaultHeading;
             if (sec.type === "reviews2") {
@@ -425,6 +458,17 @@ export default function ThemePreview({
       )}
       </div>
       </div>
+    </div>
+  );
+}
+
+// Einfüge-Punkt zwischen Sections (nur im Editor-Modus sichtbar).
+function InsertBar({ onClick }: { onClick: () => void }) {
+  return (
+    <div className="pm-insert" role="button" tabIndex={-1} onClick={(e) => { e.stopPropagation(); onClick(); }}>
+      <span className="pm-insert-line" />
+      <span className="pm-insert-btn">+ Section</span>
+      <span className="pm-insert-line" />
     </div>
   );
 }
@@ -579,4 +623,15 @@ const CSS = `
 .pm-ic-accent .pm-bic{background:var(--pv-accent);color:#fff}
 .pm-ic-outline .pm-bic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
 .pm-ic-outline .pm-step-ic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
+
+/* ── Editor-Modus: Auswahl-Rahmen + Einfüge-Punkte ── */
+.pm-selectable{cursor:pointer;border-radius:10px;outline:2px solid transparent;outline-offset:4px;transition:outline-color .15s}
+.pm-selectable:hover{outline-color:color-mix(in srgb,#95BF47 55%,transparent)}
+.pm-selected{outline-color:#95BF47!important}
+.pm-docsec{position:relative}
+.pm-insert{display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;opacity:.28;transition:opacity .15s}
+.pm-insert:hover{opacity:1}
+.pm-insert-line{flex:1;height:2px;border-radius:2px;background:#95BF47}
+.pm-insert-btn{font-size:11.5px;font-weight:800;color:#fff;background:#95BF47;border-radius:100px;padding:4px 13px;letter-spacing:.02em;box-shadow:0 4px 12px -4px rgba(149,191,71,.6)}
+${REPLICA_CSS}
 `;

@@ -26,6 +26,8 @@ import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
+import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
+import type { ThemeDocument } from "@/lib/theme-doc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,20 +51,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[]; design?: { shadow?: number; border?: number; iconStyle?: string }; benefitIcons?: string[] };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[]; design?: { shadow?: number; border?: number; iconStyle?: string }; benefitIcons?: string[]; document?: ThemeDocument };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Ungültiger Body." }, { status: 400 });
   }
 
-  const productId = body.productId || "";
-  const font = body.font || "";
-  const headingFont = body.headingFont || font;
-  const colors = body.colors;
-  const style = getThemeStyle(body.style);
+  // ── v2 (Editor): komplettes ThemeDocument · Legacy: Einzel-Felder ──
+  const doc = body.document && isValidDocument(body.document) ? body.document : null;
+  if (body.document && !doc) {
+    return NextResponse.json({ error: "Ungültiges Theme-Dokument." }, { status: 400 });
+  }
+
+  const productId = doc ? doc.productId : body.productId || "";
+  const font = doc ? doc.global.bodyFont : body.font || "";
+  const headingFont = doc ? doc.global.headingFont : body.headingFont || font;
+  const colors = doc ? doc.global.colors : body.colors;
+  const style = getThemeStyle(doc ? doc.global.styleId : body.style);
   const radius = typeof body.radius === "number" ? body.radius : radiusForStyle(style);
-  // Vom Kunden ausgeblendete Sektionen + editierte Überschriften.
+  // Vom Kunden ausgeblendete Sektionen + editierte Überschriften (Legacy).
   const userHidden = Array.isArray(body.hiddenSections) ? body.hiddenSections.filter((s) => typeof s === "string") : [];
   const headingCopy = sectionHeadingsToThemeCopy(body.sectionHeadings);
 
@@ -135,9 +143,11 @@ export async function POST(req: NextRequest) {
   // Basis-Theme laden (hochgeladenes Theme bevorzugt) + injizieren.
   let zip: Buffer;
   try {
-    const { zip: master, source } = await getEditorBaseThemeZip();
-    console.log(`[theme-export] Basis-Theme: ${source}`);
-    zip = buildThemeZip(master, {
+    const { zip: master, source, key } = await getEditorBaseThemeZip();
+    console.log(`[theme-export] Basis-Theme: ${source} (${doc ? "v2-Dokument" : "Legacy"})`);
+    zip = doc
+      ? compileDocumentZip(master, doc, themeCopy || {}, key)
+      : buildThemeZip(master, {
       themeCopy: { ...themeCopy, ...headingCopy },
       colors: colors as ThemeColors,
       font,

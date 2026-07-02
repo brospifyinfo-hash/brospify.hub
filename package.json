@@ -21,6 +21,7 @@
     "adm-zip": "^0.5.17",
     "framer-motion": "^12.38.0",
     "googleapis": "^171.4.0",
+    "gsap": "^3.15.0",
     "iron-session": "^8.0.4",
     "liquidjs": "^10.27.1",
     "lucide-react": "^1.7.0",

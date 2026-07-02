@@ -7,9 +7,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
+import { getEditorBaseThemeZip } from "@/lib/theme-master";
+import { readBaseManifest, type BaseManifest } from "@/lib/theme-compile";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+// Manifest der Editor-Basis (verfügbare Section-Typen + Basis-Sections) —
+// pro Basis-Key gecached, ändert sich nur bei neuem Theme-Upload/Deploy.
+const manifestCache = new Map<string, BaseManifest>();
+
+async function getManifest(): Promise<BaseManifest> {
+  try {
+    const { zip, key } = await getEditorBaseThemeZip();
+    const hit = manifestCache.get(key);
+    if (hit) return hit;
+    const manifest = readBaseManifest(zip, key);
+    manifestCache.set(key, manifest);
+    return manifest;
+  } catch (e) {
+    console.warn("[theme-preview] Basis-Manifest nicht lesbar:", e);
+    return { baseSections: [], capabilities: [] };
+  }
+}
 
 function httpImages(p: Produkt): string[] {
   const out: string[] = [];
@@ -85,10 +105,15 @@ export async function GET(req: NextRequest) {
     };
   };
 
+  const manifest = await getManifest();
+
   return NextResponse.json(
     {
       title,
       images: imgs,
+      // Editor v2: was die Theme-Basis kann (für Bibliothek + Initial-Dokument).
+      baseSections: manifest.baseSections,
+      capabilities: manifest.capabilities,
       badge: cp("PRODUCT_BADGE_TEXT", "BESTSELLER"),
       // 1. urgency_text (oben, rot)
       offerEndText: `Angebot endet am ${dateIn(2)}`,
