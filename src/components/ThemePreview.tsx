@@ -111,6 +111,8 @@ export default function ThemePreview({
   const [imgIdx, setImgIdx] = useState(0);
   const [bundleIdx, setBundleIdx] = useState(1);
   const [giftOpen, setGiftOpen] = useState(true);
+  const [variantIdx, setVariantIdx] = useState(0);
+  const [faqOpen, setFaqOpen] = useState(false);
   useEffect(() => { ensureFonts(); }, []);
   useEffect(() => {
     setImgIdx(0);
@@ -179,6 +181,31 @@ export default function ThemePreview({
         );
       case "stock_indicator":
         return <div className="pm-stock"><span className="pm-dot" />{data.stock}</div>;
+      case "variant_picker":
+        return (
+          <div className="pm-variants">
+            <span className="pm-var-label">Variante wählen</span>
+            <div className="pm-var-row">
+              {["Standard", "Premium", "Deluxe"].map((v, i) => (
+                <button key={v} className={`pm-var ${i === variantIdx ? "on" : ""}`} onClick={() => setVariantIdx(i)}>{v}</button>
+              ))}
+            </div>
+          </div>
+        );
+      case "custom_divider":
+        return <div className="pm-divider" />;
+      case "text":
+        return <p className="pm-freetext">Handgefertigt, sorgfältig geprüft und mit Liebe zum Detail — für ein Ergebnis, das du täglich spürst.</p>;
+      case "custom_accordion":
+        return (
+          <div className="pm-acc">
+            <button className="pm-acc-head" onClick={() => setFaqOpen((o) => !o)}>
+              <span>Versand &amp; Rückgabe</span>
+              <span className="pm-faq-plus">{faqOpen ? "−" : "+"}</span>
+            </button>
+            {faqOpen && <div className="pm-acc-body">Versand in 1–3 Werktagen mit Sendungsverfolgung. 30 Tage Geld-zurück-Garantie — unkompliziert und ohne Risiko.</div>}
+          </div>
+        );
       case "custom_price":
         return (
           <>
@@ -431,6 +458,15 @@ const CSS = `
 .pm-stock{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;margin-bottom:16px}
 .pm-dot{width:9px;height:9px;border-radius:50%;background:#00c853;box-shadow:0 0 0 3px color-mix(in srgb,#00c853 25%,transparent)}
 .pm-divider{height:1px;background:color-mix(in srgb,var(--pv-text) 12%,transparent);margin:0 0 16px}
+.pm-variants{margin-bottom:14px}
+.pm-var-label{display:block;font-size:12px;font-weight:700;margin-bottom:7px}
+.pm-var-row{display:flex;gap:8px;flex-wrap:wrap}
+.pm-var{font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:min(var(--pv-r),40px);border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 16%,transparent);background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));color:inherit;cursor:pointer;font-family:inherit}
+.pm-var.on{border-color:var(--pv-accent);background:color-mix(in srgb,var(--pv-accent) 10%,var(--pv-bg));color:var(--pv-accent)}
+.pm-freetext{font-size:13px;line-height:1.6;opacity:.72;margin:0 0 16px}
+.pm-acc{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),14px);background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg));margin-bottom:16px;overflow:hidden;box-shadow:var(--pv-shadow)}
+.pm-acc-head{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;background:transparent;border:0;cursor:pointer;padding:13px 15px;font-family:inherit;color:inherit;font-size:13.5px;font-weight:700}
+.pm-acc-body{padding:0 15px 14px;font-size:12.5px;line-height:1.55;opacity:.72}
 
 .pm-price{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:18px}
 .pm-price strong{font-family:var(--pv-h);font-size:31px;font-weight:800}

@@ -1,5 +1,5 @@
 import type { ColorPalette } from "@/lib/theme-placeholders";
-import { BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
+import { BUYBOX_DEFAULT_ORDER, BUYBOX_OPTIONAL } from "@/lib/theme-sections";
 
 // ─────────────────────────────────────────────────────────────────
 // Theme-Stile: vorgefertigte „Looks", die das Theme spürbar anders machen —
@@ -172,7 +172,8 @@ for (const s of THEME_STYLES) {
   // buyboxOrder als vollständige Permutation (fehlende Typen ans Ende — sie sind
   // ohnehin über hiddenBlocks aus).
   s.buyboxOrder = [...e.order, ...BUYBOX_DEFAULT_ORDER.filter((t) => !e.order.includes(t))];
-  s.hiddenBlocks = e.hideB;
+  // Opt-in-Bausteine (Varianten, Trennlinie, Freitext, FAQ) sind je Stil aus.
+  s.hiddenBlocks = Array.from(new Set([...e.hideB, ...BUYBOX_OPTIONAL]));
   s.hiddenSections = e.hideS;
   s.design = e.design;
 }

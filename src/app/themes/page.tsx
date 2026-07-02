@@ -5,7 +5,7 @@
 // Klick lädt die Blob-Datei. Ein ausklappbares "Hilfe"-Panel erklärt
 // Schritt für Schritt den Import in Shopify.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -351,11 +351,25 @@ function ThemeBuilderCard() {
   const [buyboxOrder, setBuyboxOrder] = useState<string[]>(DEF.buyboxOrder ?? BUYBOX_DEFAULT_ORDER);
   const [hiddenBlocks, setHiddenBlocks] = useState<string[]>(DEF.hiddenBlocks ?? []);
   const [design, setDesign] = useState<StyleDesign>(DEF.design ?? DEFAULT_DESIGN);
+  const [openG, setOpenG] = useState<Record<string, boolean>>({ stil: true });
   const blockLabel = (type: string) => BUYBOX_BLOCKS.find((b) => b.type === type)?.label || type;
   const segCls = (on: boolean) =>
     `rounded-md border px-2 py-1.5 text-[11px] font-medium transition ${
       on ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
     }`;
+  // Aufklappbare Einstellungs-Gruppe (Akkordeon) — für einen übersichtlichen Editor.
+  const groupCard = (id: string, title: string, body: ReactNode) => (
+    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+      <button
+        onClick={() => setOpenG((o) => ({ ...o, [id]: !o[id] }))}
+        className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.02] transition"
+      >
+        <span className="text-[11px] uppercase tracking-[0.13em] font-semibold text-white">{title}</span>
+        <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${openG[id] ? "rotate-180" : ""}`} />
+      </button>
+      {openG[id] && <div className="px-3 pb-3.5 pt-1 border-t border-white/[0.05]">{body}</div>}
+    </div>
+  );
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -530,8 +544,8 @@ function ThemeBuilderCard() {
       ) : (
         <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,300px)_minmax(0,1fr)] lg:gap-6 lg:items-start">
           {/* ── Einstellungen (Desktop: links · Handy: unter der Vorschau) ── */}
-          <div className="order-2 lg:order-1">
-            {/* 1. Produktauswahl ZUERST */}
+          <div className="order-2 lg:order-1 space-y-2.5">
+            {/* Produktauswahl (immer sichtbar) */}
             <label className="block">
               <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderProduct}</span>
               <select
@@ -547,189 +561,193 @@ function ThemeBuilderCard() {
               </select>
             </label>
 
-            {/* 2. Stil + Zufallsgenerator */}
-            <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/[0.06] mb-2">
-              <span className="text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400">{t.themes.builderStyle}</span>
-              <button
-                onClick={randomize}
-                title={t.themes.builderRandomHint}
-                className="flex items-center gap-1 text-[11px] font-semibold text-[#cfe9a3] hover:text-white transition rounded-md border border-[#95BF47]/30 bg-[#95BF47]/10 px-2 py-1"
-              >
-                <Shuffle className="w-3 h-3" /> {t.themes.builderRandom}
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {THEME_STYLES.map((s) => (
-                <button
-                  key={s.id}
-                  onClick={() => pickStyle(s.id)}
-                  className={`text-left rounded-lg border px-3 py-2 transition ${
-                    styleId === s.id
-                      ? "border-[#95BF47]/60 bg-[#95BF47]/10"
-                      : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
-                  }`}
-                >
-                  <span className="block text-[12.5px] font-semibold text-white">{s.label}</span>
-                  <span className="block text-[10px] text-zinc-500 leading-tight">{s.hint}</span>
-                </button>
-              ))}
-            </div>
-
-            {/* 3. Schriften */}
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <label className="block">
-                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontHeading}</span>
-                <select
-                  value={headingFont}
-                  onChange={(e) => setHeadingFont(e.target.value)}
-                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
-                >
-                  {BUILDER_FONTS.map((f) => (
-                    <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>
-                  ))}
-                </select>
-              </label>
-              <label className="block">
-                <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontBody}</span>
-                <select
-                  value={font}
-                  onChange={(e) => setFont(e.target.value)}
-                  className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
-                >
-                  {BUILDER_FONTS.map((f) => (
-                    <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            {/* 4. Ecken (feiner Slider) */}
-            <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/[0.06] mb-2">
-              <span className="text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400">{t.themes.builderCorners}</span>
-              <span className="text-[11px] font-mono text-zinc-400">{radius}px</span>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={40}
-              step={1}
-              value={radius}
-              onChange={(e) => setRadius(Number(e.target.value))}
-              className="w-full accent-[#95BF47] cursor-pointer"
-            />
-
-            {/* Design: Schatten / Randstärke / Icon-Stil */}
-            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderDesign}</span>
-            <div className="space-y-2.5">
-              <div>
-                <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderShadow}</span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {([[0, "Aus"], [1, "Weich"], [2, "Stark"]] as const).map(([v, l]) => (
-                    <button key={v} onClick={() => setDesign((d) => ({ ...d, shadow: v }))} className={segCls(design.shadow === v)}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderBorder}</span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {([[1, "Dünn"], [2, "Dick"]] as const).map(([v, l]) => (
-                    <button key={v} onClick={() => setDesign((d) => ({ ...d, border: v }))} className={segCls(design.border === v)}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderIcons}</span>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {([["dark", "Dunkel"], ["accent", "Akzent"], ["outline", "Umriss"]] as const).map(([v, l]) => (
-                    <button key={v} onClick={() => setDesign((d) => ({ ...d, iconStyle: v }))} className={segCls(design.iconStyle === v)}>{l}</button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderColors}</span>
-            <div className="grid grid-cols-2 gap-2">
-              {COLOR_FIELDS.map((f) => (
-                <div key={f.key}>
-                  <span className="block text-[10px] text-zinc-500 mb-1">{f.label}</span>
-                  <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-1.5 py-1">
-                    <input
-                      type="color"
-                      value={colors[f.key]}
-                      onChange={(e) => setColor(f.key, e.target.value)}
-                      className="w-7 h-7 rounded bg-transparent border-0 p-0 cursor-pointer shrink-0"
-                    />
-                    <input
-                      type="text"
-                      value={colors[f.key]}
-                      onChange={(e) => setColor(f.key, e.target.value)}
-                      className="w-full min-w-0 bg-transparent text-[11px] text-white outline-none"
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* 6. Kaufbox-Bausteine: umsortieren + ein-/ausblenden */}
-            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderBlocks}</span>
-            <div className="space-y-1.5">
-              {buyboxOrder.map((type, i) => {
-                const visible = !hiddenBlocks.includes(type);
-                return (
-                  <div
-                    key={type}
-                    className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition ${
-                      visible ? "border-white/10 bg-white/[0.03]" : "border-white/[0.06] bg-white/[0.01] opacity-55"
-                    }`}
+            {groupCard("stil", t.themes.builderStyle, (
+              <>
+                <div className="flex justify-end mb-2">
+                  <button
+                    onClick={randomize}
+                    title={t.themes.builderRandomHint}
+                    className="flex items-center gap-1 text-[11px] font-semibold text-[#cfe9a3] hover:text-white transition rounded-md border border-[#95BF47]/30 bg-[#95BF47]/10 px-2 py-1"
                   >
-                    <div className="flex flex-col -my-0.5">
-                      <button onClick={() => moveBlock(type, -1)} disabled={i === 0} aria-label="hoch" className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none">
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                      <button onClick={() => moveBlock(type, 1)} disabled={i === buyboxOrder.length - 1} aria-label="runter" className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none">
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <span className="text-[12px] font-medium text-white flex-1 min-w-0 truncate">{blockLabel(type)}</span>
-                    <button onClick={() => toggleBlock(type)} aria-label={blockLabel(type)} className="text-zinc-400 hover:text-white shrink-0">
-                      {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    <Shuffle className="w-3 h-3" /> {t.themes.builderRandom}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {THEME_STYLES.map((s) => (
+                    <button
+                      key={s.id}
+                      onClick={() => pickStyle(s.id)}
+                      className={`text-left rounded-lg border px-3 py-2 transition ${
+                        styleId === s.id
+                          ? "border-[#95BF47]/60 bg-[#95BF47]/10"
+                          : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
+                      }`}
+                    >
+                      <span className="block text-[12.5px] font-semibold text-white">{s.label}</span>
+                      <span className="block text-[10px] text-zinc-500 leading-tight">{s.hint}</span>
                     </button>
-                  </div>
-                );
-              })}
-            </div>
+                  ))}
+                </div>
+              </>
+            ))}
 
-            {/* 7. Sektionen ein-/ausblenden + Überschrift bearbeiten */}
-            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderSections}</span>
-            <div className="space-y-2">
-              {PRODUCT_SECTIONS.map((s) => {
-                const visible = !hiddenSections.includes(s.type);
-                return (
-                  <div key={s.type} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[12.5px] font-medium text-white">{s.label}</span>
-                      <button
-                        onClick={() => toggleSection(s.type)}
-                        role="switch"
-                        aria-checked={visible}
-                        aria-label={s.label}
-                        className={`relative w-9 h-5 rounded-full transition shrink-0 ${visible ? "bg-[#95BF47]" : "bg-white/15"}`}
-                      >
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${visible ? "translate-x-4" : ""}`} />
+            {groupCard("farben", t.themes.builderColors, (
+              <div className="grid grid-cols-2 gap-2">
+                {COLOR_FIELDS.map((f) => (
+                  <div key={f.key}>
+                    <span className="block text-[10px] text-zinc-500 mb-1">{f.label}</span>
+                    <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-1.5 py-1">
+                      <input
+                        type="color"
+                        value={colors[f.key]}
+                        onChange={(e) => setColor(f.key, e.target.value)}
+                        className="w-7 h-7 rounded bg-transparent border-0 p-0 cursor-pointer shrink-0"
+                      />
+                      <input
+                        type="text"
+                        value={colors[f.key]}
+                        onChange={(e) => setColor(f.key, e.target.value)}
+                        className="w-full min-w-0 bg-transparent text-[11px] text-white outline-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+
+            {groupCard("typo", t.themes.builderTypography, (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block">
+                    <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontHeading}</span>
+                    <select
+                      value={headingFont}
+                      onChange={(e) => setHeadingFont(e.target.value)}
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                    >
+                      {BUILDER_FONTS.map((f) => (
+                        <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontBody}</span>
+                    <select
+                      value={font}
+                      onChange={(e) => setFont(e.target.value)}
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+                    >
+                      {BUILDER_FONTS.map((f) => (
+                        <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="flex items-center justify-between mt-3 mb-1">
+                  <span className="text-[11px] text-zinc-500">{t.themes.builderCorners}</span>
+                  <span className="text-[11px] font-mono text-zinc-400">{radius}px</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={40}
+                  step={1}
+                  value={radius}
+                  onChange={(e) => setRadius(Number(e.target.value))}
+                  className="w-full accent-[#95BF47] cursor-pointer"
+                />
+              </>
+            ))}
+
+            {groupCard("design", t.themes.builderDesign, (
+              <div className="space-y-2.5">
+                <div>
+                  <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderShadow}</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([[0, "Aus"], [1, "Weich"], [2, "Stark"]] as const).map(([v, l]) => (
+                      <button key={v} onClick={() => setDesign((d) => ({ ...d, shadow: v }))} className={segCls(design.shadow === v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderBorder}</span>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {([[1, "Dünn"], [2, "Dick"]] as const).map(([v, l]) => (
+                      <button key={v} onClick={() => setDesign((d) => ({ ...d, border: v }))} className={segCls(design.border === v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderIcons}</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {([["dark", "Dunkel"], ["accent", "Akzent"], ["outline", "Umriss"]] as const).map(([v, l]) => (
+                      <button key={v} onClick={() => setDesign((d) => ({ ...d, iconStyle: v }))} className={segCls(design.iconStyle === v)}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {groupCard("blocks", t.themes.builderBlocks, (
+              <div className="space-y-1.5">
+                {buyboxOrder.map((type, i) => {
+                  const visible = !hiddenBlocks.includes(type);
+                  return (
+                    <div
+                      key={type}
+                      className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition ${
+                        visible ? "border-white/10 bg-white/[0.03]" : "border-white/[0.06] bg-white/[0.01] opacity-55"
+                      }`}
+                    >
+                      <div className="flex flex-col -my-0.5">
+                        <button onClick={() => moveBlock(type, -1)} disabled={i === 0} aria-label="hoch" className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none">
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => moveBlock(type, 1)} disabled={i === buyboxOrder.length - 1} aria-label="runter" className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none">
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <span className="text-[12px] font-medium text-white flex-1 min-w-0 truncate">{blockLabel(type)}</span>
+                      <button onClick={() => toggleBlock(type)} aria-label={blockLabel(type)} className="text-zinc-400 hover:text-white shrink-0">
+                        {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                       </button>
                     </div>
-                    {visible && (
-                      <input
-                        value={sectionHeadings[s.type] ?? ""}
-                        onChange={(e) => setSectionHeading(s.type, e.target.value)}
-                        placeholder={s.defaultHeading}
-                        className="mt-2 w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
-                      />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ))}
+
+            {groupCard("sektionen", t.themes.builderSections, (
+              <div className="space-y-2">
+                {PRODUCT_SECTIONS.map((s) => {
+                  const visible = !hiddenSections.includes(s.type);
+                  return (
+                    <div key={s.type} className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[12.5px] font-medium text-white">{s.label}</span>
+                        <button
+                          onClick={() => toggleSection(s.type)}
+                          role="switch"
+                          aria-checked={visible}
+                          aria-label={s.label}
+                          className={`relative w-9 h-5 rounded-full transition shrink-0 ${visible ? "bg-[#95BF47]" : "bg-white/15"}`}
+                        >
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${visible ? "translate-x-4" : ""}`} />
+                        </button>
+                      </div>
+                      {visible && (
+                        <input
+                          value={sectionHeadings[s.type] ?? ""}
+                          onChange={(e) => setSectionHeading(s.type, e.target.value)}
+                          placeholder={s.defaultHeading}
+                          className="mt-2 w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
+                        />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button

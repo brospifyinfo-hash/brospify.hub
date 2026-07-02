@@ -33,14 +33,22 @@ export const BUYBOX_BLOCKS: BuyboxBlockDef[] = [
   { type: "custom_rating", label: "Sterne-Bewertung" },
   { type: "benefits_list", label: "Vorteile-Liste" },
   { type: "stock_indicator", label: "Lager-Hinweis" },
+  { type: "variant_picker", label: "Varianten-Auswahl" },
   { type: "custom_price", label: "Preis" },
   { type: "bundle_selector", label: "Mengen-Bundles" },
   { type: "buy_buttons", label: "Kaufen-Button" },
   { type: "payment_icons", label: "Zahlarten" },
   { type: "free_gift", label: "Gratis-Geschenk" },
   { type: "delivery_timeline", label: "Liefer-Timeline" },
+  { type: "custom_divider", label: "Trennlinie" },
+  { type: "text", label: "Freitext" },
+  { type: "custom_accordion", label: "FAQ (Klappbereich)" },
 ];
 export const BUYBOX_DEFAULT_ORDER = BUYBOX_BLOCKS.map((b) => b.type);
+// Zusätzliche Bausteine, die im Theme eingebaut, aber standardmäßig NICHT im
+// Layout sind (opt-in). Der Kunde blendet sie im Baustein-Manager ein +
+// positioniert sie. Alle existieren als echte main-product-Blöcke.
+export const BUYBOX_OPTIONAL = ["variant_picker", "custom_divider", "text", "custom_accordion"];
 
 export function sectionHeadingsToThemeCopy(headings: Record<string, string> | undefined): Record<string, string> {
   const out: Record<string, string> = {};
