@@ -6,6 +6,9 @@ import {
   type ThemeCopy,
   type ColorPalette,
 } from "@/lib/theme-placeholders";
+import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
+
+const BUYBOX_TYPES = new Set(BUYBOX_BLOCKS.map((b) => b.type));
 
 // ─────────────────────────────────────────────────────────────────
 // Theme-Injection-Engine (in-memory, Vercel-tauglich).
@@ -31,6 +34,8 @@ export interface InjectOptions {
   headingFont?: string; // Überschriften-Schrift (default = Body)
   hiddenTypes?: string[]; // Section-Typen, die der Style ausblendet (→ disabled)
   settingOverrides?: Record<string, number | string>; // globale Style-Settings
+  buyboxOrder?: string[]; // Reihenfolge der main-product-Bausteine (Block-Typen)
+  hiddenBlocks?: string[]; // ausgeblendete main-product-Bausteine (Block-Typen)
 }
 
 export function isValidHex(color: string): boolean {
@@ -68,6 +73,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
     try {
       const data = JSON.parse(entry.getData().toString("utf8"));
       injectTemplateData(data, values, opts.colors, hidden);
+      if (/product\.json$/.test(tplPath)) applyBuyboxLayout(data, opts.buyboxOrder, opts.hiddenBlocks);
       zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
     } catch (e) {
       console.warn(`[theme-inject] Template übersprungen (${tplPath}):`, e);
@@ -88,6 +94,51 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
 
   return zip.toBuffer();
 }
+
+// ─── Kaufbox-Layout: Bausteine sortieren + ausblenden ───────────────
+// Wendet die vom Kunden gewählte Reihenfolge/Sichtbarkeit der main-product-
+// Bausteine auf `block_order` an. Nicht verwaltete Blöcke (Beschreibung,
+// Accordions, Variant-Picker …) bleiben an ihrer Position; die verwalteten
+// Slots werden mit der Nutzer-Reihenfolge gefüllt (ausgeblendete entfallen).
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[]): void {
+  const hasOrder = Array.isArray(order) && order.length > 0;
+  const hasHidden = Array.isArray(hiddenBlocks) && hiddenBlocks.length > 0;
+  if (!hasOrder && !hasHidden) return;
+  const sections = data?.sections;
+  if (!sections || typeof sections !== "object") return;
+  const main: any = Object.values(sections).find((s: any) => s && s.type === "main-product");
+  if (!main || !main.blocks || !Array.isArray(main.block_order)) return;
+
+  const typeOf = (id: string): string => String(main.blocks[id]?.type || "");
+  const hidden = new Set(hiddenBlocks || []);
+  const orderTypes = hasOrder ? (order as string[]) : BUYBOX_DEFAULT_ORDER;
+
+  // Verwaltete Block-IDs je Typ (Original-Reihenfolge).
+  const byType: Record<string, string[]> = {};
+  for (const id of main.block_order) {
+    const t = typeOf(id);
+    if (BUYBOX_TYPES.has(t)) (byType[t] ||= []).push(id);
+  }
+  // Nutzer-Reihenfolge → IDs (ausgeblendete Typen entfallen).
+  const userManaged: string[] = [];
+  for (const t of orderTypes) {
+    if (hidden.has(t)) continue;
+    for (const id of byType[t] || []) userManaged.push(id);
+  }
+  // Original durchgehen: verwaltete Slots mit userManaged füllen, Rest bleibt.
+  let mi = 0;
+  const result: string[] = [];
+  for (const id of main.block_order) {
+    if (BUYBOX_TYPES.has(typeOf(id))) {
+      if (mi < userManaged.length) result.push(userManaged[mi++]);
+    } else {
+      result.push(id);
+    }
+  }
+  main.block_order = result;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 // ─── Texte (Tokens) + Akzentfarben NUR in aktiven order-Sections ───
 

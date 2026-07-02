@@ -20,6 +20,28 @@ export const PRODUCT_SECTIONS: ProductSectionDef[] = [
   { type: "featured-collection", label: "Weitere Produkte", defaultHeading: "Das könnte dir auch gefallen", token: "FEATURED_COLLECTION_TITLE" },
 ];
 
+// ─── Kaufbox-Bausteine (Blöcke der main-product-Infospalte) ──────────
+// Jeder Block ist einzeln ein-/ausblendbar und umsortierbar. `type` = echter
+// Block-Typ in der main-product-Section (für block_order/disabled beim Download).
+export interface BuyboxBlockDef {
+  type: string;
+  label: string;
+}
+export const BUYBOX_BLOCKS: BuyboxBlockDef[] = [
+  { type: "urgency_text", label: "Angebots-Hinweis" },
+  { type: "custom_title", label: "Produkttitel" },
+  { type: "custom_rating", label: "Sterne-Bewertung" },
+  { type: "benefits_list", label: "Vorteile-Liste" },
+  { type: "stock_indicator", label: "Lager-Hinweis" },
+  { type: "custom_price", label: "Preis" },
+  { type: "bundle_selector", label: "Mengen-Bundles" },
+  { type: "buy_buttons", label: "Kaufen-Button" },
+  { type: "payment_icons", label: "Zahlarten" },
+  { type: "free_gift", label: "Gratis-Geschenk" },
+  { type: "delivery_timeline", label: "Liefer-Timeline" },
+];
+export const BUYBOX_DEFAULT_ORDER = BUYBOX_BLOCKS.map((b) => b.type);
+
 export function sectionHeadingsToThemeCopy(headings: Record<string, string> | undefined): Record<string, string> {
   const out: Record<string, string> = {};
   if (!headings) return out;

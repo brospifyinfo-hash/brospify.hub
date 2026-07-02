@@ -24,7 +24,8 @@ import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, radiusForStyle } from "@/lib/theme-styles";
-import { PRODUCT_SECTIONS } from "@/lib/theme-sections";
+import { PRODUCT_SECTIONS, BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
+import { ChevronUp, Eye, EyeOff } from "lucide-react";
 
 const ACCENT = "#95BF47";
 
@@ -346,6 +347,9 @@ function ThemeBuilderCard() {
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
   const [hiddenSections, setHiddenSections] = useState<string[]>([]);
   const [sectionHeadings, setSectionHeadings] = useState<Record<string, string>>({});
+  const [buyboxOrder, setBuyboxOrder] = useState<string[]>(BUYBOX_DEFAULT_ORDER);
+  const [hiddenBlocks, setHiddenBlocks] = useState<string[]>([]);
+  const blockLabel = (type: string) => BUYBOX_BLOCKS.find((b) => b.type === type)?.label || type;
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -439,6 +443,19 @@ function ThemeBuilderCard() {
   function setSectionHeading(type: string, value: string) {
     setSectionHeadings((prev) => ({ ...prev, [type]: value }));
   }
+  function toggleBlock(type: string) {
+    setHiddenBlocks((prev) => (prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]));
+  }
+  function moveBlock(type: string, dir: -1 | 1) {
+    setBuyboxOrder((prev) => {
+      const i = prev.indexOf(type);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
 
   async function handleDownload() {
     if (!productId || building) return;
@@ -449,7 +466,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings }),
+        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings, buyboxOrder, hiddenBlocks }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -512,8 +529,8 @@ function ThemeBuilderCard() {
             </label>
 
             {/* 2. Stil + Zufallsgenerator */}
-            <div className="flex items-center justify-between mt-4 mb-1.5">
-              <span className="text-[11px] text-zinc-500">{t.themes.builderStyle}</span>
+            <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/[0.06] mb-2">
+              <span className="text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400">{t.themes.builderStyle}</span>
               <button
                 onClick={randomize}
                 title={t.themes.builderRandomHint}
@@ -568,8 +585,8 @@ function ThemeBuilderCard() {
             </div>
 
             {/* 4. Ecken (feiner Slider) */}
-            <div className="flex items-center justify-between mt-3 mb-1.5">
-              <span className="text-[11px] text-zinc-500">{t.themes.builderCorners}</span>
+            <div className="flex items-center justify-between mt-5 pt-4 border-t border-white/[0.06] mb-2">
+              <span className="text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400">{t.themes.builderCorners}</span>
               <span className="text-[11px] font-mono text-zinc-400">{radius}px</span>
             </div>
             <input
@@ -582,7 +599,7 @@ function ThemeBuilderCard() {
               className="w-full accent-[#95BF47] cursor-pointer"
             />
 
-            <span className="block text-[11px] text-zinc-500 mt-3 mb-1.5">{t.themes.builderColors}</span>
+            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderColors}</span>
             <div className="grid grid-cols-2 gap-2">
               {COLOR_FIELDS.map((f) => (
                 <div key={f.key}>
@@ -605,8 +622,37 @@ function ThemeBuilderCard() {
               ))}
             </div>
 
-            {/* 6. Sektionen ein-/ausblenden + Überschrift bearbeiten */}
-            <span className="block text-[11px] text-zinc-500 mt-4 mb-1.5">{t.themes.builderSections}</span>
+            {/* 6. Kaufbox-Bausteine: umsortieren + ein-/ausblenden */}
+            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderBlocks}</span>
+            <div className="space-y-1.5">
+              {buyboxOrder.map((type, i) => {
+                const visible = !hiddenBlocks.includes(type);
+                return (
+                  <div
+                    key={type}
+                    className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition ${
+                      visible ? "border-white/10 bg-white/[0.03]" : "border-white/[0.06] bg-white/[0.01] opacity-55"
+                    }`}
+                  >
+                    <div className="flex flex-col -my-0.5">
+                      <button onClick={() => moveBlock(type, -1)} disabled={i === 0} aria-label="hoch" className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none">
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => moveBlock(type, 1)} disabled={i === buyboxOrder.length - 1} aria-label="runter" className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none">
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <span className="text-[12px] font-medium text-white flex-1 min-w-0 truncate">{blockLabel(type)}</span>
+                    <button onClick={() => toggleBlock(type)} aria-label={blockLabel(type)} className="text-zinc-400 hover:text-white shrink-0">
+                      {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 7. Sektionen ein-/ausblenden + Überschrift bearbeiten */}
+            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderSections}</span>
             <div className="space-y-2">
               {PRODUCT_SECTIONS.map((s) => {
                 const visible = !hiddenSections.includes(s.type);
@@ -692,6 +738,8 @@ function ThemeBuilderCard() {
               viewMode={viewMode}
               hiddenSections={hiddenSections}
               sectionHeadings={sectionHeadings}
+              buyboxOrder={buyboxOrder}
+              hiddenBlocks={hiddenBlocks}
             />
           </div>
         </div>

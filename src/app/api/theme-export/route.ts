@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string> };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[] };
   try {
     body = await req.json();
   } catch {
@@ -144,6 +144,8 @@ export async function POST(req: NextRequest) {
       headingFont,
       hiddenTypes: [...style.hiddenTypes, ...userHidden],
       settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
+      buyboxOrder: Array.isArray(body.buyboxOrder) ? body.buyboxOrder.filter((s) => typeof s === "string") : undefined,
+      hiddenBlocks: Array.isArray(body.hiddenBlocks) ? body.hiddenBlocks.filter((s) => typeof s === "string") : undefined,
     });
   } catch (err) {
     console.error("[theme-export] build failed:", err);

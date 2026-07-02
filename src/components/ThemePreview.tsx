@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
-import { PRODUCT_SECTIONS } from "@/lib/theme-sections";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 
 // Statischer Beispiel-Inhalt für die zusätzlichen Produktseiten-Sektionen.
 const PV_REVIEWS = [
@@ -96,13 +96,16 @@ function PayMark({ name }: { name: string }) {
 
 export default function ThemePreview({
   data, colors, headingFont, bodyFont, radius, loading, label, viewMode = "desktop",
-  hiddenSections = [], sectionHeadings = {},
+  hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
   hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
+  buyboxOrder?: string[]; hiddenBlocks?: string[];
 }) {
   const hidden = new Set(hiddenSections);
+  const hiddenBlk = new Set(hiddenBlocks);
+  const order = buyboxOrder.length ? buyboxOrder : BUYBOX_DEFAULT_ORDER;
   const [imgIdx, setImgIdx] = useState(0);
   const [bundleIdx, setBundleIdx] = useState(1);
   const [giftOpen, setGiftOpen] = useState(true);
@@ -133,7 +136,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings)]);
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|")]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -144,6 +147,118 @@ export default function ThemePreview({
   } as Record<string, string> as CSSProperties;
 
   const img = data?.images?.[imgIdx] || data?.images?.[0] || "";
+
+  // Rendert einen einzelnen Kaufbox-Baustein (konfigurationsgesteuert:
+  // Reihenfolge + Sichtbarkeit steuert der Kunde im Section-Manager).
+  function renderBlock(type: string) {
+    if (!data) return null;
+    switch (type) {
+      case "urgency_text":
+        return data.offerEndText ? <div className="pm-offer">🔥 {data.offerEndText}</div> : null;
+      case "custom_title":
+        return <h1 className="pm-title">{data.title}</h1>;
+      case "custom_rating":
+        return (
+          <div className="pm-rating">
+            <span className="pm-stars">★★★★★</span>
+            <strong>{data.ratingValue}</strong>
+            <span>· {data.ratingText}</span>
+          </div>
+        );
+      case "benefits_list":
+        return (
+          <div className="pm-benefits">
+            {data.benefits.slice(0, 4).map((b, i) => (
+              <div key={i} className="pm-benefit"><span className="pm-bic">{b.emoji}</span>{b.text}</div>
+            ))}
+          </div>
+        );
+      case "stock_indicator":
+        return <div className="pm-stock"><span className="pm-dot" />{data.stock}</div>;
+      case "custom_price":
+        return (
+          <>
+            <div className="pm-divider" />
+            <div className="pm-price"><strong>{data.price}</strong><s>{data.comparePrice}</s><span className="pm-save">{data.discount}</span></div>
+          </>
+        );
+      case "bundle_selector":
+        return (
+          <>
+            <div className="pm-bundle-head">{data.bundleHeading}</div>
+            <div className="pm-bundles">
+              {data.bundles.map((b, i) => (
+                <button key={i} className={`pm-bundle ${i === bundleIdx ? "on" : ""}`} onClick={() => setBundleIdx(i)}>
+                  {b.badge && <span className="pm-bundle-badge">{b.badge}</span>}
+                  <span className="pm-radio" />
+                  {b.image ? <img className="pm-bundle-img" src={b.image} alt="" /> : <span className="pm-bundle-img" />}
+                  <span className="pm-bundle-main">
+                    <span className="pm-bundle-name"><span className="pm-qty">×{b.qty}</span> {b.name}</span>
+                    {b.perUnit && <span className="pm-bundle-per">{b.perUnit}</span>}
+                    <span className="pm-bundle-save">{b.save}</span>
+                  </span>
+                  <span className="pm-bundle-right">
+                    <span className="pm-bundle-price">{b.price}</span>
+                    <s className="pm-bundle-comp">{b.compareTotal}</s>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        );
+      case "buy_buttons":
+        return (
+          <button className="pm-cta">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+            {data.cta}
+          </button>
+        );
+      case "payment_icons":
+        return (
+          <>
+            <div className="pm-pay-head">{data.payHeading}</div>
+            <div className="pm-pay">{PAY_ORDER.map((p) => <span key={p} className="pm-pay-box"><PayMark name={p} /></span>)}</div>
+          </>
+        );
+      case "free_gift":
+        return (
+          <div className="pm-gift">
+            <button className="pm-gift-head" onClick={() => setGiftOpen((o) => !o)}>
+              <span className="pm-gift-txt"><strong>{data.giftTitle}</strong><em>{data.giftSubtitle}</em></span>
+              <svg className={`pm-gift-chev ${giftOpen ? "open" : ""}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+            </button>
+            {giftOpen && (
+              <div className="pm-gift-grid">
+                {data.giftItems.map((g, i) => (
+                  <div key={i} className="pm-gift-card">
+                    <span className="pm-gift-price">{g.price}</span>
+                    {g.image ? <img src={g.image} alt="" /> : <span className="pm-gift-ph" />}
+                    <span className="pm-gift-check" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      case "delivery_timeline":
+        return (
+          <>
+            <div className="pm-countdown">{data.countdownPrefix} <strong>{data.countdown}</strong> {data.countdownSuffix}</div>
+            <div className="pm-timeline">
+              {data.timeline.map((s, i) => (
+                <div key={i} className="pm-step">
+                  <span className="pm-step-ic"><Ic d={ICON[s.icon] || ICON.bag} s={17} /></span>
+                  <span className="pm-step-label">{s.label}</span>
+                  <span className="pm-step-date">{s.date}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        );
+      default:
+        return null;
+    }
+  }
 
   return (
     <div className="pm-root" style={rootStyle}>
@@ -178,97 +293,11 @@ export default function ThemePreview({
               )}
             </div>
 
-            {/* Infospalte (bis VOR der Beschreibung) */}
+            {/* Infospalte — konfigurationsgesteuert (Reihenfolge + Sichtbarkeit) */}
             <div className="pm-info">
-              {data.offerEndText && <div className="pm-offer">🔥 {data.offerEndText}</div>}
-
-              <h1 className="pm-title">{data.title}</h1>
-
-              <div className="pm-rating">
-                <span className="pm-stars">★★★★★</span>
-                <strong>{data.ratingValue}</strong>
-                <span>· {data.ratingText}</span>
-              </div>
-
-              <div className="pm-benefits">
-                {data.benefits.slice(0, 4).map((b, i) => (
-                  <div key={i} className="pm-benefit">
-                    <span className="pm-bic">{b.emoji}</span>{b.text}
-                  </div>
-                ))}
-              </div>
-
-              <div className="pm-stock"><span className="pm-dot" />{data.stock}</div>
-
-              <div className="pm-divider" />
-
-              <div className="pm-price">
-                <strong>{data.price}</strong>
-                <s>{data.comparePrice}</s>
-                <span className="pm-save">{data.discount}</span>
-              </div>
-
-              <div className="pm-bundle-head">{data.bundleHeading}</div>
-              <div className="pm-bundles">
-                {data.bundles.map((b, i) => (
-                  <button key={i} className={`pm-bundle ${i === bundleIdx ? "on" : ""}`} onClick={() => setBundleIdx(i)}>
-                    {b.badge && <span className="pm-bundle-badge">{b.badge}</span>}
-                    <span className="pm-radio" />
-                    {b.image ? <img className="pm-bundle-img" src={b.image} alt="" /> : <span className="pm-bundle-img" />}
-                    <span className="pm-bundle-main">
-                      <span className="pm-bundle-name"><span className="pm-qty">×{b.qty}</span> {b.name}</span>
-                      {b.perUnit && <span className="pm-bundle-per">{b.perUnit}</span>}
-                      <span className="pm-bundle-save">{b.save}</span>
-                    </span>
-                    <span className="pm-bundle-right">
-                      <span className="pm-bundle-price">{b.price}</span>
-                      <s className="pm-bundle-comp">{b.compareTotal}</s>
-                    </span>
-                  </button>
-                ))}
-              </div>
-
-              <button className="pm-cta">
-                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-                {data.cta}
-              </button>
-
-              <div className="pm-pay-head">{data.payHeading}</div>
-              <div className="pm-pay">
-                {PAY_ORDER.map((p) => <span key={p} className="pm-pay-box"><PayMark name={p} /></span>)}
-              </div>
-
-              {/* Gratis-Geschenk (Accordion-Karte wie im Theme) */}
-              <div className="pm-gift">
-                <button className="pm-gift-head" onClick={() => setGiftOpen((o) => !o)}>
-                  <span className="pm-gift-txt"><strong>{data.giftTitle}</strong><em>{data.giftSubtitle}</em></span>
-                  <svg className={`pm-gift-chev ${giftOpen ? "open" : ""}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-                </button>
-                {giftOpen && (
-                  <div className="pm-gift-grid">
-                    {data.giftItems.map((g, i) => (
-                      <div key={i} className="pm-gift-card">
-                        <span className="pm-gift-price">{g.price}</span>
-                        {g.image ? <img src={g.image} alt="" /> : <span className="pm-gift-ph" />}
-                        <span className="pm-gift-check" />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="pm-countdown">
-                {data.countdownPrefix} <strong>{data.countdown}</strong> {data.countdownSuffix}
-              </div>
-              <div className="pm-timeline">
-                {data.timeline.map((s, i) => (
-                  <div key={i} className="pm-step">
-                    <span className="pm-step-ic"><Ic d={ICON[s.icon] || ICON.bag} s={17} /></span>
-                    <span className="pm-step-label">{s.label}</span>
-                    <span className="pm-step-date">{s.date}</span>
-                  </div>
-                ))}
-              </div>
+              {order.filter((t) => !hiddenBlk.has(t)).map((t) => (
+                <Fragment key={t}>{renderBlock(t)}</Fragment>
+              ))}
             </div>
           </div>
 
