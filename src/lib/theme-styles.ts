@@ -1,4 +1,5 @@
 import type { ColorPalette } from "@/lib/theme-placeholders";
+import { BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 
 // ─────────────────────────────────────────────────────────────────
 // Theme-Stile: vorgefertigte „Looks", die das Theme spürbar anders machen —
@@ -20,7 +21,22 @@ export interface ThemeStyle {
   settingOverrides: Record<string, number | string>;
   /** Section-Typen, die dieser Stil ausblendet (für ein anderes Layout). */
   hiddenTypes: string[];
+  /** Reihenfolge der Kaufbox-Bausteine (Block-Typen) dieses Stils. */
+  buyboxOrder?: string[];
+  /** Kaufbox-Bausteine, die dieser Stil ausblendet. */
+  hiddenBlocks?: string[];
+  /** Produktseiten-Sektionen (unter der Kaufbox), die dieser Stil ausblendet. */
+  hiddenSections?: string[];
+  /** Design-Ausprägung der Karten/Sektionen (Schatten, Rand, Icon-Stil). */
+  design?: StyleDesign;
 }
+
+export interface StyleDesign {
+  shadow: 0 | 1 | 2; // aus / weich / stark
+  border: 1 | 2; // Randstärke in px
+  iconStyle: "dark" | "accent" | "outline";
+}
+export const DEFAULT_DESIGN: StyleDesign = { shadow: 1, border: 1, iconStyle: "dark" };
 
 // Baut die settings_data-Overrides eines Stils konsistent aus einem Radius +
 // optionalen Extras (card_style, Abstände, Skalierung …).
@@ -127,6 +143,39 @@ export const THEME_STYLES: ThemeStyle[] = [
     hiddenTypes: ["wave"],
   },
 ];
+
+// ─── Pro Stil: eigene Baustein-Anordnung + Sichtbarkeit + Karten-Design ──
+// So sieht jeder Stil nicht nur farblich anders aus, sondern hat auch ein
+// anderes Layout (Reihenfolge/ein-/ausgeblendete Bausteine & Sektionen) und
+// eine andere Design-Ausprägung (Schatten, Randstärke, Icon-Stil).
+const U = "urgency_text", T = "custom_title", R = "custom_rating", B = "benefits_list",
+  S = "stock_indicator", P = "custom_price", BN = "bundle_selector", BT = "buy_buttons",
+  PI = "payment_icons", G = "free_gift", TL = "delivery_timeline";
+interface StyleExtra { order: string[]; hideB: string[]; hideS: string[]; design: StyleDesign }
+const STYLE_EXTRAS: Record<string, StyleExtra> = {
+  modern:  { order: [T, R, P, B, BN, BT, PI], hideB: [U, S, G, TL], hideS: ["bro-info-tabs", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" } },
+  elegant: { order: [U, T, R, B, S, P, BN, BT, PI, G], hideB: [TL], hideS: ["vids"], design: { shadow: 2, border: 1, iconStyle: "outline" } },
+  bold:    { order: [U, T, P, BN, BT, B, R, S, PI], hideB: [G, TL], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" } },
+  playful: { order: [U, T, R, BN, B, S, P, BT, G, PI, TL], hideB: [], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" } },
+  minimal: { order: [T, P, BN, BT], hideB: [U, R, B, S, PI, G, TL], hideS: ["bro-info-tabs", "brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "outline" } },
+  noir:    { order: [U, T, R, P, BN, BT, PI, G, TL], hideB: [B, S], hideS: ["featured-collection"], design: { shadow: 2, border: 1, iconStyle: "accent" } },
+  sunset:  { order: [U, T, R, B, P, BN, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
+  ocean:   { order: [T, R, B, S, P, BN, BT, PI, TL], hideB: [U, G], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "dark" } },
+  nature:  { order: [T, B, R, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: ["featured-collection"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
+  candy:   { order: [U, T, R, BN, P, B, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 2, iconStyle: "accent" } },
+  tech:    { order: [T, P, R, B, BN, BT, PI], hideB: [U, S, G, TL], hideS: ["brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" } },
+  royal:   { order: [U, T, R, P, B, BN, BT, PI, G, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 1, iconStyle: "accent" } },
+};
+for (const s of THEME_STYLES) {
+  const e = STYLE_EXTRAS[s.id];
+  if (!e) continue;
+  // buyboxOrder als vollständige Permutation (fehlende Typen ans Ende — sie sind
+  // ohnehin über hiddenBlocks aus).
+  s.buyboxOrder = [...e.order, ...BUYBOX_DEFAULT_ORDER.filter((t) => !e.order.includes(t))];
+  s.hiddenBlocks = e.hideB;
+  s.hiddenSections = e.hideS;
+  s.design = e.design;
+}
 
 export const DEFAULT_STYLE_ID = "modern";
 

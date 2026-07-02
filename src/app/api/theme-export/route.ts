@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[] };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[]; design?: { shadow?: number; border?: number; iconStyle?: string } };
   try {
     body = await req.json();
   } catch {
@@ -143,7 +143,12 @@ export async function POST(req: NextRequest) {
       font,
       headingFont,
       hiddenTypes: [...style.hiddenTypes, ...userHidden],
-      settingOverrides: { ...style.settingOverrides, ...radiusOverrides(radius) },
+      settingOverrides: {
+        ...style.settingOverrides,
+        ...radiusOverrides(radius),
+        // Design: Schatten → card_style (Karten mit/ohne Schatten im echten Theme).
+        ...(body.design && typeof body.design.shadow === "number" ? { card_style: body.design.shadow >= 1 ? "card" : "standard" } : {}),
+      },
       buyboxOrder: Array.isArray(body.buyboxOrder) ? body.buyboxOrder.filter((s) => typeof s === "string") : undefined,
       hiddenBlocks: Array.isArray(body.hiddenBlocks) ? body.hiddenBlocks.filter((s) => typeof s === "string") : undefined,
     });

@@ -23,7 +23,7 @@ import {
 import Navigation from "@/components/Navigation";
 import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
-import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, radiusForStyle } from "@/lib/theme-styles";
+import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, radiusForStyle, DEFAULT_DESIGN, type StyleDesign } from "@/lib/theme-styles";
 import { PRODUCT_SECTIONS, BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { ChevronUp, Eye, EyeOff } from "lucide-react";
 
@@ -334,22 +334,28 @@ function ThemeBuilderCard() {
   const { t, lang } = useI18n();
   const [products, setProducts] = useState<{ id: string; titel: string }[]>([]);
   const [productId, setProductId] = useState("");
+  const DEF = getThemeStyle(DEFAULT_STYLE_ID);
   const [styleId, setStyleId] = useState(DEFAULT_STYLE_ID);
-  const [colors, setColors] = useState<ThemeColors>(getThemeStyle(DEFAULT_STYLE_ID).palette);
-  const [font, setFont] = useState(getThemeStyle(DEFAULT_STYLE_ID).bodyFont);
-  const [headingFont, setHeadingFont] = useState(getThemeStyle(DEFAULT_STYLE_ID).headingFont);
-  const [radius, setRadius] = useState(radiusForStyle(getThemeStyle(DEFAULT_STYLE_ID)));
+  const [colors, setColors] = useState<ThemeColors>(DEF.palette);
+  const [font, setFont] = useState(DEF.bodyFont);
+  const [headingFont, setHeadingFont] = useState(DEF.headingFont);
+  const [radius, setRadius] = useState(radiusForStyle(DEF));
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [previewData, setPreviewData] = useState<PreviewData | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
-  const [hiddenSections, setHiddenSections] = useState<string[]>([]);
+  const [hiddenSections, setHiddenSections] = useState<string[]>(DEF.hiddenSections ?? []);
   const [sectionHeadings, setSectionHeadings] = useState<Record<string, string>>({});
-  const [buyboxOrder, setBuyboxOrder] = useState<string[]>(BUYBOX_DEFAULT_ORDER);
-  const [hiddenBlocks, setHiddenBlocks] = useState<string[]>([]);
+  const [buyboxOrder, setBuyboxOrder] = useState<string[]>(DEF.buyboxOrder ?? BUYBOX_DEFAULT_ORDER);
+  const [hiddenBlocks, setHiddenBlocks] = useState<string[]>(DEF.hiddenBlocks ?? []);
+  const [design, setDesign] = useState<StyleDesign>(DEF.design ?? DEFAULT_DESIGN);
   const blockLabel = (type: string) => BUYBOX_BLOCKS.find((b) => b.type === type)?.label || type;
+  const segCls = (on: boolean) =>
+    `rounded-md border px-2 py-1.5 text-[11px] font-medium transition ${
+      on ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
+    }`;
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -424,6 +430,11 @@ function ThemeBuilderCard() {
     setFont(s.bodyFont);
     setHeadingFont(s.headingFont);
     setRadius(radiusForStyle(s));
+    // Jeder Stil bringt eine eigene Anordnung, Sichtbarkeit & Design-Ausprägung.
+    setBuyboxOrder(s.buyboxOrder ?? BUYBOX_DEFAULT_ORDER);
+    setHiddenBlocks(s.hiddenBlocks ?? []);
+    setHiddenSections(s.hiddenSections ?? []);
+    setDesign(s.design ?? DEFAULT_DESIGN);
   }
 
   // Zufallsgenerator: zufälliger Stil als Basis + frisch gewürfelter Akzent,
@@ -435,6 +446,14 @@ function ThemeBuilderCard() {
     setHeadingFont(randFrom(BUILDER_FONTS).value);
     setFont(randFrom(BUILDER_FONTS).value);
     setRadius(randFrom([0, 4, 8, 14, 22, 30]));
+    setBuyboxOrder(s.buyboxOrder ?? BUYBOX_DEFAULT_ORDER);
+    setHiddenBlocks(s.hiddenBlocks ?? []);
+    setHiddenSections(s.hiddenSections ?? []);
+    setDesign({
+      shadow: randFrom([0, 1, 2]) as StyleDesign["shadow"],
+      border: randFrom([1, 2]) as StyleDesign["border"],
+      iconStyle: randFrom(["dark", "accent", "outline"]) as StyleDesign["iconStyle"],
+    });
   }
 
   function toggleSection(type: string) {
@@ -466,7 +485,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings, buyboxOrder, hiddenBlocks }),
+        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings, buyboxOrder, hiddenBlocks, design }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -598,6 +617,35 @@ function ThemeBuilderCard() {
               onChange={(e) => setRadius(Number(e.target.value))}
               className="w-full accent-[#95BF47] cursor-pointer"
             />
+
+            {/* Design: Schatten / Randstärke / Icon-Stil */}
+            <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderDesign}</span>
+            <div className="space-y-2.5">
+              <div>
+                <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderShadow}</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([[0, "Aus"], [1, "Weich"], [2, "Stark"]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setDesign((d) => ({ ...d, shadow: v }))} className={segCls(design.shadow === v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderBorder}</span>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {([[1, "Dünn"], [2, "Dick"]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setDesign((d) => ({ ...d, border: v }))} className={segCls(design.border === v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderIcons}</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {([["dark", "Dunkel"], ["accent", "Akzent"], ["outline", "Umriss"]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setDesign((d) => ({ ...d, iconStyle: v }))} className={segCls(design.iconStyle === v)}>{l}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
 
             <span className="block text-[10px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mt-5 pt-4 border-t border-white/[0.06] mb-2">{t.themes.builderColors}</span>
             <div className="grid grid-cols-2 gap-2">
@@ -740,6 +788,9 @@ function ThemeBuilderCard() {
               sectionHeadings={sectionHeadings}
               buyboxOrder={buyboxOrder}
               hiddenBlocks={hiddenBlocks}
+              shadow={design.shadow}
+              border={design.border}
+              iconStyle={design.iconStyle}
             />
           </div>
         </div>

@@ -97,11 +97,13 @@ function PayMark({ name }: { name: string }) {
 export default function ThemePreview({
   data, colors, headingFont, bodyFont, radius, loading, label, viewMode = "desktop",
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
+  shadow = 1, border = 1, iconStyle = "dark",
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
   hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
   buyboxOrder?: string[]; hiddenBlocks?: string[];
+  shadow?: number; border?: number; iconStyle?: string;
 }) {
   const hidden = new Set(hiddenSections);
   const hiddenBlk = new Set(hiddenBlocks);
@@ -144,6 +146,8 @@ export default function ThemePreview({
     "--pv-h": `${FONT_FAMILY[headingFont] || "'Work Sans'"}, sans-serif`,
     "--pv-b": `${FONT_FAMILY[bodyFont] || "'Work Sans'"}, sans-serif`,
     "--pv-r": `${Math.max(0, radius)}px`,
+    "--pv-shadow": ["none", "0 4px 14px -8px rgba(0,0,0,.16)", "0 12px 30px -10px rgba(0,0,0,.26)"][Math.max(0, Math.min(2, shadow))],
+    "--pv-bd": `${Math.max(1, Math.min(3, border))}px`,
   } as Record<string, string> as CSSProperties;
 
   const img = data?.images?.[imgIdx] || data?.images?.[0] || "";
@@ -264,7 +268,7 @@ export default function ThemePreview({
     <div className="pm-root" style={rootStyle}>
       <style>{CSS}</style>
       <div ref={outerRef} className="pm-outer" style={{ height: box.height || undefined }}>
-      <div ref={canvasRef} className={`pm-canvas pm-${viewMode}`} style={{ width: targetW, transform: `scale(${box.scale})` }}>
+      <div ref={canvasRef} className={`pm-canvas pm-${viewMode} pm-ic-${iconStyle}`} style={{ width: targetW, transform: `scale(${box.scale})` }}>
       <div className="pm-bar">
         <div className="pm-dots"><span /><span /><span /></div>
         <span className="pm-tab">{label}</span>
@@ -520,4 +524,12 @@ const CSS = `
 .pm-mobile .pm-feat{grid-template-columns:1fr 1fr}
 .pm-mobile .pm-brand{grid-template-columns:1fr;gap:14px}
 .pm-mobile .pm-sec-h{font-size:19px}
+
+/* ── Design-Ausprägung (Schatten, Randstärke, Icon-Stil je Stil/Kunde) ── */
+.pm-main,.pm-bundle,.pm-rev-card,.pm-faq-item,.pm-gift,.pm-vid,.pm-feat-img{box-shadow:var(--pv-shadow)}
+.pm-rev-card,.pm-faq-item,.pm-gift,.pm-bundle{border-width:var(--pv-bd)}
+.pm-ic-dark .pm-bic{background:color-mix(in srgb,var(--pv-text) 88%,#000);color:#fff}
+.pm-ic-accent .pm-bic{background:var(--pv-accent);color:#fff}
+.pm-ic-outline .pm-bic{background:transparent;border:2px solid var(--pv-accent)}
+.pm-ic-outline .pm-step-ic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
 `;
