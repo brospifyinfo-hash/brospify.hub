@@ -7,6 +7,7 @@ import {
   type ColorPalette,
 } from "@/lib/theme-placeholders";
 import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
+import { getIcon } from "@/lib/theme-icons";
 
 const BUYBOX_TYPES = new Set(BUYBOX_BLOCKS.map((b) => b.type));
 
@@ -36,6 +37,7 @@ export interface InjectOptions {
   settingOverrides?: Record<string, number | string>; // globale Style-Settings
   buyboxOrder?: string[]; // Reihenfolge der main-product-Bausteine (Block-Typen)
   hiddenBlocks?: string[]; // ausgeblendete main-product-Bausteine (Block-Typen)
+  benefitIcons?: string[]; // gewählte Icons (Bibliotheks-IDs) für die 4 Vorteile
 }
 
 export function isValidHex(color: string): boolean {
@@ -73,7 +75,10 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
     try {
       const data = JSON.parse(entry.getData().toString("utf8"));
       injectTemplateData(data, values, opts.colors, hidden);
-      if (/product\.json$/.test(tplPath)) applyBuyboxLayout(data, opts.buyboxOrder, opts.hiddenBlocks);
+      if (/product\.json$/.test(tplPath)) {
+        applyBuyboxLayout(data, opts.buyboxOrder, opts.hiddenBlocks);
+        applyBenefitIcons(data, opts.benefitIcons);
+      }
       zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
     } catch (e) {
       console.warn(`[theme-inject] Template übersprungen (${tplPath}):`, e);
@@ -137,6 +142,25 @@ function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[])
     }
   }
   main.block_order = result;
+}
+
+// Setzt die gewählten Vorteile-Icons (als Emoji) in den benefits_list-Block der
+// main-product-Section — so zeigt auch das heruntergeladene Theme die Icons.
+function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
+  if (!Array.isArray(benefitIcons) || !benefitIcons.length) return;
+  const sections = data?.sections;
+  if (!sections || typeof sections !== "object") return;
+  const main: any = Object.values(sections).find((s: any) => s && s.type === "main-product");
+  if (!main || !main.blocks) return;
+  const bl: any = Object.values(main.blocks).find((b: any) => b && b.type === "benefits_list");
+  if (!bl || !bl.settings) return;
+  for (let i = 0; i < 4; i++) {
+    const id = benefitIcons[i];
+    if (!id) continue;
+    const emoji = getIcon(id).emoji;
+    bl.settings["icon_" + (i + 1)] = emoji;
+    bl.settings["emoji_" + (i + 1)] = emoji;
+  }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

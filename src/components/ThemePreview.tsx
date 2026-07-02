@@ -2,6 +2,17 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
+import { getIcon, DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+
+// Rendert ein Bibliotheks-Icon als SVG (currentColor).
+function BIcon({ id }: { id: string }) {
+  const ic = getIcon(id);
+  return (
+    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+      {ic.paths.map((d, i) => <path key={i} d={d} />)}
+    </svg>
+  );
+}
 
 // Statischer Beispiel-Inhalt für die zusätzlichen Produktseiten-Sektionen.
 const PV_REVIEWS = [
@@ -97,13 +108,13 @@ function PayMark({ name }: { name: string }) {
 export default function ThemePreview({
   data, colors, headingFont, bodyFont, radius, loading, label, viewMode = "desktop",
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
-  shadow = 1, border = 1, iconStyle = "dark",
+  shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
   hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
   buyboxOrder?: string[]; hiddenBlocks?: string[];
-  shadow?: number; border?: number; iconStyle?: string;
+  shadow?: number; border?: number; iconStyle?: string; benefitIcons?: string[];
 }) {
   const hidden = new Set(hiddenSections);
   const hiddenBlk = new Set(hiddenBlocks);
@@ -175,7 +186,7 @@ export default function ThemePreview({
         return (
           <div className="pm-benefits">
             {data.benefits.slice(0, 4).map((b, i) => (
-              <div key={i} className="pm-benefit"><span className="pm-bic">{b.emoji}</span>{b.text}</div>
+              <div key={i} className="pm-benefit"><span className="pm-bic"><BIcon id={benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check"} /></span>{b.text}</div>
             ))}
           </div>
         );
@@ -566,6 +577,6 @@ const CSS = `
 .pm-rev-card,.pm-faq-item,.pm-gift,.pm-bundle{border-width:var(--pv-bd)}
 .pm-ic-dark .pm-bic{background:color-mix(in srgb,var(--pv-text) 88%,#000);color:#fff}
 .pm-ic-accent .pm-bic{background:var(--pv-accent);color:#fff}
-.pm-ic-outline .pm-bic{background:transparent;border:2px solid var(--pv-accent)}
+.pm-ic-outline .pm-bic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
 .pm-ic-outline .pm-step-ic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
 `;

@@ -25,6 +25,7 @@ import { useI18n, type Locale } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import { THEME_STYLES, getThemeStyle, DEFAULT_STYLE_ID, radiusForStyle, DEFAULT_DESIGN, type StyleDesign } from "@/lib/theme-styles";
 import { PRODUCT_SECTIONS, BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
+import { THEME_ICONS, DEFAULT_BENEFIT_ICONS, getIcon } from "@/lib/theme-icons";
 import { ChevronUp, Eye, EyeOff } from "lucide-react";
 
 const ACCENT = "#95BF47";
@@ -352,6 +353,8 @@ function ThemeBuilderCard() {
   const [hiddenBlocks, setHiddenBlocks] = useState<string[]>(DEF.hiddenBlocks ?? []);
   const [design, setDesign] = useState<StyleDesign>(DEF.design ?? DEFAULT_DESIGN);
   const [openG, setOpenG] = useState<Record<string, boolean>>({ stil: true });
+  const [benefitIcons, setBenefitIcons] = useState<string[]>(DEFAULT_BENEFIT_ICONS);
+  const [iconPickerFor, setIconPickerFor] = useState<number | null>(null);
   const blockLabel = (type: string) => BUYBOX_BLOCKS.find((b) => b.type === type)?.label || type;
   const segCls = (on: boolean) =>
     `rounded-md border px-2 py-1.5 text-[11px] font-medium transition ${
@@ -370,6 +373,23 @@ function ThemeBuilderCard() {
       {openG[id] && <div className="px-3 pb-3.5 pt-1 border-t border-white/[0.05]">{body}</div>}
     </div>
   );
+  const iconSvg = (id: string, size = 16) => {
+    const ic = getIcon(id);
+    return (
+      <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+        {ic.paths.map((d, i) => <path key={i} d={d} />)}
+      </svg>
+    );
+  };
+  const setBenefitIcon = (i: number, id: string) => {
+    setBenefitIcons((prev) => {
+      const n = [...prev];
+      while (n.length < 4) n.push(DEFAULT_BENEFIT_ICONS[n.length]);
+      n[i] = id;
+      return n;
+    });
+    setIconPickerFor(null);
+  };
 
   const COLOR_FIELDS: { key: keyof ThemeColors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -499,7 +519,7 @@ function ThemeBuilderCard() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings, buyboxOrder, hiddenBlocks, design }),
+        body: JSON.stringify({ productId, colors, font, headingFont, style: styleId, radius, hiddenSections, sectionHeadings, buyboxOrder, hiddenBlocks, design, benefitIcons }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -688,6 +708,45 @@ function ThemeBuilderCard() {
               </div>
             ))}
 
+            {groupCard("vorteile", t.themes.builderBenefitIcons, (
+              <div className="space-y-2">
+                {[0, 1, 2, 3].map((i) => {
+                  const bLabel = previewData?.benefits?.[i]?.text || `Vorteil ${i + 1}`;
+                  const cur = benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check";
+                  return (
+                    <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setIconPickerFor(iconPickerFor === i ? null : i)}
+                          className="w-8 h-8 shrink-0 rounded-md border border-white/15 bg-white/[0.05] text-white flex items-center justify-center hover:border-[#95BF47]/50 transition"
+                          aria-label={`Icon für ${bLabel}`}
+                        >
+                          {iconSvg(cur, 17)}
+                        </button>
+                        <span className="text-[12px] text-zinc-300 flex-1 min-w-0 truncate">{bLabel}</span>
+                      </div>
+                      {iconPickerFor === i && (
+                        <div className="grid grid-cols-6 gap-1.5 mt-2 pt-2 border-t border-white/[0.06]">
+                          {THEME_ICONS.map((ic) => (
+                            <button
+                              key={ic.id}
+                              title={ic.label}
+                              onClick={() => setBenefitIcon(i, ic.id)}
+                              className={`aspect-square rounded-md border flex items-center justify-center transition ${
+                                cur === ic.id ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]"
+                              }`}
+                            >
+                              {iconSvg(ic.id, 16)}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+
             {groupCard("blocks", t.themes.builderBlocks, (
               <div className="space-y-1.5">
                 {buyboxOrder.map((type, i) => {
@@ -809,6 +868,7 @@ function ThemeBuilderCard() {
               shadow={design.shadow}
               border={design.border}
               iconStyle={design.iconStyle}
+              benefitIcons={benefitIcons}
             />
           </div>
         </div>
