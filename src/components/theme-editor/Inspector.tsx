@@ -55,11 +55,17 @@ export default function Inspector({
   const toggleG = (id: string) => setOpenG((o) => ({ ...o, [id]: !o[id] }));
   const [iconPickerFor, setIconPickerFor] = useState<number | null>(null);
 
-  // ── Section ausgewählt ──
-  const section = selected && selected !== "__buybox" ? doc.sections.find((s) => s.uid === selected) : null;
-  if (section) {
+  // ── Section ausgewählt (Produktseite ODER Startseite — uids sind global) ──
+  const sectionList =
+    selected && doc.sections.some((s) => s.uid === selected)
+      ? doc.sections
+      : selected && (doc.home || []).some((s) => s.uid === selected)
+        ? doc.home || []
+        : null;
+  const section = sectionList ? sectionList.find((s) => s.uid === selected) : null;
+  if (section && sectionList) {
     const def = getSectionDef(section.type);
-    const idx = doc.sections.findIndex((s) => s.uid === section.uid);
+    const idx = sectionList.findIndex((s) => s.uid === section.uid);
     return (
       <div className="space-y-3">
         <div className="rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-3 py-2.5">
@@ -72,7 +78,7 @@ export default function Inspector({
               <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-7 h-7 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label={t.themes.editorUndo}>
                 <ChevronUp className="w-4 h-4" />
               </button>
-              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= doc.sections.length - 1} className="w-7 h-7 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter">
+              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-7 h-7 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter">
                 <ChevronDown className="w-4 h-4" />
               </button>
             </div>

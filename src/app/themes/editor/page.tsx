@@ -21,7 +21,7 @@ import Inspector from "@/components/theme-editor/Inspector";
 import SectionLibraryOverlay from "@/components/theme-editor/SectionLibraryOverlay";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import {
-  editorReducer, initialEditorState, type ThemeDocument,
+  editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
 } from "@/lib/theme-doc";
 import {
   buildInitialDocument, createLibraryInstance, getSectionDef,
@@ -32,6 +32,7 @@ import { THEME_STYLES, DEFAULT_STYLE_ID, type StyleDesign } from "@/lib/theme-st
 interface DrawnProduct { id: string; titel: string; bildUrl?: string }
 interface PreviewResponse extends PreviewData {
   baseSections?: BaseSectionInfo[];
+  homeSections?: BaseSectionInfo[];
   capabilities?: string[];
 }
 
@@ -63,7 +64,9 @@ export default function ThemeEditorPage() {
   const [previewData, setPreviewData] = useState<PreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [baseSections, setBaseSections] = useState<BaseSectionInfo[]>([]);
+  const [homeSections, setHomeSections] = useState<BaseSectionInfo[]>([]);
   const [capabilities, setCapabilities] = useState<string[]>([]);
+  const [page, setPage] = useState<EditorPage>("product");
   const [selected, setSelected] = useState<string | null>(null);
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
@@ -108,12 +111,14 @@ export default function ThemeEditorPage() {
         if (!d || typeof d.title !== "string") return;
         setPreviewData(d);
         const bs = Array.isArray(d.baseSections) ? d.baseSections : [];
+        const hs = Array.isArray(d.homeSections) ? d.homeSections : [];
         const caps = Array.isArray(d.capabilities) ? d.capabilities : [];
         setBaseSections(bs);
+        setHomeSections(hs);
         setCapabilities(caps);
         dispatch(
           doc.sections.length === 0
-            ? { type: "replace", doc: buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps) }
+            ? { type: "replace", doc: buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs) }
             : { type: "setProduct", productId },
         );
       })
@@ -124,13 +129,13 @@ export default function ThemeEditorPage() {
 
   // Stil wechseln = neue Seiten-Architektur (Komposition des Stils).
   const pickStyle = useCallback((styleId: string) => {
-    dispatch({ type: "replace", doc: buildInitialDocument(doc.productId, styleId, baseSections, capabilities) });
+    dispatch({ type: "replace", doc: buildInitialDocument(doc.productId, styleId, baseSections, capabilities, homeSections) });
     setSelected(null);
-  }, [doc.productId, baseSections, capabilities]);
+  }, [doc.productId, baseSections, capabilities, homeSections]);
 
   const randomize = useCallback(() => {
     const s = randFrom(THEME_STYLES);
-    const next = buildInitialDocument(doc.productId, s.id, baseSections, capabilities);
+    const next = buildInitialDocument(doc.productId, s.id, baseSections, capabilities, homeSections);
     next.global.colors = { ...next.global.colors, accent: randomAccent() };
     next.global.headingFont = randFrom(EDITOR_FONTS).value;
     next.global.bodyFont = randFrom(EDITOR_FONTS).value;
@@ -142,13 +147,16 @@ export default function ThemeEditorPage() {
     };
     dispatch({ type: "replace", doc: next });
     setSelected(null);
-  }, [doc.productId, baseSections, capabilities]);
+  }, [doc.productId, baseSections, capabilities, homeSections]);
+
+  // Aktive Seiten-Liste (Produktseite oder Startseite).
+  const currentSections = page === "home" ? doc.home || [] : doc.sections;
 
   // Section einfügen (aus Bibliothek) + GSAP-Puls auf der neuen Section.
   const insertSection = useCallback((type: string, presetId: string) => {
     const instance = createLibraryInstance(type, presetId);
-    const index = libraryAt ?? doc.sections.length;
-    dispatch({ type: "addSection", index, section: instance });
+    const index = libraryAt ?? currentSections.length;
+    dispatch({ type: "addSection", index, section: instance, page });
     setLibraryAt(null);
     setSelected(instance.uid);
     requestAnimationFrame(() => {
@@ -158,7 +166,8 @@ export default function ThemeEditorPage() {
         el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     });
-  }, [libraryAt, doc.sections.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [libraryAt, currentSections.length, page]);
 
   // Undo/Redo — Buttons + Tastatur (Ctrl/Cmd+Z, Shift für Redo).
   useEffect(() => {
@@ -421,7 +430,20 @@ export default function ThemeEditorPage() {
               {/* Aufbau (links) */}
               <aside className="order-2 lg:order-1 lg:sticky lg:top-4 mb-4 lg:mb-0">
                 <div className="glass-strong rounded-2xl border border-white/[0.08] p-3">
+                  {/* Seiten-Umschalter: Produktseite ↔ Startseite */}
+                  <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-0.5 mb-3">
+                    {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
+                      <button
+                        key={p}
+                        onClick={() => { setPage(p); setSelected(null); }}
+                        className={`px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition ${page === p ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                      >
+                        {l}
+                      </button>
+                    ))}
+                  </div>
                   <div className="text-[11px] uppercase tracking-[0.13em] font-semibold text-zinc-400 px-1 mb-2">{t.themes.editorStructure}</div>
+                  {page === "product" && (
                   <button
                     onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
                     className={`w-full text-left rounded-lg border px-2.5 py-2 mb-1.5 transition ${
@@ -433,8 +455,9 @@ export default function ThemeEditorPage() {
                       <span className="text-[12px] font-semibold text-white">{t.themes.editorBuybox}</span>
                     </span>
                   </button>
+                  )}
                   <div className="space-y-1.5">
-                    {doc.sections.map((s) => (
+                    {currentSections.map((s) => (
                       <button
                         key={s.uid}
                         onClick={() => setSelected(selected === s.uid ? null : s.uid)}
@@ -448,7 +471,7 @@ export default function ThemeEditorPage() {
                     ))}
                   </div>
                   <button
-                    onClick={() => setLibraryAt(doc.sections.length)}
+                    onClick={() => setLibraryAt(currentSections.length)}
                     className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.05] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.12] text-[12px] font-semibold px-3 py-2.5 transition"
                   >
                     <Plus className="w-4 h-4" /> {t.themes.editorAddSection}
@@ -465,7 +488,7 @@ export default function ThemeEditorPage() {
                   bodyFont={doc.global.bodyFont}
                   radius={doc.global.radius}
                   loading={previewLoading}
-                  label={t.themes.builderPageProduct}
+                  label={page === "home" ? t.themes.builderPageHome : t.themes.builderPageProduct}
                   viewMode={viewMode}
                   buyboxOrder={doc.buybox.order}
                   hiddenBlocks={doc.buybox.hidden}
@@ -475,7 +498,8 @@ export default function ThemeEditorPage() {
                   benefitIcons={doc.buybox.benefitIcons}
                   buyboxCfg={doc.buybox.blocks}
                   gallery={doc.buybox.gallery}
-                  docSections={doc.sections}
+                  docSections={currentSections}
+                  page={page}
                   selectedUid={selected}
                   onSelectSection={(uid) => setSelected(uid)}
                   onInsertAt={(i) => setLibraryAt(i)}

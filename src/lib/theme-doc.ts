@@ -64,8 +64,13 @@ export interface ThemeDocument {
   global: GlobalStyles;
   /** Produktseiten-Sektionen unter der Kaufbox, in Anzeige-Reihenfolge. */
   sections: SectionInstance[];
+  /** Startseiten-Sektionen (templates/index.json), in Anzeige-Reihenfolge.
+   *  Leer/fehlend = Startseite bleibt im Basis-Zustand (Legacy-Verhalten). */
+  home: SectionInstance[];
   buybox: BuyboxConfig;
 }
+
+export type EditorPage = "product" | "home";
 
 export function emptyDocument(): ThemeDocument {
   return {
@@ -80,6 +85,7 @@ export function emptyDocument(): ThemeDocument {
       design: DEFAULT_DESIGN,
     },
     sections: [],
+    home: [],
     buybox: {
       order: [...BUYBOX_DEFAULT_ORDER],
       hidden: [],
@@ -112,7 +118,7 @@ export type EditorAction =
   | { type: "setProduct"; productId: string }
   | { type: "setGlobal"; patch: Partial<GlobalStyles> }
   | { type: "setColors"; patch: Partial<ColorPalette> }
-  | { type: "addSection"; index: number; section: SectionInstance }
+  | { type: "addSection"; index: number; section: SectionInstance; page?: EditorPage }
   | { type: "removeSection"; uid: string }
   | { type: "moveSection"; uid: string; dir: -1 | 1 }
   | { type: "setPreset"; uid: string; presetId: string }
@@ -141,33 +147,43 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
     case "setColors":
       return { ...doc, global: { ...doc.global, colors: { ...doc.global.colors, ...action.patch } } };
     case "addSection": {
-      const sections = [...doc.sections];
-      const i = Math.max(0, Math.min(sections.length, action.index));
-      sections.splice(i, 0, action.section);
-      return { ...doc, sections };
+      // Ziel-Seite wählen (default Produktseite); uid-Actions unten arbeiten
+      // seitenübergreifend, weil uids global eindeutig sind.
+      const key = action.page === "home" ? "home" : "sections";
+      const list = [...(doc[key] || [])];
+      const i = Math.max(0, Math.min(list.length, action.index));
+      list.splice(i, 0, action.section);
+      return { ...doc, [key]: list };
     }
     case "removeSection":
-      return { ...doc, sections: doc.sections.filter((s) => s.uid !== action.uid) };
+      return {
+        ...doc,
+        sections: doc.sections.filter((s) => s.uid !== action.uid),
+        home: (doc.home || []).filter((s) => s.uid !== action.uid),
+      };
     case "moveSection": {
-      const i = doc.sections.findIndex((s) => s.uid === action.uid);
-      const j = i + action.dir;
-      if (i < 0 || j < 0 || j >= doc.sections.length) return doc;
-      const sections = [...doc.sections];
-      [sections[i], sections[j]] = [sections[j], sections[i]];
-      return { ...doc, sections };
+      for (const key of ["sections", "home"] as const) {
+        const list = doc[key] || [];
+        const i = list.findIndex((s) => s.uid === action.uid);
+        if (i < 0) continue;
+        const j = i + action.dir;
+        if (j < 0 || j >= list.length) return doc;
+        const next = [...list];
+        [next[i], next[j]] = [next[j], next[i]];
+        return { ...doc, [key]: next };
+      }
+      return doc;
     }
-    case "setPreset":
-      return {
-        ...doc,
-        sections: doc.sections.map((s) => (s.uid === action.uid ? { ...s, presetId: action.presetId } : s)),
-      };
-    case "setText":
-      return {
-        ...doc,
-        sections: doc.sections.map((s) =>
-          s.uid === action.uid ? { ...s, texts: { ...s.texts, [action.field]: action.value } } : s,
-        ),
-      };
+    case "setPreset": {
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) => (s.uid === action.uid ? { ...s, presetId: action.presetId } : s));
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
+    case "setText": {
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) => (s.uid === action.uid ? { ...s, texts: { ...s.texts, [action.field]: action.value } } : s));
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
     case "setBuybox":
       return { ...doc, buybox: { ...doc.buybox, ...action.patch } };
     case "setBlockPreset": {

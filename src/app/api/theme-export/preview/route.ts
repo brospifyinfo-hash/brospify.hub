@@ -27,7 +27,7 @@ async function getManifest(): Promise<BaseManifest> {
     return manifest;
   } catch (e) {
     console.warn("[theme-preview] Basis-Manifest nicht lesbar:", e);
-    return { baseSections: [], capabilities: [] };
+    return { baseSections: [], homeSections: [], capabilities: [] };
   }
 }
 
@@ -113,6 +113,7 @@ export async function GET(req: NextRequest) {
       images: imgs,
       // Editor v2: was die Theme-Basis kann (für Bibliothek + Initial-Dokument).
       baseSections: manifest.baseSections,
+      homeSections: manifest.homeSections,
       capabilities: manifest.capabilities,
       badge: cp("PRODUCT_BADGE_TEXT", "BESTSELLER"),
       // 1. urgency_text (oben, rot)

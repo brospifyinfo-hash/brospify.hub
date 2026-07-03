@@ -109,33 +109,42 @@ function sectionTypeAvailable(zip: AdmZip, type: string): boolean {
 export interface BaseManifest {
   /** Aktive Produktseiten-Sections verwalteter Typen (id + Typ, in order-Reihenfolge). */
   baseSections: BaseSectionInfo[];
+  /** Aktive Startseiten-Sections verwalteter Typen (templates/index.json). */
+  homeSections: BaseSectionInfo[];
   /** Bibliotheks-Typen, die diese Basis wirklich rendern kann. */
   capabilities: string[];
 }
 
+function readManagedSections(zip: AdmZip, tplPath: string): BaseSectionInfo[] {
+  const out: BaseSectionInfo[] = [];
+  const entry = findEntry(zip, tplPath);
+  if (!entry) return out;
+  try {
+    const data = JSON.parse(entry.getData().toString("utf8")) as TemplateData;
+    const order = Array.isArray(data.order) ? data.order : [];
+    for (const sid of order) {
+      const sec = data.sections?.[sid];
+      if (!sec || sec.disabled === true) continue;
+      const type = String(sec.type || "");
+      if (MANAGED_TYPES.has(type) && sectionTypeAvailable(zip, type)) {
+        out.push({ id: sid, type });
+      }
+    }
+  } catch (e) {
+    console.warn(`[theme-compile] ${tplPath} der Basis nicht lesbar:`, e);
+  }
+  return out;
+}
+
 export function readBaseManifest(baseZip: Buffer, cacheKey = "base"): BaseManifest {
   const zip = new AdmZip(baseZip);
-  const baseSections: BaseSectionInfo[] = [];
-  const entry = findEntry(zip, "templates/product.json");
-  if (entry) {
-    try {
-      const data = JSON.parse(entry.getData().toString("utf8")) as TemplateData;
-      const order = Array.isArray(data.order) ? data.order : [];
-      for (const sid of order) {
-        const sec = data.sections?.[sid];
-        if (!sec || sec.disabled === true) continue;
-        const type = String(sec.type || "");
-        if (MANAGED_TYPES.has(type) && sectionTypeAvailable(zip, type)) {
-          baseSections.push({ id: sid, type });
-        }
-      }
-    } catch (e) {
-      console.warn("[theme-compile] product.json der Basis nicht lesbar:", e);
-    }
-  }
   const capabilities = SECTION_LIBRARY.filter((s) => sectionTypeAvailable(zip, s.type)).map((s) => s.type);
   void cacheKey;
-  return { baseSections, capabilities };
+  return {
+    baseSections: readManagedSections(zip, "templates/product.json"),
+    homeSections: readManagedSections(zip, "templates/index.json"),
+    capabilities,
+  };
 }
 
 // ─── Dokument → product.json ───────────────────────────────────────
@@ -148,7 +157,9 @@ function ensureHtml(s: string): string {
 function applyInstanceToSection(section: any, instance: SectionInstance, palette: ColorPalette, fresh = false): void {
   const def = getSectionDef(instance.type);
   if (!def) return;
-  const preset = getPresetDef(def, instance.presetId);
+  // presetId "" = NEUTRAL (übernommene Startseiten-Sections behalten ihren
+  // Basis-Look) — identische Semantik wie resolvePresetSettings im Frontend.
+  const preset = instance.presetId ? getPresetDef(def, instance.presetId) : undefined;
   section.settings = section.settings && typeof section.settings === "object" ? section.settings : {};
 
   // 1) Preset-Settings (Palette-Refs auflösen) — echte Schema-Keys.
@@ -479,6 +490,115 @@ function applyBuyboxStatic(
   }
 }
 
+// ─── Dokument → index.json (Startseite) ────────────────────────────
+// Gleiche Struktur-Logik wie die Produktseite: verwaltete Basis-Sections
+// werden durch den doc.home-Aufbau ersetzt (Reihenfolge, Presets, Texte,
+// Instanziierung), unverwaltete (Header-artiges, leere, disabled) bleiben
+// an ihrem Platz. presetId "" = Basis-Look der übernommenen Section bleibt.
+
+function compileHomeTemplate(
+  data: TemplateData,
+  doc: ThemeDocument,
+  zip: AdmZip,
+  cacheKey: string,
+  values: ThemeCopy,
+  palette: ColorPalette,
+): void {
+  const sections = (data.sections = data.sections && typeof data.sections === "object" ? data.sections : {});
+  const origOrder = Array.isArray(data.order) ? data.order : Object.keys(sections);
+
+  // Bindings + Token-Injection auf dem UNVERÄNDERTEN Template (Occurrence-
+  // Zählung der Bindings braucht die Original-Reihenfolge).
+  applyCopyBindings(data, "index");
+  for (const sid of origOrder) {
+    const sec = sections[sid];
+    if (!sec || sec.disabled === true) continue;
+    replaceTokensDeep(sec, values);
+    recolorByRoleDeep(sec, palette);
+  }
+
+  const isManaged = (sid: string) => MANAGED_TYPES.has(String(sections[sid]?.type || ""));
+  const unmanagedPrefix: string[] = [];
+  const unmanagedSuffix: string[] = [];
+  let seenManaged = false;
+  for (const sid of origOrder) {
+    if (isManaged(sid)) {
+      seenManaged = true;
+      continue;
+    }
+    (seenManaged ? unmanagedSuffix : unmanagedPrefix).push(sid);
+  }
+
+  const docIds: string[] = [];
+  const keptTemplateIds = new Set<string>();
+  for (const instance of doc.home || []) {
+    let section: any = null;
+    let sid = instance.uid;
+    let fresh = false;
+    if (instance.source === "template" && sections[instance.uid]) {
+      section = sections[instance.uid];
+      keptTemplateIds.add(instance.uid);
+      delete section.disabled;
+    } else {
+      const donorId = origOrder.find((id) => String(sections[id]?.type || "") === instance.type);
+      if (donorId) {
+        section = JSON.parse(JSON.stringify(sections[donorId]));
+        delete section.disabled;
+      } else {
+        section = instantiateSection(zip, cacheKey, instance);
+        fresh = true;
+      }
+      if (!section) {
+        console.warn(`[theme-compile] Home-Section-Typ „${instance.type}" nicht in Basis — übersprungen.`);
+        continue;
+      }
+      sid = instance.uid.startsWith("hub_") ? instance.uid : `hub_${instance.uid}`;
+      sections[sid] = section;
+    }
+    applyInstanceToSection(section, instance, palette, fresh);
+    replaceTokensDeep(section, values);
+    docIds.push(sid);
+  }
+
+  for (const sid of origOrder) {
+    if (isManaged(sid) && !keptTemplateIds.has(sid)) delete sections[sid];
+  }
+
+  data.order = [...unmanagedPrefix, ...docIds, ...unmanagedSuffix];
+
+  for (const sid of data.order) {
+    const sec = sections[sid];
+    if (!sec || sec.disabled === true) continue;
+    stripStrayTokens(sec);
+  }
+}
+
+// Generische Struktur-Validierung (order ↔ sections + Block-Bijektion) —
+// verhindert, dass jemals ein für Shopify ungültiges Template ausgeliefert wird.
+function validateTemplateStructure(data: TemplateData, name: string): void {
+  const sections = data.sections || {};
+  const order = Array.isArray(data.order) ? data.order : [];
+  if (!order.length) throw new Error(`Validierung: order-Array von ${name} ist leer.`);
+  if (order.length > 25) throw new Error(`Validierung: ${name} hat ${order.length} Sections — Shopify erlaubt max. 25.`);
+  const orderSet = new Set(order);
+  if (orderSet.size !== order.length) throw new Error(`Validierung: doppelte Section-ID in ${name}.`);
+  for (const sid of order) {
+    if (!sections[sid]) throw new Error(`Validierung: Section „${sid}" fehlt in ${name}.`);
+  }
+  for (const sid of Object.keys(sections)) {
+    if (!orderSet.has(sid)) throw new Error(`Validierung: Section „${sid}" steht nicht im order-Array von ${name}.`);
+  }
+  for (const [sid, secRaw] of Object.entries(sections)) {
+    const sec = secRaw as any;
+    if (!sec?.blocks) continue;
+    const bo: string[] = Array.isArray(sec.block_order) ? sec.block_order : [];
+    if (bo.length > 50) throw new Error(`Validierung: „${sid}" in ${name} hat ${bo.length} Blöcke — max. 50.`);
+    const boSet = new Set(bo);
+    for (const bid of bo) if (!sec.blocks[bid]) throw new Error(`Validierung: Block „${bid}" fehlt in „${sid}" (${name}).`);
+    for (const bid of Object.keys(sec.blocks)) if (!boSet.has(bid)) throw new Error(`Validierung: Block „${bid}" verwaist in „${sid}" (${name}).`);
+  }
+}
+
 // ─── Shopify-Konformität: blocks ↔ block_order exakt 1:1 halten ─────
 // Shopify verwirft ein JSON-Template KOMPLETT (Customizer zeigt „No
 // templates found"), wenn ein Block in `blocks` nicht in `block_order`
@@ -588,27 +708,34 @@ export function compileDocumentZip(
   validateProductTemplate(productData);
   zip.updateFile(productEntry.entryName, Buffer.from(JSON.stringify(productData, null, 2), "utf8"));
 
-  // 2) templates/index.json — Copy + Farben (Struktur bleibt Basis-Stand).
+  // 2) templates/index.json — dokumentgesteuert, wenn das Dokument einen
+  // Startseiten-Aufbau mitbringt (doc.home); sonst Legacy: Copy + Farben,
+  // Struktur bleibt Basis-Stand.
   const indexEntry = findEntry(zip, "templates/index.json");
   if (indexEntry) {
     try {
       const indexData = JSON.parse(indexEntry.getData().toString("utf8")) as TemplateData;
-      applyCopyBindings(indexData, "index");
-      const hidden = new Set(style.hiddenTypes || []);
-      const order = Array.isArray(indexData.order) ? indexData.order : [];
-      for (const sid of order) {
-        const sec = indexData.sections?.[sid];
-        if (!sec) continue;
-        if (sec.type && hidden.has(String(sec.type))) {
-          sec.disabled = true;
-          continue;
+      if (Array.isArray(doc.home) && doc.home.length) {
+        compileHomeTemplate(indexData, doc, zip, cacheKey, values, palette);
+      } else {
+        applyCopyBindings(indexData, "index");
+        const hidden = new Set(style.hiddenTypes || []);
+        const order = Array.isArray(indexData.order) ? indexData.order : [];
+        for (const sid of order) {
+          const sec = indexData.sections?.[sid];
+          if (!sec) continue;
+          if (sec.type && hidden.has(String(sec.type))) {
+            sec.disabled = true;
+            continue;
+          }
+          if (sec.disabled === true) continue;
+          replaceTokensDeep(sec, values);
+          recolorByRoleDeep(sec, palette);
+          stripStrayTokens(sec);
         }
-        if (sec.disabled === true) continue;
-        replaceTokensDeep(sec, values);
-        recolorByRoleDeep(sec, palette);
-        stripStrayTokens(sec);
       }
       sanitizeTemplateBlocks(indexData);
+      validateTemplateStructure(indexData, "index.json");
       zip.updateFile(indexEntry.entryName, Buffer.from(JSON.stringify(indexData, null, 2), "utf8"));
     } catch (e) {
       console.warn("[theme-compile] index.json übersprungen:", e);
@@ -650,6 +777,9 @@ export function isValidDocument(doc: unknown): doc is ThemeDocument {
     !!d.global.colors &&
     Array.isArray(d.sections) &&
     d.sections.every((s) => s && typeof s.uid === "string" && typeof s.type === "string") &&
+    // home ist optional (ältere Clients) — wenn vorhanden, muss es passen.
+    (d.home === undefined ||
+      (Array.isArray(d.home) && d.home.every((s) => s && typeof s.uid === "string" && typeof s.type === "string"))) &&
     !!d.buybox &&
     Array.isArray(d.buybox.order)
   );

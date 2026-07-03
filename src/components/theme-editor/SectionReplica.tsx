@@ -420,6 +420,78 @@ export default function SectionReplica({ instance, ctx }: { instance: SectionIns
       );
     }
 
+    case "slideshow2": {
+      const full = s.full_width !== false;
+      const radius = num(s.corner_radius, 30);
+      const h = Math.round(num(s.height_desktop, 700) * 0.5);
+      return (
+        <div className="te-hero" style={{ height: h, borderRadius: full ? 0 : radius, margin: full ? "0 -24px" : "10px 0" }}>
+          {img(0) ? <img src={img(0)} alt="" /> : <span className="te-noimg" />}
+          <span className="te-hero-ov" />
+          <div className="te-hero-txt">
+            <strong>{t.heading}</strong>
+            <span>{t.subheading}</span>
+            <em className="te-hero-btn" style={{ background: ctx.palette.button, color: ctx.palette.buttonText }}>{t.cta}</em>
+          </div>
+          <div className="te-hero-dots"><span style={{ background: ctx.palette.accent }} /><span /><span /></div>
+        </div>
+      );
+    }
+
+    case "benefits": {
+      const pad = Math.round(num(s.padding_vertical, 20) * 0.8);
+      return (
+        <div className="te-benefits2" style={{ paddingTop: pad, paddingBottom: pad }}>
+          {[{ ti: t.title1, tx: t.text1 }, { ti: t.title2, tx: t.text2 }].map((b, i) => (
+            <div key={i} className="te-benefit2">
+              <span className="te-ficon">{i === 0 ? "✦" : "◆"}</span>
+              <span><strong>{b.ti}</strong><p>{b.tx}</p></span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    case "photo": {
+      const bg = str(s.bg_color, ctx.palette.background);
+      return (
+        <div className="te-fullpad" style={{ background: bg }}>
+          <div className="te-photo">
+            <div className="te-photo-imgs">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className={`te-photo-img p${i}`}>{img(i) ? <img src={img(i)} alt="" /> : <span className="te-noimg" />}</div>
+              ))}
+            </div>
+            <div className="te-photo-txt">
+              <span className="te-eyebrow">{t.subtitle}</span>
+              <h2 className="te-h" style={{ textAlign: "left" }}>{t.title}</h2>
+              <p>{t.description}</p>
+              <span className="te-btn" style={{ background: str(s.btn_bg_color, ctx.palette.button), color: str(s.btn_text_color, ctx.palette.buttonText) }}>{t.cta}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    case "map": {
+      const mapLeft = str(s.layout, "map_right") === "map_left";
+      const dark = str(s.map_filter, "grayscale") === "dark";
+      return (
+        <div className="te-map" style={{ flexDirection: mapLeft ? "row-reverse" : "row" }}>
+          <div className="te-map-txt">
+            <span className="te-eyebrow">{t.subtitle}</span>
+            <h2 className="te-h" style={{ textAlign: "left" }}>{t.title}</h2>
+            <p>{t.text}</p>
+            <span className="te-map-addr">📍 {t.address}</span>
+            <span className="te-btn" style={{ background: str(s.btn_bg_color, ctx.palette.button), color: str(s.btn_text_color, ctx.palette.buttonText) }}>{t.cta}</span>
+          </div>
+          <div className={`te-map-canvas ${dark ? "dark" : ""}`}>
+            <span className="te-map-pin" style={{ background: str(s.pin_color, ctx.palette.accent) }} />
+          </div>
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -543,6 +615,37 @@ export const REPLICA_CSS = `
 .te-tab.on{opacity:1;border-bottom:2px solid}
 .te-tabpanel{background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));border:1px solid color-mix(in srgb,var(--pv-text) 9%,transparent);font-size:13px;line-height:1.6;opacity:.85;box-shadow:var(--pv-shadow)}
 
+.te-hero{position:relative;overflow:hidden;background:color-mix(in srgb,var(--pv-text) 10%,var(--pv-bg))}
+.te-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.te-hero-ov{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.62),rgba(0,0,0,.12) 60%)}
+.te-hero-txt{position:absolute;left:0;right:0;bottom:44px;display:flex;flex-direction:column;align-items:center;text-align:center;color:#fff;gap:8px;padding:0 30px}
+.te-hero-txt strong{font-family:var(--pv-h);font-weight:800;font-size:34px;line-height:1.08;letter-spacing:-.02em;white-space:pre-line}
+.te-hero-txt span{font-size:14px;opacity:.85;max-width:460px}
+.te-hero-btn{display:inline-block;font-style:normal;font-weight:800;font-size:13px;padding:12px 28px;border-radius:100px;margin-top:6px}
+.te-hero-dots{position:absolute;bottom:14px;left:0;right:0;display:flex;gap:6px;justify-content:center}
+.te-hero-dots span{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.45)}
+
+.te-benefits2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.te-benefit2{display:flex;gap:12px;align-items:flex-start;border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 10%,transparent);border-radius:min(var(--pv-r),16px);padding:16px;background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));box-shadow:var(--pv-shadow)}
+.te-benefit2 strong{display:block;font-family:var(--pv-h);font-size:14.5px;font-weight:800;margin-bottom:3px}
+.te-benefit2 p{font-size:12.5px;opacity:.7;margin:0;line-height:1.5}
+
+.te-photo{display:flex;gap:26px;align-items:center}
+.te-photo-imgs{flex:1.2;display:grid;grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr;gap:10px;min-width:0}
+.te-photo-img{border-radius:min(var(--pv-r),16px);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 7%,var(--pv-bg))}
+.te-photo-img.p0{grid-row:1/3;aspect-ratio:auto}
+.te-photo-img img{width:100%;height:100%;object-fit:cover;display:block}
+.te-photo-txt{flex:1;min-width:0}
+.te-photo-txt p{font-size:13.5px;line-height:1.6;opacity:.75;margin:0 0 6px}
+
+.te-map{display:flex;gap:26px;align-items:center;padding:26px 0}
+.te-map-txt{flex:1;min-width:0}
+.te-map-txt p{font-size:13.5px;line-height:1.6;opacity:.75;margin:0 0 8px}
+.te-map-addr{display:block;font-size:12.5px;font-weight:700;margin:0 0 6px}
+.te-map-canvas{position:relative;flex:1.1;aspect-ratio:4/3;border-radius:min(var(--pv-r),16px);overflow:hidden;background:repeating-linear-gradient(0deg,#e8eaed 0 34px,#dde0e4 34px 35px),repeating-linear-gradient(90deg,#e8eaed 0 34px,#dde0e4 34px 35px);box-shadow:var(--pv-shadow)}
+.te-map-canvas.dark{filter:invert(.9) hue-rotate(180deg)}
+.te-map-pin{position:absolute;top:46%;left:48%;width:18px;height:18px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 4px 10px rgba(0,0,0,.3)}
+
 /* Handy-Layout der Replicas */
 .pm-mobile .te-revgrid{grid-template-columns:1fr}
 .pm-mobile .te-fgrid{grid-template-columns:1fr 1fr!important}
@@ -553,4 +656,8 @@ export const REPLICA_CSS = `
 .pm-mobile .te-count{justify-content:center;text-align:center}
 .pm-mobile .te-scroll-txt strong{font-size:24px}
 .pm-mobile .te-cta-h{font-size:26px!important}
+.pm-mobile .te-benefits2{grid-template-columns:1fr}
+.pm-mobile .te-photo{flex-direction:column}
+.pm-mobile .te-map{flex-direction:column!important}
+.pm-mobile .te-hero-txt strong{font-size:24px}
 `;

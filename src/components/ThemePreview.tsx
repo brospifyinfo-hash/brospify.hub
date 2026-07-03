@@ -113,7 +113,7 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
-  buyboxCfg = {}, gallery,
+  buyboxCfg = {}, gallery, page = "product",
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
@@ -128,6 +128,8 @@ export default function ThemePreview({
   /** Kaufbox v2: Style-Art + Texte je Baustein-Typ, Galerie-Preset. */
   buyboxCfg?: Record<string, BlockConfig>;
   gallery?: GalleryConfig;
+  /** "home" = Startseite: nur Sections, keine Galerie/Kaufbox. */
+  page?: "product" | "home";
 }) {
   const hidden = new Set(hiddenSections);
   const hiddenBlk = new Set(hiddenBlocks);
@@ -164,7 +166,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge]);
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -621,6 +623,7 @@ export default function ThemePreview({
         <div className="pm-empty">{loading ? "Lädt…" : "—"}</div>
       ) : (
         <div className="pm-stage">
+          {page !== "home" && (
           <div className="pm-grid">
             {/* Galerie — Layout/Format/Pfeile/Zähler aus dem Galerie-Preset */}
             <div className={`pm-gallery ${galLeft ? "pm-gal-left" : ""}`}>
@@ -665,6 +668,7 @@ export default function ThemePreview({
               {order.filter((t) => !hiddenBlk.has(t)).map((t) => blkWrap(t, renderBlock(t)))}
             </div>
           </div>
+          )}
 
           {/* ── Editor-Modus: dokumentgesteuerte Sections + Einfüge-Punkte ── */}
           {docSections

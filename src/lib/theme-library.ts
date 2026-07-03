@@ -111,8 +111,11 @@ export function resolveTexts(instance: SectionInstance): Record<string, string> 
   return out;
 }
 
-/** Effektive Preset-Settings einer Instanz (Palette-Refs aufgelöst). */
+/** Effektive Preset-Settings einer Instanz (Palette-Refs aufgelöst).
+ *  presetId "" = NEUTRAL: keine Overrides — die Section behält ihren
+ *  Basis-Zustand (wichtig für übernommene Startseiten-Sections). */
 export function resolvePresetSettings(instance: SectionInstance, palette: ColorPalette): Record<string, string | number | boolean> {
+  if (!instance.presetId) return {};
   const def = getSectionDef(instance.type);
   const preset = getPresetDef(def, instance.presetId);
   const out: Record<string, string | number | boolean> = {};
@@ -488,6 +491,82 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Tabs mittig", settings: { heading_align: "center", tab_align: "center", accent_color: "@accent" } },
       { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Editorial links", settings: { heading_align: "left", tab_align: "flex-start", accent_color: "@accent" } },
       { id: "karte", label: "Große Karte", labelEn: "Big card", hint: "Runder Container, viel Innenraum", settings: { container_radius: 22, panel_padding: 36, heading_align: "center", tab_align: "center", accent_color: "@accent" } },
+    ],
+  },
+
+  // ══ Startseiten-Sections (auch auf der Produktseite einsetzbar) ══
+  {
+    type: "slideshow2",
+    category: "media",
+    label: "Hero-Slider",
+    labelEn: "Hero slider",
+    desc: "Großer Startseiten-Slider mit Headline, Untertitel & Button.",
+    descEn: "Big homepage slider with headline, subheading & button.",
+    fields: [
+      { id: "heading", label: "Headline (Slide 1)", labelEn: "Headline (slide 1)", kind: "textarea", target: { key: "heading", blockType: "slide", index: 0 }, def: "Spürbar besser — ab dem ersten Tag" },
+      { id: "subheading", label: "Untertitel (Slide 1)", labelEn: "Subheading (slide 1)", kind: "text", target: { key: "subheading", blockType: "slide", index: 0 }, def: "Der einfache Weg zu einem Ergebnis, das du wirklich merkst." },
+      { id: "cta", label: "Button-Text (Slide 1)", labelEn: "Button label (slide 1)", kind: "text", target: { key: "btn_text", blockType: "slide", index: 0 }, def: "JETZT SICHERN" },
+    ],
+    presets: [
+      { id: "vollbild", label: "Vollbild", labelEn: "Full bleed", hint: "Kantenlos über die volle Breite", settings: { full_width: true, corner_radius: 0, height_desktop: 700, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
+      { id: "karte", label: "Karten-Hero", labelEn: "Card hero", hint: "Abgerundet mit Rand", settings: { full_width: false, corner_radius: 30, height_desktop: 560, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Niedriger, ruhiger Einstieg", settings: { full_width: false, corner_radius: 16, height_desktop: 480, height_mobile: 460, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
+    ],
+  },
+  {
+    type: "benefits",
+    category: "content",
+    label: "Vorteil-Banner",
+    labelEn: "Benefit banner",
+    desc: "Zwei kompakte Vorteile nebeneinander (Versand, Bezahlung …).",
+    descEn: "Two compact benefits side by side (shipping, payment …).",
+    fields: [
+      { id: "title1", label: "Vorteil 1 — Titel", labelEn: "Benefit 1 — title", kind: "text", target: { key: "title_1" }, def: "Bequem auf Rechnung" },
+      { id: "text1", label: "Vorteil 1 — Text", labelEn: "Benefit 1 — text", kind: "text", target: { key: "text_1" }, def: "Bezahle entspannt mit PayPal oder Klarna." },
+      { id: "title2", label: "Vorteil 2 — Titel", labelEn: "Benefit 2 — title", kind: "text", target: { key: "title_2" }, def: "Schneller DHL-Versand" },
+      { id: "text2", label: "Vorteil 2 — Text", labelEn: "Benefit 2 — text", kind: "text", target: { key: "text_2" }, def: "Dein Paket ist in 1–3 Tagen bei dir Zuhause." },
+    ],
+    presets: [
+      { id: "standard", label: "Standard", labelEn: "Standard", hint: "Kompakte Leiste", settings: { padding_vertical: 20 } },
+      { id: "luftig", label: "Luftig", labelEn: "Airy", hint: "Mehr Abstand", settings: { padding_vertical: 48 } },
+    ],
+  },
+  {
+    type: "photo",
+    category: "content",
+    label: "Foto-Kollage + Text",
+    labelEn: "Photo collage + text",
+    desc: "Drei Bilder mit Story-Text und Button.",
+    descEn: "Three images with story text and a button.",
+    fields: [
+      { id: "subtitle", label: "Eyebrow", labelEn: "Eyebrow", kind: "text", target: { key: "subtitle" }, def: "Unsere Marke" },
+      { id: "title", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "title" }, def: "Gemacht für deinen Alltag" },
+      { id: "description", label: "Text", labelEn: "Text", kind: "textarea", target: { key: "description" }, def: "Einfach, zuverlässig und durchdacht bis ins Detail — damit du dich auf das Wesentliche konzentrieren kannst.", html: true },
+      { id: "cta", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "button_label" }, def: "JETZT ENTDECKEN" },
+    ],
+    presets: [
+      { id: "hell", label: "Hell", labelEn: "Light", hint: "Auf Seiten-Hintergrund", settings: { bg_color: "@background", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
+      { id: "getoent", label: "Getönt", labelEn: "Tinted", hint: "Sanft abgesetzt", settings: { bg_color: "#f7f5f2", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
+    ],
+  },
+  {
+    type: "map",
+    category: "info",
+    label: "Standort & Kontakt",
+    labelEn: "Location & contact",
+    desc: "Karten-Sektion mit Adresse und Kontakt-Button.",
+    descEn: "Map section with address and contact button.",
+    fields: [
+      { id: "subtitle", label: "Eyebrow", labelEn: "Eyebrow", kind: "text", target: { key: "subtitle" }, def: "Besuche uns" },
+      { id: "title", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "title" }, def: "Unser Standort" },
+      { id: "text", label: "Text", labelEn: "Text", kind: "textarea", target: { key: "text" }, def: "Wir sind für dich da — bei Fragen melde dich jederzeit gerne bei uns.", html: true },
+      { id: "address", label: "Adresse", labelEn: "Address", kind: "text", target: { key: "address" }, def: "Berlin, Germany" },
+      { id: "cta", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "btn_label" }, def: "Route planen" },
+    ],
+    presets: [
+      { id: "rechts", label: "Karte rechts", labelEn: "Map right", hint: "Text links, Karte rechts", settings: { layout: "map_right", map_filter: "grayscale", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
+      { id: "links", label: "Karte links", labelEn: "Map left", hint: "Karte links, Text rechts", settings: { layout: "map_left", map_filter: "grayscale", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
+      { id: "dunkel", label: "Dunkler Filter", labelEn: "Dark filter", hint: "Karte im Dark-Look", settings: { layout: "map_right", map_filter: "dark", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
     ],
   },
 ];
@@ -901,6 +980,7 @@ export function buildInitialDocument(
   styleId: string,
   baseSections: BaseSectionInfo[],
   capabilities: string[],
+  homeSections: BaseSectionInfo[] = [],
 ): ThemeDocument {
   const style = getThemeStyle(styleId);
   const caps = new Set(capabilities);
@@ -936,6 +1016,14 @@ export function buildInitialDocument(
     }
   }
   doc.sections = sections;
+
+  // Startseite: Basis-Aufbau ÜBERNEHMEN (presetId "" = neutral, echte Inhalte
+  // bleiben) — nur vom Stil ausgeblendete Typen (wave/map …) fliegen raus.
+  // Der Kunde kann danach umsortieren, entfernen und neue Sections einfügen.
+  const styleHidden = new Set(style.hiddenTypes || []);
+  doc.home = homeSections
+    .filter((b) => !styleHidden.has(b.type))
+    .map((b) => ({ uid: b.id, type: b.type, presetId: "", source: "template" as const, texts: {} }));
   return doc;
 }
 
