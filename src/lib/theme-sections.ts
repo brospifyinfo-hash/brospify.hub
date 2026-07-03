@@ -28,27 +28,42 @@ export interface BuyboxBlockDef {
   label: string;
 }
 export const BUYBOX_BLOCKS: BuyboxBlockDef[] = [
+  { type: "sale_banner", label: "Sale-Banner" },
   { type: "urgency_text", label: "Angebots-Hinweis" },
   { type: "custom_title", label: "Produkttitel" },
   { type: "custom_rating", label: "Sterne-Bewertung" },
   { type: "benefits_list", label: "Vorteile-Liste" },
   { type: "stock_indicator", label: "Lager-Hinweis" },
   { type: "variant_picker", label: "Varianten-Auswahl" },
+  { type: "quantity_selector", label: "Mengen-Auswahl" },
   { type: "custom_price", label: "Preis" },
   { type: "bundle_selector", label: "Mengen-Bundles" },
   { type: "buy_buttons", label: "Kaufen-Button" },
   { type: "payment_icons", label: "Zahlarten" },
   { type: "free_gift", label: "Gratis-Geschenk" },
   { type: "delivery_timeline", label: "Liefer-Timeline" },
+  { type: "feature_box", label: "Feature-Boxen" },
+  { type: "icon-with-text", label: "Vertrauens-Icons" },
+  { type: "description", label: "Produktbeschreibung" },
   { type: "custom_divider", label: "Trennlinie" },
   { type: "text", label: "Freitext" },
   { type: "custom_accordion", label: "FAQ (Klappbereich)" },
+  { type: "collapsible_tab", label: "Aufklapp-Tab (Icon)" },
+  { type: "complementary", label: "Passende Produkte" },
+  { type: "share", label: "Teilen-Button" },
 ];
 export const BUYBOX_DEFAULT_ORDER = BUYBOX_BLOCKS.map((b) => b.type);
 // Zusätzliche Bausteine, die im Theme eingebaut, aber standardmäßig NICHT im
 // Layout sind (opt-in). Der Kunde blendet sie im Baustein-Manager ein +
-// positioniert sie. Alle existieren als echte main-product-Blöcke.
-export const BUYBOX_OPTIONAL = ["variant_picker", "custom_divider", "text", "custom_accordion"];
+// positioniert sie. Alle existieren als echte main-product-Blocktypen —
+// fehlt eine Instanz im Template, instanziiert die Compile-Engine sie aus
+// den Schema-Defaults. `description` ist bewusst NICHT optional (war schon
+// immer im Theme sichtbar und bleibt es standardmäßig).
+export const BUYBOX_OPTIONAL = [
+  "variant_picker", "custom_divider", "text", "custom_accordion",
+  "sale_banner", "quantity_selector", "feature_box", "icon-with-text",
+  "collapsible_tab", "complementary", "share",
+];
 
 export function sectionHeadingsToThemeCopy(headings: Record<string, string> | undefined): Record<string, string> {
   const out: Record<string, string> = {};

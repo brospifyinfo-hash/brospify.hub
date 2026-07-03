@@ -385,7 +385,7 @@ export default function ThemeEditorPage() {
                   <button
                     onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
                     className={`w-full text-left rounded-lg border px-2.5 py-2 mb-1.5 transition ${
-                      selected === "__buybox" ? "border-[#95BF47]/60 bg-[#95BF47]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
+                      selected === "__buybox" || selected?.startsWith("blk:") ? "border-[#95BF47]/60 bg-[#95BF47]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
                     }`}
                   >
                     <span className="flex items-center gap-2">
@@ -433,6 +433,8 @@ export default function ThemeEditorPage() {
                   border={doc.global.design.border}
                   iconStyle={doc.global.design.iconStyle}
                   benefitIcons={doc.buybox.benefitIcons}
+                  buyboxCfg={doc.buybox.blocks}
+                  gallery={doc.buybox.gallery}
                   docSections={doc.sections}
                   selectedUid={selected}
                   onSelectSection={(uid) => setSelected(uid)}
@@ -448,6 +450,7 @@ export default function ThemeEditorPage() {
                     dispatch={dispatch}
                     selected={selected}
                     onClearSelect={() => setSelected(null)}
+                    onSelectBlock={setSelected}
                     onPickStyle={pickStyle}
                     onRandomize={randomize}
                     previewData={previewData}

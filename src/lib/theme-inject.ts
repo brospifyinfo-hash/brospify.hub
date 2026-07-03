@@ -122,7 +122,11 @@ export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: st
 
   const typeOf = (id: string): string => String(main.blocks[id]?.type || "");
   const hidden = new Set(hiddenBlocks || []);
-  const orderTypes = hasOrder ? (order as string[]) : BUYBOX_DEFAULT_ORDER;
+  // Fehlende verwaltete Typen ans Ende anhängen: ältere Clients senden kürzere
+  // order-Arrays (z. B. ohne "description") — deren Blöcke dürfen dadurch
+  // NICHT aus dem Theme fallen, sondern bleiben (hinten) erhalten.
+  const provided = hasOrder ? (order as string[]) : BUYBOX_DEFAULT_ORDER;
+  const orderTypes = [...provided, ...BUYBOX_DEFAULT_ORDER.filter((t) => !provided.includes(t))];
 
   // Verwaltete Block-IDs je Typ (Original-Reihenfolge).
   const byType: Record<string, string[]> = {};
@@ -149,8 +153,17 @@ export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: st
   main.block_order = result;
 }
 
-// Setzt die gewählten Vorteile-Icons (als Emoji) in den benefits_list-Block der
+// Setzt die gewählten Vorteile-Icons in den benefits_list-Block der
 // main-product-Section — so zeigt auch das heruntergeladene Theme die Icons.
+// `icon_N` ist im Schema ein SELECT (check|truck|return|shield|lock|star|
+// heart|bag|package|gift|lightning) → Bibliotheks-IDs werden auf gültige
+// Werte gemappt; `emoji_N` bleibt als Emoji-Fallback (für icon_style=emoji).
+const BENEFIT_ICON_SELECT: Record<string, string> = {
+  truck: "truck", rotate: "return", shield: "shield", star: "star", lock: "lock",
+  card: "lock", gift: "gift", heart: "heart", leaf: "check", clock: "check",
+  check: "check", bolt: "lightning", box: "package", medal: "star",
+  thumb: "check", sparkle: "star", globe: "check", fire: "lightning",
+};
 export function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
   if (!Array.isArray(benefitIcons) || !benefitIcons.length) return;
   const sections = data?.sections;
@@ -162,9 +175,8 @@ export function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
   for (let i = 0; i < 4; i++) {
     const id = benefitIcons[i];
     if (!id) continue;
-    const emoji = getIcon(id).emoji;
-    bl.settings["icon_" + (i + 1)] = emoji;
-    bl.settings["emoji_" + (i + 1)] = emoji;
+    bl.settings["icon_" + (i + 1)] = BENEFIT_ICON_SELECT[id] || "check";
+    bl.settings["emoji_" + (i + 1)] = getIcon(id).emoji;
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

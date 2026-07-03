@@ -9,7 +9,7 @@ import { useState, type ReactNode } from "react";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Trash2, Shuffle, MousePointerClick } from "lucide-react";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
 import type { PreviewData } from "@/components/ThemePreview";
-import { getSectionDef } from "@/lib/theme-library";
+import { getSectionDef, getBuyboxLib, GALLERY_PRESETS } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
 import { BUYBOX_BLOCKS } from "@/lib/theme-sections";
 import { THEME_ICONS, DEFAULT_BENEFIT_ICONS, getIcon } from "@/lib/theme-icons";
@@ -38,12 +38,14 @@ function Group({ id, title, open, onToggle, children }: { id: string; title: str
 }
 
 export default function Inspector({
-  doc, dispatch, selected, onClearSelect, onPickStyle, onRandomize, previewData,
+  doc, dispatch, selected, onClearSelect, onSelectBlock, onPickStyle, onRandomize, previewData,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
   selected: string | null;
   onClearSelect: () => void;
+  /** Auswahl umschalten: "__buybox" (Panel) oder "blk:<typ>" (Baustein offen). */
+  onSelectBlock: (sel: string) => void;
   onPickStyle: (id: string) => void;
   onRandomize: () => void;
   previewData: PreviewData | null;
@@ -139,59 +141,163 @@ export default function Inspector({
     );
   }
 
-  // ── Kaufbox ausgewählt ──
-  if (selected === "__buybox") {
+  // ── Kaufbox ausgewählt (Panel oder einzelner Baustein via "blk:<typ>") ──
+  const blkSelected = selected && selected.startsWith("blk:") ? selected.slice(4) : null;
+  if (selected === "__buybox" || blkSelected) {
     const blockLabel = (type: string) => BUYBOX_BLOCKS.find((b) => b.type === type)?.label || type;
+    const expandedType = blkSelected;
+
+    // Konfiguration EINES Bausteins: Style-Arten + kuratierte Texte.
+    const blockConfig = (type: string) => {
+      const lib = getBuyboxLib(type);
+      if (!lib || (!lib.presets.length && !lib.fields.length)) return null;
+      const cfg = doc.buybox.blocks[type];
+      return (
+        <div className="mt-2 pt-2 border-t border-white/[0.06] space-y-2.5">
+          {lib.presets.length > 0 && (
+            <div>
+              <span className="block text-[10px] uppercase tracking-[0.12em] font-semibold text-zinc-500 mb-1.5">{t.themes.editorPreset}</span>
+              <div className="flex flex-wrap gap-1.5">
+                {lib.presets.map((p) => {
+                  const on = cfg?.presetId ? cfg.presetId === p.id : false;
+                  return (
+                    <button
+                      key={p.id}
+                      title={p.hint}
+                      onClick={() => dispatch({ type: "setBlockPreset", blockType: type, presetId: p.id })}
+                      className={`rounded-full border px-2.5 py-1 text-[10.5px] font-semibold transition ${
+                        on ? "border-[#95BF47]/70 bg-[#95BF47]/15 text-white" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-white"
+                      }`}
+                    >
+                      {lang === "en" ? p.labelEn : p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {lib.fields.length > 0 && (
+            <div className="space-y-1.5">
+              {lib.fields.map((f) => (
+                <label key={f.id} className="block">
+                  <span className="block text-[10px] text-zinc-500 mb-0.5">{lang === "en" ? f.labelEn : f.label}</span>
+                  {f.kind === "textarea" ? (
+                    <textarea
+                      value={cfg?.texts?.[f.id] ?? ""}
+                      placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
+                      rows={2}
+                      onChange={(e) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: e.target.value })}
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40 resize-y"
+                    />
+                  ) : (
+                    <input
+                      value={cfg?.texts?.[f.id] ?? ""}
+                      placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
+                      onChange={(e) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: e.target.value })}
+                      className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
     return (
       <div className="space-y-3">
         <div className="rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-3 py-2.5">
           <div className="text-[13px] font-bold text-white">{t.themes.editorBuybox}</div>
           <div className="text-[10.5px] text-zinc-500">{t.themes.builderBlocks}</div>
         </div>
+
+        {/* Produktgalerie: Style-Art + Bild-Badge */}
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+          <div className="text-[12px] font-semibold text-white mb-1.5">{t.themes.editorGallery}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {GALLERY_PRESETS.map((p) => {
+              const on = (doc.buybox.gallery?.presetId || GALLERY_PRESETS[0].id) === p.id;
+              return (
+                <button
+                  key={p.id}
+                  title={p.hint}
+                  onClick={() => dispatch({ type: "setGallery", patch: { presetId: p.id } })}
+                  className={`rounded-full border px-2.5 py-1 text-[10.5px] font-semibold transition ${
+                    on ? "border-[#95BF47]/70 bg-[#95BF47]/15 text-white" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-white"
+                  }`}
+                >
+                  {lang === "en" ? p.labelEn : p.label}
+                </button>
+              );
+            })}
+          </div>
+          <label className="block mt-2">
+            <span className="block text-[10px] text-zinc-500 mb-0.5">{t.themes.editorGalleryBadge}</span>
+            <input
+              value={doc.buybox.gallery?.badge ?? ""}
+              placeholder="BESTSELLER"
+              onChange={(e) => dispatch({ type: "setGallery", patch: { badge: e.target.value } })}
+              className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
+            />
+          </label>
+        </div>
+
         <div className="space-y-1.5">
           {doc.buybox.order.map((type, i) => {
             const visible = !doc.buybox.hidden.includes(type);
+            const expanded = expandedType === type;
+            const hasConfig = !!getBuyboxLib(type) && ((getBuyboxLib(type)?.presets.length || 0) > 0 || (getBuyboxLib(type)?.fields.length || 0) > 0);
             return (
-              <div key={type} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 transition ${visible ? "border-white/10 bg-white/[0.03]" : "border-white/[0.06] bg-white/[0.01] opacity-55"}`}>
-                <div className="flex flex-col -my-0.5">
+              <div key={type} className={`rounded-lg border px-2 py-1.5 transition ${expanded ? "border-[#95BF47]/50 bg-[#95BF47]/[0.06]" : visible ? "border-white/10 bg-white/[0.03]" : "border-white/[0.06] bg-white/[0.01] opacity-55"}`}>
+                <div className="flex items-center gap-2">
+                  <div className="flex flex-col -my-0.5">
+                    <button
+                      onClick={() => {
+                        if (i <= 0) return;
+                        const order = [...doc.buybox.order];
+                        [order[i - 1], order[i]] = [order[i], order[i - 1]];
+                        dispatch({ type: "setBuybox", patch: { order } });
+                      }}
+                      disabled={i === 0}
+                      className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none"
+                      aria-label="hoch"
+                    >
+                      <ChevronUp className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (i >= doc.buybox.order.length - 1) return;
+                        const order = [...doc.buybox.order];
+                        [order[i], order[i + 1]] = [order[i + 1], order[i]];
+                        dispatch({ type: "setBuybox", patch: { order } });
+                      }}
+                      disabled={i === doc.buybox.order.length - 1}
+                      className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none"
+                      aria-label="runter"
+                    >
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   <button
-                    onClick={() => {
-                      if (i <= 0) return;
-                      const order = [...doc.buybox.order];
-                      [order[i - 1], order[i]] = [order[i], order[i - 1]];
-                      dispatch({ type: "setBuybox", patch: { order } });
-                    }}
-                    disabled={i === 0}
-                    className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none"
-                    aria-label="hoch"
+                    onClick={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
+                    className="text-[12px] font-medium text-white flex-1 min-w-0 truncate text-left hover:text-[#cfe9a3] transition"
                   >
-                    <ChevronUp className="w-3.5 h-3.5" />
+                    {blockLabel(type)}
+                    {hasConfig && <ChevronDown className={`inline w-3 h-3 ml-1 opacity-50 transition-transform ${expanded ? "rotate-180" : ""}`} />}
                   </button>
                   <button
                     onClick={() => {
-                      if (i >= doc.buybox.order.length - 1) return;
-                      const order = [...doc.buybox.order];
-                      [order[i], order[i + 1]] = [order[i + 1], order[i]];
-                      dispatch({ type: "setBuybox", patch: { order } });
+                      const hidden = visible ? [...doc.buybox.hidden, type] : doc.buybox.hidden.filter((h) => h !== type);
+                      dispatch({ type: "setBuybox", patch: { hidden } });
                     }}
-                    disabled={i === doc.buybox.order.length - 1}
-                    className="text-zinc-500 hover:text-white disabled:opacity-20 leading-none"
-                    aria-label="runter"
+                    aria-label={blockLabel(type)}
+                    className="text-zinc-400 hover:text-white shrink-0"
                   >
-                    <ChevronDown className="w-3.5 h-3.5" />
+                    {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                   </button>
                 </div>
-                <span className="text-[12px] font-medium text-white flex-1 min-w-0 truncate">{blockLabel(type)}</span>
-                <button
-                  onClick={() => {
-                    const hidden = visible ? [...doc.buybox.hidden, type] : doc.buybox.hidden.filter((h) => h !== type);
-                    dispatch({ type: "setBuybox", patch: { hidden } });
-                  }}
-                  aria-label={blockLabel(type)}
-                  className="text-zinc-400 hover:text-white shrink-0"
-                >
-                  {visible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
-                </button>
+                {expanded && hasConfig && blockConfig(type)}
               </div>
             );
           })}

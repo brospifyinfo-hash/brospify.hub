@@ -36,10 +36,26 @@ export interface SectionInstance {
   texts: Record<string, string>;
 }
 
+/** Konfiguration EINES Kaufbox-Bausteins: Style-Art + kuratierte Texte. */
+export interface BlockConfig {
+  presetId: string;
+  texts: Record<string, string>;
+}
+
+/** Produktgalerie (Bereich Produktbild + Thumbnails) — pg_*-Settings. */
+export interface GalleryConfig {
+  presetId: string;
+  /** Badge-Text auf dem Hauptbild ("" = kein Badge). */
+  badge: string;
+}
+
 export interface BuyboxConfig {
   order: string[];
   hidden: string[];
   benefitIcons: string[];
+  /** Style-Art + Texte je Baustein-Typ (Key = Block-Typ). */
+  blocks: Record<string, BlockConfig>;
+  gallery: GalleryConfig;
 }
 
 export interface ThemeDocument {
@@ -64,7 +80,13 @@ export function emptyDocument(): ThemeDocument {
       design: DEFAULT_DESIGN,
     },
     sections: [],
-    buybox: { order: [...BUYBOX_DEFAULT_ORDER], hidden: [], benefitIcons: [...DEFAULT_BENEFIT_ICONS] },
+    buybox: {
+      order: [...BUYBOX_DEFAULT_ORDER],
+      hidden: [],
+      benefitIcons: [...DEFAULT_BENEFIT_ICONS],
+      blocks: {},
+      gallery: { presetId: "thumbs-unten", badge: "" },
+    },
   };
 }
 
@@ -96,6 +118,9 @@ export type EditorAction =
   | { type: "setPreset"; uid: string; presetId: string }
   | { type: "setText"; uid: string; field: string; value: string }
   | { type: "setBuybox"; patch: Partial<BuyboxConfig> }
+  | { type: "setBlockPreset"; blockType: string; presetId: string }
+  | { type: "setBlockText"; blockType: string; field: string; value: string }
+  | { type: "setGallery"; patch: Partial<GalleryConfig> }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -145,6 +170,31 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
       };
     case "setBuybox":
       return { ...doc, buybox: { ...doc.buybox, ...action.patch } };
+    case "setBlockPreset": {
+      const prev = doc.buybox.blocks[action.blockType] || { presetId: "", texts: {} };
+      return {
+        ...doc,
+        buybox: {
+          ...doc.buybox,
+          blocks: { ...doc.buybox.blocks, [action.blockType]: { ...prev, presetId: action.presetId } },
+        },
+      };
+    }
+    case "setBlockText": {
+      const prev = doc.buybox.blocks[action.blockType] || { presetId: "", texts: {} };
+      return {
+        ...doc,
+        buybox: {
+          ...doc.buybox,
+          blocks: {
+            ...doc.buybox.blocks,
+            [action.blockType]: { ...prev, texts: { ...prev.texts, [action.field]: action.value } },
+          },
+        },
+      };
+    }
+    case "setGallery":
+      return { ...doc, buybox: { ...doc.buybox, gallery: { ...doc.buybox.gallery, ...action.patch } } };
     default:
       return doc;
   }
@@ -166,9 +216,16 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
   const next = apply(state.present, action);
   if (next === state.present) return state;
 
-  // Tipp-Serien im selben Feld nicht als einzelne History-Schritte stapeln.
-  if (action.type === "setText") {
-    const target = `${action.uid}|${action.field}`;
+  // Tipp-Serien im selben Feld nicht als einzelne History-Schritte stapeln
+  // (gilt für Section-Texte, Block-Texte und das Galerie-Badge).
+  const isGalleryTyping = action.type === "setGallery" && action.patch.badge !== undefined && action.patch.presetId === undefined;
+  if (action.type === "setText" || action.type === "setBlockText" || isGalleryTyping) {
+    const target =
+      action.type === "setText"
+        ? `sec|${action.uid}|${action.field}`
+        : action.type === "setBlockText"
+          ? `blk|${action.blockType}|${action.field}`
+          : "gallery|badge";
     if (state.lastTextTarget === target) {
       return { ...state, present: next, future: [], lastTextTarget: target };
     }

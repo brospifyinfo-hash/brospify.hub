@@ -492,6 +492,279 @@ export const SECTION_LIBRARY: SectionDef[] = [
   },
 ];
 
+// ─────────────────────────────────────────────────────────────────
+// KAUFBOX-BLOCK-BIBLIOTHEK — Style-Arten + Texte für die Bausteine der
+// main-product-Infospalte (neben dem Produktbild). Alle Keys/Werte sind
+// gegen den {% schema %}-Block von sections/main-product.liquid verifiziert.
+// Preset-Werte "@rolle" werden gegen die Palette aufgelöst.
+//
+// WICHTIG (Compile-Regel): Nutzer-Texte überschreiben IMMER; Feld-Defaults
+// füllen nur LEERE Settings — KI-Verkaufstexte (Copy-Bindings, z. B. die
+// PRODUCT_USP_* in der Vorteile-Liste) bleiben sonst unangetastet.
+// ─────────────────────────────────────────────────────────────────
+
+export interface BuyboxBlockLib {
+  type: string;
+  fields: FieldDef[]; // target.key = Block-Setting-Key
+  presets: PresetDef[];
+}
+
+export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
+  {
+    type: "sale_banner",
+    fields: [
+      { id: "text", label: "Banner-Text", labelEn: "Banner text", kind: "text", target: { key: "text" }, def: "SALE – Nur für kurze Zeit" },
+      { id: "emoji", label: "Emoji", labelEn: "Emoji", kind: "text", target: { key: "emoji" }, def: "🔥" },
+    ],
+    presets: [
+      { id: "akzent", label: "Akzent", labelEn: "Accent", hint: "Voll in deiner Akzentfarbe", settings: { bg: "@accent", t_color: "#ffffff", radius: 12, b_width: 0 } },
+      { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Schwarzer Balken", settings: { bg: "#111111", t_color: "#ffffff", radius: 12, b_width: 0 } },
+      { id: "umriss", label: "Umriss", labelEn: "Outline", hint: "Weiß mit Akzent-Rahmen", settings: { bg: "#ffffff", t_color: "@text", b_color: "@accent", b_width: 2, radius: 12 } },
+    ],
+  },
+  {
+    type: "urgency_text",
+    fields: [{ id: "text_prefix", label: "Hinweis-Text", labelEn: "Urgency text", kind: "text", target: { key: "text_prefix" }, def: "Angebot endet am" }],
+    presets: [
+      { id: "auffaellig", label: "Auffällig", labelEn: "Bold", hint: "Fett, linksbündig", settings: { is_bold: true, font_size: 15, alignment: "left" } },
+      { id: "zentriert", label: "Zentriert", labelEn: "Centered", hint: "Mittig, fett", settings: { alignment: "center", is_bold: true } },
+      { id: "dezent", label: "Dezent", labelEn: "Subtle", hint: "Klein und ruhig", settings: { is_bold: false, font_size: 13, alignment: "left" } },
+    ],
+  },
+  {
+    type: "custom_title",
+    fields: [],
+    presets: [
+      { id: "gross", label: "Groß & fett", labelEn: "Big & bold", hint: "34 px, linksbündig", settings: { font_size_desktop: 34, font_weight: "800", alignment: "left" } },
+      { id: "zentriert", label: "Zentriert", labelEn: "Centered", hint: "Mittig, mittleres Gewicht", settings: { alignment: "center", font_size_desktop: 30, font_weight: "600" } },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "24 px, dicht", settings: { font_size_desktop: 24, font_weight: "800", alignment: "left" } },
+    ],
+  },
+  {
+    type: "custom_rating",
+    fields: [{ id: "rating_text", label: "Bewertungs-Text", labelEn: "Rating text", kind: "text", target: { key: "rating_text" }, def: "" }],
+    presets: [
+      { id: "klassisch", label: "Klassisch", labelEn: "Classic", hint: "Gefüllte Sterne zuerst", settings: { star_shape: "classic", star_style: "filled", layout_style: "stars_first", star_color: "@accent" } },
+      { id: "pill", label: "Pill", labelEn: "Pill", hint: "Kompakte Kapsel mit Zahl", settings: { layout_style: "compact_pill", pill_bg: true, star_shape: "rounded", star_color: "@accent" } },
+      { id: "glow", label: "Glow", labelEn: "Glow", hint: "Funkelnde Sterne, animiert", settings: { star_style: "glow", star_shape: "sparkle", animate_on_view: true, star_color: "@accent" } },
+    ],
+  },
+  {
+    type: "benefits_list",
+    fields: [
+      { id: "text_1", label: "Vorteil 1", labelEn: "Benefit 1", kind: "text", target: { key: "text_1" }, def: "" },
+      { id: "text_2", label: "Vorteil 2", labelEn: "Benefit 2", kind: "text", target: { key: "text_2" }, def: "" },
+      { id: "text_3", label: "Vorteil 3", labelEn: "Benefit 3", kind: "text", target: { key: "text_3" }, def: "" },
+      { id: "text_4", label: "Vorteil 4", labelEn: "Benefit 4", kind: "text", target: { key: "text_4" }, def: "" },
+    ],
+    presets: [
+      { id: "dunkel", label: "Dunkle Kreise", labelEn: "Dark circles", hint: "Icons in dunklen Kreisen", settings: { icon_style: "dark_circle" } },
+      { id: "akzent", label: "Akzent-Kreise", labelEn: "Accent circles", hint: "Icons auf Akzentfarbe", settings: { icon_style: "accent_circle", icon_bg: "@accent", icon_color: "#ffffff" } },
+      { id: "soft", label: "Soft", labelEn: "Soft", hint: "Sanft getönte Kreise", settings: { icon_style: "soft_circle", icon_color: "@accent" } },
+      { id: "umriss", label: "Umriss", labelEn: "Outline", hint: "Nur Icon-Umrisse", settings: { icon_style: "outlined", icon_color: "@accent" } },
+    ],
+  },
+  {
+    type: "stock_indicator",
+    fields: [{ id: "text", label: "Lager-Text", labelEn: "Stock text", kind: "text", target: { key: "text" }, def: "" }],
+    presets: [
+      { id: "puls", label: "Pulsierend", labelEn: "Pulse", hint: "Grüner Puls-Punkt", settings: {} },
+      { id: "zentriert", label: "Zentriert", labelEn: "Centered", hint: "Mittig", settings: { alignment: "center" } },
+      { id: "fett", label: "Fett", labelEn: "Bold", hint: "Größer und fetter", settings: { font_weight: "800", font_size: 15 } },
+    ],
+  },
+  {
+    type: "custom_price",
+    fields: [],
+    presets: [
+      { id: "gross", label: "Groß + Badge", labelEn: "Big + badge", hint: "34 px, Rabatt-Badge", settings: { price_size_desk: 34, price_weight: "800", show_compare: true, show_badge: true, badge_bg: "@accent", badge_text: "#ffffff" } },
+      { id: "schlicht", label: "Schlicht", labelEn: "Plain", hint: "Ohne Badge", settings: { price_size_desk: 28, price_weight: "600", show_compare: true, show_badge: false } },
+      { id: "zentriert", label: "Zentriert", labelEn: "Centered", hint: "Mittig mit Badge", settings: { alignment: "center", show_badge: true, badge_bg: "@accent", badge_text: "#ffffff" } },
+    ],
+  },
+  {
+    type: "bundle_selector",
+    fields: [{ id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "" }],
+    presets: [
+      { id: "modern", label: "Modern", labelEn: "Modern", hint: "Bilder + Ersparnis", settings: { card_style: "modern", show_image: true, show_savings: true, show_per_unit: true, active_border: "@accent" } },
+      { id: "soft", label: "Soft", labelEn: "Soft", hint: "Runde, weiche Karten", settings: { card_style: "soft", card_radius: 18, show_image: true, active_border: "@accent" } },
+      { id: "umriss", label: "Umriss", labelEn: "Outline", hint: "Schlank ohne Bilder", settings: { card_style: "outlined", show_image: false, active_border: "@accent" } },
+      { id: "klassisch", label: "Klassisch", labelEn: "Classic", hint: "Reduzierte Reihen", settings: { card_style: "classic", show_image: false, show_qty_chip: false } },
+    ],
+  },
+  {
+    type: "buy_buttons",
+    fields: [{ id: "add_to_cart_text", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "add_to_cart_text" }, def: "" }],
+    presets: [
+      { id: "klassisch", label: "Klassisch", labelEn: "Classic", hint: "Ein großer Kaufen-Button", settings: { layout: "layout1", cart_size: "lg", cart_icon: "cart", cart_icon_position: "left", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "xl", label: "XL", labelEn: "XL", hint: "Extra groß, Plus-Icon", settings: { layout: "layout1", cart_size: "xl", cart_text_size: "big", cart_text_weight: "extra", cart_icon: "plus", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "combo", label: "Express-Combo", labelEn: "Express combo", hint: "Kaufen + PayPal/Klarna-Split", settings: { layout: "layout2", combo_left_brand: "paypal", combo_right_brand: "klarna", combo_divider: "diagonal", primary_bg: "@button", primary_fg: "@buttonText" } },
+    ],
+  },
+  {
+    type: "payment_icons",
+    fields: [{ id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "" }],
+    presets: [
+      { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Mittig, Standardgröße", settings: { alignment: "center", icon_width: 44 } },
+      { id: "gross", label: "Groß", labelEn: "Large", hint: "Große Logos", settings: { alignment: "center", icon_width: 56, icon_gap: 12 } },
+      { id: "links", label: "Kompakt links", labelEn: "Compact left", hint: "Klein, linksbündig", settings: { alignment: "flex-start", icon_width: 34 } },
+    ],
+  },
+  {
+    type: "free_gift",
+    fields: [
+      { id: "title", label: "Titel", labelEn: "Title", kind: "text", target: { key: "title" }, def: "" },
+      { id: "subtitle", label: "Untertitel", labelEn: "Subtitle", kind: "text", target: { key: "subtitle" }, def: "" },
+    ],
+    presets: [
+      { id: "accordion", label: "Accordion", labelEn: "Accordion", hint: "Aufklappbar, offen", settings: { enable_accordion: true, open_by_default: true, accent_color: "@accent" } },
+      { id: "offen", label: "Immer offen", labelEn: "Always open", hint: "Ohne Aufklappen", settings: { enable_accordion: false, ui_style: "button", accent_color: "@accent" } },
+      { id: "checkbox", label: "Checkbox", labelEn: "Checkbox", hint: "Auswahl per Häkchen", settings: { enable_accordion: false, ui_style: "checkbox", accent_color: "@accent" } },
+    ],
+  },
+  {
+    type: "delivery_timeline",
+    fields: [
+      { id: "label_1", label: "Schritt 1", labelEn: "Step 1", kind: "text", target: { key: "label_1" }, def: "" },
+      { id: "label_2", label: "Schritt 2", labelEn: "Step 2", kind: "text", target: { key: "label_2" }, def: "" },
+      { id: "label_3", label: "Schritt 3", labelEn: "Step 3", kind: "text", target: { key: "label_3" }, def: "" },
+    ],
+    presets: [
+      { id: "gefuellt", label: "Gefüllt", labelEn: "Filled", hint: "Akzent-Kreise", settings: { circle_style: "filled", circle_bg: "@accent", icon_color: "#ffffff", countdown_color: "@accent" } },
+      { id: "umriss", label: "Umriss", labelEn: "Outline", hint: "Nur Kreis-Linien", settings: { circle_style: "outlined", circle_border: "@accent", icon_color: "@accent", countdown_color: "@accent" } },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Kleinere Kreise", settings: { circle_size: 44, circle_style: "filled", circle_bg: "@accent", icon_color: "#ffffff" } },
+    ],
+  },
+  {
+    type: "feature_box",
+    fields: [
+      { id: "title_1", label: "Box 1 — Titel", labelEn: "Box 1 title", kind: "text", target: { key: "title_1" }, def: "Premium-Qualität" },
+      { id: "text_1", label: "Box 1 — Text", labelEn: "Box 1 text", kind: "text", target: { key: "text_1" }, def: "Sorgfältig geprüft" },
+      { id: "title_2", label: "Box 2 — Titel", labelEn: "Box 2 title", kind: "text", target: { key: "title_2" }, def: "Blitzversand" },
+      { id: "text_2", label: "Box 2 — Text", labelEn: "Box 2 text", kind: "text", target: { key: "text_2" }, def: "In 1–3 Werktagen" },
+      { id: "title_3", label: "Box 3 — Titel", labelEn: "Box 3 title", kind: "text", target: { key: "title_3" }, def: "30 Tage Garantie" },
+      { id: "text_3", label: "Box 3 — Text", labelEn: "Box 3 text", kind: "text", target: { key: "text_3" }, def: "Geld zurück" },
+    ],
+    presets: [
+      { id: "glass", label: "Glass", labelEn: "Glass", hint: "Glas-Karten, 3 Spalten", settings: { card_style: "glass", columns: 3, accent_color: "@accent" } },
+      { id: "elevated", label: "Schwebend", labelEn: "Elevated", hint: "Mit Schatten", settings: { card_style: "elevated", columns: 3, accent_color: "@accent" } },
+      { id: "flach", label: "Flach 2er", labelEn: "Flat 2-col", hint: "2 flache Spalten", settings: { card_style: "flat", columns: 2, accent_color: "@accent" } },
+      { id: "umriss", label: "Umriss", labelEn: "Outline", hint: "Akzent-Rahmen", settings: { card_style: "outlined", columns: 3, accent_color: "@accent", card_border: "@accent" } },
+    ],
+  },
+  {
+    type: "icon-with-text",
+    fields: [
+      { id: "heading_1", label: "Punkt 1", labelEn: "Item 1", kind: "text", target: { key: "heading_1" }, def: "Schneller Versand" },
+      { id: "heading_2", label: "Punkt 2", labelEn: "Item 2", kind: "text", target: { key: "heading_2" }, def: "Einfache Rückgabe" },
+      { id: "heading_3", label: "Punkt 3", labelEn: "Item 3", kind: "text", target: { key: "heading_3" }, def: "Sichere Zahlung" },
+    ],
+    presets: [
+      { id: "reihe", label: "Reihe", labelEn: "Row", hint: "Nebeneinander", settings: { layout: "horizontal", icon_1: "truck", icon_2: "return", icon_3: "lock" } },
+      { id: "spalten", label: "Untereinander", labelEn: "Stacked", hint: "Vertikal gestapelt", settings: { layout: "vertical", icon_1: "heart", icon_2: "leaf", icon_3: "star" } },
+    ],
+  },
+  {
+    type: "custom_accordion",
+    fields: [
+      { id: "heading", label: "Titel", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Versand & Rückgabe" },
+      { id: "content", label: "Inhalt", labelEn: "Content", kind: "textarea", target: { key: "content" }, def: "Versand in 1–3 Werktagen mit Sendungsverfolgung. 30 Tage Geld-zurück-Garantie.", html: true },
+    ],
+    presets: [
+      { id: "info", label: "Info", labelEn: "Info", hint: "Mit Info-Icon", settings: { icon: "info" } },
+      { id: "versand", label: "Versand", labelEn: "Shipping", hint: "Mit LKW-Icon", settings: { icon: "truck" } },
+      { id: "garantie", label: "Garantie", labelEn: "Warranty", hint: "Mit Schild-Icon", settings: { icon: "shield" } },
+    ],
+  },
+  {
+    type: "collapsible_tab",
+    fields: [
+      { id: "heading", label: "Titel", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Details & Pflege" },
+      { id: "content", label: "Inhalt", labelEn: "Content", kind: "textarea", target: { key: "content" }, def: "Hochwertige Materialien, einfache Pflege — entwickelt für den täglichen Einsatz.", html: true },
+    ],
+    presets: [
+      { id: "frage", label: "Frage", labelEn: "Question", hint: "Fragezeichen-Icon", settings: { icon: "question_mark" } },
+      { id: "versand", label: "Versand", labelEn: "Shipping", hint: "LKW-Icon", settings: { icon: "truck" } },
+      { id: "pflege", label: "Pflege", labelEn: "Care", hint: "Wasch-Icon", settings: { icon: "washing" } },
+    ],
+  },
+  {
+    type: "complementary",
+    fields: [{ id: "block_heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "block_heading" }, def: "Passt perfekt dazu" }],
+    presets: [
+      { id: "reihe", label: "Offene Reihe", labelEn: "Open row", hint: "Produkte direkt sichtbar", settings: { make_collapsible_row: false, products_per_page: 2, image_ratio: "square", enable_quick_add: true } },
+      { id: "aufklappbar", label: "Aufklappbar", labelEn: "Collapsible", hint: "Als Klapp-Reihe", settings: { make_collapsible_row: true, icon: "price_tag", products_per_page: 2 } },
+    ],
+  },
+  {
+    type: "text",
+    fields: [{ id: "text", label: "Text", labelEn: "Text", kind: "textarea", target: { key: "text" }, def: "Handgefertigt, sorgfältig geprüft und mit Liebe zum Detail." }],
+    presets: [
+      { id: "body", label: "Fließtext", labelEn: "Body", hint: "Normaler Text", settings: { text_style: "body" } },
+      { id: "untertitel", label: "Untertitel", labelEn: "Subtitle", hint: "Subtitle-Stil", settings: { text_style: "subtitle" } },
+      { id: "gross", label: "Großbuchstaben", labelEn: "Uppercase", hint: "Uppercase-Stil", settings: { text_style: "uppercase" } },
+    ],
+  },
+  { type: "share", fields: [{ id: "share_label", label: "Label", labelEn: "Label", kind: "text", target: { key: "share_label" }, def: "Teilen" }], presets: [] },
+  { type: "description", fields: [], presets: [] },
+  { type: "variant_picker", fields: [], presets: [] },
+  { type: "quantity_selector", fields: [], presets: [] },
+  { type: "custom_divider", fields: [], presets: [] },
+];
+
+export function getBuyboxLib(type: string): BuyboxBlockLib | undefined {
+  return BUYBOX_LIBRARY.find((b) => b.type === type);
+}
+
+export function getBuyboxPreset(type: string, presetId: string | undefined): PresetDef | undefined {
+  const lib = getBuyboxLib(type);
+  if (!lib || !lib.presets.length) return undefined;
+  return lib.presets.find((p) => p.id === presetId) || lib.presets[0];
+}
+
+/** Effektive Preset-Settings eines Kaufbox-Bausteins (Palette-Refs aufgelöst). */
+export function resolveBlockSettings(
+  type: string,
+  cfg: { presetId?: string } | undefined,
+  palette: ColorPalette,
+): Record<string, string | number | boolean> {
+  const preset = getBuyboxPreset(type, cfg?.presetId);
+  const out: Record<string, string | number | boolean> = {};
+  for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  return out;
+}
+
+// ─── Produktgalerie (pg_*-Settings der main-product-Section) ───────
+// „Direkt am / unter dem Produktbild": Thumbnail-Position, Bildformat,
+// Pfeile, Zähler, Autoplay — als wählbare Galerie-Style-Arten.
+
+export const GALLERY_PRESETS: PresetDef[] = [
+  { id: "thumbs-unten", label: "Thumbnails unten", labelEn: "Thumbs below", hint: "Klassisch: Vorschaubilder unter dem Hauptbild", settings: { pg_layout: "bottom", pg_ratio: "square", pg_arrows: true, pg_counter: false, pg_autoplay: false } },
+  { id: "thumbs-links", label: "Thumbnails links", labelEn: "Thumbs left", hint: "Galerie-Leiste neben dem Hauptbild", settings: { pg_layout: "left", pg_ratio: "square", pg_arrows: false, pg_counter: false, pg_autoplay: false } },
+  { id: "portrait", label: "Portrait + Zähler", labelEn: "Portrait + counter", hint: "Hochformat mit Bild-Zähler", settings: { pg_layout: "bottom", pg_ratio: "portrait", pg_arrows: true, pg_counter: true, pg_autoplay: false } },
+  { id: "kino", label: "Kino-Slider", labelEn: "Cinema slider", hint: "Querformat, Autoplay, Pfeile", settings: { pg_layout: "bottom", pg_ratio: "landscape", pg_arrows: true, pg_counter: true, pg_autoplay: true, pg_transition: "slide" } },
+];
+
+export function getGalleryPreset(presetId: string | undefined): PresetDef {
+  return GALLERY_PRESETS.find((p) => p.id === presetId) || GALLERY_PRESETS[0];
+}
+
+/** Galerie-Preset je Theme-Stil (Teil der Stil-Architektur). */
+export const STYLE_GALLERY: Record<string, string> = {
+  modern: "thumbs-unten",
+  elegant: "thumbs-links",
+  bold: "kino",
+  playful: "thumbs-unten",
+  minimal: "thumbs-links",
+  noir: "portrait",
+  sunset: "thumbs-unten",
+  ocean: "thumbs-links",
+  nature: "portrait",
+  candy: "thumbs-unten",
+  tech: "thumbs-links",
+  royal: "portrait",
+};
+
 // ─── Theme-Stile v2: Default-Sektionskomposition je Stil ───────────
 // Jeder Stil bringt eine eigene Seiten-ARCHITEKTUR mit (welche Sections in
 // welcher Reihenfolge mit welchem Preset) — nicht nur Farben/Fonts.
@@ -618,6 +891,8 @@ export function buildInitialDocument(
     order: [...(style.buyboxOrder ?? BUYBOX_DEFAULT_ORDER)],
     hidden: [...(style.hiddenBlocks ?? [])],
     benefitIcons: [...DEFAULT_BENEFIT_ICONS],
+    blocks: {},
+    gallery: { presetId: STYLE_GALLERY[style.id] || "thumbs-unten", badge: "" },
   };
 
   const used = new Set<string>();

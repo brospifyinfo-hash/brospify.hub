@@ -622,6 +622,8 @@ const de = {
     editorRemove: "Section entfernen",
     editorGlobal: "Theme-Design",
     editorBack: "Zurück zu Themes",
+    editorGallery: "Produktgalerie",
+    editorGalleryBadge: "Bild-Badge (optional)",
   },
   coaching: {
     lockedTitle: "Privates Coaching ist Membership-exklusiv",
@@ -1449,6 +1451,8 @@ const en: Translations = {
     editorRemove: "Remove section",
     editorGlobal: "Theme design",
     editorBack: "Back to themes",
+    editorGallery: "Product gallery",
+    editorGalleryBadge: "Image badge (optional)",
   },
   coaching: {
     lockedTitle: "Private coaching is membership-exclusive",

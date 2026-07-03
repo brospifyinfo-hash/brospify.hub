@@ -1,9 +1,10 @@
 "use client";
 
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIcon, DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
-import type { SectionInstance } from "@/lib/theme-doc";
+import type { SectionInstance, BlockConfig, GalleryConfig } from "@/lib/theme-doc";
+import { resolveBlockSettings, getBuyboxLib, getGalleryPreset } from "@/lib/theme-library";
 import SectionReplica, { REPLICA_CSS } from "@/components/theme-editor/SectionReplica";
 
 // Rendert ein Bibliotheks-Icon als SVG (currentColor).
@@ -112,6 +113,7 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
+  buyboxCfg = {}, gallery,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
@@ -123,6 +125,9 @@ export default function ThemePreview({
   selectedUid?: string | null;
   onSelectSection?: (uid: string | null) => void;
   onInsertAt?: (index: number) => void;
+  /** Kaufbox v2: Style-Art + Texte je Baustein-Typ, Galerie-Preset. */
+  buyboxCfg?: Record<string, BlockConfig>;
+  gallery?: GalleryConfig;
 }) {
   const hidden = new Set(hiddenSections);
   const hiddenBlk = new Set(hiddenBlocks);
@@ -159,7 +164,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid]);
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -173,33 +178,162 @@ export default function ThemePreview({
 
   const img = data?.images?.[imgIdx] || data?.images?.[0] || "";
 
-  // Rendert einen einzelnen Kaufbox-Baustein (konfigurationsgesteuert:
-  // Reihenfolge + Sichtbarkeit steuert der Kunde im Section-Manager).
+  // ── Kaufbox v2: aufgelöste Block-Preset-Settings + Nutzer-Texte ──
+  // Identische Auflösung wie die Compile-Engine (theme-library) →
+  // Vorschau = Download. Ohne Konfiguration bleibt der bisherige Look.
+  const bs = (type: string): Record<string, string | number | boolean> =>
+    resolveBlockSettings(type, buyboxCfg[type], colors);
+  const bt = (type: string, field: string, fallback: string): string => {
+    const v = buyboxCfg[type]?.texts?.[field];
+    if (typeof v === "string" && v.trim()) return v.trim();
+    const def = getBuyboxLib(type)?.fields.find((f) => f.id === field)?.def;
+    return fallback || def || "";
+  };
+  const num = (v: unknown, fb: number) => (typeof v === "number" && Number.isFinite(v) ? v : fb);
+  const str = (v: unknown, fb: string) => (typeof v === "string" && v ? v : fb);
+
+  // Galerie-Preset (pg_*): Layout/Format/Pfeile/Zähler + Badge.
+  const gset = getGalleryPreset(gallery?.presetId).settings;
+  const galLeft = str(gset.pg_layout, "bottom") === "left";
+  const galRatio = { square: "1 / 1", portrait: "3 / 4", landscape: "16 / 10" }[str(gset.pg_ratio, "square")] || "1 / 1";
+  const galArrows = gallery ? gset.pg_arrows === true : false;
+  const galCounter = gallery ? gset.pg_counter === true : false;
+  const galBadge = (gallery?.badge || "").trim() || data?.badge || "";
+  const imgCount = data?.images?.length || 0;
+  const stepImg = (d: number) => setImgIdx((i) => (imgCount ? (i + d + imgCount) % imgCount : 0));
+
+  // Klickbarer Baustein-Wrapper (Editor-Modus): wählt "blk:<typ>" aus.
+  const blkWrap = (type: string, node: ReactNode) => {
+    if (!node) return null;
+    if (!onSelectSection || !docSections) return <Fragment key={type}>{node}</Fragment>;
+    const on = selectedUid === `blk:${type}`;
+    return (
+      <div
+        key={type}
+        className={`pm-blk ${on ? "pm-blk-on" : ""}`}
+        onClick={(e) => { e.stopPropagation(); onSelectSection(`blk:${type}`); }}
+      >
+        {node}
+      </div>
+    );
+  };
+
+  // Rendert einen einzelnen Kaufbox-Baustein — konfigurationsgesteuert:
+  // Reihenfolge/Sichtbarkeit + Style-Art (Preset) + Texte je Baustein.
+  // Die Preset-Settings kommen aus derselben Auflösung wie der Download.
   function renderBlock(type: string) {
     if (!data) return null;
+    const s = bs(type);
     switch (type) {
-      case "urgency_text":
-        return data.offerEndText ? <div className="pm-offer">🔥 {data.offerEndText}</div> : null;
-      case "custom_title":
-        return <h1 className="pm-title">{data.title}</h1>;
-      case "custom_rating":
+      case "sale_banner": {
+        const txt = bt("sale_banner", "text", "");
+        const emoji = bt("sale_banner", "emoji", "");
         return (
-          <div className="pm-rating">
-            <span className="pm-stars">★★★★★</span>
-            <strong>{data.ratingValue}</strong>
-            <span>· {data.ratingText}</span>
+          <div
+            className="pm-sale"
+            style={{
+              background: str(s.bg, colors.accent),
+              color: str(s.t_color, "#ffffff"),
+              borderRadius: num(s.radius, 12),
+              border: num(s.b_width, 0) > 0 ? `${num(s.b_width, 0)}px solid ${str(s.b_color, colors.accent)}` : "none",
+            }}
+          >
+            {emoji} {txt} {emoji}
           </div>
         );
-      case "benefits_list":
+      }
+      case "urgency_text": {
+        const user = buyboxCfg[type]?.texts?.text_prefix?.trim();
+        const dateTail = (data.offerEndText.match(/\S+\s\S+$/) || [""])[0];
+        const txt = user ? `${user} ${dateTail}`.trim() : data.offerEndText;
+        return txt ? (
+          <div
+            className="pm-offer"
+            style={{
+              fontSize: num(s.font_size, 11.5),
+              fontWeight: s.is_bold === false ? 500 : 700,
+              fontStyle: s.is_italic === true ? "italic" : undefined,
+              display: str(s.alignment, "left") === "left" ? "inline-block" : "block",
+              textAlign: str(s.alignment, "left") as CSSProperties["textAlign"],
+            }}
+          >
+            🔥 {txt}
+          </div>
+        ) : null;
+      }
+      case "custom_title":
         return (
-          <div className="pm-benefits">
+          <h1
+            className="pm-title"
+            style={{
+              fontSize: num(s.font_size_desktop, 27),
+              fontWeight: Number(str(s.font_weight, "800")),
+              textAlign: str(s.alignment, "left") as CSSProperties["textAlign"],
+            }}
+          >
+            {data.title}
+          </h1>
+        );
+      case "custom_rating": {
+        const layout = str(s.layout_style, "stars_first");
+        const starColor = str(s.star_color, colors.accent);
+        const glow = str(s.star_style, "filled") === "glow";
+        const stars = (
+          <span className="pm-stars" style={{ color: starColor, textShadow: glow ? `0 0 8px ${starColor}` : undefined }}>
+            ★★★★★
+          </span>
+        );
+        const inner =
+          layout === "number_first" ? (
+            <><strong>{data.ratingValue}</strong>{stars}<span>· {bt(type, "rating_text", data.ratingText)}</span></>
+          ) : (
+            <>{stars}<strong>{data.ratingValue}</strong><span>· {bt(type, "rating_text", data.ratingText)}</span></>
+          );
+        return (
+          <div
+            className="pm-rating"
+            style={{
+              justifyContent: str(s.alignment, "flex-start") as CSSProperties["justifyContent"],
+              ...(layout === "compact_pill"
+                ? { background: `color-mix(in srgb, ${starColor} 12%, transparent)`, borderRadius: 100, padding: "5px 12px", width: "fit-content" }
+                : {}),
+            }}
+          >
+            {inner}
+          </div>
+        );
+      }
+      case "benefits_list": {
+        const styleMap: Record<string, string> = {
+          dark_circle: "pm-bl-dark", accent_circle: "pm-bl-accent",
+          soft_circle: "pm-bl-soft", outlined: "pm-bl-outline", emoji: "pm-bl-emoji",
+        };
+        const cls = styleMap[str(s.icon_style, "")] || "";
+        return (
+          <div className={`pm-benefits ${cls}`} style={{ gap: num(s.item_gap, 10) }}>
             {data.benefits.slice(0, 4).map((b, i) => (
-              <div key={i} className="pm-benefit"><span className="pm-bic"><BIcon id={benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check"} /></span>{b.text}</div>
+              <div key={i} className="pm-benefit" style={{ fontSize: num(s.font_size, 13.5) }}>
+                <span className="pm-bic"><BIcon id={benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check"} /></span>
+                {bt(type, `text_${i + 1}`, b.text)}
+              </div>
             ))}
           </div>
         );
+      }
       case "stock_indicator":
-        return <div className="pm-stock"><span className="pm-dot" />{data.stock}</div>;
+        return (
+          <div
+            className="pm-stock"
+            style={{
+              justifyContent: str(s.alignment, "flex-start") as CSSProperties["justifyContent"],
+              fontWeight: Number(str(s.font_weight, "700")),
+              fontSize: num(s.font_size, 12.5),
+            }}
+          >
+            <span className="pm-dot" />
+            {bt(type, "text", data.stock)}
+          </div>
+        );
       case "variant_picker":
         return (
           <div className="pm-variants">
@@ -213,39 +347,72 @@ export default function ThemePreview({
         );
       case "custom_divider":
         return <div className="pm-divider" />;
-      case "text":
-        return <p className="pm-freetext">Handgefertigt, sorgfältig geprüft und mit Liebe zum Detail — für ein Ergebnis, das du täglich spürst.</p>;
+      case "text": {
+        const style = str(s.text_style, "body");
+        return (
+          <p
+            className="pm-freetext"
+            style={style === "uppercase" ? { textTransform: "uppercase", letterSpacing: ".06em", fontSize: 11.5, fontWeight: 700, opacity: 0.8 } : style === "subtitle" ? { fontSize: 14.5, opacity: 0.85 } : undefined}
+          >
+            {bt(type, "text", "")}
+          </p>
+        );
+      }
       case "custom_accordion":
         return (
           <div className="pm-acc">
             <button className="pm-acc-head" onClick={() => setFaqOpen((o) => !o)}>
-              <span>Versand &amp; Rückgabe</span>
+              <span className="pm-acc-lead">
+                {str(s.icon, "none") !== "none" && <span className="pm-acc-dot">i</span>}
+                {bt(type, "heading", "")}
+              </span>
               <span className="pm-faq-plus">{faqOpen ? "−" : "+"}</span>
             </button>
-            {faqOpen && <div className="pm-acc-body">Versand in 1–3 Werktagen mit Sendungsverfolgung. 30 Tage Geld-zurück-Garantie — unkompliziert und ohne Risiko.</div>}
+            {faqOpen && <div className="pm-acc-body">{bt(type, "content", "")}</div>}
           </div>
         );
-      case "custom_price":
+      case "custom_price": {
+        const showBadge = s.show_badge !== false;
+        const showCompare = s.show_compare !== false;
         return (
           <>
             <div className="pm-divider" />
-            <div className="pm-price"><strong>{data.price}</strong><s>{data.comparePrice}</s><span className="pm-save">{data.discount}</span></div>
+            <div
+              className="pm-price"
+              style={{ justifyContent: str(s.alignment, "left") === "center" ? "center" : str(s.alignment, "left") === "right" ? "flex-end" : "flex-start" }}
+            >
+              <strong style={{ fontSize: num(s.price_size_desk, 31), fontWeight: Number(str(s.price_weight, "800")) }}>{data.price}</strong>
+              {showCompare && <s>{data.comparePrice}</s>}
+              {showBadge && <span className="pm-save">{data.discount}</span>}
+            </div>
           </>
         );
-      case "bundle_selector":
+      }
+      case "bundle_selector": {
+        const cardStyle = str(s.card_style, "modern");
+        const showImage = s.show_image !== false && cardStyle !== "classic";
+        const showSave = s.show_savings !== false;
+        const showPer = s.show_per_unit !== false;
+        const showQty = s.show_qty_chip !== false;
+        const cardRadius = typeof s.card_radius === "number" ? Math.min(28, s.card_radius as number) : undefined;
         return (
           <>
-            <div className="pm-bundle-head">{data.bundleHeading}</div>
+            <div className="pm-bundle-head">{bt(type, "heading", data.bundleHeading)}</div>
             <div className="pm-bundles">
               {data.bundles.map((b, i) => (
-                <button key={i} className={`pm-bundle ${i === bundleIdx ? "on" : ""}`} onClick={() => setBundleIdx(i)}>
+                <button
+                  key={i}
+                  className={`pm-bundle pm-bundle--${cardStyle} ${i === bundleIdx ? "on" : ""}`}
+                  style={cardRadius !== undefined ? { borderRadius: cardRadius } : undefined}
+                  onClick={() => setBundleIdx(i)}
+                >
                   {b.badge && <span className="pm-bundle-badge">{b.badge}</span>}
                   <span className="pm-radio" />
-                  {b.image ? <img className="pm-bundle-img" src={b.image} alt="" /> : <span className="pm-bundle-img" />}
+                  {showImage && (b.image ? <img className="pm-bundle-img" src={b.image} alt="" /> : <span className="pm-bundle-img" />)}
                   <span className="pm-bundle-main">
-                    <span className="pm-bundle-name"><span className="pm-qty">×{b.qty}</span> {b.name}</span>
-                    {b.perUnit && <span className="pm-bundle-per">{b.perUnit}</span>}
-                    <span className="pm-bundle-save">{b.save}</span>
+                    <span className="pm-bundle-name">{showQty && <span className="pm-qty">×{b.qty}</span>} {b.name}</span>
+                    {showPer && b.perUnit && <span className="pm-bundle-per">{b.perUnit}</span>}
+                    {showSave && <span className="pm-bundle-save">{b.save}</span>}
                   </span>
                   <span className="pm-bundle-right">
                     <span className="pm-bundle-price">{b.price}</span>
@@ -256,28 +423,59 @@ export default function ThemePreview({
             </div>
           </>
         );
-      case "buy_buttons":
-        return (
-          <button className="pm-cta">
+      }
+      case "buy_buttons": {
+        const size = str(s.cart_size, "lg");
+        const pad = { sm: 10, md: 12, lg: 15, xl: 19 }[size] ?? 15;
+        const fs = { sm: 13, md: 14, lg: 15.5, xl: 18 }[size] ?? 15.5;
+        const icon = str(s.cart_icon, "cart");
+        const combo = str(s.layout, "layout1") === "layout2";
+        const iconSvg =
+          icon === "none" ? null : icon === "plus" ? (
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-            {data.cta}
-          </button>
-        );
-      case "payment_icons":
+          ) : (
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6h15l-1.5 9h-12z" /><path d="M6 6 5 3H2" /><circle cx="9" cy="20" r="1.6" /><circle cx="18" cy="20" r="1.6" /></svg>
+          );
         return (
           <>
-            <div className="pm-pay-head">{data.payHeading}</div>
-            <div className="pm-pay">{PAY_ORDER.map((p) => <span key={p} className="pm-pay-box"><PayMark name={p} /></span>)}</div>
+            <button className="pm-cta" style={{ padding: pad, fontSize: fs, background: str(s.primary_bg, colors.button), color: str(s.primary_fg, colors.buttonText) }}>
+              {iconSvg}
+              {bt(type, "add_to_cart_text", data.cta)}
+            </button>
+            {combo && (
+              <div className="pm-combo">
+                <span className="pm-combo-btn" style={{ background: "#ffc439", color: "#003087" }}><b style={{ fontStyle: "italic" }}>Pay<span style={{ color: "#0070e0" }}>Pal</span></b></span>
+                <span className="pm-combo-btn" style={{ background: "#ffb3c7", color: "#0a0a0a" }}><b>Klarna.</b></span>
+              </div>
+            )}
           </>
         );
-      case "free_gift":
+      }
+      case "payment_icons": {
+        const w = num(s.icon_width, 44);
+        return (
+          <>
+            <div className="pm-pay-head">{bt(type, "heading", data.payHeading)}</div>
+            <div className="pm-pay" style={{ justifyContent: str(s.alignment, "center") as CSSProperties["justifyContent"], gap: num(s.icon_gap, 7) }}>
+              {PAY_ORDER.map((p) => (
+                <span key={p} className="pm-pay-box" style={{ minWidth: w, height: Math.round(w * 0.64) }}><PayMark name={p} /></span>
+              ))}
+            </div>
+          </>
+        );
+      }
+      case "free_gift": {
+        const accordion = s.enable_accordion !== false;
+        const open = accordion ? giftOpen : true;
         return (
           <div className="pm-gift">
-            <button className="pm-gift-head" onClick={() => setGiftOpen((o) => !o)}>
-              <span className="pm-gift-txt"><strong>{data.giftTitle}</strong><em>{data.giftSubtitle}</em></span>
-              <svg className={`pm-gift-chev ${giftOpen ? "open" : ""}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+            <button className="pm-gift-head" onClick={accordion ? () => setGiftOpen((o) => !o) : undefined} style={accordion ? undefined : { cursor: "default" }}>
+              <span className="pm-gift-txt"><strong>{bt(type, "title", data.giftTitle)}</strong><em>{bt(type, "subtitle", data.giftSubtitle)}</em></span>
+              {accordion && (
+                <svg className={`pm-gift-chev ${open ? "open" : ""}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+              )}
             </button>
-            {giftOpen && (
+            {open && (
               <div className="pm-gift-grid">
                 {data.giftItems.map((g, i) => (
                   <div key={i} className="pm-gift-card">
@@ -290,20 +488,118 @@ export default function ThemePreview({
             )}
           </div>
         );
-      case "delivery_timeline":
+      }
+      case "delivery_timeline": {
+        const outlined = str(s.circle_style, "filled") === "outlined";
+        const size = Math.round((num(s.circle_size, 56) / 56) * 35);
+        const circleStyle: CSSProperties = outlined
+          ? { background: "transparent", border: `2px solid ${str(s.circle_border, colors.accent)}`, color: str(s.icon_color, colors.accent), width: size, height: size }
+          : { background: str(s.circle_bg, colors.accent), color: str(s.icon_color, "#fff"), width: size, height: size };
         return (
           <>
-            <div className="pm-countdown">{data.countdownPrefix} <strong>{data.countdown}</strong> {data.countdownSuffix}</div>
+            <div className="pm-countdown">
+              {data.countdownPrefix} <strong style={{ color: str(s.countdown_color, colors.accent) }}>{data.countdown}</strong> {data.countdownSuffix}
+            </div>
             <div className="pm-timeline">
-              {data.timeline.map((s, i) => (
+              {data.timeline.map((st, i) => (
                 <div key={i} className="pm-step">
-                  <span className="pm-step-ic"><Ic d={ICON[s.icon] || ICON.bag} s={17} /></span>
-                  <span className="pm-step-label">{s.label}</span>
-                  <span className="pm-step-date">{s.date}</span>
+                  <span className="pm-step-ic" style={circleStyle}><Ic d={ICON[st.icon] || ICON.bag} s={17} /></span>
+                  <span className="pm-step-label">{bt(type, `label_${i + 1}`, st.label)}</span>
+                  <span className="pm-step-date">{st.date}</span>
                 </div>
               ))}
             </div>
           </>
+        );
+      }
+
+      // ── Neue Kaufbox-Bausteine ──
+      case "description":
+        return (
+          <div className="pm-desc">
+            <p>Hochwertige Materialien, durchdachtes Design und eine Verarbeitung, die überzeugt — entwickelt für deinen Alltag. Alle Details, Maße und Pflegehinweise findest du hier.</p>
+            <span className="pm-desc-more">Mehr anzeigen</span>
+          </div>
+        );
+      case "feature_box": {
+        const cols = Math.max(1, Math.min(3, num(s.columns, 3)));
+        const cardStyle = str(s.card_style, "elevated");
+        const items = [1, 2, 3].slice(0, cols === 2 ? 2 : 3).map((n) => ({
+          title: bt(type, `title_${n}`, ""),
+          text: bt(type, `text_${n}`, ""),
+        }));
+        return (
+          <div className={`pm-fbx pm-fbx--${cardStyle}`} style={{ gridTemplateColumns: `repeat(${cols},1fr)`, ...(typeof s.card_radius === "number" ? {} : {}) }}>
+            {items.map((it, i) => (
+              <div key={i} className="pm-fbx-card" style={cardStyle === "outlined" ? { borderColor: str(s.card_border, colors.accent) } : undefined}>
+                <span className="pm-fbx-ic" style={{ background: `color-mix(in srgb, ${str(s.accent_color, colors.accent)} 14%, transparent)`, color: str(s.accent_color, colors.accent) }}>✦</span>
+                <strong>{it.title}</strong>
+                <em>{it.text}</em>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case "icon-with-text": {
+        const vertical = str(s.layout, "horizontal") === "vertical";
+        const iconMap: Record<string, string> = { truck: "truck", return: "rotate", lock: "lock", heart: "heart", leaf: "leaf", star: "star" };
+        const items = [1, 2, 3].map((n) => ({
+          heading: bt(type, `heading_${n}`, ""),
+          icon: iconMap[str(s[`icon_${n}`], "")] || "check",
+        }));
+        return (
+          <div className={`pm-iwt ${vertical ? "pm-iwt-v" : ""}`}>
+            {items.map((it, i) => (
+              <span key={i} className="pm-iwt-item">
+                <span className="pm-iwt-ic"><BIcon id={it.icon} /></span>
+                {it.heading}
+              </span>
+            ))}
+          </div>
+        );
+      }
+      case "collapsible_tab":
+        return (
+          <div className="pm-acc">
+            <button className="pm-acc-head">
+              <span className="pm-acc-lead"><span className="pm-acc-dot">i</span>{bt(type, "heading", "")}</span>
+              <span className="pm-faq-plus">+</span>
+            </button>
+          </div>
+        );
+      case "complementary": {
+        const items = (data.images.length ? data.images : [""]).slice(0, 2);
+        return (
+          <div className="pm-comp">
+            <div className="pm-comp-head">{bt(type, "block_heading", "")}</div>
+            <div className="pm-comp-row">
+              {items.map((u, i) => (
+                <div key={i} className="pm-comp-card">
+                  <span className="pm-comp-img">{u ? <img src={u} alt="" /> : <span />}</span>
+                  <span className="pm-comp-main">
+                    <span className="pm-comp-title">{data.title}</span>
+                    <span className="pm-comp-price">{data.price}</span>
+                  </span>
+                  <span className="pm-comp-add">+</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      case "quantity_selector":
+        return (
+          <div className="pm-qtysel">
+            <span className="pm-var-label">Menge</span>
+            <span className="pm-qty-box"><button>−</button><b>1</b><button>+</button></span>
+          </div>
+        );
+      case "share":
+        return (
+          <span className="pm-share">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" /><path d="M16 6l-4-4-4 4" /><path d="M12 2v13" /></svg>
+            {bt(type, "share_label", "")}
+          </span>
         );
       default:
         return null;
@@ -326,14 +622,10 @@ export default function ThemePreview({
       ) : (
         <div className="pm-stage">
           <div className="pm-grid">
-            {/* Galerie */}
-            <div className="pm-gallery">
-              <div className="pm-main">
-                {data.badge && <span className="pm-badge">{data.badge}</span>}
-                {img ? <img src={img} alt="" /> : <div className="pm-noimg">Produktbild</div>}
-              </div>
-              {data.images.length > 1 && (
-                <div className="pm-thumbs">
+            {/* Galerie — Layout/Format/Pfeile/Zähler aus dem Galerie-Preset */}
+            <div className={`pm-gallery ${galLeft ? "pm-gal-left" : ""}`}>
+              {galLeft && data.images.length > 1 && (
+                <div className="pm-thumbs pm-thumbs-rail">
                   {data.images.slice(0, 5).map((u, i) => (
                     <button key={i} className={`pm-thumb ${i === imgIdx ? "on" : ""}`} onClick={() => setImgIdx(i)}>
                       <img src={u} alt="" />
@@ -341,6 +633,28 @@ export default function ThemePreview({
                   ))}
                 </div>
               )}
+              <div className="pm-gal-main">
+                <div className="pm-main" style={{ aspectRatio: galRatio }}>
+                  {galBadge && <span className="pm-badge">{galBadge}</span>}
+                  {img ? <img src={img} alt="" /> : <div className="pm-noimg">Produktbild</div>}
+                  {galArrows && imgCount > 1 && (
+                    <>
+                      <button className="pm-arrow pm-arrow-l" onClick={() => stepImg(-1)} aria-label="zurück">‹</button>
+                      <button className="pm-arrow pm-arrow-r" onClick={() => stepImg(1)} aria-label="weiter">›</button>
+                    </>
+                  )}
+                  {galCounter && imgCount > 0 && <span className="pm-counter">{imgIdx + 1} / {imgCount}</span>}
+                </div>
+                {!galLeft && data.images.length > 1 && (
+                  <div className="pm-thumbs">
+                    {data.images.slice(0, 5).map((u, i) => (
+                      <button key={i} className={`pm-thumb ${i === imgIdx ? "on" : ""}`} onClick={() => setImgIdx(i)}>
+                        <img src={u} alt="" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Infospalte — konfigurationsgesteuert (Reihenfolge + Sichtbarkeit) */}
@@ -348,9 +662,7 @@ export default function ThemePreview({
               className={`pm-info ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === "__buybox" ? "pm-selected" : ""}`}
               onClick={onSelectSection ? (e) => { e.stopPropagation(); onSelectSection("__buybox"); } : undefined}
             >
-              {order.filter((t) => !hiddenBlk.has(t)).map((t) => (
-                <Fragment key={t}>{renderBlock(t)}</Fragment>
-              ))}
+              {order.filter((t) => !hiddenBlk.has(t)).map((t) => blkWrap(t, renderBlock(t)))}
             </div>
           </div>
 
@@ -623,6 +935,64 @@ const CSS = `
 .pm-ic-accent .pm-bic{background:var(--pv-accent);color:#fff}
 .pm-ic-outline .pm-bic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
 .pm-ic-outline .pm-step-ic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
+
+/* ── Galerie-Varianten (Preset: Thumbnails links/unten, Pfeile, Zähler) ── */
+.pm-gal-left{display:flex;gap:10px;align-items:flex-start}
+.pm-gal-main{flex:1;min-width:0}
+.pm-thumbs-rail{display:flex;flex-direction:column;gap:8px;margin-top:0}
+.pm-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#111;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.18)}
+.pm-arrow-l{left:10px}.pm-arrow-r{right:10px}
+.pm-counter{position:absolute;bottom:10px;right:10px;z-index:2;background:rgba(0,0,0,.55);color:#fff;font-size:10.5px;font-weight:700;border-radius:20px;padding:3px 9px}
+.pm-mobile .pm-gal-left{flex-direction:column}
+.pm-mobile .pm-thumbs-rail{flex-direction:row;margin-top:10px}
+
+/* ── Kaufbox v2: Baustein-Auswahl + neue Bausteine ── */
+.pm-blk{border-radius:8px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .15s;cursor:pointer}
+.pm-blk:hover{outline-color:color-mix(in srgb,#95BF47 45%,transparent)}
+.pm-blk-on{outline-color:#95BF47!important}
+.pm-bl-dark .pm-bic{background:color-mix(in srgb,var(--pv-text) 88%,#000)!important;border:0!important;color:#fff!important}
+.pm-bl-accent .pm-bic{background:var(--pv-accent)!important;border:0!important;color:#fff!important}
+.pm-bl-soft .pm-bic{background:color-mix(in srgb,var(--pv-accent) 14%,transparent)!important;border:0!important;color:var(--pv-accent)!important}
+.pm-bl-outline .pm-bic{background:transparent!important;border:2px solid var(--pv-accent)!important;color:var(--pv-accent)!important}
+.pm-sale{text-align:center;font-weight:800;font-size:13px;letter-spacing:.03em;padding:10px 14px;margin-bottom:14px}
+.pm-combo{display:flex;gap:8px;margin-top:8px}
+.pm-combo-btn{flex:1;display:flex;align-items:center;justify-content:center;height:38px;border-radius:min(var(--pv-r),12px);font-size:13px}
+.pm-bundle--soft{border-width:1px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-bundle--outlined{background:transparent}
+.pm-bundle--classic{background:transparent;border-width:1px;padding:11px 13px}
+.pm-desc{font-size:13px;line-height:1.6;opacity:.75;margin-bottom:16px}
+.pm-desc p{margin:0 0 6px}
+.pm-desc-more{font-size:12px;font-weight:700;text-decoration:underline;text-underline-offset:3px;opacity:.9;cursor:pointer}
+.pm-fbx{display:grid;gap:10px;margin-bottom:16px}
+.pm-fbx-card{display:flex;flex-direction:column;gap:4px;padding:14px;border-radius:min(var(--pv-r),16px);border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 10%,transparent);background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg))}
+.pm-fbx--elevated .pm-fbx-card{box-shadow:0 8px 22px -12px rgba(0,0,0,.28);border-color:transparent}
+.pm-fbx--glass .pm-fbx-card{background:color-mix(in srgb,var(--pv-bg) 55%,transparent);backdrop-filter:blur(6px)}
+.pm-fbx--flat .pm-fbx-card{border-color:transparent;background:color-mix(in srgb,var(--pv-text) 5%,var(--pv-bg))}
+.pm-fbx--outlined .pm-fbx-card{background:transparent;border-width:2px}
+.pm-fbx-ic{width:26px;height:26px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-size:13px}
+.pm-fbx-card strong{font-size:12.5px;font-weight:800}
+.pm-fbx-card em{font-style:normal;font-size:11px;opacity:.65;line-height:1.4}
+.pm-iwt{display:flex;gap:8px;margin-bottom:16px}
+.pm-iwt-v{flex-direction:column}
+.pm-iwt-item{flex:1;display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;background:color-mix(in srgb,var(--pv-text) 3%,var(--pv-bg));border:1px solid color-mix(in srgb,var(--pv-text) 9%,transparent);border-radius:min(var(--pv-r),12px);padding:9px 11px}
+.pm-iwt-ic{width:26px;height:26px;flex:0 0 auto;border-radius:50%;background:color-mix(in srgb,var(--pv-accent) 13%,transparent);color:var(--pv-accent);display:inline-flex;align-items:center;justify-content:center}
+.pm-acc-lead{display:flex;align-items:center;gap:9px;min-width:0}
+.pm-acc-dot{width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:color-mix(in srgb,var(--pv-accent) 14%,transparent);color:var(--pv-accent);font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;font-style:normal}
+.pm-comp{border:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent);border-radius:min(var(--pv-r),14px);padding:12px 13px;margin-bottom:16px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-comp-head{font-size:12.5px;font-weight:800;margin-bottom:9px}
+.pm-comp-row{display:flex;flex-direction:column;gap:8px}
+.pm-comp-card{display:flex;align-items:center;gap:10px}
+.pm-comp-img{width:42px;height:42px;flex:0 0 auto;border-radius:min(var(--pv-r),10px);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 7%,var(--pv-bg))}
+.pm-comp-img img{width:100%;height:100%;object-fit:cover;display:block}
+.pm-comp-main{display:flex;flex-direction:column;min-width:0;flex:1}
+.pm-comp-title{font-size:11.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pm-comp-price{font-size:11.5px;font-weight:800}
+.pm-comp-add{width:26px;height:26px;flex:0 0 auto;border-radius:8px;border:1.5px solid color-mix(in srgb,var(--pv-text) 20%,transparent);display:inline-flex;align-items:center;justify-content:center;font-weight:700}
+.pm-qtysel{margin-bottom:14px}
+.pm-qty-box{display:inline-flex;align-items:center;gap:14px;border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 16%,transparent);border-radius:min(var(--pv-r),12px);padding:7px 13px}
+.pm-qty-box button{background:none;border:0;color:inherit;font-size:15px;font-weight:700;cursor:pointer;padding:0}
+.pm-qty-box b{font-size:13px}
+.pm-share{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;opacity:.75;margin-bottom:14px;cursor:pointer}
 
 /* ── Editor-Modus: Auswahl-Rahmen + Einfüge-Punkte ── */
 .pm-selectable{cursor:pointer;border-radius:10px;outline:2px solid transparent;outline-offset:4px;transition:outline-color .15s}

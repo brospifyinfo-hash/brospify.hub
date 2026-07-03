@@ -150,21 +150,29 @@ export const THEME_STYLES: ThemeStyle[] = [
 // eine andere Design-Ausprägung (Schatten, Randstärke, Icon-Stil).
 const U = "urgency_text", T = "custom_title", R = "custom_rating", B = "benefits_list",
   S = "stock_indicator", P = "custom_price", BN = "bundle_selector", BT = "buy_buttons",
-  PI = "payment_icons", G = "free_gift", TL = "delivery_timeline";
-interface StyleExtra { order: string[]; hideB: string[]; hideS: string[]; design: StyleDesign }
+  PI = "payment_icons", G = "free_gift", TL = "delivery_timeline",
+  SB = "sale_banner", FB = "feature_box", IW = "icon-with-text", CT = "collapsible_tab", CO = "complementary";
+interface StyleExtra {
+  order: string[];
+  hideB: string[];
+  hideS: string[];
+  design: StyleDesign;
+  /** Opt-in-Bausteine, die DIESER Stil sichtbar schaltet (aus BUYBOX_OPTIONAL). */
+  showB?: string[];
+}
 const STYLE_EXTRAS: Record<string, StyleExtra> = {
   modern:  { order: [T, R, P, B, BN, BT, PI], hideB: [U, S, G, TL], hideS: ["bro-info-tabs", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" } },
-  elegant: { order: [U, T, R, B, S, P, BN, BT, PI, G], hideB: [TL], hideS: ["vids"], design: { shadow: 2, border: 1, iconStyle: "outline" } },
-  bold:    { order: [U, T, P, BN, BT, B, R, S, PI], hideB: [G, TL], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" } },
-  playful: { order: [U, T, R, BN, B, S, P, BT, G, PI, TL], hideB: [], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" } },
+  elegant: { order: [U, T, R, B, S, P, BN, BT, PI, G, CT], hideB: [TL], hideS: ["vids"], design: { shadow: 2, border: 1, iconStyle: "outline" }, showB: [CT] },
+  bold:    { order: [SB, U, T, P, BN, BT, B, R, S, PI], hideB: [G, TL], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" }, showB: [SB] },
+  playful: { order: [U, T, R, BN, B, S, P, BT, G, PI, TL, FB], hideB: [], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" }, showB: [FB] },
   minimal: { order: [T, P, BN, BT], hideB: [U, R, B, S, PI, G, TL], hideS: ["bro-info-tabs", "brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "outline" } },
   noir:    { order: [U, T, R, P, BN, BT, PI, G, TL], hideB: [B, S], hideS: ["featured-collection"], design: { shadow: 2, border: 1, iconStyle: "accent" } },
   sunset:  { order: [U, T, R, B, P, BN, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
-  ocean:   { order: [T, R, B, S, P, BN, BT, PI, TL], hideB: [U, G], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "dark" } },
+  ocean:   { order: [T, R, B, S, P, BN, BT, PI, TL, IW], hideB: [U, G], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "dark" }, showB: [IW] },
   nature:  { order: [T, B, R, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: ["featured-collection"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
-  candy:   { order: [U, T, R, BN, P, B, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 2, iconStyle: "accent" } },
-  tech:    { order: [T, P, R, B, BN, BT, PI], hideB: [U, S, G, TL], hideS: ["brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" } },
-  royal:   { order: [U, T, R, P, B, BN, BT, PI, G, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 1, iconStyle: "accent" } },
+  candy:   { order: [SB, U, T, R, BN, P, B, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 2, iconStyle: "accent" }, showB: [SB] },
+  tech:    { order: [T, P, R, B, BN, BT, PI, IW], hideB: [U, S, G, TL], hideS: ["brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" }, showB: [IW] },
+  royal:   { order: [U, T, R, P, B, BN, BT, PI, G, TL, CO], hideB: [S], hideS: [], design: { shadow: 2, border: 1, iconStyle: "accent" }, showB: [CO] },
 };
 for (const s of THEME_STYLES) {
   const e = STYLE_EXTRAS[s.id];
@@ -172,8 +180,10 @@ for (const s of THEME_STYLES) {
   // buyboxOrder als vollständige Permutation (fehlende Typen ans Ende — sie sind
   // ohnehin über hiddenBlocks aus).
   s.buyboxOrder = [...e.order, ...BUYBOX_DEFAULT_ORDER.filter((t) => !e.order.includes(t))];
-  // Opt-in-Bausteine (Varianten, Trennlinie, Freitext, FAQ) sind je Stil aus.
-  s.hiddenBlocks = Array.from(new Set([...e.hideB, ...BUYBOX_OPTIONAL]));
+  // Opt-in-Bausteine sind je Stil aus — außer der Stil schaltet sie via showB
+  // gezielt frei (z. B. Bold → Sale-Banner, Tech → Vertrauens-Icons).
+  const show = new Set(e.showB || []);
+  s.hiddenBlocks = Array.from(new Set([...e.hideB, ...BUYBOX_OPTIONAL.filter((t) => !show.has(t))]));
   s.hiddenSections = e.hideS;
   s.design = e.design;
 }

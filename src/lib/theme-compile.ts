@@ -12,6 +12,9 @@ import {
   getPresetDef,
   resolveTexts,
   resolvePaletteRef,
+  getBuyboxLib,
+  resolveBlockSettings,
+  getGalleryPreset,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
 import { getThemeStyle, radiusOverrides } from "@/lib/theme-styles";
@@ -67,16 +70,19 @@ function readSectionSchema(zip: AdmZip, cacheKey: string, type: string): Section
       const m = raw.match(SCHEMA_RE);
       if (m) {
         const schema = JSON.parse(m[1]);
+        // "t:…"-Defaults (Schema-Übersetzungskeys) NICHT übernehmen — in
+        // Template-Settings würden sie als roher Text erscheinen.
+        const usable = (v: unknown) => v !== undefined && !(typeof v === "string" && v.startsWith("t:"));
         const settingsDefaults: Record<string, unknown> = {};
         for (const s of schema.settings || []) {
-          if (s && s.id && s.default !== undefined) settingsDefaults[s.id] = s.default;
+          if (s && s.id && usable(s.default)) settingsDefaults[s.id] = s.default;
         }
         const blockDefaults: Record<string, Record<string, unknown>> = {};
         for (const b of schema.blocks || []) {
           if (!b || !b.type) continue;
           const d: Record<string, unknown> = {};
           for (const s of b.settings || []) {
-            if (s && s.id && s.default !== undefined) d[s.id] = s.default;
+            if (s && s.id && usable(s.default)) d[s.id] = s.default;
           }
           blockDefaults[b.type] = d;
         }
@@ -148,12 +154,18 @@ function applyInstanceToSection(section: any, instance: SectionInstance, palette
     section.settings[k] = resolvePaletteRef(v, palette);
   }
 
-  // 2) Kuratierte Texte (Feld-Defaults ⊕ Nutzer-Eingaben).
-  const texts = resolveTexts(instance);
+  // 2) Kuratierte Texte. Regel: NUTZER-Eingaben überschreiben immer;
+  //    Feld-Defaults füllen nur LEERE Ziele — vorhandene Inhalte (KI-Texte
+  //    aus Copy-Bindings, echte Template-Inhalte) bleiben sonst erhalten.
+  const userTexts = instance.texts || {};
+  const isBlank = (v: unknown) =>
+    typeof v !== "string" || !v.trim() || /\[\[[A-Z0-9_]+\]\]/.test(v) || v.startsWith("t:");
   for (const f of def.fields) {
-    const raw = texts[f.id];
-    if (typeof raw !== "string" || !raw.trim()) continue;
-    const value = f.html ? ensureHtml(raw) : raw;
+    const u = userTexts[f.id];
+    const userVal = typeof u === "string" && u.trim() ? u.trim() : null;
+
+    // Ziel auflösen (Section-Setting oder Block-Setting).
+    let target: Record<string, unknown> | null = null;
     if (f.target.blockType) {
       const blocks = section.blocks || {};
       const blockOrder: string[] = Array.isArray(section.block_order) ? section.block_order : Object.keys(blocks);
@@ -161,11 +173,16 @@ function applyInstanceToSection(section: any, instance: SectionInstance, palette
       const targetId = idsOfType[f.target.index ?? 0];
       if (targetId && blocks[targetId]) {
         blocks[targetId].settings = blocks[targetId].settings || {};
-        blocks[targetId].settings[f.target.key] = value;
+        target = blocks[targetId].settings;
       }
     } else {
-      section.settings[f.target.key] = value;
+      target = section.settings;
     }
+    if (!target) continue;
+
+    const raw = userVal ?? (isBlank(target[f.target.key]) && f.def ? f.def : null);
+    if (!raw) continue;
+    target[f.target.key] = f.html ? ensureHtml(raw) : raw;
   }
 }
 
@@ -269,7 +286,10 @@ function compileProductTemplate(
 
   data.order = [...unmanagedPrefix, ...docIds, ...unmanagedSuffix];
 
-  // Kaufbox (main-product): Reihenfolge, Sichtbarkeit, Vorteile-Icons.
+  // Kaufbox (main-product): Galerie + Block-Instanziierung + Block-Presets/
+  // Texte MUSS vor dem Reorder laufen (neue Blöcke brauchen ihre Slots),
+  // danach Reihenfolge/Sichtbarkeit + Vorteile-Icons.
+  applyBuyboxV2(data, doc, zip, cacheKey, palette);
   applyBuyboxLayout(data, doc.buybox.order, doc.buybox.hidden);
   applyBenefitIcons(data, doc.buybox.benefitIcons);
 
@@ -278,6 +298,87 @@ function compileProductTemplate(
     const sec = sections[sid];
     if (!sec || sec.disabled === true) continue;
     stripStrayTokens(sec);
+  }
+}
+
+// ─── Kaufbox v2: Galerie-Preset + Block-Instanziierung + Block-Styles ──
+
+function applyBuyboxV2(
+  data: TemplateData,
+  doc: ThemeDocument,
+  zip: AdmZip,
+  cacheKey: string,
+  palette: ColorPalette,
+): void {
+  const sections = data.sections || {};
+  const main: any = Object.values(sections).find((s: any) => s && s.type === "main-product");
+  if (!main) return;
+  main.settings = main.settings && typeof main.settings === "object" ? main.settings : {};
+  const buybox = doc.buybox || ({} as ThemeDocument["buybox"]);
+
+  // 1) Produktgalerie (pg_*): Preset + globaler Ecken-Radius + optionales Badge.
+  //    (Ältere Clients senden evtl. kein gallery-Feld → dann Basis unangetastet.)
+  if (buybox.gallery && typeof buybox.gallery === "object") {
+    const preset = getGalleryPreset(buybox.gallery.presetId);
+    for (const [k, v] of Object.entries(preset.settings)) main.settings[k] = resolvePaletteRef(v, palette);
+    main.settings.pg_radius = Math.max(0, Math.min(40, Math.round(doc.global.radius || 0)));
+    const badge = typeof buybox.gallery.badge === "string" ? buybox.gallery.badge.trim() : "";
+    if (badge) {
+      main.settings.pg_badge_enable = true;
+      main.settings.pg_badge_text = badge;
+      main.settings.pg_badge_bg = palette.accent;
+      main.settings.pg_badge_color = "#ffffff";
+    }
+  }
+
+  // 2) Sichtbare Bausteine ohne Template-Instanz aus dem main-product-Schema
+  //    instanziieren (z. B. sale_banner, feature_box, icon-with-text …).
+  main.blocks = main.blocks && typeof main.blocks === "object" ? main.blocks : {};
+  main.block_order = Array.isArray(main.block_order) ? main.block_order : [];
+  const order = Array.isArray(buybox.order) ? buybox.order : [];
+  const hidden = new Set(Array.isArray(buybox.hidden) ? buybox.hidden : []);
+  const present = new Set(Object.values(main.blocks).map((b: any) => String(b?.type || "")));
+  const schema = readSectionSchema(zip, cacheKey, "main-product");
+  for (const type of order) {
+    if (hidden.has(type) || present.has(type)) continue;
+    if (!getBuyboxLib(type)) continue;
+    const defaults = schema?.blockDefaults[type];
+    if (!defaults) continue; // Basis kennt den Block-Typ nicht → auslassen
+    const id = `hub_${type.replace(/[^a-z0-9_]/gi, "_")}`;
+    main.blocks[id] = { type, settings: { ...defaults } };
+    main.block_order.push(id);
+    present.add(type);
+  }
+
+  // 3) Style-Art + Texte je Baustein-Typ (jeweils erster Block des Typs).
+  //    Preset nur anwenden, wenn der Kunde eine Style-Art gewählt hat ODER
+  //    der Block frisch instanziiert wurde — kuratierte Template-Settings
+  //    bleiben sonst unangetastet.
+  const cfgs = buybox.blocks && typeof buybox.blocks === "object" ? buybox.blocks : {};
+  const seen = new Set<string>();
+  for (const bid of main.block_order) {
+    const blk = main.blocks[bid];
+    if (!blk) continue;
+    const type = String(blk.type || "");
+    if (seen.has(type)) continue;
+    seen.add(type);
+    const lib = getBuyboxLib(type);
+    if (!lib) continue;
+    const cfg = cfgs[type];
+    blk.settings = blk.settings && typeof blk.settings === "object" ? blk.settings : {};
+
+    if ((cfg?.presetId || String(bid).startsWith("hub_")) && lib.presets.length) {
+      Object.assign(blk.settings, resolveBlockSettings(type, cfg, palette));
+    }
+
+    const isBlank = (v: unknown) => typeof v !== "string" || !v.trim() || v.startsWith("t:");
+    for (const f of lib.fields) {
+      const u = cfg?.texts?.[f.id];
+      const userVal = typeof u === "string" && u.trim() ? u.trim() : null;
+      const raw = userVal ?? (isBlank(blk.settings[f.target.key]) && f.def ? f.def : null);
+      if (!raw) continue;
+      blk.settings[f.target.key] = f.html ? ensureHtml(raw) : raw;
+    }
   }
 }
 
