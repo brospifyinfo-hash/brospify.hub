@@ -382,6 +382,39 @@ function applyBuyboxV2(
   }
 }
 
+// ─── Shopify-Konformität: blocks ↔ block_order exakt 1:1 halten ─────
+// Shopify verwirft ein JSON-Template KOMPLETT (Customizer zeigt „No
+// templates found"), wenn ein Block in `blocks` nicht in `block_order`
+// steht oder umgekehrt. Dieser Pass repariert JEDE Section defensiv.
+function sanitizeTemplateBlocks(data: TemplateData): void {
+  for (const sec of Object.values(data.sections || {})) {
+    if (!sec || typeof sec !== "object") continue;
+    const s = sec as { blocks?: Record<string, unknown>; block_order?: string[] };
+    const hasBlocks = s.blocks && typeof s.blocks === "object";
+    if (!hasBlocks) {
+      if (Array.isArray(s.block_order)) delete s.block_order;
+      continue;
+    }
+    const blocks = s.blocks as Record<string, unknown>;
+    if (!Array.isArray(s.block_order)) s.block_order = Object.keys(blocks);
+    // (1) order-Einträge ohne Block-Objekt raus, Duplikate raus.
+    const seen = new Set<string>();
+    s.block_order = s.block_order.filter((id) => {
+      if (typeof id !== "string" || !blocks[id] || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    // (2) Block-Objekte ohne order-Eintrag löschen (Verwaiste).
+    for (const id of Object.keys(blocks)) {
+      if (!seen.has(id)) delete blocks[id];
+    }
+    if (!s.block_order.length) {
+      delete s.blocks;
+      delete s.block_order;
+    }
+  }
+}
+
 function stripStrayTokens(node: unknown): void {
   if (Array.isArray(node)) {
     for (let i = 0; i < node.length; i++) {
@@ -411,13 +444,27 @@ function validateProductTemplate(data: TemplateData): void {
   for (const sid of Object.keys(sections)) {
     if (!orderSet.has(sid)) throw new Error(`Validierung: Section „${sid}" steht nicht im order-Array.`);
   }
+  if (order.length > 25) throw new Error(`Validierung: ${order.length} Sections — Shopify erlaubt max. 25 pro Template.`);
   const main = Object.values(sections).find((s: any) => s && s.type === "main-product") as any;
   if (!main) throw new Error("Validierung: main-product-Section fehlt.");
   if (!Array.isArray(main.block_order) || !main.block_order.length) {
     throw new Error("Validierung: main-product hat keine Bausteine (block_order leer).");
   }
-  for (const bid of main.block_order) {
-    if (!main.blocks?.[bid]) throw new Error(`Validierung: Kaufbox-Baustein „${bid}" fehlt.`);
+  // Shopify-Pflicht: blocks ↔ block_order in JEDER Section exakt 1:1,
+  // sonst verwirft der Customizer das gesamte Template.
+  for (const [sid, secRaw] of Object.entries(sections)) {
+    const sec = secRaw as any;
+    if (!sec?.blocks) continue;
+    const ids = Object.keys(sec.blocks);
+    const bo: string[] = Array.isArray(sec.block_order) ? sec.block_order : [];
+    if (bo.length > 50) throw new Error(`Validierung: Section „${sid}" hat ${bo.length} Blöcke — Shopify erlaubt max. 50.`);
+    for (const bid of bo) {
+      if (!sec.blocks[bid]) throw new Error(`Validierung: Block „${bid}" in „${sid}" steht in block_order, fehlt aber in blocks.`);
+    }
+    const boSet = new Set(bo);
+    for (const bid of ids) {
+      if (!boSet.has(bid)) throw new Error(`Validierung: Block „${bid}" in „${sid}" ist VERWAIST (nicht in block_order).`);
+    }
   }
 }
 
@@ -439,6 +486,7 @@ export function compileDocumentZip(
   if (!productEntry) throw new Error("Theme-Basis hat keine templates/product.json.");
   const productData = JSON.parse(productEntry.getData().toString("utf8")) as TemplateData;
   compileProductTemplate(productData, doc, zip, cacheKey, values, palette);
+  sanitizeTemplateBlocks(productData);
   validateProductTemplate(productData);
   zip.updateFile(productEntry.entryName, Buffer.from(JSON.stringify(productData, null, 2), "utf8"));
 
@@ -462,6 +510,7 @@ export function compileDocumentZip(
         recolorByRoleDeep(sec, palette);
         stripStrayTokens(sec);
       }
+      sanitizeTemplateBlocks(indexData);
       zip.updateFile(indexEntry.entryName, Buffer.from(JSON.stringify(indexData, null, 2), "utf8"));
     } catch (e) {
       console.warn("[theme-compile] index.json übersprungen:", e);

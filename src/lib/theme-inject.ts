@@ -151,6 +151,15 @@ export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: st
     }
   }
   main.block_order = result;
+
+  // KRITISCH: Ausgeblendete Blöcke auch aus dem blocks-Objekt LÖSCHEN.
+  // Shopify verlangt in JSON-Templates, dass jeder Block in `blocks` genau
+  // einmal in `block_order` steht — verwaiste Blöcke machen das GESAMTE
+  // Template ungültig (Customizer: „No templates found for products").
+  const keep = new Set(result);
+  for (const id of Object.keys(main.blocks)) {
+    if (!keep.has(id)) delete main.blocks[id];
+  }
 }
 
 // Setzt die gewählten Vorteile-Icons in den benefits_list-Block der
