@@ -111,6 +111,7 @@
     host.__bspx = true;
     var code = host.getAttribute("data-bspx-code") || "";
     var hub = (host.getAttribute("data-bspx-hub") || "").replace(/\/$/, "");
+    var assetUrl = host.getAttribute("data-bspx-asset") || "";
     var mount = host.querySelector(".bspx-mount");
     var skeleton = host.querySelector(".bspx-skeleton");
     var fallback = host.querySelector(".bspx-fallback");
@@ -122,50 +123,65 @@
       if (skeleton) skeleton.style.display = "none";
       if (fallback) fallback.hidden = false;
     }
-    if (!code || !hub || !mount || !product) { showFallback(); return; }
+    if (!mount || !product) { showFallback(); return; }
 
     var cacheKey = "bspx:" + code;
 
     function useData(data) {
       try {
         render(host, mount, skeleton, fallback, product, data.plan, data.css);
+        return true;
       } catch (e) {
-        showFallback();
         if (window.console) console.warn("[bspx] render failed", e);
+        return false;
       }
     }
 
     function tryCache() {
+      if (!code) return false;
       try {
         var raw = localStorage.getItem(cacheKey);
         if (!raw) return false;
         var data = JSON.parse(raw);
         if (!data || !data.plan) return false;
-        useData(data);
-        return true;
+        return useData(data);
       } catch (e) { return false; }
     }
+
+    // Im ZIP eingebackener Plan (assets/bspx-plan.json) — rendert IMMER,
+    // auch wenn Hub/Code/Netz komplett ausfallen. Same-Origin, kein CORS.
+    function tryAsset(done) {
+      if (!assetUrl) { done(false); return; }
+      fetch(assetUrl)
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) { done(!!(d && d.plan && useData(d))); })
+        .catch(function () { done(false); });
+    }
+
+    function offline() {
+      if (tryCache()) return;
+      tryAsset(function (ok) { if (!ok) showFallback(); });
+    }
+
+    // Kein Code/Hub konfiguriert → direkt eingebackenen Plan nutzen.
+    if (!code || !hub) { offline(); return; }
 
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, FETCH_TIMEOUT);
     fetch(hub + "/api/buybox/" + encodeURIComponent(code), { signal: ctrl ? ctrl.signal : undefined })
       .then(function (r) {
         clearTimeout(timer);
-        if (r.status === 404 || r.status === 410) { // Code deaktiviert/gelöscht
-          if (!tryCache()) showFallback();
-          return null;
-        }
-        if (!r.ok) throw new Error("http " + r.status);
+        if (!r.ok) { offline(); return null; } // 404 = Code unbekannt, 5xx = Hub-Problem
         return r.json();
       })
       .then(function (data) {
         if (!data) return;
         try { localStorage.setItem(cacheKey, JSON.stringify({ plan: data.plan, css: data.css, ts: Date.now() })); } catch (e) { /* voll */ }
-        useData(data);
+        if (!useData(data)) offline();
       })
       .catch(function () {
         clearTimeout(timer);
-        if (!tryCache()) showFallback();
+        offline();
       });
   }
 

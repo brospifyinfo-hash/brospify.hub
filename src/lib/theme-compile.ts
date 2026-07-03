@@ -218,10 +218,15 @@ function instantiateSection(zip: AdmZip, cacheKey: string, instance: SectionInst
   return section;
 }
 
-/** Dynamische Buy Box: Sync-Code + Hub-URL für den Master-Block. */
+/** Dynamische Buy Box: Sync-Code + Hub-URL für den Master-Block.
+ *  `payloadJson` ({v, css, plan}) und `runtimeJs` werden zusätzlich als
+ *  Theme-Assets ins ZIP gebacken — die Buy Box rendert dann IMMER voll
+ *  designt (Offline-Plan), der Hub-Abruf ist nur noch der Live-Update-Kanal. */
 export interface DynamicBuyboxOpts {
   syncCode: string;
   hubUrl: string;
+  payloadJson?: string;
+  runtimeJs?: string;
 }
 
 function compileProductTemplate(
@@ -309,7 +314,12 @@ function compileProductTemplate(
   // den Sync-Code vom Hub) — oder STATISCH als Fallback, wenn die Basis den
   // Master-Block nicht kennt (alte Uploads) oder kein Sync-Code vorliegt.
   const dynOk = dyn ? applyDynamicBuybox(data, zip, cacheKey, dyn.syncCode, dyn.hubUrl) : false;
-  if (!dynOk) {
+  if (dynOk && dyn) {
+    // Offline-Plan + Runtime als Theme-Assets einbacken → Buy Box rendert
+    // auch ohne Hub/Code voll designt (Runtime-Kette: Hub → Cache → Asset).
+    if (dyn.payloadJson) zip.addFile("assets/bspx-plan.json", Buffer.from(dyn.payloadJson, "utf8"));
+    if (dyn.runtimeJs) zip.addFile("assets/bspx-runtime.js", Buffer.from(dyn.runtimeJs, "utf8"));
+  } else {
     applyBuyboxStatic(data, doc, zip, cacheKey, palette);
     applyBuyboxLayout(data, doc.buybox.order, doc.buybox.hidden);
     applyBenefitIcons(data, doc.buybox.benefitIcons);

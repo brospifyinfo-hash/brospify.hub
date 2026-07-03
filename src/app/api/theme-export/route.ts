@@ -31,6 +31,30 @@ import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile } from "@/lib/sheets";
 import { SITE_URL } from "@/lib/seo";
+import { BUYBOX_CSS } from "@/lib/buybox-css";
+import { promises as fsp } from "fs";
+import path from "path";
+
+// Storefront-Runtime fürs Einbacken ins ZIP (assets/bspx-runtime.js) —
+// pro Lambda gecached; Pfad-Kandidaten wegen Vercel-File-Tracing.
+let runtimeJsCache: string | null = null;
+async function getRuntimeJs(): Promise<string> {
+  if (runtimeJsCache) return runtimeJsCache;
+  const candidates = [
+    path.join(process.cwd(), "public", "bspx-runtime.js"),
+    path.join(process.cwd(), "..", "public", "bspx-runtime.js"),
+  ];
+  for (const p of candidates) {
+    try {
+      runtimeJsCache = await fsp.readFile(p, "utf8");
+      return runtimeJsCache;
+    } catch {
+      /* nächsten Kandidaten probieren */
+    }
+  }
+  console.warn("[theme-export] bspx-runtime.js nicht gefunden — ZIP ohne Asset-Runtime (Hub-Script bleibt).");
+  return "";
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -154,6 +178,7 @@ export async function POST(req: NextRequest) {
   // unter dem Code speichern. MUSS vor dem Build klappen — sonst würde ein
   // ZIP mit totem Code ausgeliefert.
   let syncCode = "";
+  let payloadJson = "";
   if (doc) {
     if (kunde) {
       const codes = { ...(kunde.profile.buyboxCodes || {}) };
@@ -173,10 +198,15 @@ export async function POST(req: NextRequest) {
     }
     try {
       const plan = buildBuyboxPlan(doc, themeCopy);
+      // Gleiches Payload-Format wie GET /api/buybox/[code] — wird ZUSÄTZLICH
+      // als assets/bspx-plan.json ins ZIP gebacken (Offline-Fallback).
+      payloadJson = JSON.stringify({ v: 1, css: BUYBOX_CSS, plan });
       await saveBuyboxPlan(syncCode, session.isAdmin ? "admin" : session.lizenzschluessel || "", produkt.id, JSON.stringify(plan));
     } catch (err) {
-      console.error("[theme-export] Buybox-Plan speichern fehlgeschlagen:", err);
-      return NextResponse.json({ error: "Live-Sync konnte nicht eingerichtet werden — bitte erneut versuchen." }, { status: 500 });
+      // Sheet-Ausfall blockiert den Download NICHT mehr — der eingebackene
+      // Plan rendert die Buy Box auch ohne Live-Sync; Sync greift beim
+      // nächsten „Live aktualisieren".
+      console.error("[theme-export] Buybox-Plan speichern fehlgeschlagen (Download läuft mit Offline-Plan weiter):", err);
     }
   }
 
@@ -186,7 +216,13 @@ export async function POST(req: NextRequest) {
     const { zip: master, source, key } = await getEditorBaseThemeZip();
     console.log(`[theme-export] Basis-Theme: ${source} (${doc ? "v2-Dokument" : "Legacy"})`);
     zip = doc
-      ? compileDocumentZip(master, doc, themeCopy || {}, key, syncCode ? { syncCode, hubUrl: SITE_URL } : null)
+      ? compileDocumentZip(
+          master,
+          doc,
+          themeCopy || {},
+          key,
+          syncCode ? { syncCode, hubUrl: SITE_URL, payloadJson, runtimeJs: await getRuntimeJs() } : null,
+        )
       : buildThemeZip(master, {
       themeCopy: { ...themeCopy, ...headingCopy },
       colors: colors as ThemeColors,
