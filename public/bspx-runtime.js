@@ -596,4 +596,16 @@
   }
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
   else boot();
+
+  // WICHTIG für den Shopify-Theme-Editor (Customizer): Dort werden Sections
+  // per AJAX neu gerendert — <script>-Tags im neuen HTML laufen dabei NICHT.
+  // Diese (einmal geladene) Runtime bleibt aber am Leben und bootet die neu
+  // eingesetzten Hosts über Shopifys Editor-Events erneut — sonst bliebe die
+  // Buy Box nach jeder Änderung im Customizer als Skeleton hängen.
+  ["shopify:section:load", "shopify:section:select", "shopify:block:select"].forEach(function (ev) {
+    document.addEventListener(ev, function () { setTimeout(boot, 50); });
+  });
+  // Fallback außerhalb des Editors: falls der Host nachträglich in den DOM
+  // kommt (Page-Builder, verzögertes Rendering), einmal kurz nachbooten.
+  setTimeout(boot, 1500);
 })();

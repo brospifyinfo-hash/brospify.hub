@@ -145,7 +145,7 @@ function ensureHtml(s: string): string {
 }
 
 /** Wendet Preset-Settings + kuratierte Texte einer Instanz auf die Section an. */
-function applyInstanceToSection(section: any, instance: SectionInstance, palette: ColorPalette): void {
+function applyInstanceToSection(section: any, instance: SectionInstance, palette: ColorPalette, fresh = false): void {
   const def = getSectionDef(instance.type);
   if (!def) return;
   const preset = getPresetDef(def, instance.presetId);
@@ -182,7 +182,11 @@ function applyInstanceToSection(section: any, instance: SectionInstance, palette
     }
     if (!target) continue;
 
-    const raw = userVal ?? (isBlank(target[f.target.key]) && f.def ? f.def : null);
+    // FRISCH instanzierte Sections tragen nur generische Schema-Platzhalter
+    // (z. B. "UEBERSCHRIFT") — dort überschreiben unsere kuratierten
+    // Feld-Defaults IMMER. Bei Template-/Klon-Sections füllen Defaults nur
+    // leere Ziele (echte Inhalte + KI-Texte bleiben erhalten).
+    const raw = userVal ?? ((fresh || isBlank(target[f.target.key])) && f.def ? f.def : null);
     if (!raw) continue;
     target[f.target.key] = f.html ? ensureHtml(raw) : raw;
   }
@@ -260,6 +264,7 @@ function compileProductTemplate(
   for (const instance of doc.sections) {
     let section: any = null;
     let sid = instance.uid;
+    let fresh = false;
     if (instance.source === "template" && sections[instance.uid]) {
       section = sections[instance.uid];
       keptTemplateIds.add(instance.uid);
@@ -273,6 +278,7 @@ function compileProductTemplate(
         delete section.disabled;
       } else {
         section = instantiateSection(zip, cacheKey, instance);
+        fresh = true; // nur Schema-Platzhalter → kuratierte Texte übernehmen
       }
       if (!section) {
         console.warn(`[theme-compile] Section-Typ „${instance.type}" nicht in Basis — übersprungen.`);
@@ -281,7 +287,7 @@ function compileProductTemplate(
       sid = instance.uid.startsWith("hub_") ? instance.uid : `hub_${instance.uid}`;
       sections[sid] = section;
     }
-    applyInstanceToSection(section, instance, palette);
+    applyInstanceToSection(section, instance, palette, fresh);
     // Nutzer-Texte sind final — eventuelle Rest-Tokens darin auflösen.
     replaceTokensDeep(section, values);
     docIds.push(sid);
