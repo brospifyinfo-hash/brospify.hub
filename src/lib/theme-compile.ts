@@ -14,6 +14,7 @@ import {
   resolvePaletteRef,
   getBuyboxLib,
   resolveBlockSettings,
+  effectiveBuyboxPresetId,
   getGalleryPreset,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
@@ -367,8 +368,12 @@ function applyBuyboxV2(
     const cfg = cfgs[type];
     blk.settings = blk.settings && typeof blk.settings === "object" ? blk.settings : {};
 
-    if ((cfg?.presetId || String(bid).startsWith("hub_")) && lib.presets.length) {
-      Object.assign(blk.settings, resolveBlockSettings(type, cfg, palette));
+    // Effektive Style-Art: Kunden-Wahl > impliziter globaler Icon-Stil
+    // (Vorteile/Timeline) > erstes Preset NUR bei frisch instanziierten.
+    const effId = effectiveBuyboxPresetId(type, cfg, doc.global.design);
+    const presetId = effId || (String(bid).startsWith("hub_") ? lib.presets[0]?.id || "" : "");
+    if (presetId && lib.presets.length) {
+      Object.assign(blk.settings, resolveBlockSettings(type, { presetId }, palette));
     }
 
     const isBlank = (v: unknown) => typeof v !== "string" || !v.trim() || v.startsWith("t:");

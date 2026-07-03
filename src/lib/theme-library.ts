@@ -722,13 +722,40 @@ export function getBuyboxPreset(type: string, presetId: string | undefined): Pre
   return lib.presets.find((p) => p.id === presetId) || lib.presets[0];
 }
 
-/** Effektive Preset-Settings eines Kaufbox-Bausteins (Palette-Refs aufgelöst). */
+/**
+ * Effektive Style-Art eines Bausteins: explizite Wahl des Kunden ODER —
+ * für Vorteile-Liste/Timeline — implizit aus dem globalen Icon-Stil
+ * (Design-Regler Dunkel/Akzent/Umriss). So landet der globale Icon-Stil
+ * auch im Download, nicht nur in der Vorschau.
+ */
+export function effectiveBuyboxPresetId(
+  type: string,
+  cfg: { presetId?: string } | undefined,
+  design?: { iconStyle: string },
+): string {
+  if (cfg?.presetId) return cfg.presetId;
+  if (design) {
+    if (type === "benefits_list") {
+      return design.iconStyle === "accent" ? "akzent" : design.iconStyle === "outline" ? "umriss" : "dunkel";
+    }
+    if (type === "delivery_timeline") {
+      return design.iconStyle === "outline" ? "umriss" : "gefuellt";
+    }
+  }
+  return "";
+}
+
+/** Effektive Preset-Settings eines Kaufbox-Bausteins (Palette-Refs aufgelöst).
+ *  Ohne effektive Style-Art → leeres Objekt (Basis-Settings bleiben). */
 export function resolveBlockSettings(
   type: string,
   cfg: { presetId?: string } | undefined,
   palette: ColorPalette,
+  design?: { iconStyle: string },
 ): Record<string, string | number | boolean> {
-  const preset = getBuyboxPreset(type, cfg?.presetId);
+  const presetId = effectiveBuyboxPresetId(type, cfg, design);
+  if (!presetId) return {};
+  const preset = getBuyboxPreset(type, presetId);
   const out: Record<string, string | number | boolean> = {};
   for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
   return out;

@@ -182,7 +182,7 @@ export default function ThemePreview({
   // Identische Auflösung wie die Compile-Engine (theme-library) →
   // Vorschau = Download. Ohne Konfiguration bleibt der bisherige Look.
   const bs = (type: string): Record<string, string | number | boolean> =>
-    resolveBlockSettings(type, buyboxCfg[type], colors);
+    resolveBlockSettings(type, buyboxCfg[type], colors, { iconStyle });
   const bt = (type: string, field: string, fallback: string): string => {
     const v = buyboxCfg[type]?.texts?.[field];
     if (typeof v === "string" && v.trim()) return v.trim();

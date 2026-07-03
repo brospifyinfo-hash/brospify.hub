@@ -213,9 +213,14 @@ export const RECOLOR_ROLES = {
     "accent_color", "star_color", "wave_color", "underline_color", "dot_active",
     "pin_color", "color_accent", "btn_border_color", "box2_badge_bg",
     "badge_bg_color", "box_border_color", "heading_highlight_color",
+    // Kaufbox (main-product): Bundle-Auswahl/-Badge, Galerie-Badge & aktiver
+    // Thumb-Rahmen, Timeline-Kreise/Countdown — die Vorschau färbt all das
+    // per --pv-accent, also MUSS der Export dieselben Keys umfärben.
+    "active_border", "badge_bg", "pg_badge_bg", "pg_thumb_active_border",
+    "countdown_color", "circle_bg",
   ],
-  button: ["btn_bg_color", "button_bg", "btn_primary_bg", "cta_bg"],
-  buttonText: ["btn_text_color", "button_text_color", "btn_primary_text"],
+  button: ["btn_bg_color", "button_bg", "btn_primary_bg", "cta_bg", "primary_bg"],
+  buttonText: ["btn_text_color", "button_text_color", "btn_primary_text", "primary_fg"],
 } as const;
 
 const COLORISH = /^(#[0-9a-fA-F]{3,8}|rgba?\([\d.,\s%]+\))$/;
