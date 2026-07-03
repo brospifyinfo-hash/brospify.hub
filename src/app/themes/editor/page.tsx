@@ -12,13 +12,14 @@ import { motion } from "framer-motion";
 import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
-  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw,
+  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import Inspector from "@/components/theme-editor/Inspector";
 import SectionLibraryOverlay from "@/components/theme-editor/SectionLibraryOverlay";
+import StyleGalleryOverlay from "@/components/theme-editor/StyleGalleryOverlay";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import {
   editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
@@ -27,7 +28,8 @@ import {
   buildInitialDocument, createLibraryInstance, getSectionDef,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
-import { THEME_STYLES, DEFAULT_STYLE_ID, type StyleDesign } from "@/lib/theme-styles";
+import { THEME_STYLES, DEFAULT_STYLE_ID, getThemeStyle, type StyleDesign } from "@/lib/theme-styles";
+import { STYLE_GALLERY } from "@/lib/theme-library";
 
 interface DrawnProduct { id: string; titel: string; bildUrl?: string }
 interface PreviewResponse extends PreviewData {
@@ -69,6 +71,7 @@ export default function ThemeEditorPage() {
   const [page, setPage] = useState<EditorPage>("product");
   const [selected, setSelected] = useState<string | null>(null);
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
+  const [styleOpen, setStyleOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cost, setCost] = useState<number | null>(null);
@@ -151,6 +154,37 @@ export default function ThemeEditorPage() {
 
   // Aktive Seiten-Liste (Produktseite oder Startseite).
   const currentSections = page === "home" ? doc.home || [] : doc.sections;
+
+  // Stil NACHTRÄGLICH anwenden: „Nur Design" behält Aufbau/Texte (nur Farben,
+  // Schriften, Ecken, Design, Galerie-Look); „Kompletter Stil" baut beide
+  // Seiten nach der Stil-Komposition neu.
+  const applyStyle = useCallback((styleId: string, full: boolean) => {
+    setStyleOpen(false);
+    if (full) {
+      pickStyle(styleId);
+      return;
+    }
+    const s = getThemeStyle(styleId);
+    dispatch({
+      type: "replace",
+      doc: {
+        ...doc,
+        global: {
+          styleId: s.id,
+          colors: { ...s.palette },
+          headingFont: s.headingFont,
+          bodyFont: s.bodyFont,
+          radius: typeof s.settingOverrides.buttons_radius === "number" ? s.settingOverrides.buttons_radius : 8,
+          design: s.design ? { ...s.design } : doc.global.design,
+        },
+        buybox: {
+          ...doc.buybox,
+          gallery: { ...doc.buybox.gallery, presetId: STYLE_GALLERY[s.id] || doc.buybox.gallery.presetId },
+        },
+      },
+    });
+    setSelected(null);
+  }, [doc, pickStyle]);
 
   // Section einfügen (aus Bibliothek) + GSAP-Puls auf der neuen Section.
   const insertSection = useCallback((type: string, presetId: string) => {
@@ -308,6 +342,17 @@ export default function ThemeEditorPage() {
             )}
 
             <div className="flex items-center gap-1.5 ml-auto">
+              {/* Gesamt-Stil jederzeit änderbar */}
+              {doc.productId && (
+                <button
+                  onClick={() => setStyleOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                >
+                  <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                  <span className="hidden sm:inline">{t.themes.editorStyleGallery}</span>
+                  <span className="text-[10.5px] text-zinc-500 hidden md:inline">· {getThemeStyle(doc.global.styleId).label}</span>
+                </button>
+              )}
               {/* Undo / Redo */}
               <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                 <button
@@ -515,7 +560,7 @@ export default function ThemeEditorPage() {
                     selected={selected}
                     onClearSelect={() => setSelected(null)}
                     onSelectBlock={setSelected}
-                    onPickStyle={pickStyle}
+                    onOpenStyles={() => setStyleOpen(true)}
                     onRandomize={randomize}
                     previewData={previewData}
                   />
@@ -525,6 +570,23 @@ export default function ThemeEditorPage() {
           )}
         </div>
       </main>
+
+      {/* Stil-Galerie — Gesamt-Stil jederzeit nachträglich änderbar */}
+      {previewData && (
+        <StyleGalleryOverlay
+          open={styleOpen}
+          onClose={() => setStyleOpen(false)}
+          currentStyleId={doc.global.styleId}
+          ctx={{ images: previewData.images, title: previewData.title, price: previewData.price }}
+          onApply={applyStyle}
+          title={t.themes.editorStyleGallery}
+          modeDesign={t.themes.editorStyleModeDesign}
+          modeDesignSub={t.themes.editorStyleModeDesignSub}
+          modeFull={t.themes.editorStyleModeFull}
+          modeFullSub={t.themes.editorStyleModeFullSub}
+          applyLabel={t.themes.editorStyleApply}
+        />
+      )}
 
       {/* Section-Bibliothek */}
       {previewData && (

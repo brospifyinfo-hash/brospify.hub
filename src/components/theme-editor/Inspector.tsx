@@ -6,7 +6,7 @@
 // globale Theme-Design (Stil, Farben, Schriften/Ecken, Design).
 
 import { useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Eye, EyeOff, Trash2, Shuffle, MousePointerClick } from "lucide-react";
+import { ChevronDown, ChevronUp, Eye, EyeOff, Trash2, Shuffle, MousePointerClick, Palette as PaletteIcon } from "lucide-react";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
 import type { PreviewData } from "@/components/ThemePreview";
 import { getSectionDef, getBuyboxLib, GALLERY_PRESETS } from "@/lib/theme-library";
@@ -38,7 +38,7 @@ function Group({ id, title, open, onToggle, children }: { id: string; title: str
 }
 
 export default function Inspector({
-  doc, dispatch, selected, onClearSelect, onSelectBlock, onPickStyle, onRandomize, previewData,
+  doc, dispatch, selected, onClearSelect, onSelectBlock, onOpenStyles, onRandomize, previewData,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -46,7 +46,8 @@ export default function Inspector({
   onClearSelect: () => void;
   /** Auswahl umschalten: "__buybox" (Panel) oder "blk:<typ>" (Baustein offen). */
   onSelectBlock: (sel: string) => void;
-  onPickStyle: (id: string) => void;
+  /** Öffnet die Stil-Galerie (Stil-Wechsel läuft nur noch darüber). */
+  onOpenStyles: () => void;
   onRandomize: () => void;
   previewData: PreviewData | null;
 }) {
@@ -380,31 +381,35 @@ export default function Inspector({
       </div>
 
       <Group id="stil" title={t.themes.builderStyle} open={!!openG.stil} onToggle={toggleG}>
-        <div className="flex justify-end mb-2">
+        {(() => {
+          const cur = THEME_STYLES.find((s) => s.id === g.styleId);
+          return (
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 mb-2">
+              <span className="flex -space-x-1 shrink-0">
+                <span className="w-3.5 h-3.5 rounded-full border border-black/30" style={{ background: g.colors.accent }} />
+                <span className="w-3.5 h-3.5 rounded-full border border-black/30" style={{ background: g.colors.button }} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12.5px] font-semibold text-white">{cur?.label || g.styleId}</span>
+                <span className="block text-[10px] text-zinc-500 truncate">{cur?.hint || ""}</span>
+              </span>
+            </div>
+          );
+        })()}
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={onOpenStyles}
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 text-[12px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 px-3 py-2.5 transition"
+          >
+            <PaletteIcon className="w-3.5 h-3.5" /> {t.themes.editorStyleGallery}
+          </button>
           <button
             onClick={onRandomize}
             title={t.themes.builderRandomHint}
-            className="flex items-center gap-1 text-[11px] font-semibold text-[#cfe9a3] hover:text-white transition rounded-md border border-[#95BF47]/30 bg-[#95BF47]/10 px-2 py-1"
+            className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-[12px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.07] px-3 py-2.5 transition"
           >
-            <Shuffle className="w-3 h-3" /> {t.themes.builderRandom}
+            <Shuffle className="w-3.5 h-3.5" /> {t.themes.builderRandom}
           </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {THEME_STYLES.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => onPickStyle(s.id)}
-              className={`text-left rounded-lg border px-3 py-2 transition ${
-                g.styleId === s.id ? "border-[#95BF47]/60 bg-[#95BF47]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
-              }`}
-            >
-              <span className="flex items-center gap-1.5">
-                <span className="w-3 h-3 rounded-full border border-white/20" style={{ background: s.palette.accent }} />
-                <span className="text-[12.5px] font-semibold text-white">{s.label}</span>
-              </span>
-              <span className="block text-[10px] text-zinc-500 leading-tight mt-0.5">{s.hint}</span>
-            </button>
-          ))}
         </div>
       </Group>
 
