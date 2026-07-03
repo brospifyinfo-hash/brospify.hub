@@ -231,6 +231,10 @@ export interface KundeProfile {
    *  Account jemals gezogen hat. Append-only — garantiert, dass kein
    *  Produkt zweimal gezogen werden kann. */
   drawnProducts?: string[];
+  /** Live-Sync der dynamischen Buy Box: Produkt-ID → Sync-Code (bspx_…).
+   *  Derselbe Code wird bei jedem Build desselben Produkts wiederverwendet,
+   *  damit bereits installierte Themes Design-Updates ohne Neu-Upload sehen. */
+  buyboxCodes?: Record<string, string>;
   /** ISO-Timestamp wann wir den Admin zuletzt benachrichtigt haben, dass
    *  dieser Account ziehen wollte aber schon ALLE Produkte hatte. Dient
    *  als Debounce gegen Mail-Spam; wird beim nächsten erfolgreichen Zug
@@ -2055,6 +2059,67 @@ export async function addToScoutCache(productId: string, videos: ScoutVideo[]): 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID(),
       range: "ScoutCache!A:D",
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  }
+}
+
+// ─── BUYBOX SYNC (Tab "BuyboxConfigs") ───────────────────────────
+// Live-Sync der dynamischen Buy Box: Der Theme-Export schreibt nur noch
+// EINEN brospify_buybox-Block ins ZIP; das Design (Bausteine, Presets,
+// Farben, Texte) liegt hier als fertig aufgelöster Render-Plan (JSON in
+// einer Zelle) und wird vom Kunden-Shop über den Code abgerufen
+// (GET /api/buybox/[code], öffentlich). Pro Code EINE Zeile, Upsert.
+//   A=Code, B=User, C=ProductId, D=PlanJson, E=UpdatedAt, F=Active
+const BUYBOX_HEADERS = ["Code", "User", "ProductId", "PlanJson", "UpdatedAt", "Active"];
+
+/** Render-Plan zu einem Sync-Code (JSON-String) — null wenn unbekannt/inaktiv. */
+export async function getBuyboxPlanByCode(code: string): Promise<string | null> {
+  if (!code) return null;
+  const sheets = getSheets();
+  try {
+    await ensureSheet("BuyboxConfigs", BUYBOX_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "BuyboxConfigs!A2:F",
+    });
+    const rows = res.data.values || [];
+    const hit = rows.find((r) => (r[0] || "") === code);
+    if (!hit || !hit[3]) return null;
+    if (String(hit[5] ?? "1") === "0") return null; // deaktiviert
+    return String(hit[3]);
+  } catch {
+    return null;
+  }
+}
+
+/** Render-Plan unter einem Code speichern (Upsert: bestehende Code-Zeile
+ *  wird per values.update überschrieben — Design-Updates erreichen so alle
+ *  Shops mit diesem Code, ohne neues Theme-ZIP). */
+export async function saveBuyboxPlan(code: string, user: string, productId: string, planJson: string): Promise<void> {
+  if (!code || !planJson) return;
+  const sheets = getSheets();
+  await ensureSheet("BuyboxConfigs", BUYBOX_HEADERS);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: "BuyboxConfigs!A2:A",
+  });
+  const rows = res.data.values || [];
+  const idx = rows.findIndex((r) => (r[0] || "") === code);
+  const rowValues = [code, user, productId, planJson, new Date().toISOString(), "1"];
+  if (idx >= 0) {
+    const rowNumber = idx + 2;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID(),
+      range: `BuyboxConfigs!A${rowNumber}:F${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "BuyboxConfigs!A:F",
       valueInputOption: "RAW",
       requestBody: { values: [rowValues] },
     });

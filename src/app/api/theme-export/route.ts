@@ -28,6 +28,9 @@ import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styl
 import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
 import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
 import type { ThemeDocument } from "@/lib/theme-doc";
+import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
+import { saveBuyboxPlan, updateKundeProfile } from "@/lib/sheets";
+import { SITE_URL } from "@/lib/seo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -92,15 +95,19 @@ export async function POST(req: NextRequest) {
   }
   if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
 
-  // Autorisierung + Credits (Admins frei, ohne Abzug).
+  // Autorisierung. Credits kosten NUR echte API-Kosten: die einmalige
+  // KI-Text-Erstellung pro Produkt (DeepSeek). Download/Build selbst ist
+  // kostenlos — liegen die Texte schon am Produkt, wird nichts abgezogen.
   let chargeRow: number | null = null;
   let chargeProfile: import("@/lib/sheets").KundeProfile | null = null;
+  let kunde: Awaited<ReturnType<typeof findKundeByKey>> = null;
   let cost = 0;
+  const needsCopyGen = !produkt.extra?.themeCopy || Object.keys(produkt.extra.themeCopy).length === 0;
   if (!session.isAdmin) {
     if (!session.lizenzschluessel) {
       return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
     }
-    const kunde = await findKundeByKey(session.lizenzschluessel);
+    kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
 
     const drawn = Array.isArray(kunde.profile?.drawnProducts) ? kunde.profile.drawnProducts : [];
@@ -108,13 +115,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
     }
 
-    cost = await getCreditCost("THEME_EXPORT");
-    const balance = getCreditsState(kunde.profile).balance;
-    if (cost > 0 && balance < cost) {
-      return NextResponse.json(
-        { error: `Nicht genug Credits — ein Theme-Build kostet ${cost}. Du hast ${balance}.`, creditsRemaining: balance },
-        { status: 402 },
-      );
+    if (needsCopyGen) {
+      cost = await getCreditCost("THEME_EXPORT");
+      const balance = getCreditsState(kunde.profile).balance;
+      if (cost > 0 && balance < cost) {
+        return NextResponse.json(
+          { error: `Nicht genug Credits — die einmalige KI-Text-Erstellung für dieses Produkt kostet ${cost}. Du hast ${balance}.`, creditsRemaining: balance },
+          { status: 402 },
+        );
+      }
     }
     chargeRow = kunde.rowIndex;
     chargeProfile = kunde.profile;
@@ -140,13 +149,44 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Dynamische Buy Box: Sync-Code je Kunde+Produkt (wiederverwendet,
+  // damit bereits installierte Themes Live-Updates bekommen) + Render-Plan
+  // unter dem Code speichern. MUSS vor dem Build klappen — sonst würde ein
+  // ZIP mit totem Code ausgeliefert.
+  let syncCode = "";
+  if (doc) {
+    if (kunde) {
+      const codes = { ...(kunde.profile.buyboxCodes || {}) };
+      syncCode = codes[produkt.id] || "";
+      if (!syncCode) {
+        syncCode = generateSyncCode();
+        codes[produkt.id] = syncCode;
+        kunde.profile.buyboxCodes = codes;
+        try {
+          await updateKundeProfile(kunde.rowIndex, kunde.profile);
+        } catch (e) {
+          console.warn("[theme-export] buyboxCodes-Persist fehlgeschlagen (Code bleibt nutzbar):", e);
+        }
+      }
+    } else {
+      syncCode = generateSyncCode();
+    }
+    try {
+      const plan = buildBuyboxPlan(doc, themeCopy);
+      await saveBuyboxPlan(syncCode, session.isAdmin ? "admin" : session.lizenzschluessel || "", produkt.id, JSON.stringify(plan));
+    } catch (err) {
+      console.error("[theme-export] Buybox-Plan speichern fehlgeschlagen:", err);
+      return NextResponse.json({ error: "Live-Sync konnte nicht eingerichtet werden — bitte erneut versuchen." }, { status: 500 });
+    }
+  }
+
   // Basis-Theme laden (hochgeladenes Theme bevorzugt) + injizieren.
   let zip: Buffer;
   try {
     const { zip: master, source, key } = await getEditorBaseThemeZip();
     console.log(`[theme-export] Basis-Theme: ${source} (${doc ? "v2-Dokument" : "Legacy"})`);
     zip = doc
-      ? compileDocumentZip(master, doc, themeCopy || {}, key)
+      ? compileDocumentZip(master, doc, themeCopy || {}, key, syncCode ? { syncCode, hubUrl: SITE_URL } : null)
       : buildThemeZip(master, {
       themeCopy: { ...themeCopy, ...headingCopy },
       colors: colors as ThemeColors,
@@ -169,13 +209,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 
-  // Credits abziehen (erst NACH erfolgreichem Build → kein Abzug bei Fehler).
-  if (chargeRow !== null && chargeProfile && cost > 0) {
+  // Credits abziehen — NUR für die einmalige KI-Text-Erstellung (echte
+  // API-Kosten) und erst NACH erfolgreichem Build (kein Abzug bei Fehler).
+  if (chargeRow !== null && chargeProfile && cost > 0 && needsCopyGen) {
     try {
       const result = await deductCredits(chargeRow, chargeProfile, cost, "theme-export");
       if (!result.success) {
         return NextResponse.json(
-          { error: `Nicht genug Credits — ein Theme-Build kostet ${cost}.`, creditsRemaining: result.remaining },
+          { error: `Nicht genug Credits — die KI-Text-Erstellung kostet ${cost}.`, creditsRemaining: result.remaining },
           { status: 402 },
         );
       }
@@ -193,6 +234,7 @@ export async function POST(req: NextRequest) {
       "Content-Disposition": `attachment; filename="${fileName}"`,
       "Content-Length": String(zip.length),
       "Cache-Control": "no-store",
+      ...(syncCode ? { "X-Bspx-Code": syncCode } : {}),
     },
   });
 }

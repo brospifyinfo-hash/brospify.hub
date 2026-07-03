@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
-  Sparkles, ShoppingCart, Package, ChevronRight,
+  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -70,6 +70,7 @@ export default function ThemeEditorPage() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
+  const [syncing, setSyncing] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
 
@@ -220,6 +221,33 @@ export default function ThemeEditorPage() {
     }
   }
 
+  // Design live in den Shop pushen (gleicher Sync-Code, kein neues ZIP).
+  async function handleSyncUpdate() {
+    if (!doc.productId || syncing) return;
+    setSyncing(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/buybox/update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ document: doc satisfies ThemeDocument }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setMsg({ kind: "ok", text: t.themes.editorSyncUpdated });
+      } else if (res.status === 404 && data?.needsExport) {
+        setMsg({ kind: "err", text: t.themes.editorSyncNeedsDownload });
+      } else {
+        setMsg({ kind: "err", text: data?.error || t.themes.builderErr });
+      }
+    } catch {
+      setMsg({ kind: "err", text: t.themes.builderErr });
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   const activeProduct = useMemo(
     () => (products || []).find((p) => p.id === doc.productId) || null,
     [products, doc.productId],
@@ -312,13 +340,25 @@ export default function ThemeEditorPage() {
               >
                 {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
                 <span>{building ? t.themes.builderBuilding : "Download"}</span>
-                {cost !== null && cost > 0 && <span className="hidden sm:inline text-[10.5px] opacity-80">· {cost} Cr.</span>}
+              </button>
+              {/* Design live in installierte Shops pushen (Sync-Code, kostenlos) */}
+              <button
+                onClick={handleSyncUpdate}
+                disabled={syncing || !doc.productId}
+                title={t.themes.editorSyncHint}
+                className="flex items-center gap-1.5 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 px-3 py-2 text-[12px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                <span className="hidden sm:inline">{t.themes.editorSyncUpdate}</span>
               </button>
             </div>
           </div>
 
           {msg && (
             <p className={`mb-3 text-[12px] ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>{msg.text}</p>
+          )}
+          {!msg && cost !== null && cost > 0 && !showPicker && (
+            <p className="mb-3 text-[11.5px] text-zinc-500">{t.themes.editorFreeNote.replace("{n}", String(cost))}</p>
           )}
 
           {/* ── Schritt 1: Produkt-Bilder-Grid ── */}

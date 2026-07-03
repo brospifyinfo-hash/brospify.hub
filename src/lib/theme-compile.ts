@@ -19,6 +19,7 @@ import {
   type BaseSectionInfo,
 } from "@/lib/theme-library";
 import { getThemeStyle, radiusOverrides } from "@/lib/theme-styles";
+import { BUYBOX_BLOCKS } from "@/lib/theme-sections";
 import {
   applyCopyBindings,
   applyBuyboxLayout,
@@ -213,6 +214,12 @@ function instantiateSection(zip: AdmZip, cacheKey: string, instance: SectionInst
   return section;
 }
 
+/** Dynamische Buy Box: Sync-Code + Hub-URL für den Master-Block. */
+export interface DynamicBuyboxOpts {
+  syncCode: string;
+  hubUrl: string;
+}
+
 function compileProductTemplate(
   data: TemplateData,
   doc: ThemeDocument,
@@ -220,6 +227,7 @@ function compileProductTemplate(
   cacheKey: string,
   values: ThemeCopy,
   palette: ColorPalette,
+  dyn: DynamicBuyboxOpts | null,
 ): void {
   const sections = (data.sections = data.sections && typeof data.sections === "object" ? data.sections : {});
   const origOrder = Array.isArray(data.order) ? data.order : Object.keys(sections);
@@ -287,12 +295,19 @@ function compileProductTemplate(
 
   data.order = [...unmanagedPrefix, ...docIds, ...unmanagedSuffix];
 
-  // Kaufbox (main-product): Galerie + Block-Instanziierung + Block-Presets/
-  // Texte MUSS vor dem Reorder laufen (neue Blöcke brauchen ihre Slots),
-  // danach Reihenfolge/Sichtbarkeit + Vorteile-Icons.
-  applyBuyboxV2(data, doc, zip, cacheKey, palette);
-  applyBuyboxLayout(data, doc.buybox.order, doc.buybox.hidden);
-  applyBenefitIcons(data, doc.buybox.benefitIcons);
+  // Produktgalerie (pg_*) bleibt IMMER statisch im ZIP — nur die
+  // Produktinfo-Spalte ist von der dynamischen Buy Box betroffen.
+  applyGallerySettings(data, doc, palette);
+
+  // Kaufbox: DYNAMISCH (ein brospify_buybox-Block, Design kommt live über
+  // den Sync-Code vom Hub) — oder STATISCH als Fallback, wenn die Basis den
+  // Master-Block nicht kennt (alte Uploads) oder kein Sync-Code vorliegt.
+  const dynOk = dyn ? applyDynamicBuybox(data, zip, cacheKey, dyn.syncCode, dyn.hubUrl) : false;
+  if (!dynOk) {
+    applyBuyboxStatic(data, doc, zip, cacheKey, palette);
+    applyBuyboxLayout(data, doc.buybox.order, doc.buybox.hidden);
+    applyBenefitIcons(data, doc.buybox.benefitIcons);
+  }
 
   // Rest-Tokens in aktiven Sections leeren (nie rohes [[…]] ausliefern).
   for (const sid of data.order) {
@@ -302,23 +317,18 @@ function compileProductTemplate(
   }
 }
 
-// ─── Kaufbox v2: Galerie-Preset + Block-Instanziierung + Block-Styles ──
+// ─── Produktgalerie (pg_*): Preset + Radius + Badge — immer statisch ──
 
-function applyBuyboxV2(
-  data: TemplateData,
-  doc: ThemeDocument,
-  zip: AdmZip,
-  cacheKey: string,
-  palette: ColorPalette,
-): void {
-  const sections = data.sections || {};
-  const main: any = Object.values(sections).find((s: any) => s && s.type === "main-product");
+function findMainProduct(data: TemplateData): any | null {
+  return (Object.values(data.sections || {}) as any[]).find((s) => s && s.type === "main-product") || null;
+}
+
+function applyGallerySettings(data: TemplateData, doc: ThemeDocument, palette: ColorPalette): void {
+  const main = findMainProduct(data);
   if (!main) return;
   main.settings = main.settings && typeof main.settings === "object" ? main.settings : {};
   const buybox = doc.buybox || ({} as ThemeDocument["buybox"]);
-
-  // 1) Produktgalerie (pg_*): Preset + globaler Ecken-Radius + optionales Badge.
-  //    (Ältere Clients senden evtl. kein gallery-Feld → dann Basis unangetastet.)
+  // Ältere Clients senden evtl. kein gallery-Feld → dann Basis unangetastet.
   if (buybox.gallery && typeof buybox.gallery === "object") {
     const preset = getGalleryPreset(buybox.gallery.presetId);
     for (const [k, v] of Object.entries(preset.settings)) main.settings[k] = resolvePaletteRef(v, palette);
@@ -331,6 +341,72 @@ function applyBuyboxV2(
       main.settings.pg_badge_color = "#ffffff";
     }
   }
+}
+
+// ─── DYNAMISCHE Buy Box: Produktinfo-Spalte = EIN Master-Block ─────
+// Ersetzt alle verwalteten Produktinfo-Bausteine durch einen einzigen
+// brospify_buybox-Block mit vorbefülltem Sync-Code. Das Design kommt zur
+// Laufzeit vom Hub (GET /api/buybox/[code]) — Design-Updates erreichen den
+// Shop OHNE neues Theme-ZIP. Gibt false zurück, wenn die Basis den
+// Master-Block nicht kennt (alte Uploads) → Aufrufer fällt auf statisch zurück.
+
+const DYNAMIC_BLOCK_TYPE = "brospify_buybox";
+
+function applyDynamicBuybox(
+  data: TemplateData,
+  zip: AdmZip,
+  cacheKey: string,
+  syncCode: string,
+  hubUrl: string,
+): boolean {
+  if (!syncCode) return false;
+  const main = findMainProduct(data);
+  if (!main) return false;
+  const schema = readSectionSchema(zip, cacheKey, "main-product");
+  if (!schema || !(DYNAMIC_BLOCK_TYPE in schema.blockDefaults)) return false;
+
+  const managed = new Set(BUYBOX_BLOCKS.map((b) => b.type));
+  main.blocks = main.blocks && typeof main.blocks === "object" ? main.blocks : {};
+  main.block_order = Array.isArray(main.block_order) ? main.block_order : [];
+
+  // Verwaltete Bausteine raus; der ERSTE verwaltete Slot wird zur Position
+  // des Master-Blocks. Unverwaltete Blöcke (@app, custom_liquid …) bleiben.
+  const keep: string[] = [];
+  let inserted = false;
+  for (const bid of main.block_order) {
+    const t = String(main.blocks[bid]?.type || "");
+    if (managed.has(t)) {
+      if (!inserted) {
+        keep.push("bspx");
+        inserted = true;
+      }
+      delete main.blocks[bid];
+    } else {
+      keep.push(bid);
+    }
+  }
+  if (!inserted) keep.unshift("bspx");
+  main.blocks["bspx"] = {
+    type: DYNAMIC_BLOCK_TYPE,
+    settings: { sync_code: syncCode, hub_url: hubUrl },
+  };
+  main.block_order = keep;
+  return true;
+}
+
+// ─── Kaufbox STATISCH (Fallback für Basen ohne Master-Block) ────────
+
+function applyBuyboxStatic(
+  data: TemplateData,
+  doc: ThemeDocument,
+  zip: AdmZip,
+  cacheKey: string,
+  palette: ColorPalette,
+): void {
+  const main = findMainProduct(data);
+  if (!main) return;
+  main.settings = main.settings && typeof main.settings === "object" ? main.settings : {};
+  const buybox = doc.buybox || ({} as ThemeDocument["buybox"]);
 
   // 2) Sichtbare Bausteine ohne Template-Instanz aus dem main-product-Schema
   //    instanziieren (z. B. sale_banner, feature_box, icon-with-text …).
@@ -480,6 +556,7 @@ export function compileDocumentZip(
   doc: ThemeDocument,
   themeCopy: ThemeCopy,
   cacheKey = "base",
+  dyn: DynamicBuyboxOpts | null = null,
 ): Buffer {
   const zip = new AdmZip(baseZip);
   const values = getPlaceholderValues(themeCopy);
@@ -490,7 +567,7 @@ export function compileDocumentZip(
   const productEntry = findEntry(zip, "templates/product.json");
   if (!productEntry) throw new Error("Theme-Basis hat keine templates/product.json.");
   const productData = JSON.parse(productEntry.getData().toString("utf8")) as TemplateData;
-  compileProductTemplate(productData, doc, zip, cacheKey, values, palette);
+  compileProductTemplate(productData, doc, zip, cacheKey, values, palette, dyn);
   sanitizeTemplateBlocks(productData);
   validateProductTemplate(productData);
   zip.updateFile(productEntry.entryName, Buffer.from(JSON.stringify(productData, null, 2), "utf8"));
