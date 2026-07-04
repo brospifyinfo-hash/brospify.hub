@@ -20,8 +20,9 @@ const CORS_HEADERS: Record<string, string> = {
 
 // Pro Lambda kurz cachen — schützt die Sheets-Quota vor Traffic-Spitzen
 // der Kunden-Shops; die eigentliche Lastabwehr macht der CDN-Cache.
+// KURZ halten, damit „Live aktualisieren" im Hub schnell im Shop ankommt.
 const memCache = new Map<string, { json: string | null; ts: number }>();
-const MEM_TTL_MS = 60_000;
+const MEM_TTL_MS = 10_000;
 
 const CODE_RE = /^bspx_[a-z0-9]{10,40}$/;
 
@@ -67,10 +68,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     {
       headers: {
         ...CORS_HEADERS,
-        // 5 Min frisch am CDN, danach bis zu 7 Tage stale ausliefern während
-        // revalidiert wird — Kunden-Shops laden immer schnell, Updates
-        // erscheinen innerhalb weniger Minuten.
-        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=604800",
+        // KURZ cachen, damit „Live aktualisieren" im Hub schnell im Shop
+        // ankommt: 20s frisch am CDN, dann 40s stale-while-revalidate
+        // (schützt die Sheets-Quota unter Last). Design-Änderungen sind
+        // nach spätestens ~1 Minute (ggf. 1× neu laden) im Shop sichtbar.
+        "Cache-Control": "public, s-maxage=20, stale-while-revalidate=40",
       },
     },
   );

@@ -166,23 +166,38 @@
     // Kein Code/Hub konfiguriert → direkt eingebackenen Plan nutzen.
     if (!code || !hub) { offline(); return; }
 
-    var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, FETCH_TIMEOUT);
-    fetch(hub + "/api/buybox/" + encodeURIComponent(code), { signal: ctrl ? ctrl.signal : undefined })
-      .then(function (r) {
-        clearTimeout(timer);
-        if (!r.ok) { offline(); return null; } // 404 = Code unbekannt, 5xx = Hub-Problem
-        return r.json();
-      })
-      .then(function (data) {
-        if (!data) return;
-        try { localStorage.setItem(cacheKey, JSON.stringify({ plan: data.plan, css: data.css, ts: Date.now() })); } catch (e) { /* voll */ }
-        if (!useData(data)) offline();
-      })
-      .catch(function () {
-        clearTimeout(timer);
-        offline();
-      });
+    // WICHTIG: www↔Apex-Redirects tragen keine CORS-Header → der Browser
+    // blockt den Fetch, obwohl die API gesund ist. Deshalb BEIDE Varianten
+    // probieren (konfigurierte zuerst, dann die getauschte).
+    var hubCandidates = [hub];
+    var swapped = /:\/\/www\./.test(hub)
+      ? hub.replace("://www.", "://")
+      : hub.replace("://", "://www.");
+    if (swapped !== hub) hubCandidates.push(swapped);
+
+    function fetchPlan(idx) {
+      if (idx >= hubCandidates.length) { offline(); return; }
+      var base = hubCandidates[idx];
+      var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+      var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, FETCH_TIMEOUT);
+      fetch(base + "/api/buybox/" + encodeURIComponent(code), { signal: ctrl ? ctrl.signal : undefined })
+        .then(function (r) {
+          clearTimeout(timer);
+          if (!r.ok) { offline(); return null; } // 404 = Code unbekannt (definitiv)
+          return r.json();
+        })
+        .then(function (data) {
+          if (!data) return;
+          try { localStorage.setItem(cacheKey, JSON.stringify({ plan: data.plan, css: data.css, ts: Date.now() })); } catch (e) { /* voll */ }
+          if (!useData(data)) offline();
+        })
+        .catch(function () {
+          clearTimeout(timer);
+          if (window.console) console.warn("[bspx] Hub nicht erreichbar über " + base + (idx + 1 < hubCandidates.length ? " — probiere Alternative" : ""));
+          fetchPlan(idx + 1); // Netz-/CORS-Fehler → andere Domain-Variante
+        });
+    }
+    fetchPlan(0);
   }
 
   // ── Rendering ────────────────────────────────────────────────────

@@ -30,8 +30,12 @@ import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
-import { SITE_URL } from "@/lib/seo";
 import { BUYBOX_CSS } from "@/lib/buybox-css";
+
+// Öffentliche Hub-URL für die Storefront-Fetches der Kunden-Shops.
+// BEWUSST der Apex (nicht www): der www→Apex-Redirect trägt keine
+// CORS-Header — ein Fetch über www würde im Browser geblockt.
+const BSPX_HUB_URL = "https://brospifyhub.com";
 import { promises as fsp } from "fs";
 import path from "path";
 
@@ -239,7 +243,7 @@ export async function POST(req: NextRequest) {
           doc,
           themeCopy || {},
           key,
-          syncCode ? { syncCode, hubUrl: SITE_URL, payloadJson, runtimeJs: await getRuntimeJs() } : null,
+          syncCode ? { syncCode, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: await getRuntimeJs() } : null,
         )
       : buildThemeZip(master, {
       themeCopy: { ...themeCopy, ...headingCopy },
