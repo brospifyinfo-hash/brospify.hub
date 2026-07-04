@@ -1061,9 +1061,15 @@ export function buildInitialDocument(
     radius: typeof style.settingOverrides.buttons_radius === "number" ? style.settingOverrides.buttons_radius : 8,
     design: style.design ? { ...style.design } : { shadow: 1, border: 1, iconStyle: "dark" },
   };
+  // order = NUR die AKTIVEN Bausteine. Vom Stil ausgeblendete Bausteine gelten
+  // als „noch nicht hinzugefügt" → sie erscheinen NICHT in der Verschieben-
+  // Liste, sondern nur in der Baustein-Galerie zum Hinzufügen. hidden bleibt
+  // leer; die Compile-Engine entfernt alles, was nicht in order steht.
+  const bbHidden = new Set(style.hiddenBlocks ?? []);
+  const activeBuybox = (style.buyboxOrder ?? BUYBOX_DEFAULT_ORDER).filter((tp) => !bbHidden.has(tp));
   doc.buybox = {
-    order: [...(style.buyboxOrder ?? BUYBOX_DEFAULT_ORDER)],
-    hidden: [...(style.hiddenBlocks ?? [])],
+    order: activeBuybox,
+    hidden: [],
     benefitIcons: [...DEFAULT_BENEFIT_ICONS],
     blocks: {},
     gallery: { presetId: STYLE_GALLERY[style.id] || "thumbs-unten", badge: "" },

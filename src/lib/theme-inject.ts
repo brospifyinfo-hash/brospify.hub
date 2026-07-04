@@ -111,7 +111,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
 // Accordions, Variant-Picker …) bleiben an ihrer Position; die verwalteten
 // Slots werden mit der Nutzer-Reihenfolge gefüllt (ausgeblendete entfallen).
 /* eslint-disable @typescript-eslint/no-explicit-any */
-export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[]): void {
+export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: string[], strict = false): void {
   const hasOrder = Array.isArray(order) && order.length > 0;
   const hasHidden = Array.isArray(hiddenBlocks) && hiddenBlocks.length > 0;
   if (!hasOrder && !hasHidden) return;
@@ -122,11 +122,14 @@ export function applyBuyboxLayout(data: any, order?: string[], hiddenBlocks?: st
 
   const typeOf = (id: string): string => String(main.blocks[id]?.type || "");
   const hidden = new Set(hiddenBlocks || []);
-  // Fehlende verwaltete Typen ans Ende anhängen: ältere Clients senden kürzere
-  // order-Arrays (z. B. ohne "description") — deren Blöcke dürfen dadurch
-  // NICHT aus dem Theme fallen, sondern bleiben (hinten) erhalten.
   const provided = hasOrder ? (order as string[]) : BUYBOX_DEFAULT_ORDER;
-  const orderTypes = [...provided, ...BUYBOX_DEFAULT_ORDER.filter((t) => !provided.includes(t))];
+  // strict (v2-Dokument): `order` = die AKTIVEN Bausteine, maßgeblich — alles,
+  // was nicht drinsteht, gilt als entfernt und fliegt raus.
+  // nicht-strict (Legacy-Body): fehlende Standard-Typen ans Ende anhängen,
+  // damit ältere Clients mit kürzeren order-Arrays keine Blöcke verlieren.
+  const orderTypes = strict
+    ? provided
+    : [...provided, ...BUYBOX_DEFAULT_ORDER.filter((t) => !provided.includes(t))];
 
   // Verwaltete Block-IDs je Typ (Original-Reihenfolge).
   const byType: Record<string, string[]> = {};

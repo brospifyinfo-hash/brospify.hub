@@ -332,7 +332,8 @@ function compileProductTemplate(
     if (dyn.runtimeJs) zip.addFile("assets/bspx-runtime.js", Buffer.from(dyn.runtimeJs, "utf8"));
   } else {
     applyBuyboxStatic(data, doc, zip, cacheKey, palette);
-    applyBuyboxLayout(data, doc.buybox.order, doc.buybox.hidden);
+    // strict: order = aktive Bausteine (maßgeblich) — Entferntes bleibt entfernt.
+    applyBuyboxLayout(data, doc.buybox.order, doc.buybox.hidden, true);
     applyBenefitIcons(data, doc.buybox.benefitIcons);
   }
 
