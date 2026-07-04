@@ -569,6 +569,99 @@
         });
         return btn;
       },
+
+      // ── NEU: Runtime-Bausteine (Optik identisch zur Editor-Vorschau) ──
+      trust_badges: function (b) {
+        var ic = [
+          ["M2 5h11v9H2z", "M13 8h4l3 3v3h-3", "M6.5 17.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z", "M17.5 17.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"],
+          ["M12 21a9 9 0 1 0-9-9", "M3 12l3-3", "M3 12l3 3"],
+          ["M5 11h14v9H5z", "M8 11V8a4 4 0 0 1 8 0v3", "M12 15v2"],
+          ["M12 3l2.5 5.5 6 .5-4.5 4 1.4 5.9L12 16.9 6.1 18.9 7.5 13 3 9l6-.5z"],
+        ];
+        var wrap = el("div", "bspx-tb bspx-tb--" + (b.s.style || "cards"));
+        var ac = b.s.accent || v.accent;
+        [1, 2, 3, 4].forEach(function (n, i) {
+          var label = b.t["label_" + n];
+          if (!label) return;
+          var item = el("div", "bspx-tb-item");
+          var icw = el("span", "bspx-tb-ic");
+          icw.style.color = ac;
+          icw.appendChild(svg(ic[i], 15));
+          item.appendChild(icw);
+          item.appendChild(el("span", "bspx-tb-lbl", label));
+          wrap.appendChild(item);
+        });
+        return wrap;
+      },
+      stock_bar: function (b) {
+        var col = b.s.color || "#e0332f";
+        var level = Math.max(6, Math.min(60, Number(b.s.level) || 20));
+        var wrap = el("div", "bspx-sbar");
+        var top = el("div", "bspx-sbar-top");
+        top.appendChild(el("span", "", "🔥 " + (b.t.text || "")));
+        var left = el("strong", "", b.t.left || "8");
+        left.style.color = col;
+        top.appendChild(left);
+        wrap.appendChild(top);
+        var track = el("div", "bspx-sbar-track");
+        var fill = el("span", "bspx-sbar-fill");
+        fill.style.width = level + "%";
+        fill.style.background = col;
+        track.appendChild(fill);
+        wrap.appendChild(track);
+        return wrap;
+      },
+      guarantee: function (b) {
+        var ac = b.s.accent || v.accent;
+        var style = b.s.style || "box";
+        var wrap = el("div", "bspx-guar bspx-guar--" + style);
+        if (style === "accent") {
+          wrap.style.background = "color-mix(in srgb," + ac + " 10%,var(--bx-bg))";
+          wrap.style.border = "1px solid color-mix(in srgb," + ac + " 30%,transparent)";
+        }
+        var icw = el("span", "bspx-guar-ic");
+        icw.style.color = ac;
+        icw.appendChild(svg(["M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z", "M9 12l2 2 4-4"], 26));
+        wrap.appendChild(icw);
+        var txt = el("span", "bspx-guar-txt");
+        txt.appendChild(el("strong", "", b.t.title || ""));
+        txt.appendChild(el("em", "", b.t.subtitle || ""));
+        wrap.appendChild(txt);
+        return wrap;
+      },
+      highlights: function (b) {
+        var ac = b.s.accent || v.accent;
+        var style = b.s.style || "accent";
+        var wrap = el("div", "bspx-hl bspx-hl--" + style);
+        [1, 2, 3, 4, 5].forEach(function (n) {
+          var it = b.t["item_" + n];
+          if (!it) return;
+          var row = el("div", "bspx-hl-item");
+          var chk = el("span", "bspx-hl-check");
+          if (style === "circle") { chk.style.background = ac; chk.style.color = "#fff"; }
+          else { chk.style.color = ac; }
+          if (style === "arrow") { chk.textContent = "›"; }
+          else { chk.appendChild(svg(["M20 6L9 17l-5-5"], 13)); }
+          row.appendChild(chk);
+          row.appendChild(document.createTextNode(it));
+          wrap.appendChild(row);
+        });
+        return wrap;
+      },
+      social_proof: function (b) {
+        var ac = b.s.accent || v.accent;
+        var style = b.s.style || "viewers";
+        var wrap = el("div", "bspx-sp");
+        var icw = el("span", "bspx-sp-ic", style === "sold" ? "🛒" : style === "trending" ? "🔥" : "👀");
+        icw.style.background = "color-mix(in srgb," + ac + " 14%,transparent)";
+        wrap.appendChild(icw);
+        var txt = el("span", "bspx-sp-txt");
+        txt.appendChild(el("strong", "", b.t.count || "17"));
+        txt.appendChild(document.createTextNode(" " + (style === "sold" ? "heute verkauft" : (b.t.text || "sehen sich das gerade an"))));
+        wrap.appendChild(txt);
+        wrap.appendChild(el("span", "bspx-sp-dot"));
+        return wrap;
+      },
     };
 
     function brandLabel(brand) {

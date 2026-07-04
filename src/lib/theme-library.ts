@@ -789,6 +789,73 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
   { type: "variant_picker", fields: [], presets: [] },
   { type: "quantity_selector", fields: [], presets: [] },
   { type: "custom_divider", fields: [], presets: [] },
+
+  // ── NEU: nur Runtime-gerendert (kein echter Liquid-Blocktyp) ──
+  {
+    type: "trust_badges",
+    fields: [
+      { id: "label_1", label: "Badge 1", labelEn: "Badge 1", kind: "text", target: { key: "label_1" }, def: "Gratis Versand" },
+      { id: "label_2", label: "Badge 2", labelEn: "Badge 2", kind: "text", target: { key: "label_2" }, def: "30 Tage Rückgabe" },
+      { id: "label_3", label: "Badge 3", labelEn: "Badge 3", kind: "text", target: { key: "label_3" }, def: "Sicher bezahlen" },
+      { id: "label_4", label: "Badge 4", labelEn: "Badge 4", kind: "text", target: { key: "label_4" }, def: "Top bewertet" },
+    ],
+    presets: [
+      { id: "boxen", label: "Karten", labelEn: "Cards", hint: "Umrandete Badge-Karten", settings: { style: "cards", accent: "@accent" } },
+      { id: "schlicht", label: "Schlicht", labelEn: "Plain", hint: "Nur Icons + Text", settings: { style: "plain", accent: "@accent" } },
+      { id: "streifen", label: "Streifen", labelEn: "Strip", hint: "Getönter Balken", settings: { style: "strip", accent: "@accent" } },
+    ],
+  },
+  {
+    type: "stock_bar",
+    fields: [
+      { id: "text", label: "Text", labelEn: "Text", kind: "text", target: { key: "text" }, def: "Fast ausverkauft — nur noch wenige verfügbar" },
+      { id: "left", label: "Restanzahl", labelEn: "Units left", kind: "text", target: { key: "left" }, def: "8" },
+    ],
+    presets: [
+      { id: "dringend", label: "Dringend", labelEn: "Urgent", hint: "Roter Balken", settings: { color: "#e0332f", level: 18 } },
+      { id: "akzent", label: "Akzent", labelEn: "Accent", hint: "In deiner Akzentfarbe", settings: { color: "@accent", level: 22 } },
+      { id: "dezent", label: "Dezent", labelEn: "Subtle", hint: "Ruhiger Balken", settings: { color: "#f0a020", level: 30 } },
+    ],
+  },
+  {
+    type: "guarantee",
+    fields: [
+      { id: "title", label: "Titel", labelEn: "Title", kind: "text", target: { key: "title" }, def: "30 Tage Geld-zurück-Garantie" },
+      { id: "subtitle", label: "Untertitel", labelEn: "Subtitle", kind: "text", target: { key: "subtitle" }, def: "Nicht zufrieden? Du bekommst dein Geld zurück — ohne Wenn und Aber." },
+    ],
+    presets: [
+      { id: "box", label: "Box", labelEn: "Box", hint: "Umrandet mit Siegel", settings: { style: "box", accent: "@accent" } },
+      { id: "akzent", label: "Akzent-Fläche", labelEn: "Accent fill", hint: "Getönter Hintergrund", settings: { style: "accent", accent: "@accent" } },
+      { id: "minimal", label: "Minimal", labelEn: "Minimal", hint: "Nur Siegel + Text", settings: { style: "minimal", accent: "@accent" } },
+    ],
+  },
+  {
+    type: "highlights",
+    fields: [
+      { id: "item_1", label: "Highlight 1", labelEn: "Highlight 1", kind: "text", target: { key: "item_1" }, def: "Premium-Materialien, die lange halten" },
+      { id: "item_2", label: "Highlight 2", labelEn: "Highlight 2", kind: "text", target: { key: "item_2" }, def: "In Sekunden einsatzbereit" },
+      { id: "item_3", label: "Highlight 3", labelEn: "Highlight 3", kind: "text", target: { key: "item_3" }, def: "Für den täglichen Gebrauch gemacht" },
+      { id: "item_4", label: "Highlight 4", labelEn: "Highlight 4", kind: "text", target: { key: "item_4" }, def: "Von tausenden Kunden geliebt" },
+      { id: "item_5", label: "Highlight 5", labelEn: "Highlight 5", kind: "text", target: { key: "item_5" }, def: "" },
+    ],
+    presets: [
+      { id: "akzent", label: "Akzent-Haken", labelEn: "Accent checks", hint: "Häkchen in Akzentfarbe", settings: { style: "accent", accent: "@accent" } },
+      { id: "kreis", label: "Gefüllte Kreise", labelEn: "Filled circles", hint: "Häkchen in Kreisen", settings: { style: "circle", accent: "@accent" } },
+      { id: "pfeil", label: "Pfeile", labelEn: "Arrows", hint: "Pfeil-Aufzählung", settings: { style: "arrow", accent: "@accent" } },
+    ],
+  },
+  {
+    type: "social_proof",
+    fields: [
+      { id: "text", label: "Text", labelEn: "Text", kind: "text", target: { key: "text" }, def: "sehen sich das gerade an" },
+      { id: "count", label: "Anzahl", labelEn: "Count", kind: "text", target: { key: "count" }, def: "17" },
+    ],
+    presets: [
+      { id: "betrachter", label: "Betrachter", labelEn: "Viewers", hint: "Augen-Icon, Live-Punkt", settings: { style: "viewers", accent: "@accent" } },
+      { id: "verkauft", label: "Heute verkauft", labelEn: "Sold today", hint: "Warenkorb-Icon", settings: { style: "sold", accent: "@accent" } },
+      { id: "trend", label: "Im Trend", labelEn: "Trending", hint: "Flammen-Icon", settings: { style: "trending", accent: "@accent" } },
+    ],
+  },
 ];
 
 export function getBuyboxLib(type: string): BuyboxBlockLib | undefined {

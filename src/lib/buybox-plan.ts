@@ -28,6 +28,8 @@ export const DYNAMIC_SUPPORTED = new Set([
   "bundle_selector", "buy_buttons", "payment_icons", "delivery_timeline",
   "feature_box", "icon-with-text", "description", "custom_divider", "text",
   "custom_accordion", "collapsible_tab", "share",
+  // NEU (nur Runtime): rein designbasiert, keine Shop-Daten nötig.
+  "trust_badges", "stock_bar", "guarantee", "highlights", "social_proof",
 ]);
 
 export interface BuyboxPlanBlock {

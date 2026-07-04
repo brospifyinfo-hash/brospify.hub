@@ -21,6 +21,7 @@ import Inspector from "@/components/theme-editor/Inspector";
 import SectionLibraryOverlay from "@/components/theme-editor/SectionLibraryOverlay";
 import StyleGalleryOverlay from "@/components/theme-editor/StyleGalleryOverlay";
 import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
+import BuyboxGalleryOverlay from "@/components/theme-editor/BuyboxGalleryOverlay";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import {
   editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
@@ -73,6 +74,7 @@ export default function ThemeEditorPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [buyboxGalleryOpen, setBuyboxGalleryOpen] = useState(false);
   const [designsOpen, setDesignsOpen] = useState(false);
   /** Aktuell geladener/gespeicherter Speicherstand (Code = Live-Sync-Code). */
   const [activeDesign, setActiveDesign] = useState<{ code: string; name: string } | null>(null);
@@ -578,6 +580,7 @@ export default function ThemeEditorPage() {
                     onClearSelect={() => setSelected(null)}
                     onSelectBlock={setSelected}
                     onOpenStyles={() => setStyleOpen(true)}
+                    onOpenBuyboxGallery={() => setBuyboxGalleryOpen(true)}
                     onRandomize={randomize}
                     previewData={previewData}
                   />
@@ -618,6 +621,26 @@ export default function ThemeEditorPage() {
             empty: t.themes.editorDesignsEmpty,
             saved: t.themes.editorDesignCopied,
           }}
+        />
+      )}
+
+      {/* Kaufbox-Baustein-Galerie — Baustein mit großer Vorschau hinzufügen */}
+      {previewData && (
+        <BuyboxGalleryOverlay
+          open={buyboxGalleryOpen}
+          onClose={() => setBuyboxGalleryOpen(false)}
+          onAdd={(type, presetId) => {
+            dispatch({ type: "addBuyboxBlock", blockType: type });
+            if (presetId) dispatch({ type: "setBlockPreset", blockType: type, presetId });
+            setBuyboxGalleryOpen(false);
+            setSelected(`blk:${type}`);
+          }}
+          activeTypes={doc.buybox.order}
+          previewData={previewData}
+          global={doc.global}
+          lang={lang}
+          title={t.themes.editorBuyboxGalleryTitle}
+          subtitle={t.themes.editorBuyboxGallerySub}
         />
       )}
 

@@ -127,6 +127,39 @@ export const BUYBOX_CSS = `
 
 .bspx-share{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;border:var(--bx-bd) solid rgba(0,0,0,.16);border-radius:100px;background:transparent;color:inherit;padding:8px 15px;cursor:pointer;margin:0 0 14px}
 
+/* ── NEU: Runtime-Bausteine (Optik identisch zur Editor-Vorschau .pm-) ── */
+.bspx-tb{display:flex;gap:8px;margin:0 0 16px}
+.bspx-tb--cards .bspx-tb-item{flex:1;flex-direction:column;text-align:center;border:var(--bx-bd) solid rgba(0,0,0,.12);border-radius:min(var(--bx-r),12px);padding:10px 6px;gap:6px;background:rgba(0,0,0,.015)}
+.bspx-tb--strip{background:rgba(0,0,0,.04);border-radius:min(var(--bx-r),12px);padding:12px 10px;justify-content:space-around}
+.bspx-tb-item{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;min-width:0}
+.bspx-tb-ic{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.bspx-tb-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bspx-tb--cards .bspx-tb-lbl,.bspx-tb--strip .bspx-tb-lbl{white-space:normal}
+
+.bspx-sbar{margin:0 0 16px}
+.bspx-sbar-top{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;margin-bottom:6px}
+.bspx-sbar-track{height:8px;border-radius:20px;background:rgba(0,0,0,.1);overflow:hidden}
+.bspx-sbar-fill{display:block;height:100%;border-radius:20px}
+
+.bspx-guar{display:flex;align-items:center;gap:13px;margin:0 0 16px;border-radius:min(var(--bx-r),16px)}
+.bspx-guar--box{border:var(--bx-bd) solid rgba(0,0,0,.14);padding:14px 16px;background:rgba(0,0,0,.015)}
+.bspx-guar--accent{padding:14px 16px;border:1px solid}
+.bspx-guar-ic{flex:0 0 auto;display:inline-flex}
+.bspx-guar-txt{min-width:0}
+.bspx-guar-txt strong{display:block;font-family:var(--bx-h);font-size:14px;font-weight:800}
+.bspx-guar-txt em{display:block;font-style:normal;font-size:12px;opacity:.7;line-height:1.45;margin-top:2px}
+
+.bspx-hl{display:flex;flex-direction:column;gap:9px;margin:0 0 16px}
+.bspx-hl-item{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;font-weight:600;line-height:1.4}
+.bspx-hl-check{flex:0 0 auto;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;margin-top:1px}
+.bspx-hl--arrow .bspx-hl-check{background:transparent!important;font-size:18px}
+
+.bspx-sp{display:flex;align-items:center;gap:10px;margin:0 0 16px;font-size:12.5px;font-weight:600;border:var(--bx-bd) solid rgba(0,0,0,.1);border-radius:min(var(--bx-r),14px);padding:9px 13px;background:rgba(0,0,0,.015)}
+.bspx-sp-ic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+.bspx-sp-txt{flex:1;min-width:0}
+.bspx-sp-txt strong{font-weight:800}
+.bspx-sp-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25);animation:bspx-pulse 1.6s ease-in-out infinite}
+
 /* ── Skeleton (im Liquid-Block, wird bei Render entfernt) ── */
 .bspx-skeleton{display:flex;flex-direction:column;gap:13px;padding:4px 0}
 .bspx-sk{border-radius:10px;background:linear-gradient(100deg,rgba(0,0,0,.06) 40%,rgba(0,0,0,.11) 50%,rgba(0,0,0,.06) 60%);background-size:200% 100%;animation:bspx-shimmer 1.3s ease-in-out infinite}

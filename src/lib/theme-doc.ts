@@ -127,6 +127,11 @@ export type EditorAction =
   | { type: "setBlockPreset"; blockType: string; presetId: string }
   | { type: "setBlockText"; blockType: string; field: string; value: string }
   | { type: "setGallery"; patch: Partial<GalleryConfig> }
+  // Kaufbox-Baustein-Verwaltung (add/remove/reorder/arrange):
+  | { type: "addBuyboxBlock"; blockType: string; index?: number }
+  | { type: "removeBuyboxBlock"; blockType: string }
+  | { type: "reorderBuybox"; order: string[] }
+  | { type: "arrangeBuybox"; canonical: string[] }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -211,6 +216,39 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
     }
     case "setGallery":
       return { ...doc, buybox: { ...doc.buybox, gallery: { ...doc.buybox.gallery, ...action.patch } } };
+    case "addBuyboxBlock": {
+      if (doc.buybox.order.includes(action.blockType)) return doc; // schon aktiv
+      const order = [...doc.buybox.order];
+      const at = typeof action.index === "number" ? Math.max(0, Math.min(order.length, action.index)) : order.length;
+      order.splice(at, 0, action.blockType);
+      return {
+        ...doc,
+        buybox: { ...doc.buybox, order, hidden: doc.buybox.hidden.filter((h) => h !== action.blockType) },
+      };
+    }
+    case "removeBuyboxBlock":
+      return {
+        ...doc,
+        buybox: {
+          ...doc.buybox,
+          order: doc.buybox.order.filter((t) => t !== action.blockType),
+          // hidden führt entfernte Typen mit (für den statischen Compile-Pfad).
+          hidden: doc.buybox.hidden.includes(action.blockType) ? doc.buybox.hidden : [...doc.buybox.hidden, action.blockType],
+        },
+      };
+    case "reorderBuybox": {
+      // Nur eine Permutation der aktuell aktiven Typen zulassen (Sicherheit).
+      const cur = new Set(doc.buybox.order);
+      const next = action.order.filter((t) => cur.has(t));
+      if (next.length !== doc.buybox.order.length) return doc;
+      return { ...doc, buybox: { ...doc.buybox, order: next } };
+    }
+    case "arrangeBuybox": {
+      const active = new Set(doc.buybox.order);
+      const inCanon = action.canonical.filter((t) => active.has(t));
+      const rest = doc.buybox.order.filter((t) => !action.canonical.includes(t));
+      return { ...doc, buybox: { ...doc.buybox, order: [...inCanon, ...rest] } };
+    }
     default:
       return doc;
   }

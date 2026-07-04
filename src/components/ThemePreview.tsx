@@ -113,7 +113,7 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
-  buyboxCfg = {}, gallery, page = "product",
+  buyboxCfg = {}, gallery, page = "product", previewBlock,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
@@ -130,6 +130,8 @@ export default function ThemePreview({
   gallery?: GalleryConfig;
   /** "home" = Startseite: nur Sections, keine Galerie/Kaufbox. */
   page?: "product" | "home";
+  /** Wenn gesetzt: rendert NUR diesen Kaufbox-Baustein (Baustein-Galerie). */
+  previewBlock?: string;
 }) {
   const hidden = new Set(hiddenSections);
   const hiddenBlk = new Set(hiddenBlocks);
@@ -603,6 +605,80 @@ export default function ThemePreview({
             {bt(type, "share_label", "")}
           </span>
         );
+
+      // ── NEU: Runtime-Bausteine (Preview identisch zur Shop-Runtime) ──
+      case "trust_badges": {
+        const style = str(s.style, "cards");
+        const ic = ["truck", "rotate", "lock", "star"];
+        const items = [1, 2, 3, 4].map((n) => bt(type, `label_${n}`, "")).filter(Boolean);
+        return (
+          <div className={`pm-tb pm-tb--${style}`}>
+            {items.map((label, i) => (
+              <div key={i} className="pm-tb-item">
+                <span className="pm-tb-ic" style={{ color: str(s.accent, colors.accent) }}><BIcon id={ic[i] || "check"} /></span>
+                <span className="pm-tb-lbl">{label}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case "stock_bar": {
+        const level = Math.max(6, Math.min(60, num(s.level, 20)));
+        const col = str(s.color, "#e0332f");
+        return (
+          <div className="pm-sbar">
+            <div className="pm-sbar-top">
+              <span>🔥 {bt(type, "text", "")}</span>
+              <strong style={{ color: col }}>{bt(type, "left", "8")}</strong>
+            </div>
+            <div className="pm-sbar-track"><span className="pm-sbar-fill" style={{ width: `${level}%`, background: col }} /></div>
+          </div>
+        );
+      }
+      case "guarantee": {
+        const style = str(s.style, "box");
+        const ac = str(s.accent, colors.accent);
+        return (
+          <div className={`pm-guar pm-guar--${style}`} style={style === "accent" ? { background: `color-mix(in srgb,${ac} 10%,var(--pv-bg))`, borderColor: `color-mix(in srgb,${ac} 30%,transparent)` } : undefined}>
+            <span className="pm-guar-ic" style={{ color: ac }}>
+              <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" /><path d="M9 12l2 2 4-4" /></svg>
+            </span>
+            <span className="pm-guar-txt">
+              <strong>{bt(type, "title", "")}</strong>
+              <em>{bt(type, "subtitle", "")}</em>
+            </span>
+          </div>
+        );
+      }
+      case "highlights": {
+        const style = str(s.style, "accent");
+        const ac = str(s.accent, colors.accent);
+        const items = [1, 2, 3, 4, 5].map((n) => bt(type, `item_${n}`, "")).filter(Boolean);
+        return (
+          <div className={`pm-hl pm-hl--${style}`}>
+            {items.map((it, i) => (
+              <div key={i} className="pm-hl-item">
+                <span className="pm-hl-check" style={{ color: style === "circle" ? "#fff" : ac, background: style === "circle" ? ac : "transparent" }}>
+                  {style === "arrow" ? "›" : <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
+                </span>
+                {it}
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case "social_proof": {
+        const style = str(s.style, "viewers");
+        const ac = str(s.accent, colors.accent);
+        const icon = style === "sold" ? "🛒" : style === "trending" ? "🔥" : "👀";
+        return (
+          <div className="pm-sp">
+            <span className="pm-sp-ic" style={{ background: `color-mix(in srgb,${ac} 14%,transparent)` }}>{icon}</span>
+            <span className="pm-sp-txt"><strong>{bt(type, "count", "17")}</strong> {style === "sold" ? "heute verkauft" : bt(type, "text", "sehen sich das gerade an")}</span>
+            <span className="pm-sp-dot" />
+          </div>
+        );
+      }
       default:
         return null;
     }
@@ -611,6 +687,13 @@ export default function ThemePreview({
   return (
     <div className="pm-root" style={rootStyle}>
       <style>{CSS}</style>
+      {previewBlock && data ? (
+        // Einzelbaustein-Modus (Baustein-Galerie): rendert genau EINEN Baustein
+        // — pixelgleich zur echten Kaufbox, ohne Canvas/Galerie/Sektionen.
+        <div className={`pm-single pm-ic-${iconStyle}`} style={{ background: "var(--pv-bg)", color: "var(--pv-text)", fontFamily: "var(--pv-b)", padding: "18px 22px", borderRadius: 12 }}>
+          <div className="pm-info">{renderBlock(previewBlock)}</div>
+        </div>
+      ) : (
       <div ref={outerRef} className="pm-outer" style={{ height: box.height || undefined }}>
       <div ref={canvasRef} className={`pm-canvas pm-${viewMode} pm-ic-${iconStyle}`} style={{ width: targetW, transform: `scale(${box.scale})` }}>
       <div className="pm-bar">
@@ -774,6 +857,7 @@ export default function ThemePreview({
       )}
       </div>
       </div>
+      )}
     </div>
   );
 }
@@ -997,6 +1081,41 @@ const CSS = `
 .pm-qty-box button{background:none;border:0;color:inherit;font-size:15px;font-weight:700;cursor:pointer;padding:0}
 .pm-qty-box b{font-size:13px}
 .pm-share{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;opacity:.75;margin-bottom:14px;cursor:pointer}
+
+/* ── NEU: Runtime-Bausteine (Optik identisch zur Shop-Runtime .bspx-) ── */
+.pm-tb{display:flex;gap:8px;margin-bottom:16px}
+.pm-tb--cards .pm-tb-item{flex:1;flex-direction:column;text-align:center;border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),12px);padding:10px 6px;gap:6px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-tb--strip{background:color-mix(in srgb,var(--pv-text) 4%,var(--pv-bg));border-radius:min(var(--pv-r),12px);padding:12px 10px;justify-content:space-around}
+.pm-tb-item{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;min-width:0}
+.pm-tb--cards .pm-tb-lbl,.pm-tb--strip .pm-tb-lbl{white-space:normal}
+.pm-tb-ic{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.pm-tb-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.pm-sbar{margin-bottom:16px}
+.pm-sbar-top{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;font-weight:700;margin-bottom:6px}
+.pm-sbar-track{height:8px;border-radius:20px;background:color-mix(in srgb,var(--pv-text) 12%,transparent);overflow:hidden}
+.pm-sbar-fill{display:block;height:100%;border-radius:20px}
+
+.pm-guar{display:flex;align-items:center;gap:13px;margin-bottom:16px;border-radius:min(var(--pv-r),16px)}
+.pm-guar--box{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 14%,transparent);padding:14px 16px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-guar--accent{padding:14px 16px;border:1px solid}
+.pm-guar-ic{flex:0 0 auto;display:inline-flex}
+.pm-guar-txt{min-width:0}
+.pm-guar-txt strong{display:block;font-family:var(--pv-h);font-size:14px;font-weight:800}
+.pm-guar-txt em{display:block;font-style:normal;font-size:12px;opacity:.7;line-height:1.45;margin-top:2px}
+
+.pm-hl{display:flex;flex-direction:column;gap:9px;margin-bottom:16px}
+.pm-hl-item{display:flex;align-items:flex-start;gap:10px;font-size:13.5px;font-weight:600;line-height:1.4}
+.pm-hl-check{flex:0 0 auto;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;margin-top:1px}
+.pm-hl--arrow .pm-hl-check{background:transparent!important;font-size:18px}
+
+.pm-sp{display:flex;align-items:center;gap:10px;margin-bottom:16px;font-size:12.5px;font-weight:600;border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 10%,transparent);border-radius:min(var(--pv-r),14px);padding:9px 13px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-sp-ic{flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:15px}
+.pm-sp-txt{flex:1;min-width:0}
+.pm-sp-txt strong{font-weight:800}
+.pm-sp-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px color-mix(in srgb,#22c55e 25%,transparent);animation:pm-pulse 1.6s ease-in-out infinite}
+@keyframes pm-pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,#22c55e 10%,transparent)}}
+.pm-mobile .pm-tb--cards{flex-wrap:wrap}.pm-mobile .pm-tb--cards .pm-tb-item{flex:1 1 40%}
 
 /* ── Editor-Modus: Auswahl-Rahmen + Einfüge-Punkte ── */
 .pm-selectable{cursor:pointer;border-radius:10px;outline:2px solid transparent;outline-offset:4px;transition:outline-color .15s}
