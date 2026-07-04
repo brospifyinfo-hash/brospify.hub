@@ -6,7 +6,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, findKundeByKey, saveBuyboxPlan } from "@/lib/sheets";
+import { getAllProdukte, findKundeByKey, saveBuyboxPlan, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
 import { isValidDocument } from "@/lib/theme-compile";
 import { buildBuyboxPlan } from "@/lib/buybox-plan";
 import type { ThemeDocument } from "@/lib/theme-doc";
@@ -36,12 +36,14 @@ export async function POST(req: NextRequest) {
   }
   if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
 
-  // Code auflösen: Kunde → gespeicherter Code fürs Produkt; Admin → body.code.
+  // Code auflösen: explizit übergebener Design-Code (Besitz prüfen) hat
+  // Vorrang; sonst Kunde → gespeicherter Produkt-Code; Admin → body.code.
   let code = "";
   let user = "admin";
-  if (session.isAdmin) {
-    code = typeof body.code === "string" ? body.code : "";
-  } else {
+  let designName = "";
+  const requestedCode = typeof body.code === "string" ? body.code.trim() : "";
+
+  if (!session.isAdmin) {
     if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
     const kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
@@ -52,6 +54,19 @@ export async function POST(req: NextRequest) {
     user = session.lizenzschluessel;
     code = kunde.profile?.buyboxCodes?.[doc.productId] || "";
   }
+
+  if (requestedCode) {
+    const design = await getThemeDesign(requestedCode);
+    if (design && (design.user === user || session.isAdmin)) {
+      code = requestedCode;
+      designName = design.name;
+    } else if (session.isAdmin) {
+      code = requestedCode; // Admin darf beliebige Codes aktualisieren
+    } else {
+      return NextResponse.json({ error: "Design nicht gefunden." }, { status: 404 });
+    }
+  }
+
   if (!code) {
     // Noch kein Code → es gab noch keinen Download für dieses Produkt.
     return NextResponse.json({ error: "no_code", needsExport: true }, { status: 404 });
@@ -60,6 +75,10 @@ export async function POST(req: NextRequest) {
   const plan = buildBuyboxPlan(doc, produkt.extra?.themeCopy);
   try {
     await saveBuyboxPlan(code, user, doc.productId, JSON.stringify(plan));
+    // Gespeicherten Design-Speicherstand synchron halten.
+    if (designName) {
+      await saveThemeDesign(code, user, doc.productId, designName, JSON.stringify(doc));
+    }
   } catch (err) {
     console.error("[buybox/update] save failed:", err);
     return NextResponse.json({ error: "Speichern fehlgeschlagen." }, { status: 500 });

@@ -12,7 +12,7 @@ import { motion } from "framer-motion";
 import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
-  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette,
+  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -20,6 +20,7 @@ import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import Inspector from "@/components/theme-editor/Inspector";
 import SectionLibraryOverlay from "@/components/theme-editor/SectionLibraryOverlay";
 import StyleGalleryOverlay from "@/components/theme-editor/StyleGalleryOverlay";
+import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import {
   editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
@@ -72,6 +73,9 @@ export default function ThemeEditorPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
+  const [designsOpen, setDesignsOpen] = useState(false);
+  /** Aktuell geladener/gespeicherter Speicherstand (Code = Live-Sync-Code). */
+  const [activeDesign, setActiveDesign] = useState<{ code: string; name: string } | null>(null);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [cost, setCost] = useState<number | null>(null);
@@ -124,6 +128,8 @@ export default function ThemeEditorPage() {
             ? { type: "replace", doc: buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs) }
             : { type: "setProduct", productId },
         );
+        // Speicherstände sind produktgebunden — bei Produktwechsel entkoppeln.
+        setActiveDesign((prev) => (doc.productId && doc.productId !== productId ? null : prev));
       })
       .catch(() => {})
       .finally(() => setPreviewLoading(false));
@@ -237,7 +243,7 @@ export default function ThemeEditorPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ document: doc satisfies ThemeDocument }),
+        body: JSON.stringify({ document: doc satisfies ThemeDocument, designCode: activeDesign?.code }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -274,7 +280,7 @@ export default function ThemeEditorPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ document: doc satisfies ThemeDocument }),
+        body: JSON.stringify({ document: doc satisfies ThemeDocument, code: activeDesign?.code }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
@@ -351,6 +357,17 @@ export default function ThemeEditorPage() {
                   <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                   <span className="hidden sm:inline">{t.themes.editorStyleGallery}</span>
                   <span className="text-[10.5px] text-zinc-500 hidden md:inline">· {getThemeStyle(doc.global.styleId).label}</span>
+                </button>
+              )}
+              {/* Design-Speicherstände (mit Sync-Codes) */}
+              {doc.productId && (
+                <button
+                  onClick={() => setDesignsOpen(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                >
+                  <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                  <span className="hidden sm:inline">{t.themes.editorDesigns}</span>
+                  {activeDesign && <span className="text-[10.5px] text-zinc-500 hidden md:inline truncate max-w-[110px]">· {activeDesign.name}</span>}
                 </button>
               )}
               {/* Undo / Redo */}
@@ -570,6 +587,39 @@ export default function ThemeEditorPage() {
           )}
         </div>
       </main>
+
+      {/* Design-Speicherstände — Codes immer sichtbar, Design-Wechsel per Code */}
+      {doc.productId && (
+        <DesignsOverlay
+          open={designsOpen}
+          onClose={() => setDesignsOpen(false)}
+          productId={doc.productId}
+          doc={doc}
+          activeCode={activeDesign?.code || null}
+          lang={lang}
+          onLoaded={(loadedDoc, code, name) => {
+            dispatch({ type: "replace", doc: loadedDoc });
+            setActiveDesign({ code, name });
+            setSelected(null);
+            setMsg({ kind: "ok", text: `${t.themes.editorDesignLoaded} „${name}"` });
+          }}
+          onSaved={(code, name) => {
+            setActiveDesign({ code, name });
+            setMsg({ kind: "ok", text: t.themes.editorDesignSaved.replace("{c}", code) });
+          }}
+          t={{
+            title: t.themes.editorDesigns,
+            subtitle: t.themes.editorDesignsSub,
+            saveNew: t.themes.editorDesignSaveNew,
+            namePlaceholder: t.themes.editorDesignName,
+            load: t.themes.editorDesignLoad,
+            update: t.themes.editorDesignUpdate,
+            codeHint: t.themes.editorDesignCodeHint,
+            empty: t.themes.editorDesignsEmpty,
+            saved: t.themes.editorDesignCopied,
+          }}
+        />
+      )}
 
       {/* Stil-Galerie — Gesamt-Stil jederzeit nachträglich änderbar */}
       {previewData && (

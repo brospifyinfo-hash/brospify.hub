@@ -2126,6 +2126,111 @@ export async function saveBuyboxPlan(code: string, user: string, productId: stri
   }
 }
 
+// ─── THEME-DESIGNS (Tab "ThemeDesigns") ──────────────────────────
+// Benannte Design-Speicherstände des Theme-Editors. Jedes Design hat einen
+// EIGENEN Sync-Code (= Live-Buybox-Code): Der Kunde speichert mehrere
+// Designs, sieht deren Codes im Editor und wechselt das Live-Design im
+// Shop, indem er einen anderen Code in den Shopify-Block einträgt.
+//   A=Code, B=User, C=ProductId, D=Name, E=DocJson, F=UpdatedAt
+const DESIGN_HEADERS = ["Code", "User", "ProductId", "Name", "DocJson", "UpdatedAt"];
+
+export interface ThemeDesignMeta {
+  code: string;
+  productId: string;
+  name: string;
+  updatedAt: string;
+}
+
+export async function listThemeDesigns(user: string, productId?: string): Promise<ThemeDesignMeta[]> {
+  const sheets = getSheets();
+  try {
+    await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "ThemeDesigns!A2:F",
+    });
+    const rows = res.data.values || [];
+    return rows
+      .filter((r) => (r[0] || "") && (r[1] || "") === user && (!productId || (r[2] || "") === productId))
+      .map((r) => ({ code: String(r[0]), productId: String(r[2] || ""), name: String(r[3] || ""), updatedAt: String(r[5] || "") }))
+      .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""));
+  } catch {
+    return [];
+  }
+}
+
+export async function getThemeDesign(code: string): Promise<{ user: string; productId: string; name: string; docJson: string } | null> {
+  if (!code) return null;
+  const sheets = getSheets();
+  try {
+    await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId: SHEET_ID(),
+      range: "ThemeDesigns!A2:F",
+    });
+    const rows = res.data.values || [];
+    const hit = rows.find((r) => (r[0] || "") === code);
+    if (!hit || !hit[4]) return null;
+    return { user: String(hit[1] || ""), productId: String(hit[2] || ""), name: String(hit[3] || ""), docJson: String(hit[4]) };
+  } catch {
+    return null;
+  }
+}
+
+/** Design speichern (Upsert per Code). */
+export async function saveThemeDesign(code: string, user: string, productId: string, name: string, docJson: string): Promise<void> {
+  if (!code || !docJson) return;
+  const sheets = getSheets();
+  await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: "ThemeDesigns!A2:A",
+  });
+  const rows = res.data.values || [];
+  const idx = rows.findIndex((r) => (r[0] || "") === code);
+  const rowValues = [code, user, productId, name, docJson, new Date().toISOString()];
+  if (idx >= 0) {
+    const rowNumber = idx + 2;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID(),
+      range: `ThemeDesigns!A${rowNumber}:F${rowNumber}`,
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId: SHEET_ID(),
+      range: "ThemeDesigns!A:F",
+      valueInputOption: "RAW",
+      requestBody: { values: [rowValues] },
+    });
+  }
+}
+
+/** Design löschen (Zeile leeren; nur wenn `user` der Besitzer ist).
+ *  Der Live-Plan unterm Code bleibt bewusst aktiv — Shops, die den Code
+ *  bereits nutzen, verlieren ihr Design nicht. */
+export async function deleteThemeDesign(code: string, user: string): Promise<boolean> {
+  if (!code) return false;
+  const sheets = getSheets();
+  await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: "ThemeDesigns!A2:B",
+  });
+  const rows = res.data.values || [];
+  const idx = rows.findIndex((r) => (r[0] || "") === code && (r[1] || "") === user);
+  if (idx < 0) return false;
+  const rowNumber = idx + 2;
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID(),
+    range: `ThemeDesigns!A${rowNumber}:F${rowNumber}`,
+    valueInputOption: "RAW",
+    requestBody: { values: [["", "", "", "", "", ""]] },
+  });
+  return true;
+}
+
 export interface ScoutCacheEntry {
   productId: string;
   videos: ScoutVideo[];

@@ -29,7 +29,7 @@ import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
 import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
-import { saveBuyboxPlan, updateKundeProfile } from "@/lib/sheets";
+import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
 import { SITE_URL } from "@/lib/seo";
 import { BUYBOX_CSS } from "@/lib/buybox-css";
 import { promises as fsp } from "fs";
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[]; design?: { shadow?: number; border?: number; iconStyle?: string }; benefitIcons?: string[]; document?: ThemeDocument };
+  let body: { productId?: string; colors?: Partial<ThemeColors>; font?: string; headingFont?: string; style?: string; radius?: number; hiddenSections?: string[]; sectionHeadings?: Record<string, string>; buyboxOrder?: string[]; hiddenBlocks?: string[]; design?: { shadow?: number; border?: number; iconStyle?: string }; benefitIcons?: string[]; document?: ThemeDocument; designCode?: string };
   try {
     body = await req.json();
   } catch {
@@ -179,8 +179,20 @@ export async function POST(req: NextRequest) {
   // ZIP mit totem Code ausgeliefert.
   let syncCode = "";
   let payloadJson = "";
+  let designName = "";
   if (doc) {
-    if (kunde) {
+    // Aktives GESPEICHERTES Design? → dessen Code verwenden (Besitz prüfen).
+    // Download = Speichern: Doc + Live-Plan unter dem Design-Code aktualisieren.
+    const requestedCode = typeof body.designCode === "string" ? body.designCode.trim() : "";
+    if (requestedCode) {
+      const design = await getThemeDesign(requestedCode);
+      const owner = session.isAdmin ? "admin" : session.lizenzschluessel || "";
+      if (design && (design.user === owner || session.isAdmin)) {
+        syncCode = requestedCode;
+        designName = design.name;
+      }
+    }
+    if (!syncCode && kunde) {
       const codes = { ...(kunde.profile.buyboxCodes || {}) };
       syncCode = codes[produkt.id] || "";
       if (!syncCode) {
@@ -193,7 +205,8 @@ export async function POST(req: NextRequest) {
           console.warn("[theme-export] buyboxCodes-Persist fehlgeschlagen (Code bleibt nutzbar):", e);
         }
       }
-    } else {
+    }
+    if (!syncCode) {
       syncCode = generateSyncCode();
     }
     try {
@@ -201,7 +214,12 @@ export async function POST(req: NextRequest) {
       // Gleiches Payload-Format wie GET /api/buybox/[code] — wird ZUSÄTZLICH
       // als assets/bspx-plan.json ins ZIP gebacken (Offline-Fallback).
       payloadJson = JSON.stringify({ v: 1, css: BUYBOX_CSS, plan });
-      await saveBuyboxPlan(syncCode, session.isAdmin ? "admin" : session.lizenzschluessel || "", produkt.id, JSON.stringify(plan));
+      const owner = session.isAdmin ? "admin" : session.lizenzschluessel || "";
+      await saveBuyboxPlan(syncCode, owner, produkt.id, JSON.stringify(plan));
+      // Download eines gespeicherten Designs hält den Speicherstand synchron.
+      if (designName) {
+        await saveThemeDesign(syncCode, owner, produkt.id, designName, JSON.stringify(doc));
+      }
     } catch (err) {
       // Sheet-Ausfall blockiert den Download NICHT mehr — der eingebackene
       // Plan rendert die Buy Box auch ohne Live-Sync; Sync greift beim
