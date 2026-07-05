@@ -8,7 +8,7 @@
 
 import { useEffect, useMemo, useReducer, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, Reorder, useDragControls } from "framer-motion";
 import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
@@ -56,6 +56,43 @@ function hslToHex(h: number, s: number, l: number): string {
 }
 function randomAccent(): string {
   return hslToHex(Math.floor(Math.random() * 360), 62 + Math.floor(Math.random() * 20), 45 + Math.floor(Math.random() * 12));
+}
+
+// Eine sortierbare Section-Zeile in der Aufbau-Leiste. Ziehen NUR am
+// Greif-Symbol (dragListener=false + DragControls) — Klick wählt aus.
+// Framer rastet die Zeile weich zwischen den anderen ein.
+function RailSectionRow({
+  uid, Ico, name, presetText, on, onClick, dragTitle,
+}: {
+  uid: string; Ico: LucideIcon; name: string; presetText: string; on: boolean; onClick: () => void; dragTitle: string;
+}) {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={uid}
+      dragListener={false}
+      dragControls={controls}
+      whileDrag={{ scale: 1.02, zIndex: 30, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
+      transition={{ duration: 0.16 }}
+      className={`list-none flex items-center gap-1 rounded-md border px-1 py-1 ${
+        on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
+      }`}
+    >
+      <span
+        onPointerDown={(e) => controls.start(e)}
+        title={dragTitle}
+        style={{ touchAction: "none" }}
+        className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0"
+      >
+        <GripVertical className="w-3 h-3" />
+      </span>
+      <Ico className={`w-3.5 h-3.5 shrink-0 ${on ? "text-[#95BF47]" : "text-zinc-500"}`} />
+      <button onClick={onClick} className="min-w-0 flex-1 text-left">
+        <span className="block text-[12px] font-medium text-white truncate leading-tight">{name}</span>
+      </button>
+      <span className="text-[9px] text-zinc-600 shrink-0 truncate max-w-[62px]">{presetText}</span>
+    </Reorder.Item>
+  );
 }
 
 export default function ThemeEditorPage() {
@@ -558,30 +595,32 @@ export default function ThemeEditorPage() {
                     <span className="text-[9.5px] text-zinc-500 shrink-0">{doc.buybox.order.length}</span>
                   </button>
                   )}
-                  <div className="space-y-0.5">
+                  <Reorder.Group
+                    axis="y"
+                    values={currentSections.map((s) => s.uid)}
+                    onReorder={(order) => dispatch({ type: "reorderSections", page, order })}
+                    className="space-y-0.5"
+                  >
                     {currentSections.map((s) => {
                       const Ico = sectionIcon(s.type);
                       const on = selected === s.uid;
                       return (
-                        <button
+                        <RailSectionRow
                           key={s.uid}
+                          uid={s.uid}
+                          Ico={Ico}
+                          name={sectionLabel(s.type)}
+                          presetText={presetLabel(s.type, s.presetId)}
+                          on={on}
                           onClick={() => setSelected(on ? null : s.uid)}
-                          className={`w-full flex items-center gap-2 rounded-md border px-2 py-1.5 transition ${
-                            on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
-                          }`}
-                        >
-                          <Ico className={`w-3.5 h-3.5 shrink-0 ${on ? "text-[#95BF47]" : "text-zinc-500"}`} />
-                          <span className="min-w-0 flex-1 text-left">
-                            <span className="block text-[12px] font-medium text-white truncate leading-tight">{sectionLabel(s.type)}</span>
-                          </span>
-                          <span className="text-[9px] text-zinc-600 shrink-0 truncate max-w-[70px]">{presetLabel(s.type, s.presetId)}</span>
-                        </button>
+                          dragTitle={t.themes.editorBuyboxDragHint}
+                        />
                       );
                     })}
-                    {currentSections.length === 0 && (
-                      <p className="text-[10.5px] text-zinc-500 text-center py-2.5 px-2">{t.themes.editorRailEmpty}</p>
-                    )}
-                  </div>
+                  </Reorder.Group>
+                  {currentSections.length === 0 && (
+                    <p className="text-[10.5px] text-zinc-500 text-center py-2.5 px-2">{t.themes.editorRailEmpty}</p>
+                  )}
                   <button
                     onClick={() => setLibraryAt(currentSections.length)}
                     className="w-full mt-1.5 flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[11.5px] font-semibold px-3 py-1.5 transition"

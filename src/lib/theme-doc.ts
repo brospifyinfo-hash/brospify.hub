@@ -127,6 +127,7 @@ export type EditorAction =
   | { type: "addSection"; index: number; section: SectionInstance; page?: EditorPage }
   | { type: "removeSection"; uid: string }
   | { type: "moveSection"; uid: string; dir: -1 | 1 }
+  | { type: "reorderSections"; page: EditorPage; order: string[] }
   | { type: "setPreset"; uid: string; presetId: string }
   | { type: "setText"; uid: string; field: string; value: string }
   | { type: "setBuybox"; patch: Partial<BuyboxConfig> }
@@ -185,6 +186,18 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
         return { ...doc, [key]: next };
       }
       return doc;
+    }
+    case "reorderSections": {
+      // Ganze Reihenfolge einer Seite setzen (Drag&Drop in der Aufbau-Leiste).
+      // Nur eine Permutation der vorhandenen uids zulassen (Sicherheit).
+      const key = action.page === "home" ? "home" : "sections";
+      const list = doc[key] || [];
+      const byUid = new Map(list.map((s) => [s.uid, s]));
+      const next = action.order
+        .map((uid) => byUid.get(uid))
+        .filter((s): s is SectionInstance => !!s);
+      if (next.length !== list.length) return doc;
+      return { ...doc, [key]: next };
     }
     case "setPreset": {
       const mapList = (list: SectionInstance[]) =>
