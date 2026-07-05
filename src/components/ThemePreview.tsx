@@ -113,13 +113,13 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
-  buyboxCfg = {}, gallery, page = "product", previewBlock,
+  buyboxCfg = {}, gallery, page = "product", previewBlock, spacing = 15,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
   hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
   buyboxOrder?: string[]; hiddenBlocks?: string[];
-  shadow?: number; border?: number; iconStyle?: string; benefitIcons?: string[];
+  shadow?: number; border?: number; iconStyle?: string; benefitIcons?: string[]; spacing?: number;
   /** Editor-Modus: dokumentgesteuerte Sections (statt PRODUCT_SECTIONS). */
   docSections?: SectionInstance[];
   selectedUid?: string | null;
@@ -168,7 +168,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page]);
+  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -178,6 +178,7 @@ export default function ThemePreview({
     "--pv-r": `${Math.max(0, radius)}px`,
     "--pv-shadow": ["none", "0 4px 14px -8px rgba(0,0,0,.16)", "0 12px 30px -10px rgba(0,0,0,.26)"][Math.max(0, Math.min(2, shadow))],
     "--pv-bd": `${Math.max(1, Math.min(3, border))}px`,
+    "--pv-gap": `${Math.max(4, Math.min(40, typeof spacing === "number" ? spacing : 15))}px`,
   } as Record<string, string> as CSSProperties;
 
   const img = data?.images?.[imgIdx] || data?.images?.[0] || "";
@@ -440,9 +441,11 @@ export default function ThemePreview({
           ) : (
             <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 6h15l-1.5 9h-12z" /><path d="M6 6 5 3H2" /><circle cx="9" cy="20" r="1.6" /><circle cx="18" cy="20" r="1.6" /></svg>
           );
+        const radiusStyle = str(s.btn_shape, "") === "pill" ? { borderRadius: 999 } : str(s.btn_shape, "") === "sharp" ? { borderRadius: 0 } : {};
+        const subtext = bt(type, "subtext", "");
         return (
           <>
-            <button className="pm-cta" style={{ padding: pad, fontSize: fs, background: str(s.primary_bg, colors.button), color: str(s.primary_fg, colors.buttonText) }}>
+            <button className="pm-cta" style={{ padding: pad, fontSize: fs, background: str(s.primary_bg, colors.button), color: str(s.primary_fg, colors.buttonText), ...radiusStyle }}>
               {iconSvg}
               {bt(type, "add_to_cart_text", data.cta)}
             </button>
@@ -450,6 +453,12 @@ export default function ThemePreview({
               <div className="pm-combo">
                 <span className="pm-combo-btn" style={{ background: "#ffc439", color: "#003087" }}><b style={{ fontStyle: "italic" }}>Pay<span style={{ color: "#0070e0" }}>Pal</span></b></span>
                 <span className="pm-combo-btn" style={{ background: "#ffb3c7", color: "#0a0a0a" }}><b>Klarna.</b></span>
+              </div>
+            )}
+            {subtext && (
+              <div className="pm-cta-sub">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 11h14v9H5z" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
+                {subtext}
               </div>
             )}
           </>
@@ -469,27 +478,19 @@ export default function ThemePreview({
         );
       }
       case "free_gift": {
-        const accordion = s.enable_accordion !== false;
-        const open = accordion ? giftOpen : true;
+        // Angebots-/Geschenk-Box (Text). Optik identisch zur Shop-Runtime
+        // (.bspx-gift) — das eigentliche Gratis-Produkt legt der Kunde in
+        // Shopify fest.
+        const ac = str(s.accent_color, colors.accent);
         return (
-          <div className="pm-gift">
-            <button className="pm-gift-head" onClick={accordion ? () => setGiftOpen((o) => !o) : undefined} style={accordion ? undefined : { cursor: "default" }}>
-              <span className="pm-gift-txt"><strong>{bt(type, "title", data.giftTitle)}</strong><em>{bt(type, "subtitle", data.giftSubtitle)}</em></span>
-              {accordion && (
-                <svg className={`pm-gift-chev ${open ? "open" : ""}`} viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
-              )}
-            </button>
-            {open && (
-              <div className="pm-gift-grid">
-                {data.giftItems.map((g, i) => (
-                  <div key={i} className="pm-gift-card">
-                    <span className="pm-gift-price">{g.price}</span>
-                    {g.image ? <img src={g.image} alt="" /> : <span className="pm-gift-ph" />}
-                    <span className="pm-gift-check" />
-                  </div>
-                ))}
-              </div>
-            )}
+          <div className="pm-gift2" style={{ borderColor: `color-mix(in srgb,${ac} 35%,transparent)` }}>
+            <span className="pm-gift2-ic" style={{ background: ac }}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16v8H4z" /><path d="M3 8h18v4H3z" /><path d="M12 8v12" /><path d="M12 8C10 8 8 6.5 9 5.2s3 2.8 3 2.8" /><path d="M12 8c2 0 4-1.5 3-2.8s-3 2.8-3 2.8" /></svg>
+            </span>
+            <span className="pm-gift2-txt">
+              <strong>{bt(type, "title", data.giftTitle)}</strong>
+              <em>{bt(type, "subtitle", data.giftSubtitle)}</em>
+            </span>
           </div>
         );
       }
@@ -899,7 +900,12 @@ const CSS = `
 .pm-thumb.on{border-color:var(--pv-accent)}
 .pm-thumb img{width:100%;height:100%;object-fit:cover;display:block}
 
-.pm-info{min-width:0}
+.pm-info{min-width:0;display:flex;flex-direction:column;gap:var(--pv-gap,15px)}
+/* Einheitlicher AUSSEN-Abstand über flex-gap; interne Baustein-Abstände
+   bleiben erhalten (nur der jeweils letzte Rand wird genullt) → Vorschau=Shop. */
+.pm-info>*{margin-bottom:0!important}
+.pm-blk>*:last-child{margin-bottom:0}
+.pm-info>*>*:last-child{margin-bottom:0}
 .pm-offer{display:inline-block;background:color-mix(in srgb,#d9534f 12%,var(--pv-bg));color:#d9534f;font-size:11.5px;font-weight:700;padding:5px 11px;border-radius:min(var(--pv-r),20px);margin-bottom:12px}
 .pm-title{font-family:var(--pv-h);font-weight:800;font-size:27px;line-height:1.12;letter-spacing:-.02em;margin:0 0 10px}
 .pm-rating{display:flex;align-items:center;gap:7px;font-size:12.5px;margin-bottom:16px;opacity:.9}
@@ -1115,6 +1121,12 @@ const CSS = `
 .pm-sp-txt strong{font-weight:800}
 .pm-sp-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px color-mix(in srgb,#22c55e 25%,transparent);animation:pm-pulse 1.6s ease-in-out infinite}
 @keyframes pm-pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,#22c55e 10%,transparent)}}
+.pm-gift2{display:flex;align-items:center;gap:13px;margin-bottom:16px;border:var(--pv-bd) solid;border-radius:min(var(--pv-r),16px);padding:13px 15px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-gift2-ic{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
+.pm-gift2-txt{min-width:0}
+.pm-gift2-txt strong{display:block;font-family:var(--pv-h);font-size:14px;font-weight:800}
+.pm-gift2-txt em{display:block;font-style:normal;font-size:12px;opacity:.7;line-height:1.45;margin-top:2px}
+.pm-cta-sub{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;font-weight:600;opacity:.6;margin-top:9px}
 .pm-mobile .pm-tb--cards{flex-wrap:wrap}.pm-mobile .pm-tb--cards .pm-tb-item{flex:1 1 40%}
 
 /* ── Editor-Modus: Auswahl-Rahmen + Einfüge-Punkte ── */

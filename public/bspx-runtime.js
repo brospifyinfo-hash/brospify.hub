@@ -222,7 +222,8 @@
     root.style.cssText = "--bx-bg:" + v.bg + ";--bx-text:" + v.text + ";--bx-btn:" + v.btn + ";--bx-btnText:" + v.btnText +
       ";--bx-accent:" + v.accent + ";--bx-r:" + v.radius + "px;--bx-bd:" + v.border + "px;--bx-shadow:" +
       ["none", "0 4px 14px -8px rgba(0,0,0,.16)", "0 12px 30px -10px rgba(0,0,0,.26)"][v.shadow || 0] +
-      ";--bx-h:" + plan.fonts.heading + ";--bx-b:" + plan.fonts.body;
+      ";--bx-h:" + plan.fonts.heading + ";--bx-b:" + plan.fonts.body +
+      ";--bx-gap:" + (v.gap != null ? v.gap : 15) + "px";
 
     // Kauf-Zustand
     var state = {
@@ -454,6 +455,10 @@
         var wrap = el("div");
         var btn = el("button", "bspx-cta size-" + (b.s.cart_size || "lg"));
         btn.type = "button";
+        if (b.s.btn_shape === "pill") btn.style.borderRadius = "999px";
+        else if (b.s.btn_shape === "sharp") btn.style.borderRadius = "0";
+        if (b.s.primary_bg) btn.style.background = b.s.primary_bg;
+        if (b.s.primary_fg) btn.style.color = b.s.primary_fg;
         var icon = b.s.cart_icon;
         if (icon !== "none") {
           var ic = svg(icon === "plus" ? ["M12 5v14", "M5 12h14"] : TL_ICONS.bag, 17);
@@ -472,6 +477,12 @@
           r.addEventListener("click", addToCart);
           combo.appendChild(l); combo.appendChild(r);
           wrap.appendChild(combo);
+        }
+        if (b.t.subtext) {
+          var sub = el("div", "bspx-cta-sub");
+          sub.appendChild(svg(["M5 11h14v9H5z", "M8 11V8a4 4 0 0 1 8 0v3"], 12));
+          sub.appendChild(el("span", "", b.t.subtext));
+          wrap.appendChild(sub);
         }
         return wrap;
       },
@@ -660,6 +671,59 @@
         txt.appendChild(document.createTextNode(" " + (style === "sold" ? "heute verkauft" : (b.t.text || "sehen sich das gerade an"))));
         wrap.appendChild(txt);
         wrap.appendChild(el("span", "bspx-sp-dot"));
+        return wrap;
+      },
+      free_gift: function (b) {
+        // Angebots-/Geschenk-Box (Text). Das eigentliche Gratis-Produkt legt
+        // der Kunde in Shopify fest; hier zeigen wir den Reiz-Hinweis.
+        var ac = b.s.accent_color || v.accent;
+        var wrap = el("div", "bspx-gift");
+        wrap.style.borderColor = "color-mix(in srgb," + ac + " 35%,transparent)";
+        var icw = el("span", "bspx-gift-ic");
+        icw.style.background = ac;
+        icw.appendChild(svg(["M4 12h16v8H4z", "M3 8h18v4H3z", "M12 8v12", "M12 8C10 8 8 6.5 9 5.2s3 2.8 3 2.8", "M12 8c2 0 4-1.5 3-2.8s-3 2.8-3 2.8"], 20));
+        wrap.appendChild(icw);
+        var txt = el("span", "bspx-gift-txt");
+        txt.appendChild(el("strong", "", b.t.title || "Gratis-Geschenk sichern"));
+        txt.appendChild(el("em", "", b.t.subtitle || ""));
+        wrap.appendChild(txt);
+        return wrap;
+      },
+      complementary: function (b) {
+        // Passende Produkte LIVE aus Shopifys Empfehlungen — echte Produkte
+        // aus dem Shop des Kunden, verlinkt. Async: Box zuerst, dann füllen.
+        var wrap = el("div", "bspx-comp");
+        wrap.appendChild(el("div", "bspx-comp-head", b.t.block_heading || "Passt perfekt dazu"));
+        var row = el("div", "bspx-comp-row");
+        wrap.appendChild(row);
+        var pid = product.id;
+        if (pid) {
+          fetch("/recommendations/products.json?product_id=" + encodeURIComponent(pid) + "&limit=3&intent=related")
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (d) {
+              var items = d && d.products ? d.products.slice(0, 3) : [];
+              if (!items.length) { wrap.style.display = "none"; return; }
+              items.forEach(function (p) {
+                var a = document.createElement("a");
+                a.className = "bspx-comp-card";
+                a.href = p.url || "#";
+                var im = document.createElement("span");
+                im.className = "bspx-comp-img";
+                var src = p.featured_image || (p.images && p.images[0]) || "";
+                if (src) { var g = document.createElement("img"); g.src = src; g.alt = ""; im.appendChild(g); }
+                a.appendChild(im);
+                var main = el("span", "bspx-comp-main");
+                main.appendChild(el("span", "bspx-comp-title", p.title || ""));
+                main.appendChild(el("span", "bspx-comp-price", money(p.price != null ? p.price : 0)));
+                a.appendChild(main);
+                a.appendChild(el("span", "bspx-comp-add", "+"));
+                row.appendChild(a);
+              });
+            })
+            .catch(function () { wrap.style.display = "none"; });
+        } else {
+          wrap.style.display = "none";
+        }
         return wrap;
       },
     };

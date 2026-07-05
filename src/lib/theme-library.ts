@@ -673,11 +673,17 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
   },
   {
     type: "buy_buttons",
-    fields: [{ id: "add_to_cart_text", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "add_to_cart_text" }, def: "" }],
+    fields: [
+      { id: "add_to_cart_text", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "add_to_cart_text" }, def: "" },
+      { id: "subtext", label: "Trust-Zeile (unter dem Button)", labelEn: "Trust line (below button)", kind: "text", target: { key: "subtext" }, def: "Sichere Bezahlung · 30 Tage Rückgaberecht" },
+    ],
     presets: [
-      { id: "klassisch", label: "Klassisch", labelEn: "Classic", hint: "Ein großer Kaufen-Button", settings: { layout: "layout1", cart_size: "lg", cart_icon: "cart", cart_icon_position: "left", primary_bg: "@button", primary_fg: "@buttonText" } },
-      { id: "xl", label: "XL", labelEn: "XL", hint: "Extra groß, Plus-Icon", settings: { layout: "layout1", cart_size: "xl", cart_text_size: "big", cart_text_weight: "extra", cart_icon: "plus", primary_bg: "@button", primary_fg: "@buttonText" } },
-      { id: "combo", label: "Express-Combo", labelEn: "Express combo", hint: "Kaufen + PayPal/Klarna-Split", settings: { layout: "layout2", combo_left_brand: "paypal", combo_right_brand: "klarna", combo_divider: "diagonal", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "klassisch", label: "Klassisch", labelEn: "Classic", hint: "Ein großer Kaufen-Button", settings: { layout: "layout1", cart_size: "lg", cart_icon: "cart", cart_icon_position: "left", btn_shape: "round", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "xl", label: "XL", labelEn: "XL", hint: "Extra groß, Plus-Icon", settings: { layout: "layout1", cart_size: "xl", cart_text_size: "big", cart_text_weight: "extra", cart_icon: "plus", btn_shape: "round", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "pill", label: "Pill (rund)", labelEn: "Pill (round)", hint: "Vollrunder Button", settings: { layout: "layout1", cart_size: "lg", cart_icon: "cart", btn_shape: "pill", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "kantig", label: "Kantig", labelEn: "Sharp", hint: "Ohne runde Ecken", settings: { layout: "layout1", cart_size: "lg", cart_icon: "none", btn_shape: "sharp", primary_bg: "@button", primary_fg: "@buttonText" } },
+      { id: "akzent", label: "Akzent-Button", labelEn: "Accent button", hint: "In deiner Akzentfarbe", settings: { layout: "layout1", cart_size: "xl", cart_icon: "cart", btn_shape: "round", primary_bg: "@accent", primary_fg: "#ffffff" } },
+      { id: "combo", label: "Express-Combo", labelEn: "Express combo", hint: "Kaufen + PayPal/Klarna-Split", settings: { layout: "layout2", combo_left_brand: "paypal", combo_right_brand: "klarna", combo_divider: "diagonal", btn_shape: "round", primary_bg: "@button", primary_fg: "@buttonText" } },
     ],
   },
   {
@@ -1073,6 +1079,7 @@ export function buildInitialDocument(
     benefitIcons: [...DEFAULT_BENEFIT_ICONS],
     blocks: {},
     gallery: { presetId: STYLE_GALLERY[style.id] || "thumbs-unten", badge: "" },
+    spacing: 15,
   };
 
   const used = new Set<string>();

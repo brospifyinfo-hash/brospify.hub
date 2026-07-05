@@ -30,6 +30,9 @@ export const DYNAMIC_SUPPORTED = new Set([
   "custom_accordion", "collapsible_tab", "share",
   // NEU (nur Runtime): rein designbasiert, keine Shop-Daten nötig.
   "trust_badges", "stock_bar", "guarantee", "highlights", "social_proof",
+  // free_gift = Angebots-Box (Text); complementary = Shopify-Empfehlungen
+  // (Runtime holt /recommendations/products.json live im Shop).
+  "free_gift", "complementary",
 ]);
 
 export interface BuyboxPlanBlock {
@@ -46,6 +49,7 @@ export interface BuyboxPlan {
   vars: {
     bg: string; text: string; btn: string; btnText: string; accent: string;
     radius: number; shadow: 0 | 1 | 2; border: 1 | 2; iconStyle: string;
+    gap: number;
   };
   fonts: { heading: string; body: string; url: string };
   blocks: BuyboxPlanBlock[];
@@ -89,6 +93,13 @@ function aiTextSeed(type: string, values: ThemeCopy): Record<string, string> {
         heading: values.ACCORDION_1_HEADING || "Häufige Fragen",
         content: values.ACCORDION_1_CONTENT || "",
       };
+    case "free_gift":
+      return {
+        title: values.GIFT_TITLE || "Gratis-Geschenk sichern",
+        subtitle: values.GIFT_SUBTITLE || "Bei jeder Bestellung — solange der Vorrat reicht.",
+      };
+    case "complementary":
+      return { block_heading: "Passt perfekt dazu" };
     default:
       return {};
   }
@@ -155,6 +166,7 @@ export function buildBuyboxPlan(doc: ThemeDocument, themeCopy: ThemeCopy | undef
       shadow: g.design.shadow,
       border: g.design.border,
       iconStyle: g.design.iconStyle,
+      gap: Math.max(4, Math.min(40, typeof bb.spacing === "number" ? bb.spacing : 15)),
     },
     fonts: {
       heading: (FONT_FAMILY[g.headingFont] || "'Work Sans'") + ", sans-serif",

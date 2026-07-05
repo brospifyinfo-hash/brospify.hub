@@ -5,8 +5,12 @@
 // setzt. Optik spiegelt die Editor-Vorschau (pm-*-Replica) → Vorschau = Shop.
 
 export const BUYBOX_CSS = `
-.bspx-root{--bx-bg:#fff;--bx-text:#1a1a1a;--bx-btn:#111;--bx-btnText:#fff;--bx-accent:#2f6bff;--bx-r:8px;--bx-bd:1px;--bx-shadow:none;--bx-h:inherit;--bx-b:inherit;
-  color:var(--bx-text);font-family:var(--bx-b);line-height:1.45}
+.bspx-root{--bx-bg:#fff;--bx-text:#1a1a1a;--bx-btn:#111;--bx-btnText:#fff;--bx-accent:#2f6bff;--bx-r:8px;--bx-bd:1px;--bx-shadow:none;--bx-h:inherit;--bx-b:inherit;--bx-gap:15px;
+  color:var(--bx-text);font-family:var(--bx-b);line-height:1.45;display:flex;flex-direction:column;gap:var(--bx-gap)}
+/* Einheitlicher AUSSEN-Abstand über flex-gap; interne Baustein-Abstände
+   bleiben erhalten (nur der jeweils letzte Rand wird genullt). */
+.bspx-root>*{margin-bottom:0!important}
+.bspx-root>*>*:last-child{margin-bottom:0}
 .bspx-root,.bspx-root *{box-sizing:border-box}
 .bspx-root img{max-width:100%}
 .bspx-root button{font-family:inherit}
@@ -159,6 +163,25 @@ export const BUYBOX_CSS = `
 .bspx-sp-txt{flex:1;min-width:0}
 .bspx-sp-txt strong{font-weight:800}
 .bspx-sp-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25);animation:bspx-pulse 1.6s ease-in-out infinite}
+
+.bspx-cta-sub{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;font-weight:600;opacity:.6;margin-top:9px}
+
+.bspx-gift{display:flex;align-items:center;gap:13px;margin:0 0 16px;border:var(--bx-bd) solid;border-radius:min(var(--bx-r),16px);padding:13px 15px;background:rgba(0,0,0,.015)}
+.bspx-gift-ic{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff}
+.bspx-gift-txt{min-width:0}
+.bspx-gift-txt strong{display:block;font-family:var(--bx-h);font-size:14px;font-weight:800}
+.bspx-gift-txt em{display:block;font-style:normal;font-size:12px;opacity:.7;line-height:1.45;margin-top:2px}
+
+.bspx-comp{margin:0 0 16px}
+.bspx-comp-head{font-family:var(--bx-h);font-weight:800;font-size:14px;margin:0 0 10px}
+.bspx-comp-row{display:flex;flex-direction:column;gap:8px}
+.bspx-comp-card{display:flex;align-items:center;gap:11px;border:var(--bx-bd) solid rgba(0,0,0,.1);border-radius:min(var(--bx-r),14px);padding:8px 10px;text-decoration:none;color:inherit;background:rgba(0,0,0,.01)}
+.bspx-comp-img{width:46px;height:46px;flex:0 0 auto;border-radius:min(var(--bx-r),10px);overflow:hidden;background:rgba(0,0,0,.06);display:inline-flex}
+.bspx-comp-img img{width:100%;height:100%;object-fit:cover;display:block}
+.bspx-comp-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.bspx-comp-title{font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bspx-comp-price{font-size:12.5px;font-weight:800;opacity:.85}
+.bspx-comp-add{flex:0 0 auto;width:26px;height:26px;border-radius:8px;border:1.5px solid rgba(0,0,0,.2);display:inline-flex;align-items:center;justify-content:center;font-weight:700}
 
 /* ── Skeleton (im Liquid-Block, wird bei Render entfernt) ── */
 .bspx-skeleton{display:flex;flex-direction:column;gap:13px;padding:4px 0}

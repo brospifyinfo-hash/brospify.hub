@@ -562,6 +562,7 @@ export default function ThemeEditorPage() {
                   benefitIcons={doc.buybox.benefitIcons}
                   buyboxCfg={doc.buybox.blocks}
                   gallery={doc.buybox.gallery}
+                  spacing={doc.buybox.spacing}
                   docSections={currentSections}
                   page={page}
                   selectedUid={selected}

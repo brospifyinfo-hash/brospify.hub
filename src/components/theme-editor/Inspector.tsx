@@ -272,6 +272,23 @@ export default function Inspector({
           </label>
         </div>
 
+        {/* Abstand zwischen den Bausteinen */}
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[12px] font-semibold text-white">{t.themes.editorBuyboxSpacing}</span>
+            <span className="text-[11px] font-mono text-zinc-400">{doc.buybox.spacing ?? 15}px</span>
+          </div>
+          <input
+            type="range"
+            min={4}
+            max={40}
+            step={1}
+            value={doc.buybox.spacing ?? 15}
+            onChange={(e) => dispatch({ type: "setBuybox", patch: { spacing: Number(e.target.value) } })}
+            className="w-full accent-[#95BF47] cursor-pointer"
+          />
+        </div>
+
         {/* Aktionsleiste: Baustein hinzufügen + automatisch anordnen */}
         <div className="grid grid-cols-2 gap-2">
           <button

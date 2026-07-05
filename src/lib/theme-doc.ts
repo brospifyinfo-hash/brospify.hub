@@ -56,6 +56,8 @@ export interface BuyboxConfig {
   /** Style-Art + Texte je Baustein-Typ (Key = Block-Typ). */
   blocks: Record<string, BlockConfig>;
   gallery: GalleryConfig;
+  /** Vertikaler Abstand zwischen den Kaufbox-Bausteinen in px (4–40). */
+  spacing?: number;
 }
 
 export interface ThemeDocument {
@@ -92,6 +94,7 @@ export function emptyDocument(): ThemeDocument {
       benefitIcons: [...DEFAULT_BENEFIT_ICONS],
       blocks: {},
       gallery: { presetId: "thumbs-unten", badge: "" },
+      spacing: 15,
     },
   };
 }
