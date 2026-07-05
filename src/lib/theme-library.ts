@@ -172,6 +172,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "vollbild", label: "Vollbild-Hero", labelEn: "Full-bleed hero", hint: "Hoch, zentriert, dramatisch", settings: { align: "center", min_height_desktop: 560, h_size_desktop: 64, overlay_opacity: 55, radius: 0, max_width: 860, padding_y: 110, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
       { id: "karte", label: "Karten-Banner", labelEn: "Card banner", hint: "Abgerundet, kompakt, edel", settings: { align: "center", min_height_desktop: 340, h_size_desktop: 40, radius: 28, max_width: 720, padding_y: 64, overlay_opacity: 35, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
       { id: "editorial", label: "Editorial links", labelEn: "Editorial left", hint: "Linksbündig, ruhig, hochwertig", settings: { align: "left", min_height_desktop: 460, h_size_desktop: 52, radius: 0, max_width: 640, overlay_opacity: 50, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
+      { id: "streifen", label: "Kompakt-Streifen", labelEn: "Compact strip", hint: "Flacher, breiter Abschluss-Streifen", settings: { align: "center", min_height_desktop: 240, h_size_desktop: 34, radius: 16, max_width: 940, padding_y: 44, overlay_opacity: 40, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
     ],
   },
   {
@@ -189,6 +190,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Dunkler Balken, Akzent-Timer", settings: { bg_color: "#0f0f12", heading_color: "#ffffff", accent_color: "@accent" } },
       { id: "akzent", label: "Akzent", labelEn: "Accent", hint: "Voll in deiner Akzentfarbe", settings: { bg_color: "@accent", heading_color: "#ffffff", accent_color: "#ffffff" } },
       { id: "hell", label: "Hell", labelEn: "Light", hint: "Dezent auf Seiten-Hintergrund", settings: { bg_color: "@background", heading_color: "@text", accent_color: "@accent" } },
+      { id: "getoent", label: "Getönt", labelEn: "Tinted", hint: "Warm getönter Streifen", settings: { bg_color: "#f7f5f2", heading_color: "#2a2520", accent_color: "@accent" } },
     ],
   },
   {
@@ -203,6 +205,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "galerie", label: "Galerie", labelEn: "Gallery", hint: "4 Spalten, quadratisch", settings: { columns_desktop: 4, image_ratio: "square", heading_size: "h2", products_to_show: 4, enable_desktop_slider: false } },
       { id: "editorial", label: "Editorial", labelEn: "Editorial", hint: "2 große Portrait-Karten mit Bogen", settings: { columns_desktop: 2, image_ratio: "portrait", image_shape: "arch", heading_size: "h1", products_to_show: 2, enable_desktop_slider: false } },
       { id: "slider", label: "Slider", labelEn: "Slider", hint: "Durchblätterbare Reihe", settings: { enable_desktop_slider: true, columns_desktop: 4, products_to_show: 8, image_ratio: "square", heading_size: "h2" } },
+      { id: "portrait3", label: "Drei Portrait", labelEn: "Three portrait", hint: "3 hohe Portrait-Karten", settings: { columns_desktop: 3, image_ratio: "portrait", heading_size: "h2", products_to_show: 3, enable_desktop_slider: false } },
     ],
   },
   {
@@ -217,6 +220,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Pillen mittig", settings: { alignment: "center" } },
       { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Pillen links", settings: { alignment: "flex-start" } },
       { id: "gross", label: "Groß", labelEn: "Large", hint: "Große, luftige Pillen", settings: { alignment: "center", font_size_desktop: 18, padding_x_desktop: 32, padding_y_desktop: 14 } },
+      { id: "kompakt", label: "Kompakt links", labelEn: "Compact left", hint: "Kleine Pillen, linksbündig", settings: { alignment: "flex-start", font_size_desktop: 14, padding_x_desktop: 18, padding_y_desktop: 8 } },
     ],
   },
 
@@ -238,6 +242,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "hell", label: "Hell", labelEn: "Light", hint: "Weiße Karten auf Seiten-Hintergrund", settings: { color_bg: "@background", color_card: "#ffffff", color_accent: "@accent", color_text: "@text" } },
       { id: "getoent", label: "Getönt", labelEn: "Tinted", hint: "Warm getönter Hintergrund", settings: { color_bg: "#f7f5f2", color_card: "#ffffff", color_accent: "@accent", color_text: "#2a2520" } },
       { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Dunkle Karten, edler Look", settings: { color_bg: "#101014", color_card: "#1a1a20", color_accent: "@accent", color_text: "#f5f5f7" } },
+      { id: "sand", label: "Sand", labelEn: "Sand", hint: "Warmer Sand-Ton, weiße Karten", settings: { color_bg: "#efe9e1", color_card: "#ffffff", color_accent: "@accent", color_text: "#2a2520" } },
     ],
   },
   {
@@ -269,6 +274,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "flow", label: "Schneller Flow", labelEn: "Fast flow", hint: "Kleine Karten, flotter Lauf", settings: { scroll_speed: 45, card_padding: 10, text_size: 13 }, blocks: trustBlocks() },
       { id: "gross", label: "Groß & ruhig", labelEn: "Large & calm", hint: "Große Karten, langsamer Lauf", settings: { scroll_speed: 22, card_padding: 20, review_image_size: 150, text_size: 15 }, blocks: trustBlocks() },
       { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Dichte, kleine Karten", settings: { scroll_speed: 35, card_padding: 8, review_image_size: 80, text_size: 12 }, blocks: trustBlocks() },
+      { id: "premium", label: "Premium ruhig", labelEn: "Premium calm", hint: "Große Karten, sehr langsamer Lauf", settings: { scroll_speed: 14, card_padding: 22, review_image_size: 120, text_size: 15 }, blocks: trustBlocks() },
     ],
   },
   {
@@ -286,6 +292,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "hell", label: "Hell", labelEn: "Light", hint: "Auf Seiten-Hintergrund", settings: { bg_color: "@background" } },
       { id: "getoent", label: "Getönt", labelEn: "Tinted", hint: "Sanft abgesetzter Hintergrund", settings: { bg_color: "#f7f5f2" } },
       { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Kino-Look", settings: { bg_color: "#101014" } },
+      { id: "sand", label: "Sand", labelEn: "Sand", hint: "Warmer Sand-Hintergrund", settings: { bg_color: "#efe9e1" } },
     ],
   },
   {
@@ -300,6 +307,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Klassisch mittig", settings: { icon_alignment: "center", heading_alignment: "center" } },
       { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Kleine Icons, wenig Abstand", settings: { icon_size: 30, section_padding_top: 24, section_padding_bottom: 24, icon_alignment: "center", heading_alignment: "center" } },
       { id: "gross", label: "Groß", labelEn: "Large", hint: "Große Icons mit Hover-Zoom", settings: { icon_size: 56, hover_scale: 1.3, icon_alignment: "center", heading_alignment: "center" } },
+      { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Icons links, kompakt", settings: { icon_alignment: "flex-start", heading_alignment: "left", icon_size: 34 } },
     ],
   },
 
@@ -320,6 +328,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "icons", label: "Icon-Karten", labelEn: "Icon cards", hint: "3 Spalten, zentriert", settings: { columns_desktop: 3, card_align: "center", icon_size: 32, card_radius: 16, heading_align: "center", accent_color: "@accent" }, blocks: featureBlocks(3) },
       { id: "kacheln", label: "Große Kacheln", labelEn: "Big tiles", hint: "2 Spalten, viel Raum", settings: { columns_desktop: 2, card_padding: 36, card_radius: 20, title_size: 20, heading_align: "left", card_align: "left", accent_color: "@accent" }, blocks: featureBlocks(4) },
       { id: "kompakt", label: "Kompakt-Reihe", labelEn: "Compact row", hint: "4 schlanke Karten", settings: { columns_desktop: 4, card_padding: 16, gap: 12, icon_size: 22, text_size: 13, heading_align: "center", card_align: "center", accent_color: "@accent" }, blocks: featureBlocks(4) },
+      { id: "duo", label: "Zwei zentriert", labelEn: "Two centered", hint: "2 große zentrierte Karten", settings: { columns_desktop: 2, card_align: "center", heading_align: "center", card_padding: 32, card_radius: 24, icon_size: 40, accent_color: "@accent" }, blocks: featureBlocks(2) },
     ],
   },
   {
@@ -338,6 +347,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "split", label: "50/50 Split", labelEn: "50/50 split", hint: "Bild links, Text rechts", settings: { desktop_image_width: "medium", layout: "image_first", height: "adapt", desktop_content_position: "middle", desktop_content_alignment: "left", content_layout: "no-overlap" }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }, { type: "button", settings: {} }] },
       { id: "overlap", label: "Editorial Overlap", labelEn: "Editorial overlap", hint: "Großes Bild, Text-Karte überlappt", settings: { desktop_image_width: "large", content_layout: "overlap", height: "medium", desktop_content_position: "middle", desktop_content_alignment: "left", layout: "image_first" }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }, { type: "button", settings: {} }] },
       { id: "zentriert", label: "Minimalist Center", labelEn: "Minimalist center", hint: "Kleines Bild, zentrierter Text", settings: { desktop_image_width: "small", desktop_content_alignment: "center", desktop_content_position: "middle", layout: "text_first", content_layout: "no-overlap", height: "adapt" }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }] },
+      { id: "bildrechts", label: "Bild rechts", labelEn: "Image right", hint: "Text links, Bild rechts", settings: { desktop_image_width: "medium", layout: "text_first", height: "adapt", desktop_content_position: "middle", desktop_content_alignment: "left", content_layout: "no-overlap" }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }, { type: "button", settings: {} }] },
     ],
   },
   {
@@ -352,6 +362,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "drei", label: "Drei Spalten", labelEn: "Three columns", hint: "Zentriert, luftig", settings: { columns_desktop: 3, column_alignment: "center", background_style: "none", heading_size: "h2" }, blocks: FEATURES.slice(0, 3).map((f) => ({ type: "column", settings: { title: f.title, text: `<p>${f.text}</p>` } })) },
       { id: "karten", label: "Karten", labelEn: "Cards", hint: "Mit Karten-Hintergrund", settings: { columns_desktop: 3, background_style: "primary", column_alignment: "left", heading_size: "h2" }, blocks: FEATURES.slice(0, 3).map((f) => ({ type: "column", settings: { title: f.title, text: `<p>${f.text}</p>` } })) },
       { id: "vier", label: "Vier kompakt", labelEn: "Four compact", hint: "4 schmale Spalten", settings: { columns_desktop: 4, column_alignment: "center", background_style: "none", heading_size: "h2" }, blocks: FEATURES.map((f) => ({ type: "column", settings: { title: f.title, text: `<p>${f.text}</p>` } })) },
+      { id: "zwei", label: "Zwei breit", labelEn: "Two wide", hint: "2 breite Spalten, linksbündig", settings: { columns_desktop: 2, column_alignment: "left", background_style: "none", heading_size: "h2" }, blocks: FEATURES.slice(0, 2).map((f) => ({ type: "column", settings: { title: f.title, text: `<p>${f.text}</p>` } })) },
     ],
   },
   {
@@ -369,6 +380,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Klassisch mittig", settings: { desktop_content_position: "center", content_alignment: "center", full_width: false }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }] },
       { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Editorial links", settings: { desktop_content_position: "left", content_alignment: "left", full_width: false }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }] },
       { id: "breit", label: "Volle Breite", labelEn: "Full width", hint: "Über die ganze Seite", settings: { full_width: true, desktop_content_position: "center", content_alignment: "center" }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }] },
+      { id: "rechts", label: "Rechtsbündig", labelEn: "Right", hint: "Text rechts ausgerichtet", settings: { desktop_content_position: "right", content_alignment: "right", full_width: false }, blocks: [{ type: "heading", settings: {} }, { type: "text", settings: {} }] },
     ],
   },
 
@@ -389,6 +401,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "vollbild", label: "Vollbild", labelEn: "Full screen", hint: "Bild füllt den Viewport", settings: { size_mode: "viewport", desktop_height: 90, overlay_style: "bottom", corner_radius: 0, side_margin: 0 } },
       { id: "kino", label: "Kino 21:9", labelEn: "Cinema 21:9", hint: "Breites Kinoformat", settings: { size_mode: "ratio", aspect_desktop: "21 / 9", corner_radius: 0, side_margin: 0, overlay_style: "full", overlay_opacity: 45 } },
       { id: "karte", label: "Karten-Bild", labelEn: "Card image", hint: "Abgerundet mit Rand", settings: { size_mode: "ratio", aspect_desktop: "16 / 9", corner_radius: 28, side_margin: 48, overlay_style: "radial" } },
+      { id: "panorama", label: "Panorama", labelEn: "Panorama", hint: "Sehr breiter, flacher Streifen", settings: { size_mode: "ratio", aspect_desktop: "3 / 1", corner_radius: 0, side_margin: 0, overlay_style: "bottom" } },
     ],
   },
   {
@@ -403,6 +416,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "links", label: "Groß links", labelEn: "Big left", hint: "Großes Bild links", settings: { desktop_layout: "left", card_styles: "none", heading_size: "h2" }, blocks: [{ type: "image", settings: {} }, { type: "image", settings: {} }, { type: "image", settings: {} }] },
       { id: "rechts", label: "Groß rechts", labelEn: "Big right", hint: "Großes Bild rechts", settings: { desktop_layout: "right", card_styles: "none", heading_size: "h2" }, blocks: [{ type: "image", settings: {} }, { type: "image", settings: {} }, { type: "image", settings: {} }] },
       { id: "karten", label: "Karten-Stil", labelEn: "Card style", hint: "Mit Karten-Rahmen", settings: { desktop_layout: "left", card_styles: "product-card-wrapper", heading_size: "h2" }, blocks: [{ type: "image", settings: {} }, { type: "image", settings: {} }, { type: "image", settings: {} }] },
+      { id: "kartenrechts", label: "Karten rechts", labelEn: "Cards right", hint: "Karten-Rahmen, groß rechts", settings: { desktop_layout: "right", card_styles: "product-card-wrapper", heading_size: "h2" }, blocks: [{ type: "image", settings: {} }, { type: "image", settings: {} }, { type: "image", settings: {} }] },
     ],
   },
   {
@@ -463,6 +477,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "glass", label: "Glass", labelEn: "Glass", hint: "Glas-Karten, eine offen", settings: { auto_close: true, icon_color: "@accent" }, blocks: faqBlocks() },
       { id: "offen", label: "Alle offen", labelEn: "All open", hint: "Mehrere gleichzeitig offen", settings: { auto_close: false, icon_color: "@accent" }, blocks: faqBlocks() },
       { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Wenig Abstand", settings: { auto_close: true, padding_top: 32, padding_bottom: 32, icon_color: "@accent" }, blocks: faqBlocks() },
+      { id: "luftig", label: "Luftig", labelEn: "Airy", hint: "Viel Abstand, ruhig", settings: { auto_close: true, padding_top: 72, padding_bottom: 72, icon_color: "@accent" }, blocks: faqBlocks() },
     ],
   },
   {
@@ -477,6 +492,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "reihen", label: "Reihen", labelEn: "Rows", hint: "Einzelne Reihen-Karten", settings: { layout: "row", heading_alignment: "center", open_first_collapsible_row: true }, blocks: FAQ_ROWS.map((r) => ({ type: "collapsible_row", settings: { heading: r.q, row_content: r.a } })) },
       { id: "sektion", label: "Sektion", labelEn: "Section", hint: "Als zusammenhängender Block", settings: { layout: "section", heading_alignment: "center", open_first_collapsible_row: false }, blocks: FAQ_ROWS.map((r) => ({ type: "collapsible_row", settings: { heading: r.q, row_content: r.a } })) },
       { id: "schlicht", label: "Schlicht", labelEn: "Plain", hint: "Ohne Rahmen", settings: { layout: "none", heading_alignment: "left", open_first_collapsible_row: false }, blocks: FAQ_ROWS.map((r) => ({ type: "collapsible_row", settings: { heading: r.q, row_content: r.a } })) },
+      { id: "reihenoffen", label: "Reihen (erste offen)", labelEn: "Rows (first open)", hint: "Reihen-Karten, erste offen, linksbündig", settings: { layout: "row", heading_alignment: "left", open_first_collapsible_row: true }, blocks: FAQ_ROWS.map((r) => ({ type: "collapsible_row", settings: { heading: r.q, row_content: r.a } })) },
     ],
   },
   {
@@ -491,6 +507,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Tabs mittig", settings: { heading_align: "center", tab_align: "center", accent_color: "@accent" } },
       { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Editorial links", settings: { heading_align: "left", tab_align: "flex-start", accent_color: "@accent" } },
       { id: "karte", label: "Große Karte", labelEn: "Big card", hint: "Runder Container, viel Innenraum", settings: { container_radius: 22, panel_padding: 36, heading_align: "center", tab_align: "center", accent_color: "@accent" } },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Schmaler Container, wenig Innenraum", settings: { container_radius: 12, panel_padding: 20, heading_align: "center", tab_align: "center", accent_color: "@accent" } },
     ],
   },
 
@@ -511,6 +528,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "vollbild", label: "Vollbild", labelEn: "Full bleed", hint: "Kantenlos über die volle Breite", settings: { full_width: true, corner_radius: 0, height_desktop: 700, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
       { id: "karte", label: "Karten-Hero", labelEn: "Card hero", hint: "Abgerundet mit Rand", settings: { full_width: false, corner_radius: 30, height_desktop: 560, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
       { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Niedriger, ruhiger Einstieg", settings: { full_width: false, corner_radius: 16, height_desktop: 480, height_mobile: 460, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
+      { id: "hoch", label: "Hoch & dramatisch", labelEn: "Tall & dramatic", hint: "Sehr großer Vollbild-Hero", settings: { full_width: true, corner_radius: 0, height_desktop: 820, dot_active: "@accent" }, blocks: [{ type: "slide", settings: { btn_bg_color: "@button", btn_text_color: "@buttonText" } }] },
     ],
   },
   {
@@ -529,6 +547,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
     presets: [
       { id: "standard", label: "Standard", labelEn: "Standard", hint: "Kompakte Leiste", settings: { padding_vertical: 20 } },
       { id: "luftig", label: "Luftig", labelEn: "Airy", hint: "Mehr Abstand", settings: { padding_vertical: 48 } },
+      { id: "schmal", label: "Sehr kompakt", labelEn: "Very compact", hint: "Schmale, dichte Leiste", settings: { padding_vertical: 12 } },
     ],
   },
   {
@@ -547,6 +566,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
     presets: [
       { id: "hell", label: "Hell", labelEn: "Light", hint: "Auf Seiten-Hintergrund", settings: { bg_color: "@background", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
       { id: "getoent", label: "Getönt", labelEn: "Tinted", hint: "Sanft abgesetzt", settings: { bg_color: "#f7f5f2", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
+      { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Dunkler, edler Hintergrund", settings: { bg_color: "#101014", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
     ],
   },
   {
@@ -567,6 +587,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "rechts", label: "Karte rechts", labelEn: "Map right", hint: "Text links, Karte rechts", settings: { layout: "map_right", map_filter: "grayscale", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
       { id: "links", label: "Karte links", labelEn: "Map left", hint: "Karte links, Text rechts", settings: { layout: "map_left", map_filter: "grayscale", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
       { id: "dunkel", label: "Dunkler Filter", labelEn: "Dark filter", hint: "Karte im Dark-Look", settings: { layout: "map_right", map_filter: "dark", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
+      { id: "linksdunkel", label: "Links dunkel", labelEn: "Left dark", hint: "Karte links im Dark-Look", settings: { layout: "map_left", map_filter: "dark", pin_color: "@accent", btn_bg_color: "@button", btn_text_color: "@buttonText" } },
     ],
   },
 ];
