@@ -13,6 +13,7 @@ import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
   Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
+  Star, AlignLeft, Image as ImageIcon, Info, GripVertical, type LucideIcon,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -325,6 +326,11 @@ export default function ThemeEditorPage() {
     const p = def?.presets.find((x) => x.id === presetId) || def?.presets[0];
     return p ? (lang === "en" ? p.labelEn : p.label) : "";
   };
+  // Icon je Section-Kategorie (für die Aufbau-Karten).
+  const CAT_ICON: Record<string, LucideIcon> = {
+    conversion: ShoppingCart, social: Star, content: AlignLeft, media: ImageIcon, info: Info,
+  };
+  const sectionIcon = (type: string): LucideIcon => CAT_ICON[getSectionDef(type)?.category || "info"] || Info;
 
   // ── Schritt 1: Produkt wählen (Bilder-Grid) ──
   const showPicker = !doc.productId || pickerOpen;
@@ -335,8 +341,8 @@ export default function ThemeEditorPage() {
       <main className="min-h-screen bg-mesh font-sf">
         <div className="mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 max-w-5xl lg:max-w-none xl:max-w-[1840px]">
 
-          {/* ── Top-Bar ── */}
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap mb-4">
+          {/* ── Top-Bar (edle Glas-Toolbar) ── */}
+          <div className="glass-strong rounded-2xl border border-white/[0.08] px-2.5 py-2 mb-4 flex items-center gap-2 flex-wrap">
             <button
               onClick={() => router.push("/themes")}
               className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition"
@@ -522,49 +528,71 @@ export default function ThemeEditorPage() {
               {/* Aufbau (links) */}
               <aside className={`order-3 lg:order-1 lg:sticky lg:top-4 mb-4 lg:mb-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:block`}>
                 <div className="glass-strong rounded-2xl border border-white/[0.08] p-3.5 sm:p-4">
-                  {/* Seiten-Umschalter: Produktseite ↔ Startseite */}
-                  <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-0.5 mb-3">
+                  {/* Seiten-Umschalter: Produktseite ↔ Startseite (Segmented) */}
+                  <div className="flex rounded-xl border border-white/10 bg-black/20 p-1 mb-3.5">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
                       <button
                         key={p}
                         onClick={() => { setPage(p); setSelected(null); }}
-                        className={`px-2 py-1.5 rounded-md text-[11.5px] font-semibold transition ${page === p ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                        className={`flex-1 px-2 py-2 rounded-lg text-[12px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
                       >
                         {l}
                       </button>
                     ))}
                   </div>
-                  <div className="text-[11px] uppercase tracking-[0.13em] font-semibold text-zinc-400 px-1 mb-2">{t.themes.editorStructure}</div>
+                  <div className="flex items-center gap-1.5 mb-2.5 px-0.5">
+                    <span className="h-3 w-[3px] rounded-full" style={{ background: ACCENT }} />
+                    <span className="text-[10.5px] uppercase tracking-[0.15em] font-bold text-zinc-400">{t.themes.editorStructure}</span>
+                  </div>
                   {page === "product" && (
                   <button
                     onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
-                    className={`w-full text-left rounded-lg border px-2.5 py-2 mb-1.5 transition ${
-                      selected === "__buybox" || selected?.startsWith("blk:") ? "border-[#95BF47]/60 bg-[#95BF47]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
+                    className={`group w-full flex items-center gap-2.5 rounded-xl border px-2.5 py-2.5 mb-2 transition ${
+                      selected === "__buybox" || selected?.startsWith("blk:")
+                        ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
+                        : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06]"
                     }`}
                   >
-                    <span className="flex items-center gap-2">
-                      <ShoppingCart className="w-3.5 h-3.5 text-[#95BF47] shrink-0" />
-                      <span className="text-[12px] font-semibold text-white">{t.themes.editorBuybox}</span>
+                    <span className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center border border-[#95BF47]/25" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
+                      <ShoppingCart className="w-4 h-4" />
                     </span>
+                    <span className="min-w-0 flex-1 text-left">
+                      <span className="block text-[12.5px] font-semibold text-white">{t.themes.editorBuybox}</span>
+                      <span className="block text-[9.5px] text-zinc-500">{doc.buybox.order.length} Bausteine</span>
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
                   </button>
                   )}
                   <div className="space-y-1.5">
-                    {currentSections.map((s) => (
-                      <button
-                        key={s.uid}
-                        onClick={() => setSelected(selected === s.uid ? null : s.uid)}
-                        className={`w-full text-left rounded-lg border px-2.5 py-2 transition ${
-                          selected === s.uid ? "border-[#95BF47]/60 bg-[#95BF47]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"
-                        }`}
-                      >
-                        <span className="block text-[12px] font-semibold text-white truncate">{sectionLabel(s.type)}</span>
-                        <span className="block text-[9.5px] text-zinc-500 uppercase tracking-wider">{presetLabel(s.type, s.presetId)}</span>
-                      </button>
-                    ))}
+                    {currentSections.map((s, i) => {
+                      const Ico = sectionIcon(s.type);
+                      const on = selected === s.uid;
+                      return (
+                        <button
+                          key={s.uid}
+                          onClick={() => setSelected(on ? null : s.uid)}
+                          className={`group w-full flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition ${
+                            on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06]"
+                          }`}
+                        >
+                          <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border ${on ? "border-[#95BF47]/30 text-[#95BF47]" : "border-white/[0.08] text-zinc-400"}`} style={on ? { background: "rgba(149,191,71,0.12)" } : { background: "rgba(255,255,255,0.03)" }}>
+                            <Ico className="w-3.5 h-3.5" />
+                          </span>
+                          <span className="min-w-0 flex-1 text-left">
+                            <span className="block text-[12px] font-semibold text-white truncate">{sectionLabel(s.type)}</span>
+                            <span className="block text-[9.5px] text-zinc-500 truncate">{presetLabel(s.type, s.presetId)}</span>
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-600 shrink-0">{i + 1}</span>
+                        </button>
+                      );
+                    })}
+                    {currentSections.length === 0 && (
+                      <p className="text-[11px] text-zinc-500 text-center py-3 px-2">{t.themes.editorRailEmpty}</p>
+                    )}
                   </div>
                   <button
                     onClick={() => setLibraryAt(currentSections.length)}
-                    className="w-full mt-2 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.05] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.12] text-[12px] font-semibold px-3 py-2.5 transition"
+                    className="w-full mt-2.5 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[12px] font-semibold px-3 py-2.5 transition"
                   >
                     <Plus className="w-4 h-4" /> {t.themes.editorAddSection}
                   </button>
