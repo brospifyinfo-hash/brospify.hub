@@ -189,7 +189,7 @@ export default function Inspector({
         </div>
       );
       return (
-        <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] space-y-1.5">
+        <div className="mt-1 pt-1.5 border-t border-white/[0.06] space-y-1">
           {lib.presets.length > 0 && (
             <div>
               <FieldLabel>{t.themes.editorPreset}</FieldLabel>
