@@ -18,13 +18,13 @@ import {
 } from "lucide-react";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
 import type { PreviewData } from "@/components/ThemePreview";
-import { getSectionDef, getBuyboxLib, GALLERY_PRESETS } from "@/lib/theme-library";
+import { getSectionDef, getBuyboxLib, GALLERY_PRESETS, getBuyboxControls, resolveBlockSettings } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
 import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
 import { THEME_ICONS, DEFAULT_BENEFIT_ICONS, getIcon } from "@/lib/theme-icons";
 import { useI18n } from "@/lib/i18n";
 import { EDITOR_FONTS, segCls, ACCENT } from "@/components/theme-editor/editor-ui";
-import { GroupTitle, PresetTile, FieldLabel, TextField } from "@/components/theme-editor/ui";
+import { GroupTitle, PresetPill, FieldLabel, TextField, Segmented, ColorField, SliderField } from "@/components/theme-editor/ui";
 
 const BLOCK_ICONS: Record<string, LucideIcon> = {
   Type, Tag, SlidersHorizontal, Hash, ShoppingCart, Layers, Megaphone, Flame,
@@ -93,35 +93,30 @@ export default function Inspector({
     const def = getSectionDef(section.type);
     const idx = sectionList.findIndex((s) => s.uid === section.uid);
     return (
-      <div className="space-y-3.5">
-        {/* Premium-Kopf: Icon-Chip + Name + Verschieben */}
-        <div className="rounded-2xl border border-[#95BF47]/25 bg-gradient-to-br from-[#95BF47]/[0.10] to-transparent px-3 py-3">
-          <div className="flex items-center gap-2.5">
-            <span className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center border border-[#95BF47]/30" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
-              <LayoutPanelTop className="w-4.5 h-4.5" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="text-[13.5px] font-bold text-white truncate">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
-              <div className="text-[10.5px] text-zinc-400 truncate">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
-            </div>
-            <div className="flex flex-col gap-0.5 shrink-0">
-              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-6 h-6 rounded-md border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="hoch">
-                <ChevronUp className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-6 h-6 rounded-md border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter">
-                <ChevronDown className="w-3.5 h-3.5" />
-              </button>
-            </div>
+      <div className="space-y-2.5">
+        {/* Kompakter Kopf: Icon + Name + Verschieben (eine Zeile) */}
+        <div className="flex items-center gap-2 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.08] px-2 py-1.5">
+          <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
+            <LayoutPanelTop className="w-4 h-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="text-[12.5px] font-bold text-white truncate leading-tight">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
+            <div className="text-[9.5px] text-zinc-400 truncate leading-tight">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
+          </div>
+          <div className="flex items-center gap-0.5 shrink-0">
+            <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-6 h-6 rounded border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="hoch"><ChevronUp className="w-3.5 h-3.5" /></button>
+            <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-6 h-6 rounded border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter"><ChevronDown className="w-3.5 h-3.5" /></button>
+            <button onClick={() => { dispatch({ type: "removeSection", uid: section.uid }); onClearSelect(); }} className="w-6 h-6 rounded border border-red-400/25 bg-red-500/[0.08] text-red-300 hover:bg-red-500/[0.16] flex items-center justify-center" aria-label={t.themes.editorRemove}><Trash2 className="w-3 h-3" /></button>
           </div>
         </div>
 
-        {/* Style-Arten als Premium-Kacheln */}
+        {/* Style-Arten als kompakte Pillen (mehrere pro Zeile) */}
         {def && def.presets.length > 0 && (
           <div>
             <GroupTitle>{t.themes.editorPreset}</GroupTitle>
-            <div className="grid grid-cols-1 gap-1.5">
+            <div className="flex flex-wrap gap-1">
               {def.presets.map((p) => (
-                <PresetTile
+                <PresetPill
                   key={p.id}
                   label={lang === "en" ? p.labelEn : p.label}
                   hint={p.hint}
@@ -137,7 +132,7 @@ export default function Inspector({
         {def && def.fields.length > 0 && (
           <div>
             <GroupTitle>{t.themes.editorTexts}</GroupTitle>
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {def.fields.map((f) => (
                 <label key={f.id} className="block">
                   <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
@@ -152,13 +147,6 @@ export default function Inspector({
             </div>
           </div>
         )}
-
-        <button
-          onClick={() => { dispatch({ type: "removeSection", uid: section.uid }); onClearSelect(); }}
-          className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/[0.07] text-red-300 hover:bg-red-500/[0.14] text-[12px] font-semibold px-3 py-2.5 transition"
-        >
-          <Trash2 className="w-3.5 h-3.5" /> {t.themes.editorRemove}
-        </button>
       </div>
     );
   }
@@ -168,60 +156,65 @@ export default function Inspector({
   if (selected === "__buybox" || blkSelected) {
     const expandedType = blkSelected;
 
-    // Konfiguration EINES Bausteins: Style-Arten + kuratierte Texte.
+    // Konfiguration EINES Bausteins: Style-Arten + Texte + Feineinstellungen.
     const blockConfig = (type: string) => {
       const lib = getBuyboxLib(type);
-      if (!lib || (!lib.presets.length && !lib.fields.length)) return null;
+      const controls = getBuyboxControls(type);
+      if (!lib || (!lib.presets.length && !lib.fields.length && !controls.length)) return null;
       const cfg = doc.buybox.blocks[type];
+      const eff = resolveBlockSettings(type, cfg, doc.global.colors, doc.global.design);
+      const val = (k: string) => cfg?.settings?.[k] ?? eff[k];
       return (
-        <div className="mt-2 pt-2 border-t border-white/[0.06] space-y-2.5">
+        <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] space-y-2">
           {lib.presets.length > 0 && (
             <div>
-              <span className="block text-[10px] uppercase tracking-[0.12em] font-semibold text-zinc-500 mb-1.5">{t.themes.editorPreset}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {lib.presets.map((p) => {
-                  const on = cfg?.presetId ? cfg.presetId === p.id : false;
-                  return (
-                    <button
-                      key={p.id}
-                      title={p.hint}
-                      onClick={() => dispatch({ type: "setBlockPreset", blockType: type, presetId: p.id })}
-                      className={`rounded-full border px-2.5 py-1 text-[10.5px] font-semibold transition ${
-                        on ? "border-[#95BF47]/70 bg-[#95BF47]/15 text-white" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-white"
-                      }`}
-                    >
-                      {lang === "en" ? p.labelEn : p.label}
-                    </button>
-                  );
-                })}
+              <FieldLabel>{t.themes.editorPreset}</FieldLabel>
+              <div className="flex flex-wrap gap-1">
+                {lib.presets.map((p) => (
+                  <PresetPill
+                    key={p.id}
+                    label={lang === "en" ? p.labelEn : p.label}
+                    hint={p.hint}
+                    active={cfg?.presetId === p.id}
+                    onClick={() => dispatch({ type: "setBlockPreset", blockType: type, presetId: p.id })}
+                  />
+                ))}
               </div>
             </div>
           )}
-          {lib.fields.length > 0 && (
-            <div className="space-y-1.5">
-              {lib.fields.map((f) => (
-                <label key={f.id} className="block">
-                  <span className="block text-[10px] text-zinc-500 mb-0.5">{lang === "en" ? f.labelEn : f.label}</span>
-                  {f.kind === "textarea" ? (
-                    <textarea
-                      value={cfg?.texts?.[f.id] ?? ""}
-                      placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
-                      rows={2}
-                      onChange={(e) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: e.target.value })}
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40 resize-y"
-                    />
-                  ) : (
-                    <input
-                      value={cfg?.texts?.[f.id] ?? ""}
-                      placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
-                      onChange={(e) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: e.target.value })}
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
-                    />
-                  )}
-                </label>
-              ))}
+          {lib.fields.map((f) => (
+            <label key={f.id} className="block">
+              <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
+              <TextField
+                value={cfg?.texts?.[f.id] ?? ""}
+                placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
+                textarea={f.kind === "textarea"}
+                onChange={(v) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: v })}
+              />
+            </label>
+          ))}
+          {controls.map((c) => (
+            <div key={c.key}>
+              {c.kind === "slider" ? (
+                <FieldLabel right={`${Math.round(Number(val(c.key)) || c.min || 0)}${c.suffix || ""}`}>{lang === "en" ? c.labelEn : c.label}</FieldLabel>
+              ) : (
+                <FieldLabel>{lang === "en" ? c.labelEn : c.label}</FieldLabel>
+              )}
+              {c.kind === "color" && (
+                <ColorField value={String(val(c.key) ?? "#888888")} onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })} />
+              )}
+              {c.kind === "slider" && (
+                <SliderField value={Math.round(Number(val(c.key)) || c.min || 0)} min={c.min || 0} max={c.max || 100} step={c.step || 1} suffix={c.suffix} onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })} />
+              )}
+              {c.kind === "segment" && c.options && (
+                <Segmented
+                  options={c.options.map((o) => [o.value, lang === "en" ? o.labelEn : o.label] as const)}
+                  value={String(val(c.key) ?? c.options[0].value)}
+                  onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })}
+                />
+              )}
             </div>
-          )}
+          ))}
         </div>
       );
     };
@@ -305,7 +298,7 @@ export default function Inspector({
           {doc.buybox.order.map((type, i) => {
             const expanded = expandedType === type;
             const lib = getBuyboxLib(type);
-            const hasConfig = !!lib && ((lib.presets.length || 0) > 0 || (lib.fields.length || 0) > 0);
+            const hasConfig = (!!lib && ((lib.presets.length || 0) > 0 || (lib.fields.length || 0) > 0)) || getBuyboxControls(type).length > 0;
             const meta = getBuyboxMeta(type);
             const isOver = overIdx === i && dragIdx !== null && dragIdx !== i;
             return (

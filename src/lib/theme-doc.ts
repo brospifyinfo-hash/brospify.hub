@@ -36,10 +36,13 @@ export interface SectionInstance {
   texts: Record<string, string>;
 }
 
-/** Konfiguration EINES Kaufbox-Bausteins: Style-Art + kuratierte Texte. */
+/** Konfiguration EINES Kaufbox-Bausteins: Style-Art + kuratierte Texte +
+ *  Feineinstellungen (rohe Setting-Overrides wie Farbe/Größe/Ausrichtung,
+ *  die über die Preset-Werte gelegt werden). */
 export interface BlockConfig {
   presetId: string;
   texts: Record<string, string>;
+  settings?: Record<string, string | number | boolean>;
 }
 
 /** Produktgalerie (Bereich Produktbild + Thumbnails) — pg_*-Settings. */
@@ -129,6 +132,7 @@ export type EditorAction =
   | { type: "setBuybox"; patch: Partial<BuyboxConfig> }
   | { type: "setBlockPreset"; blockType: string; presetId: string }
   | { type: "setBlockText"; blockType: string; field: string; value: string }
+  | { type: "setBlockSetting"; blockType: string; key: string; value: string | number | boolean }
   | { type: "setGallery"; patch: Partial<GalleryConfig> }
   // Kaufbox-Baustein-Verwaltung (add/remove/reorder/arrange):
   | { type: "addBuyboxBlock"; blockType: string; index?: number }
@@ -213,6 +217,19 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
           blocks: {
             ...doc.buybox.blocks,
             [action.blockType]: { ...prev, texts: { ...prev.texts, [action.field]: action.value } },
+          },
+        },
+      };
+    }
+    case "setBlockSetting": {
+      const prev = doc.buybox.blocks[action.blockType] || { presetId: "", texts: {} };
+      return {
+        ...doc,
+        buybox: {
+          ...doc.buybox,
+          blocks: {
+            ...doc.buybox.blocks,
+            [action.blockType]: { ...prev, settings: { ...(prev.settings || {}), [action.key]: action.value } },
           },
         },
       };

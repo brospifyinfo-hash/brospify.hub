@@ -527,74 +527,66 @@ export default function ThemeEditorPage() {
 
               {/* Aufbau (links) */}
               <aside className={`order-3 lg:order-1 lg:sticky lg:top-4 mb-4 lg:mb-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:block`}>
-                <div className="glass-strong rounded-2xl border border-white/[0.08] p-3.5 sm:p-4">
-                  {/* Seiten-Umschalter: Produktseite ↔ Startseite (Segmented) */}
-                  <div className="flex rounded-xl border border-white/10 bg-black/20 p-1 mb-3.5">
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
+                  {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
+                  <div className="flex rounded-md border border-white/10 bg-black/25 p-0.5 mb-2">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
                       <button
                         key={p}
                         onClick={() => { setPage(p); setSelected(null); }}
-                        className={`flex-1 px-2 py-2 rounded-lg text-[12px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
+                        className={`flex-1 px-2 py-1.5 rounded text-[11px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
                       >
                         {l}
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 mb-2.5 px-0.5">
-                    <span className="h-3 w-[3px] rounded-full" style={{ background: ACCENT }} />
-                    <span className="text-[10.5px] uppercase tracking-[0.15em] font-bold text-zinc-400">{t.themes.editorStructure}</span>
+                  <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                    <span className="h-2.5 w-[3px] rounded-full" style={{ background: ACCENT }} />
+                    <span className="text-[9.5px] uppercase tracking-[0.14em] font-bold text-zinc-400">{t.themes.editorStructure}</span>
                   </div>
                   {page === "product" && (
                   <button
                     onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
-                    className={`group w-full flex items-center gap-2.5 rounded-xl border px-2.5 py-2.5 mb-2 transition ${
+                    className={`w-full flex items-center gap-2 rounded-md border px-2 py-1.5 mb-1 transition ${
                       selected === "__buybox" || selected?.startsWith("blk:")
                         ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
-                        : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06]"
+                        : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
                     }`}
                   >
-                    <span className="w-8 h-8 shrink-0 rounded-lg flex items-center justify-center border border-[#95BF47]/25" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
-                      <ShoppingCart className="w-4 h-4" />
-                    </span>
-                    <span className="min-w-0 flex-1 text-left">
-                      <span className="block text-[12.5px] font-semibold text-white">{t.themes.editorBuybox}</span>
-                      <span className="block text-[9.5px] text-zinc-500">{doc.buybox.order.length} Bausteine</span>
-                    </span>
-                    <ChevronRight className="w-4 h-4 text-zinc-600 group-hover:text-zinc-400 shrink-0" />
+                    <ShoppingCart className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
+                    <span className="text-[12px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorBuybox}</span>
+                    <span className="text-[9.5px] text-zinc-500 shrink-0">{doc.buybox.order.length}</span>
                   </button>
                   )}
-                  <div className="space-y-1.5">
-                    {currentSections.map((s, i) => {
+                  <div className="space-y-0.5">
+                    {currentSections.map((s) => {
                       const Ico = sectionIcon(s.type);
                       const on = selected === s.uid;
                       return (
                         <button
                           key={s.uid}
                           onClick={() => setSelected(on ? null : s.uid)}
-                          className={`group w-full flex items-center gap-2.5 rounded-xl border px-2.5 py-2 transition ${
-                            on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-white/[0.08] bg-white/[0.025] hover:bg-white/[0.06]"
+                          className={`w-full flex items-center gap-2 rounded-md border px-2 py-1.5 transition ${
+                            on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
                           }`}
                         >
-                          <span className={`w-7 h-7 shrink-0 rounded-lg flex items-center justify-center border ${on ? "border-[#95BF47]/30 text-[#95BF47]" : "border-white/[0.08] text-zinc-400"}`} style={on ? { background: "rgba(149,191,71,0.12)" } : { background: "rgba(255,255,255,0.03)" }}>
-                            <Ico className="w-3.5 h-3.5" />
-                          </span>
+                          <Ico className={`w-3.5 h-3.5 shrink-0 ${on ? "text-[#95BF47]" : "text-zinc-500"}`} />
                           <span className="min-w-0 flex-1 text-left">
-                            <span className="block text-[12px] font-semibold text-white truncate">{sectionLabel(s.type)}</span>
-                            <span className="block text-[9.5px] text-zinc-500 truncate">{presetLabel(s.type, s.presetId)}</span>
+                            <span className="block text-[12px] font-medium text-white truncate leading-tight">{sectionLabel(s.type)}</span>
                           </span>
-                          <span className="text-[10px] font-mono text-zinc-600 shrink-0">{i + 1}</span>
+                          <span className="text-[9px] text-zinc-600 shrink-0 truncate max-w-[70px]">{presetLabel(s.type, s.presetId)}</span>
                         </button>
                       );
                     })}
                     {currentSections.length === 0 && (
-                      <p className="text-[11px] text-zinc-500 text-center py-3 px-2">{t.themes.editorRailEmpty}</p>
+                      <p className="text-[10.5px] text-zinc-500 text-center py-2.5 px-2">{t.themes.editorRailEmpty}</p>
                     )}
                   </div>
                   <button
                     onClick={() => setLibraryAt(currentSections.length)}
-                    className="w-full mt-2.5 flex items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[12px] font-semibold px-3 py-2.5 transition"
+                    className="w-full mt-1.5 flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[11.5px] font-semibold px-3 py-1.5 transition"
                   >
-                    <Plus className="w-4 h-4" /> {t.themes.editorAddSection}
+                    <Plus className="w-3.5 h-3.5" /> {t.themes.editorAddSection}
                   </button>
                 </div>
               </aside>
@@ -629,7 +621,7 @@ export default function ThemeEditorPage() {
 
               {/* Inspector (rechts) */}
               <aside ref={inspectorRef} className={`order-4 lg:order-3 lg:sticky lg:top-4 scroll-mt-4 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:block`}>
-                <div className="glass-strong rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}

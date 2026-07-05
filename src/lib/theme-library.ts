@@ -897,20 +897,106 @@ export function effectiveBuyboxPresetId(
   return "";
 }
 
-/** Effektive Preset-Settings eines Kaufbox-Bausteins (Palette-Refs aufgelöst).
- *  Ohne effektive Style-Art → leeres Objekt (Basis-Settings bleiben). */
+/** Effektive Settings eines Kaufbox-Bausteins: Preset-Werte (Palette-Refs
+ *  aufgelöst) + darüber die Feineinstellungen des Kunden (cfg.settings). */
 export function resolveBlockSettings(
   type: string,
-  cfg: { presetId?: string } | undefined,
+  cfg: { presetId?: string; settings?: Record<string, string | number | boolean> } | undefined,
   palette: ColorPalette,
   design?: { iconStyle: string },
 ): Record<string, string | number | boolean> {
-  const presetId = effectiveBuyboxPresetId(type, cfg, design);
-  if (!presetId) return {};
-  const preset = getBuyboxPreset(type, presetId);
   const out: Record<string, string | number | boolean> = {};
-  for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  const presetId = effectiveBuyboxPresetId(type, cfg, design);
+  if (presetId) {
+    const preset = getBuyboxPreset(type, presetId);
+    for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  }
+  // Feineinstellungen (Farbe/Größe/Ausrichtung …) überschreiben die Preset-Werte.
+  for (const [k, v] of Object.entries(cfg?.settings || {})) out[k] = resolvePaletteRef(v, palette);
   return out;
+}
+
+// ─── Feineinstellungen je Kaufbox-Baustein (Regler im Inspector) ────
+// Kuratierte, sehr verständliche Regler auf ECHTEN Schema-Keys (gegen das
+// main-product-Schema verifiziert). kind: color | slider | segment.
+export interface BuyboxControl {
+  key: string;
+  label: string; labelEn: string;
+  kind: "color" | "slider" | "segment";
+  min?: number; max?: number; step?: number; suffix?: string;
+  options?: { value: string; label: string; labelEn: string }[];
+}
+
+const ALIGN3 = (keyLR = false) => [
+  { value: keyLR ? "flex-start" : "left", label: "Links", labelEn: "Left" },
+  { value: "center", label: "Mitte", labelEn: "Center" },
+  { value: keyLR ? "flex-end" : "right", label: "Rechts", labelEn: "Right" },
+];
+
+export const BUYBOX_CONTROLS: Record<string, BuyboxControl[]> = {
+  custom_title: [
+    { key: "alignment", label: "Ausrichtung", labelEn: "Alignment", kind: "segment", options: ALIGN3() },
+    { key: "font_size_desktop", label: "Schriftgröße", labelEn: "Font size", kind: "slider", min: 16, max: 60, suffix: "px" },
+    { key: "text_color", label: "Textfarbe", labelEn: "Text color", kind: "color" },
+  ],
+  custom_price: [
+    { key: "alignment", label: "Ausrichtung", labelEn: "Alignment", kind: "segment", options: ALIGN3() },
+    { key: "price_size_desk", label: "Preisgröße", labelEn: "Price size", kind: "slider", min: 16, max: 60, suffix: "px" },
+    { key: "price_color", label: "Preisfarbe", labelEn: "Price color", kind: "color" },
+    { key: "badge_bg", label: "Rabatt-Badge", labelEn: "Discount badge", kind: "color" },
+  ],
+  custom_rating: [
+    { key: "alignment", label: "Ausrichtung", labelEn: "Alignment", kind: "segment", options: ALIGN3(true) },
+    { key: "star_size", label: "Sterngröße", labelEn: "Star size", kind: "slider", min: 12, max: 32, suffix: "px" },
+    { key: "star_color", label: "Sternfarbe", labelEn: "Star color", kind: "color" },
+    { key: "text_color", label: "Textfarbe", labelEn: "Text color", kind: "color" },
+  ],
+  sale_banner: [
+    { key: "bg", label: "Hintergrund", labelEn: "Background", kind: "color" },
+    { key: "t_color", label: "Textfarbe", labelEn: "Text color", kind: "color" },
+    { key: "radius", label: "Ecken", labelEn: "Corners", kind: "slider", min: 0, max: 20, suffix: "px" },
+  ],
+  urgency_text: [
+    { key: "alignment", label: "Ausrichtung", labelEn: "Alignment", kind: "segment", options: ALIGN3() },
+    { key: "font_size", label: "Schriftgröße", labelEn: "Font size", kind: "slider", min: 12, max: 30, suffix: "px" },
+    { key: "text_color", label: "Textfarbe", labelEn: "Text color", kind: "color" },
+  ],
+  stock_indicator: [
+    { key: "alignment", label: "Ausrichtung", labelEn: "Alignment", kind: "segment", options: ALIGN3(true) },
+    { key: "text_color", label: "Textfarbe", labelEn: "Text color", kind: "color" },
+    { key: "dot_color", label: "Punkt-Farbe", labelEn: "Dot color", kind: "color" },
+  ],
+  benefits_list: [
+    { key: "icon_bg", label: "Icon-Hintergrund", labelEn: "Icon background", kind: "color" },
+    { key: "icon_color", label: "Icon-Farbe", labelEn: "Icon color", kind: "color" },
+    { key: "text_color", label: "Textfarbe", labelEn: "Text color", kind: "color" },
+    { key: "font_size", label: "Schriftgröße", labelEn: "Font size", kind: "slider", min: 12, max: 22, suffix: "px" },
+  ],
+  bundle_selector: [
+    { key: "card_radius", label: "Karten-Ecken", labelEn: "Card corners", kind: "slider", min: 0, max: 28, suffix: "px" },
+    { key: "active_border", label: "Aktiv-Rahmen", labelEn: "Active border", kind: "color" },
+    { key: "savings_color", label: "Ersparnis-Farbe", labelEn: "Savings color", kind: "color" },
+  ],
+  buy_buttons: [
+    { key: "cart_size", label: "Größe", labelEn: "Size", kind: "segment", options: [{ value: "md", label: "M", labelEn: "M" }, { value: "lg", label: "L", labelEn: "L" }, { value: "xl", label: "XL", labelEn: "XL" }] },
+    { key: "btn_shape", label: "Form", labelEn: "Shape", kind: "segment", options: [{ value: "round", label: "Rund", labelEn: "Round" }, { value: "pill", label: "Pill", labelEn: "Pill" }, { value: "sharp", label: "Kantig", labelEn: "Sharp" }] },
+    { key: "primary_bg", label: "Button-Farbe", labelEn: "Button color", kind: "color" },
+    { key: "primary_fg", label: "Button-Text", labelEn: "Button text", kind: "color" },
+  ],
+  payment_icons: [
+    { key: "alignment", label: "Ausrichtung", labelEn: "Alignment", kind: "segment", options: ALIGN3(true) },
+    { key: "icon_width", label: "Icon-Größe", labelEn: "Icon size", kind: "slider", min: 24, max: 72, suffix: "px" },
+  ],
+  guarantee: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+  trust_badges: [{ key: "accent", label: "Icon-Farbe", labelEn: "Icon color", kind: "color" }],
+  highlights: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+  social_proof: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+  stock_bar: [{ key: "color", label: "Balkenfarbe", labelEn: "Bar color", kind: "color" }, { key: "level", label: "Füllstand", labelEn: "Fill level", kind: "slider", min: 6, max: 60, suffix: "%" }],
+  feature_box: [{ key: "accent_color", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+};
+
+export function getBuyboxControls(type: string): BuyboxControl[] {
+  return BUYBOX_CONTROLS[type] || [];
 }
 
 // ─── Produktgalerie (pg_*-Settings der main-product-Section) ───────
