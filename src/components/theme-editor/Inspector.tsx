@@ -6,6 +6,7 @@
 // globale Theme-Design (Stil, Farben, Schriften/Ecken, Design).
 
 import { useState, type ReactNode } from "react";
+import { Reorder, useDragControls } from "framer-motion";
 import {
   ChevronDown, ChevronUp, Trash2, Shuffle, MousePointerClick, Palette as PaletteIcon,
   Plus, ArrowDownUp, GripVertical,
@@ -46,6 +47,60 @@ function IconSvg({ id, size = 16 }: { id: string; size?: number }) {
   );
 }
 
+// Eine Baustein-Zeile in der sortierbaren Liste. Drag startet NUR am
+// Greif-Symbol (dragListener=false + eigene DragControls) — so bleiben
+// Aufklappen/Entfernen klickbar. Framer animiert das Einrasten zwischen
+// den Zeilen automatisch.
+function BuyboxRow({
+  type, expanded, iconName, label, isNew, hasConfig, onToggle, onRemove, dragTitle, removeLabel, children,
+}: {
+  type: string; expanded: boolean; iconName: string; label: string; isNew: boolean; hasConfig: boolean;
+  onToggle: () => void; onRemove: () => void; dragTitle: string; removeLabel: string; children?: ReactNode;
+}) {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={type}
+      dragListener={false}
+      dragControls={controls}
+      whileDrag={{ scale: 1.015, zIndex: 40, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
+      transition={{ duration: 0.16 }}
+      className={`list-none rounded-lg border ${
+        expanded ? "border-[#95BF47]/50 bg-[#95BF47]/[0.06]" : "border-white/10 bg-white/[0.03]"
+      }`}
+    >
+      <div className="flex items-center gap-1 px-1.5 py-[3px]">
+        <span
+          onPointerDown={(e) => controls.start(e)}
+          title={dragTitle}
+          style={{ touchAction: "none" }}
+          className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0"
+        >
+          <GripVertical className="w-3 h-3" />
+        </span>
+        <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
+          <BlockIcon name={iconName} className="w-3 h-3" />
+        </span>
+        <button onClick={onToggle} className="flex-1 min-w-0 text-left">
+          <span className="block text-[11px] font-semibold text-white truncate">
+            {label}
+            {isNew && <span className="ml-1 text-[8px] font-bold uppercase tracking-wider text-[#95BF47]/80 align-middle">Neu</span>}
+          </span>
+        </button>
+        {hasConfig && (
+          <button onClick={onToggle} aria-label="Einstellungen" className="text-zinc-400 hover:text-white shrink-0 p-0.5">
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </button>
+        )}
+        <button onClick={onRemove} aria-label={removeLabel} title={removeLabel} className="text-zinc-500 hover:text-red-300 shrink-0 p-0.5">
+          <Trash2 className="w-3 h-3" />
+        </button>
+      </div>
+      {expanded && hasConfig && <div className="px-2 pb-2">{children}</div>}
+    </Reorder.Item>
+  );
+}
+
 function Group({ id, title, open, onToggle, children }: { id: string; title: string; open: boolean; onToggle: (id: string) => void; children: ReactNode }) {
   return (
     <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] overflow-hidden">
@@ -78,8 +133,6 @@ export default function Inspector({
   const [openG, setOpenG] = useState<Record<string, boolean>>({ stil: true });
   const toggleG = (id: string) => setOpenG((o) => ({ ...o, [id]: !o[id] }));
   const [iconPickerFor, setIconPickerFor] = useState<number | null>(null);
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [overIdx, setOverIdx] = useState<number | null>(null);
 
   // ── Section ausgewählt (Produktseite ODER Startseite — uids sind global) ──
   const sectionList =
@@ -305,73 +358,37 @@ export default function Inspector({
         </div>
         <p className="text-[10px] text-zinc-500 -mt-0.5">{t.themes.editorBuyboxDragHint}</p>
 
-        {/* Baustein-Liste: Drag & Drop zum Verschieben, Karte öffnet Einstellungen */}
-        <div className="space-y-[3px]">
-          {doc.buybox.order.map((type, i) => {
+        {/* Baustein-Liste: Ziehen am Greif-Symbol rastet zwischen den Zeilen ein */}
+        <Reorder.Group
+          axis="y"
+          values={doc.buybox.order}
+          onReorder={(order) => dispatch({ type: "reorderBuybox", order })}
+          className="space-y-[3px]"
+        >
+          {doc.buybox.order.map((type) => {
             const expanded = expandedType === type;
             const lib = getBuyboxLib(type);
             const hasConfig = (!!lib && ((lib.presets.length || 0) > 0 || (lib.fields.length || 0) > 0)) || getBuyboxControls(type).length > 0;
             const meta = getBuyboxMeta(type);
-            const isOver = overIdx === i && dragIdx !== null && dragIdx !== i;
             return (
-              <div
+              <BuyboxRow
                 key={type}
-                draggable
-                onDragStart={() => setDragIdx(i)}
-                onDragOver={(e) => { e.preventDefault(); if (overIdx !== i) setOverIdx(i); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  if (dragIdx === null || dragIdx === i) { setDragIdx(null); setOverIdx(null); return; }
-                  const order = [...doc.buybox.order];
-                  const [moved] = order.splice(dragIdx, 1);
-                  order.splice(i, 0, moved);
-                  dispatch({ type: "reorderBuybox", order });
-                  setDragIdx(null); setOverIdx(null);
-                }}
-                onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
-                className={`rounded-lg border transition ${
-                  expanded ? "border-[#95BF47]/50 bg-[#95BF47]/[0.06]" : "border-white/10 bg-white/[0.03]"
-                } ${isOver ? "border-[#95BF47]/70 border-dashed" : ""} ${dragIdx === i ? "opacity-40" : ""}`}
+                type={type}
+                expanded={expanded}
+                iconName={meta.icon}
+                label={lang === "en" ? meta.labelEn : meta.label}
+                isNew={BUYBOX_RUNTIME_ONLY.has(type)}
+                hasConfig={hasConfig}
+                onToggle={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
+                onRemove={() => { dispatch({ type: "removeBuyboxBlock", blockType: type }); if (expanded) onSelectBlock("__buybox"); }}
+                dragTitle={t.themes.editorBuyboxDragHint}
+                removeLabel={t.themes.editorBuyboxRemove}
               >
-                <div className="flex items-center gap-1 px-1.5 py-[3px]">
-                  <span className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0" title={t.themes.editorBuyboxDragHint}>
-                    <GripVertical className="w-3 h-3" />
-                  </span>
-                  <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
-                    <BlockIcon name={meta.icon} className="w-3 h-3" />
-                  </span>
-                  <button
-                    onClick={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
-                    className="flex-1 min-w-0 text-left"
-                  >
-                    <span className="block text-[11px] font-semibold text-white truncate">
-                      {lang === "en" ? meta.labelEn : meta.label}
-                      {BUYBOX_RUNTIME_ONLY.has(type) && <span className="ml-1 text-[8px] font-bold uppercase tracking-wider text-[#95BF47]/80 align-middle">Neu</span>}
-                    </span>
-                  </button>
-                  {hasConfig && (
-                    <button
-                      onClick={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
-                      aria-label="Einstellungen"
-                      className="text-zinc-400 hover:text-white shrink-0 p-0.5"
-                    >
-                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => { dispatch({ type: "removeBuyboxBlock", blockType: type }); if (expanded) onSelectBlock("__buybox"); }}
-                    aria-label={t.themes.editorBuyboxRemove}
-                    title={t.themes.editorBuyboxRemove}
-                    className="text-zinc-500 hover:text-red-300 shrink-0 p-0.5"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-                {expanded && hasConfig && <div className="px-2 pb-2">{blockConfig(type)}</div>}
-              </div>
+                {expanded && hasConfig ? blockConfig(type) : null}
+              </BuyboxRow>
             );
           })}
-        </div>
+        </Reorder.Group>
 
         {/* Vorteile-Icons */}
         <div>
