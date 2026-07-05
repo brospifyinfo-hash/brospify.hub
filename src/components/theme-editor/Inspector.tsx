@@ -164,8 +164,32 @@ export default function Inspector({
       const cfg = doc.buybox.blocks[type];
       const eff = resolveBlockSettings(type, cfg, doc.global.colors, doc.global.design);
       const val = (k: string) => cfg?.settings?.[k] ?? eff[k];
+      const colorCtrls = controls.filter((c) => c.kind === "color");
+      const otherCtrls = controls.filter((c) => c.kind !== "color");
+      const renderCtrl = (c: (typeof controls)[number]) => (
+        <div key={c.key}>
+          {c.kind === "slider" ? (
+            <FieldLabel right={`${Math.round(Number(val(c.key)) || c.min || 0)}${c.suffix || ""}`}>{lang === "en" ? c.labelEn : c.label}</FieldLabel>
+          ) : (
+            <FieldLabel>{lang === "en" ? c.labelEn : c.label}</FieldLabel>
+          )}
+          {c.kind === "color" && (
+            <ColorField value={String(val(c.key) ?? "#888888")} onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })} />
+          )}
+          {c.kind === "slider" && (
+            <SliderField value={Math.round(Number(val(c.key)) || c.min || 0)} min={c.min || 0} max={c.max || 100} step={c.step || 1} suffix={c.suffix} onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })} />
+          )}
+          {c.kind === "segment" && c.options && (
+            <Segmented
+              options={c.options.map((o) => [o.value, lang === "en" ? o.labelEn : o.label] as const)}
+              value={String(val(c.key) ?? c.options[0].value)}
+              onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })}
+            />
+          )}
+        </div>
+      );
       return (
-        <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] space-y-2">
+        <div className="mt-1.5 pt-1.5 border-t border-white/[0.06] space-y-1.5">
           {lib.presets.length > 0 && (
             <div>
               <FieldLabel>{t.themes.editorPreset}</FieldLabel>
@@ -193,28 +217,8 @@ export default function Inspector({
               />
             </label>
           ))}
-          {controls.map((c) => (
-            <div key={c.key}>
-              {c.kind === "slider" ? (
-                <FieldLabel right={`${Math.round(Number(val(c.key)) || c.min || 0)}${c.suffix || ""}`}>{lang === "en" ? c.labelEn : c.label}</FieldLabel>
-              ) : (
-                <FieldLabel>{lang === "en" ? c.labelEn : c.label}</FieldLabel>
-              )}
-              {c.kind === "color" && (
-                <ColorField value={String(val(c.key) ?? "#888888")} onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })} />
-              )}
-              {c.kind === "slider" && (
-                <SliderField value={Math.round(Number(val(c.key)) || c.min || 0)} min={c.min || 0} max={c.max || 100} step={c.step || 1} suffix={c.suffix} onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })} />
-              )}
-              {c.kind === "segment" && c.options && (
-                <Segmented
-                  options={c.options.map((o) => [o.value, lang === "en" ? o.labelEn : o.label] as const)}
-                  value={String(val(c.key) ?? c.options[0].value)}
-                  onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })}
-                />
-              )}
-            </div>
-          ))}
+          {otherCtrls.length > 0 && <div className="space-y-1.5">{otherCtrls.map(renderCtrl)}</div>}
+          {colorCtrls.length > 0 && <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">{colorCtrls.map(renderCtrl)}</div>}
         </div>
       );
     };

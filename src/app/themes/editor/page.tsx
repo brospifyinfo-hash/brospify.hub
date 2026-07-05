@@ -679,10 +679,11 @@ export default function ThemeEditorPage() {
           open={buyboxGalleryOpen}
           onClose={() => setBuyboxGalleryOpen(false)}
           onAdd={(type, presetId) => {
+            // Galerie bleibt offen — so lassen sich mehrere Bausteine
+            // nacheinander hinzufügen. Feineinstellungen danach im Inspector.
             dispatch({ type: "addBuyboxBlock", blockType: type });
             if (presetId) dispatch({ type: "setBlockPreset", blockType: type, presetId });
-            setBuyboxGalleryOpen(false);
-            setSelected(`blk:${type}`);
+            setSelected("__buybox");
           }}
           activeTypes={doc.buybox.order}
           previewData={previewData}
