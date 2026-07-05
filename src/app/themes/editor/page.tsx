@@ -508,7 +508,7 @@ export default function ThemeEditorPage() {
             </div>
           ) : (
             /* ── Split-Pane-Editor ── */
-            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_408px] xl:grid-cols-[320px_minmax(0,1fr)_432px] lg:gap-6 lg:items-start">
+            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_364px] xl:grid-cols-[320px_minmax(0,1fr)_384px] lg:gap-5 lg:items-start">
 
               {/* Mobil-Umschalter: Aufbau ↔ Einstellungen (Desktop versteckt) */}
               <div className="order-2 lg:hidden mb-3">
@@ -621,7 +621,7 @@ export default function ThemeEditorPage() {
 
               {/* Inspector (rechts) */}
               <aside ref={inspectorRef} className={`order-4 lg:order-3 lg:sticky lg:top-4 scroll-mt-4 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:block`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:max-h-[calc(100vh-104px)] lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}

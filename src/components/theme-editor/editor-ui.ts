@@ -50,7 +50,7 @@ export const ACCENT = "#95BF47";
 
 /** Klassen für Segment-Buttons (an/aus) im Editor-Chrome. */
 export function segCls(on: boolean): string {
-  return `rounded-md border px-2 py-1.5 text-[11px] font-medium transition ${
+  return `rounded-md border px-1.5 py-1 text-[10px] font-medium transition ${
     on ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
   }`;
 }

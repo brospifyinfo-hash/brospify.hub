@@ -48,12 +48,12 @@ function IconSvg({ id, size = 16 }: { id: string; size?: number }) {
 
 function Group({ id, title, open, onToggle, children }: { id: string; title: string; open: boolean; onToggle: (id: string) => void; children: ReactNode }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
-      <button onClick={() => onToggle(id)} className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-white/[0.02] transition">
-        <span className="text-[11px] uppercase tracking-[0.13em] font-semibold text-white">{title}</span>
-        <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] overflow-hidden">
+      <button onClick={() => onToggle(id)} className="w-full flex items-center justify-between px-2.5 py-1.5 hover:bg-white/[0.02] transition">
+        <span className="text-[9.5px] uppercase tracking-[0.12em] font-bold text-white">{title}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
-      {open && <div className="px-3 pb-3.5 pt-1 border-t border-white/[0.05]">{children}</div>}
+      {open && <div className="px-2.5 pb-2.5 pt-1 border-t border-white/[0.05]">{children}</div>}
     </div>
   );
 }
@@ -93,7 +93,7 @@ export default function Inspector({
     const def = getSectionDef(section.type);
     const idx = sectionList.findIndex((s) => s.uid === section.uid);
     return (
-      <div className="space-y-2.5">
+      <div className="space-y-2">
         {/* Kompakter Kopf: Icon + Name + Verschieben (eine Zeile) */}
         <div className="flex items-center gap-2 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.08] px-2 py-1.5">
           <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
@@ -220,16 +220,16 @@ export default function Inspector({
     };
 
     return (
-      <div className="space-y-3">
-        <div className="rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-3 py-2.5">
-          <div className="text-[13px] font-bold text-white">{t.themes.editorBuybox}</div>
-          <div className="text-[10.5px] text-zinc-500">{t.themes.builderBlocks}</div>
+      <div className="space-y-2">
+        <div className="rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2.5 py-2">
+          <div className="text-[12px] font-bold text-white leading-tight">{t.themes.editorBuybox}</div>
+          <div className="text-[10px] text-zinc-500">{t.themes.builderBlocks}</div>
         </div>
 
         {/* Produktgalerie: Style-Art + Bild-Badge */}
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-          <div className="text-[12px] font-semibold text-white mb-1.5">{t.themes.editorGallery}</div>
-          <div className="flex flex-wrap gap-1.5">
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+          <div className="text-[11px] font-semibold text-white mb-1">{t.themes.editorGallery}</div>
+          <div className="flex flex-wrap gap-1">
             {GALLERY_PRESETS.map((p) => {
               const on = (doc.buybox.gallery?.presetId || GALLERY_PRESETS[0].id) === p.id;
               return (
@@ -237,7 +237,7 @@ export default function Inspector({
                   key={p.id}
                   title={p.hint}
                   onClick={() => dispatch({ type: "setGallery", patch: { presetId: p.id } })}
-                  className={`rounded-full border px-2.5 py-1 text-[10.5px] font-semibold transition ${
+                  className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${
                     on ? "border-[#95BF47]/70 bg-[#95BF47]/15 text-white" : "border-white/10 bg-white/[0.03] text-zinc-400 hover:text-white"
                   }`}
                 >
@@ -246,55 +246,49 @@ export default function Inspector({
               );
             })}
           </div>
-          <label className="block mt-2">
-            <span className="block text-[10px] text-zinc-500 mb-0.5">{t.themes.editorGalleryBadge}</span>
-            <input
+          <label className="block mt-1.5">
+            <FieldLabel>{t.themes.editorGalleryBadge}</FieldLabel>
+            <TextField
               value={doc.buybox.gallery?.badge ?? ""}
               placeholder="BESTSELLER"
-              onChange={(e) => dispatch({ type: "setGallery", patch: { badge: e.target.value } })}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2 py-1.5 text-[11.5px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
+              onChange={(v) => dispatch({ type: "setGallery", patch: { badge: v } })}
             />
           </label>
         </div>
 
         {/* Abstand zwischen den Bausteinen */}
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2.5">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[12px] font-semibold text-white">{t.themes.editorBuyboxSpacing}</span>
-            <span className="text-[11px] font-mono text-zinc-400">{doc.buybox.spacing ?? 15}px</span>
-          </div>
-          <input
-            type="range"
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+          <FieldLabel right={`${doc.buybox.spacing ?? 15}px`}>{t.themes.editorBuyboxSpacing}</FieldLabel>
+          <SliderField
+            value={doc.buybox.spacing ?? 15}
             min={4}
             max={40}
-            step={1}
-            value={doc.buybox.spacing ?? 15}
-            onChange={(e) => dispatch({ type: "setBuybox", patch: { spacing: Number(e.target.value) } })}
-            className="w-full accent-[#95BF47] cursor-pointer"
+            suffix="px"
+            onChange={(v) => dispatch({ type: "setBuybox", patch: { spacing: v } })}
           />
         </div>
 
         {/* Aktionsleiste: Baustein hinzufügen + automatisch anordnen */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           <button
             onClick={onOpenBuyboxGallery}
-            className="flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-bold px-3 py-2.5 text-white hover:brightness-110 transition"
+            className="flex items-center justify-center gap-1.5 rounded-md text-[11.5px] font-bold px-2 py-2 text-white hover:brightness-110 transition"
             style={{ background: "#95BF47" }}
           >
-            <Plus className="w-4 h-4" /> {t.themes.editorBuyboxAdd}
+            <Plus className="w-3.5 h-3.5" /> {t.themes.editorBuyboxAdd}
           </button>
           <button
             onClick={() => dispatch({ type: "arrangeBuybox", canonical: BUYBOX_CANONICAL_ORDER })}
             title={t.themes.editorBuyboxArrangeHint}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] text-[12px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition"
+            className="flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition"
           >
             <ArrowDownUp className="w-3.5 h-3.5" /> {t.themes.editorBuyboxArrange}
           </button>
         </div>
-        <p className="text-[10.5px] text-zinc-500 -mt-1">{t.themes.editorBuyboxDragHint}</p>
+        <p className="text-[10px] text-zinc-500 -mt-0.5">{t.themes.editorBuyboxDragHint}</p>
 
         {/* Baustein-Liste: Drag & Drop zum Verschieben, Karte öffnet Einstellungen */}
-        <div className="space-y-1.5">
+        <div className="space-y-1">
           {doc.buybox.order.map((type, i) => {
             const expanded = expandedType === type;
             const lib = getBuyboxLib(type);
@@ -363,25 +357,25 @@ export default function Inspector({
 
         {/* Vorteile-Icons */}
         <div>
-          <div className="text-[11px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mb-2">{t.themes.builderBenefitIcons}</div>
-          <div className="space-y-2">
+          <GroupTitle>{t.themes.builderBenefitIcons}</GroupTitle>
+          <div className="space-y-1">
             {[0, 1, 2, 3].map((i) => {
               const bLabel = previewData?.benefits?.[i]?.text || `Vorteil ${i + 1}`;
               const cur = doc.buybox.benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check";
               return (
-                <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-1.5">
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setIconPickerFor(iconPickerFor === i ? null : i)}
-                      className="w-8 h-8 shrink-0 rounded-md border border-white/15 bg-white/[0.05] text-white flex items-center justify-center hover:border-[#95BF47]/50 transition"
+                      className="w-7 h-7 shrink-0 rounded-md border border-white/15 bg-white/[0.05] text-white flex items-center justify-center hover:border-[#95BF47]/50 transition"
                       aria-label={`Icon für ${bLabel}`}
                     >
-                      <IconSvg id={cur} size={17} />
+                      <IconSvg id={cur} size={15} />
                     </button>
-                    <span className="text-[12px] text-zinc-300 flex-1 min-w-0 truncate">{bLabel}</span>
+                    <span className="text-[11px] text-zinc-300 flex-1 min-w-0 truncate">{bLabel}</span>
                   </div>
                   {iconPickerFor === i && (
-                    <div className="grid grid-cols-6 gap-1.5 mt-2 pt-2 border-t border-white/[0.06]">
+                    <div className="grid grid-cols-7 gap-1 mt-1.5 pt-1.5 border-t border-white/[0.06]">
                       {THEME_ICONS.map((ic) => (
                         <button
                           key={ic.id}
@@ -422,12 +416,12 @@ export default function Inspector({
   ];
 
   return (
-    <div className="space-y-2.5">
-      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-3 py-3 flex items-start gap-2.5">
-        <MousePointerClick className="w-4 h-4 text-[#95BF47] shrink-0 mt-0.5" />
+    <div className="space-y-2">
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2 flex items-start gap-2">
+        <MousePointerClick className="w-3.5 h-3.5 text-[#95BF47] shrink-0 mt-0.5" />
         <div>
-          <div className="text-[12.5px] font-semibold text-white">{t.themes.editorInspectorEmpty}</div>
-          <div className="text-[10.5px] text-zinc-500 leading-snug mt-0.5">{t.themes.editorInspectorEmptySub}</div>
+          <div className="text-[11.5px] font-semibold text-white">{t.themes.editorInspectorEmpty}</div>
+          <div className="text-[10px] text-zinc-500 leading-snug mt-0.5">{t.themes.editorInspectorEmptySub}</div>
         </div>
       </div>
 
@@ -435,118 +429,99 @@ export default function Inspector({
         {(() => {
           const cur = THEME_STYLES.find((s) => s.id === g.styleId);
           return (
-            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 mb-2">
+            <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-1.5 mb-1.5">
               <span className="flex -space-x-1 shrink-0">
-                <span className="w-3.5 h-3.5 rounded-full border border-black/30" style={{ background: g.colors.accent }} />
-                <span className="w-3.5 h-3.5 rounded-full border border-black/30" style={{ background: g.colors.button }} />
+                <span className="w-3 h-3 rounded-full border border-black/30" style={{ background: g.colors.accent }} />
+                <span className="w-3 h-3 rounded-full border border-black/30" style={{ background: g.colors.button }} />
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-[12.5px] font-semibold text-white">{cur?.label || g.styleId}</span>
-                <span className="block text-[10px] text-zinc-500 truncate">{cur?.hint || ""}</span>
+                <span className="block text-[11.5px] font-semibold text-white leading-tight">{cur?.label || g.styleId}</span>
+                <span className="block text-[9.5px] text-zinc-500 truncate">{cur?.hint || ""}</span>
               </span>
             </div>
           );
         })()}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-1.5">
           <button
             onClick={onOpenStyles}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 text-[12px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 px-3 py-2.5 transition"
+            className="flex items-center justify-center gap-1.5 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/10 text-[11px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 px-2 py-1.5 transition"
           >
-            <PaletteIcon className="w-3.5 h-3.5" /> {t.themes.editorStyleGallery}
+            <PaletteIcon className="w-3 h-3" /> {t.themes.editorStyleGallery}
           </button>
           <button
             onClick={onRandomize}
             title={t.themes.builderRandomHint}
-            className="flex items-center justify-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.03] text-[12px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.07] px-3 py-2.5 transition"
+            className="flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.03] text-[11px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.07] px-2 py-1.5 transition"
           >
-            <Shuffle className="w-3.5 h-3.5" /> {t.themes.builderRandom}
+            <Shuffle className="w-3 h-3" /> {t.themes.builderRandom}
           </button>
         </div>
       </Group>
 
       <Group id="farben" title={t.themes.builderColors} open={!!openG.farben} onToggle={toggleG}>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
           {COLOR_FIELDS.map((f) => (
             <div key={f.key}>
-              <span className="block text-[10px] text-zinc-500 mb-1">{f.label}</span>
-              <div className="flex items-center gap-1.5 bg-white/[0.04] border border-white/10 rounded-lg px-1.5 py-1">
-                <input
-                  type="color"
-                  value={g.colors[f.key]}
-                  onChange={(e) => dispatch({ type: "setColors", patch: { [f.key]: e.target.value } })}
-                  className="w-7 h-7 rounded bg-transparent border-0 p-0 cursor-pointer shrink-0"
-                />
-                <input
-                  type="text"
-                  value={g.colors[f.key]}
-                  onChange={(e) => dispatch({ type: "setColors", patch: { [f.key]: e.target.value } })}
-                  className="w-full min-w-0 bg-transparent text-[11px] text-white outline-none"
-                />
-              </div>
+              <FieldLabel>{f.label}</FieldLabel>
+              <ColorField
+                value={g.colors[f.key]}
+                onChange={(v) => dispatch({ type: "setColors", patch: { [f.key]: v } })}
+              />
             </div>
           ))}
         </div>
       </Group>
 
       <Group id="typo" title={t.themes.builderTypography} open={!!openG.typo} onToggle={toggleG}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           <label className="block">
-            <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontHeading}</span>
+            <FieldLabel>{t.themes.builderFontHeading}</FieldLabel>
             <select
               value={g.headingFont}
               onChange={(e) => dispatch({ type: "setGlobal", patch: { headingFont: e.target.value } })}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+              className="w-full bg-black/25 border border-white/[0.1] rounded-md px-1.5 py-1 text-[11.5px] text-white outline-none focus:border-[#95BF47]/50"
             >
               {EDITOR_FONTS.map((f) => <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="block text-[11px] text-zinc-500 mb-1">{t.themes.builderFontBody}</span>
+            <FieldLabel>{t.themes.builderFontBody}</FieldLabel>
             <select
               value={g.bodyFont}
               onChange={(e) => dispatch({ type: "setGlobal", patch: { bodyFont: e.target.value } })}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-lg px-2 py-2 text-sm text-white outline-none focus:border-[#95BF47]/40"
+              className="w-full bg-black/25 border border-white/[0.1] rounded-md px-1.5 py-1 text-[11.5px] text-white outline-none focus:border-[#95BF47]/50"
             >
               {EDITOR_FONTS.map((f) => <option key={f.value} value={f.value} className="bg-zinc-900">{f.label}</option>)}
             </select>
           </label>
         </div>
-        <div className="flex items-center justify-between mt-3 mb-1">
-          <span className="text-[11px] text-zinc-500">{t.themes.builderCorners}</span>
-          <span className="text-[11px] font-mono text-zinc-400">{g.radius}px</span>
+        <div className="mt-2">
+          <FieldLabel right={`${g.radius}px`}>{t.themes.builderCorners}</FieldLabel>
+          <SliderField value={g.radius} min={0} max={40} suffix="px" onChange={(v) => dispatch({ type: "setGlobal", patch: { radius: v } })} />
         </div>
-        <input
-          type="range"
-          min={0}
-          max={40}
-          step={1}
-          value={g.radius}
-          onChange={(e) => dispatch({ type: "setGlobal", patch: { radius: Number(e.target.value) } })}
-          className="w-full accent-[#95BF47] cursor-pointer"
-        />
       </Group>
 
       <Group id="design" title={t.themes.builderDesign} open={!!openG.design} onToggle={toggleG}>
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <div>
-            <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderShadow}</span>
-            <div className="grid grid-cols-3 gap-1.5">
+            <FieldLabel>{t.themes.builderShadow}</FieldLabel>
+            <div className="grid grid-cols-3 gap-1">
               {([[0, "Aus"], [1, "Weich"], [2, "Stark"]] as const).map(([v, l]) => (
                 <button key={v} onClick={() => dispatch({ type: "setGlobal", patch: { design: { ...g.design, shadow: v } } })} className={segCls(g.design.shadow === v)}>{l}</button>
               ))}
             </div>
           </div>
           <div>
-            <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderBorder}</span>
-            <div className="grid grid-cols-2 gap-1.5">
+            <FieldLabel>{t.themes.builderBorder}</FieldLabel>
+            <div className="grid grid-cols-2 gap-1">
               {([[1, "Dünn"], [2, "Dick"]] as const).map(([v, l]) => (
                 <button key={v} onClick={() => dispatch({ type: "setGlobal", patch: { design: { ...g.design, border: v } } })} className={segCls(g.design.border === v)}>{l}</button>
               ))}
             </div>
           </div>
           <div>
-            <span className="block text-[10px] text-zinc-500 mb-1">{t.themes.builderIcons}</span>
-            <div className="grid grid-cols-3 gap-1.5">
+            <FieldLabel>{t.themes.builderIcons}</FieldLabel>
+            <div className="grid grid-cols-3 gap-1">
               {([["dark", "Dunkel"], ["accent", "Akzent"], ["outline", "Umriss"]] as const).map(([v, l]) => (
                 <button key={v} onClick={() => dispatch({ type: "setGlobal", patch: { design: { ...g.design, iconStyle: v } } })} className={segCls(g.design.iconStyle === v)}>{l}</button>
               ))}
