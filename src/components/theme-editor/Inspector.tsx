@@ -93,7 +93,7 @@ export default function Inspector({
     const def = getSectionDef(section.type);
     const idx = sectionList.findIndex((s) => s.uid === section.uid);
     return (
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         {/* Kompakter Kopf: Icon + Name + Verschieben (eine Zeile) */}
         <div className="flex items-center gap-2 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.08] px-2 py-1.5">
           <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
@@ -238,8 +238,8 @@ export default function Inspector({
     };
 
     return (
-      <div className="space-y-2">
-        <div className="rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2.5 py-2">
+      <div className="space-y-1.5">
+        <div className="rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2.5 py-1.5">
           <div className="text-[12px] font-bold text-white leading-tight">{t.themes.editorBuybox}</div>
           <div className="text-[10px] text-zinc-500">{t.themes.builderBlocks}</div>
         </div>
@@ -306,7 +306,7 @@ export default function Inspector({
         <p className="text-[10px] text-zinc-500 -mt-0.5">{t.themes.editorBuyboxDragHint}</p>
 
         {/* Baustein-Liste: Drag & Drop zum Verschieben, Karte öffnet Einstellungen */}
-        <div className="space-y-1">
+        <div className="space-y-[3px]">
           {doc.buybox.order.map((type, i) => {
             const expanded = expandedType === type;
             const lib = getBuyboxLib(type);
@@ -333,18 +333,18 @@ export default function Inspector({
                   expanded ? "border-[#95BF47]/50 bg-[#95BF47]/[0.06]" : "border-white/10 bg-white/[0.03]"
                 } ${isOver ? "border-[#95BF47]/70 border-dashed" : ""} ${dragIdx === i ? "opacity-40" : ""}`}
               >
-                <div className="flex items-center gap-1 px-1.5 py-1">
+                <div className="flex items-center gap-1 px-1.5 py-[3px]">
                   <span className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0" title={t.themes.editorBuyboxDragHint}>
-                    <GripVertical className="w-3.5 h-3.5" />
+                    <GripVertical className="w-3 h-3" />
                   </span>
-                  <span className={`w-6 h-6 rounded flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
+                  <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
                     <BlockIcon name={meta.icon} className="w-3 h-3" />
                   </span>
                   <button
                     onClick={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
                     className="flex-1 min-w-0 text-left"
                   >
-                    <span className="block text-[11.5px] font-semibold text-white truncate">
+                    <span className="block text-[11px] font-semibold text-white truncate">
                       {lang === "en" ? meta.labelEn : meta.label}
                       {BUYBOX_RUNTIME_ONLY.has(type) && <span className="ml-1 text-[8px] font-bold uppercase tracking-wider text-[#95BF47]/80 align-middle">Neu</span>}
                     </span>
@@ -434,7 +434,7 @@ export default function Inspector({
   ];
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-1.5">
       <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2 flex items-start gap-2">
         <MousePointerClick className="w-3.5 h-3.5 text-[#95BF47] shrink-0 mt-0.5" />
         <div>
