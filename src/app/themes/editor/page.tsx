@@ -85,6 +85,15 @@ export default function ThemeEditorPage() {
   const [syncing, setSyncing] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
+  const inspectorRef = useRef<HTMLElement>(null);
+
+  // Klick auf eine Section/Baustein → auf schmalen Screens die Einstellungen
+  // (Inspector liegt dort unter der Vorschau) sanft in den Blick scrollen.
+  useEffect(() => {
+    if (selected && inspectorRef.current && typeof window !== "undefined" && window.innerWidth < 1024) {
+      inspectorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [selected]);
 
   // Produkte (gezogene) + Kosten laden.
   useEffect(() => {
@@ -572,7 +581,7 @@ export default function ThemeEditorPage() {
               </div>
 
               {/* Inspector (rechts) */}
-              <aside className="order-3 lg:sticky lg:top-4">
+              <aside ref={inspectorRef} className="order-3 lg:sticky lg:top-4 scroll-mt-4">
                 <div className="glass-strong rounded-2xl border border-white/[0.08] p-3 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
                   <Inspector
                     doc={doc}

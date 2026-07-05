@@ -13,6 +13,7 @@ import {
   PackageCheck, BatteryLow, Gift, Users, Star, ListChecks, ShieldCheck,
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
   ChevronsDownUp, PanelBottomOpen, PackagePlus, Pilcrow, Minus, Share2, Square,
+  LayoutPanelTop,
   type LucideIcon,
 } from "lucide-react";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
@@ -22,7 +23,8 @@ import { THEME_STYLES } from "@/lib/theme-styles";
 import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
 import { THEME_ICONS, DEFAULT_BENEFIT_ICONS, getIcon } from "@/lib/theme-icons";
 import { useI18n } from "@/lib/i18n";
-import { EDITOR_FONTS, segCls } from "@/components/theme-editor/editor-ui";
+import { EDITOR_FONTS, segCls, ACCENT } from "@/components/theme-editor/editor-ui";
+import { GroupTitle, PresetTile, FieldLabel, TextField } from "@/components/theme-editor/ui";
 
 const BLOCK_ICONS: Record<string, LucideIcon> = {
   Type, Tag, SlidersHorizontal, Hash, ShoppingCart, Layers, Megaphone, Flame,
@@ -91,42 +93,42 @@ export default function Inspector({
     const def = getSectionDef(section.type);
     const idx = sectionList.findIndex((s) => s.uid === section.uid);
     return (
-      <div className="space-y-3">
-        <div className="rounded-xl border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-3 py-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <div className="text-[13px] font-bold text-white truncate">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
-              <div className="text-[10.5px] text-zinc-500">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
+      <div className="space-y-3.5">
+        {/* Premium-Kopf: Icon-Chip + Name + Verschieben */}
+        <div className="rounded-2xl border border-[#95BF47]/25 bg-gradient-to-br from-[#95BF47]/[0.10] to-transparent px-3 py-3">
+          <div className="flex items-center gap-2.5">
+            <span className="w-9 h-9 shrink-0 rounded-xl flex items-center justify-center border border-[#95BF47]/30" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
+              <LayoutPanelTop className="w-4.5 h-4.5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[13.5px] font-bold text-white truncate">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
+              <div className="text-[10.5px] text-zinc-400 truncate">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-7 h-7 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label={t.themes.editorUndo}>
-                <ChevronUp className="w-4 h-4" />
+            <div className="flex flex-col gap-0.5 shrink-0">
+              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-6 h-6 rounded-md border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="hoch">
+                <ChevronUp className="w-3.5 h-3.5" />
               </button>
-              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-7 h-7 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter">
-                <ChevronDown className="w-4 h-4" />
+              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-6 h-6 rounded-md border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter">
+                <ChevronDown className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Style-Arten */}
+        {/* Style-Arten als Premium-Kacheln */}
         {def && def.presets.length > 0 && (
           <div>
-            <div className="text-[11px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mb-2">{t.themes.editorPreset}</div>
+            <GroupTitle>{t.themes.editorPreset}</GroupTitle>
             <div className="grid grid-cols-1 gap-1.5">
-              {def.presets.map((p) => {
-                const on = p.id === section.presetId || (!section.presetId && p.id === def.presets[0].id);
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => dispatch({ type: "setPreset", uid: section.uid, presetId: p.id })}
-                    className={`text-left rounded-lg border px-3 py-2 transition ${on ? "border-[#95BF47]/60 bg-[#95BF47]/10" : "border-white/10 bg-white/[0.03] hover:bg-white/[0.07]"}`}
-                  >
-                    <span className="block text-[12.5px] font-semibold text-white">{lang === "en" ? p.labelEn : p.label}</span>
-                    <span className="block text-[10px] text-zinc-500 leading-tight">{p.hint}</span>
-                  </button>
-                );
-              })}
+              {def.presets.map((p) => (
+                <PresetTile
+                  key={p.id}
+                  label={lang === "en" ? p.labelEn : p.label}
+                  hint={p.hint}
+                  active={p.id === section.presetId || (!section.presetId && p.id === def.presets[0].id)}
+                  onClick={() => dispatch({ type: "setPreset", uid: section.uid, presetId: p.id })}
+                />
+              ))}
             </div>
           </div>
         )}
@@ -134,27 +136,17 @@ export default function Inspector({
         {/* Kuratierte Texte */}
         {def && def.fields.length > 0 && (
           <div>
-            <div className="text-[11px] uppercase tracking-[0.13em] font-semibold text-zinc-400 mb-2">{t.themes.editorTexts}</div>
+            <GroupTitle>{t.themes.editorTexts}</GroupTitle>
             <div className="space-y-2">
               {def.fields.map((f) => (
                 <label key={f.id} className="block">
-                  <span className="block text-[10.5px] text-zinc-500 mb-1">{lang === "en" ? f.labelEn : f.label}</span>
-                  {f.kind === "textarea" ? (
-                    <textarea
-                      value={section.texts[f.id] ?? ""}
-                      placeholder={f.def}
-                      rows={2}
-                      onChange={(e) => dispatch({ type: "setText", uid: section.uid, field: f.id, value: e.target.value })}
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2.5 py-1.5 text-[12px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40 resize-y"
-                    />
-                  ) : (
-                    <input
-                      value={section.texts[f.id] ?? ""}
-                      placeholder={f.def}
-                      onChange={(e) => dispatch({ type: "setText", uid: section.uid, field: f.id, value: e.target.value })}
-                      className="w-full bg-white/[0.04] border border-white/10 rounded-md px-2.5 py-1.5 text-[12px] text-white placeholder:text-zinc-600 outline-none focus:border-[#95BF47]/40"
-                    />
-                  )}
+                  <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
+                  <TextField
+                    value={section.texts[f.id] ?? ""}
+                    placeholder={f.def}
+                    textarea={f.kind === "textarea"}
+                    onChange={(v) => dispatch({ type: "setText", uid: section.uid, field: f.id, value: v })}
+                  />
                 </label>
               ))}
             </div>
@@ -163,7 +155,7 @@ export default function Inspector({
 
         <button
           onClick={() => { dispatch({ type: "removeSection", uid: section.uid }); onClearSelect(); }}
-          className="w-full flex items-center justify-center gap-2 rounded-lg border border-red-400/25 bg-red-500/[0.07] text-red-300 hover:bg-red-500/[0.14] text-[12px] font-semibold px-3 py-2 transition"
+          className="w-full flex items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/[0.07] text-red-300 hover:bg-red-500/[0.14] text-[12px] font-semibold px-3 py-2.5 transition"
         >
           <Trash2 className="w-3.5 h-3.5" /> {t.themes.editorRemove}
         </button>
