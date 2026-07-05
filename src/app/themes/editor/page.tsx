@@ -72,6 +72,9 @@ export default function ThemeEditorPage() {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [page, setPage] = useState<EditorPage>("product");
   const [selected, setSelected] = useState<string | null>(null);
+  // Mobil: nur EIN Panel (Aufbau ODER Einstellungen) unter der Vorschau
+  // zeigen — auf dem Desktop stehen beide nebeneinander (Umschalter versteckt).
+  const [mobileTab, setMobileTab] = useState<"aufbau" | "einstellungen">("aufbau");
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [buyboxGalleryOpen, setBuyboxGalleryOpen] = useState(false);
@@ -87,11 +90,12 @@ export default function ThemeEditorPage() {
   const shellRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
 
-  // Klick auf eine Section/Baustein → auf schmalen Screens die Einstellungen
-  // (Inspector liegt dort unter der Vorschau) sanft in den Blick scrollen.
+  // Klick auf eine Section/Baustein → auf schmalen Screens automatisch auf den
+  // Einstellungen-Tab wechseln und ihn sanft in den Blick scrollen.
   useEffect(() => {
-    if (selected && inspectorRef.current && typeof window !== "undefined" && window.innerWidth < 1024) {
-      inspectorRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (selected && typeof window !== "undefined" && window.innerWidth < 1024) {
+      setMobileTab("einstellungen");
+      requestAnimationFrame(() => inspectorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     }
   }, [selected]);
 
@@ -329,7 +333,7 @@ export default function ThemeEditorPage() {
     <>
       <Navigation />
       <main className="min-h-screen bg-mesh font-sf">
-        <div className="mx-auto px-3 sm:px-5 py-4 sm:py-6 max-w-5xl lg:max-w-none xl:max-w-[1800px]">
+        <div className="mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 max-w-5xl lg:max-w-none xl:max-w-[1840px]">
 
           {/* ── Top-Bar ── */}
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap mb-4">
@@ -498,11 +502,26 @@ export default function ThemeEditorPage() {
             </div>
           ) : (
             /* ── Split-Pane-Editor ── */
-            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[262px_minmax(0,1fr)_336px] lg:gap-4 lg:items-start">
+            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_408px] xl:grid-cols-[320px_minmax(0,1fr)_432px] lg:gap-6 lg:items-start">
+
+              {/* Mobil-Umschalter: Aufbau ↔ Einstellungen (Desktop versteckt) */}
+              <div className="order-2 lg:hidden mb-3">
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+                  {([["aufbau", t.themes.editorStructure], ["einstellungen", t.themes.editorSettings]] as const).map(([tab, label]) => (
+                    <button
+                      key={tab}
+                      onClick={() => setMobileTab(tab)}
+                      className={`px-3 py-2.5 rounded-lg text-[12.5px] font-semibold transition ${mobileTab === tab ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-300 hover:text-white"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
               {/* Aufbau (links) */}
-              <aside className="order-2 lg:order-1 lg:sticky lg:top-4 mb-4 lg:mb-0">
-                <div className="glass-strong rounded-2xl border border-white/[0.08] p-3">
+              <aside className={`order-3 lg:order-1 lg:sticky lg:top-4 mb-4 lg:mb-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:block`}>
+                <div className="glass-strong rounded-2xl border border-white/[0.08] p-3.5 sm:p-4">
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite */}
                   <div className="grid grid-cols-2 gap-1 rounded-lg border border-white/10 bg-white/[0.03] p-0.5 mb-3">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
@@ -581,8 +600,8 @@ export default function ThemeEditorPage() {
               </div>
 
               {/* Inspector (rechts) */}
-              <aside ref={inspectorRef} className="order-3 lg:sticky lg:top-4 scroll-mt-4">
-                <div className="glass-strong rounded-2xl border border-white/[0.08] p-3 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
+              <aside ref={inspectorRef} className={`order-4 lg:order-3 lg:sticky lg:top-4 scroll-mt-4 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:block`}>
+                <div className="glass-strong rounded-2xl border border-white/[0.08] p-3.5 sm:p-4 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}
