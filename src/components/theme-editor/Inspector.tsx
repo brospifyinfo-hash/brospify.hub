@@ -206,17 +206,31 @@ export default function Inspector({
               </div>
             </div>
           )}
-          {lib.fields.map((f) => (
-            <label key={f.id} className="block">
-              <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
-              <TextField
-                value={cfg?.texts?.[f.id] ?? ""}
-                placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
-                textarea={f.kind === "textarea"}
-                onChange={(v) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: v })}
-              />
-            </label>
-          ))}
+          {lib.fields.map((f) =>
+            f.kind === "textarea" ? (
+              <label key={f.id} className="block">
+                <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
+                <TextField
+                  value={cfg?.texts?.[f.id] ?? ""}
+                  placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
+                  textarea
+                  onChange={(v) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: v })}
+                />
+              </label>
+            ) : (
+              // Kurzes Feld: Label links, Eingabe rechts (platzsparend bei Listen)
+              <label key={f.id} className="flex items-center gap-2">
+                <span className="text-[10px] font-medium text-zinc-400 w-14 shrink-0 truncate" title={lang === "en" ? f.labelEn : f.label}>{lang === "en" ? f.labelEn : f.label}</span>
+                <span className="flex-1 min-w-0">
+                  <TextField
+                    value={cfg?.texts?.[f.id] ?? ""}
+                    placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
+                    onChange={(v) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: v })}
+                  />
+                </span>
+              </label>
+            )
+          )}
           {otherCtrls.length > 0 && <div className="space-y-1.5">{otherCtrls.map(renderCtrl)}</div>}
           {colorCtrls.length > 0 && <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">{colorCtrls.map(renderCtrl)}</div>}
         </div>
@@ -319,41 +333,41 @@ export default function Inspector({
                   expanded ? "border-[#95BF47]/50 bg-[#95BF47]/[0.06]" : "border-white/10 bg-white/[0.03]"
                 } ${isOver ? "border-[#95BF47]/70 border-dashed" : ""} ${dragIdx === i ? "opacity-40" : ""}`}
               >
-                <div className="flex items-center gap-1.5 px-2 py-1.5">
+                <div className="flex items-center gap-1 px-1.5 py-1">
                   <span className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0" title={t.themes.editorBuyboxDragHint}>
-                    <GripVertical className="w-4 h-4" />
+                    <GripVertical className="w-3.5 h-3.5" />
                   </span>
-                  <span className={`w-7 h-7 rounded-md flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
-                    <BlockIcon name={meta.icon} className="w-3.5 h-3.5" />
+                  <span className={`w-6 h-6 rounded flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
+                    <BlockIcon name={meta.icon} className="w-3 h-3" />
                   </span>
                   <button
                     onClick={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
                     className="flex-1 min-w-0 text-left"
                   >
-                    <span className="block text-[12px] font-semibold text-white truncate">
+                    <span className="block text-[11.5px] font-semibold text-white truncate">
                       {lang === "en" ? meta.labelEn : meta.label}
-                      {BUYBOX_RUNTIME_ONLY.has(type) && <span className="ml-1 text-[8.5px] font-bold uppercase tracking-wider text-[#95BF47]/80 align-middle">Neu</span>}
+                      {BUYBOX_RUNTIME_ONLY.has(type) && <span className="ml-1 text-[8px] font-bold uppercase tracking-wider text-[#95BF47]/80 align-middle">Neu</span>}
                     </span>
                   </button>
                   {hasConfig && (
                     <button
                       onClick={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
                       aria-label="Einstellungen"
-                      className="text-zinc-400 hover:text-white shrink-0"
+                      className="text-zinc-400 hover:text-white shrink-0 p-0.5"
                     >
-                      <ChevronDown className={`w-4 h-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
                     </button>
                   )}
                   <button
                     onClick={() => { dispatch({ type: "removeBuyboxBlock", blockType: type }); if (expanded) onSelectBlock("__buybox"); }}
                     aria-label={t.themes.editorBuyboxRemove}
                     title={t.themes.editorBuyboxRemove}
-                    className="text-zinc-500 hover:text-red-300 shrink-0"
+                    className="text-zinc-500 hover:text-red-300 shrink-0 p-0.5"
                   >
-                    <Trash2 className="w-3.5 h-3.5" />
+                    <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
-                {expanded && hasConfig && <div className="px-2.5 pb-2.5">{blockConfig(type)}</div>}
+                {expanded && hasConfig && <div className="px-2 pb-2">{blockConfig(type)}</div>}
               </div>
             );
           })}
