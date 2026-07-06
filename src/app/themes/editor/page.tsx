@@ -14,7 +14,7 @@ import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
   Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
-  SlidersHorizontal, ZoomIn, ZoomOut, type LucideIcon,
+  SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, type LucideIcon,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -24,6 +24,7 @@ import SectionLibraryOverlay from "@/components/theme-editor/SectionLibraryOverl
 import StyleGalleryOverlay from "@/components/theme-editor/StyleGalleryOverlay";
 import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
 import BuyboxGalleryOverlay from "@/components/theme-editor/BuyboxGalleryOverlay";
+import FullPreviewOverlay from "@/components/theme-editor/FullPreviewOverlay";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import {
   editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
@@ -116,6 +117,8 @@ export default function ThemeEditorPage() {
   const [mobileTab, setMobileTab] = useState<"vorschau" | "aufbau" | "einstellungen">("vorschau");
   // Vorschau-Zoom (Regler): multipliziert die Einpass-Skalierung (50–200 %).
   const [zoom, setZoom] = useState(1);
+  // Fast-Vollbild-Vorschau (Overlay, reine Ansicht).
+  const [fullPreviewOpen, setFullPreviewOpen] = useState(false);
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [buyboxGalleryOpen, setBuyboxGalleryOpen] = useState(false);
@@ -266,8 +269,11 @@ export default function ThemeEditorPage() {
   }, [libraryAt, currentSections.length, page]);
 
   // Undo/Redo — Buttons + Tastatur (Ctrl/Cmd+Z, Shift für Redo).
+  // In der Fast-Vollbild-Vorschau (reine Ansicht) bewusst AUS — sonst würde
+  // Ctrl+Z das Dokument dort unsichtbar mutieren.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (fullPreviewOpen) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -281,7 +287,7 @@ export default function ThemeEditorPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [fullPreviewOpen]);
 
   // Sanfter Einstieg des Editor-Shells (GSAP statt Layout-Sprung).
   useEffect(() => {
@@ -384,7 +390,7 @@ export default function ThemeEditorPage() {
             reichen dadurch immer bis ganz unten. Mobil: normaler Fluss + Platz
             für die untere Navigations-Leiste. */}
         <div className={`mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 pb-24 md:pb-6 max-w-5xl lg:max-w-none xl:max-w-[1840px] ${
-          showPicker ? "" : "lg:h-[calc(100vh-56px)] lg:flex lg:flex-col lg:overflow-hidden lg:py-4"
+          showPicker ? "" : "lg:h-[calc(100vh-56px)] lg:flex lg:flex-col lg:overflow-hidden lg:py-3"
         }`}>
 
           {/* ── Top-Bar (edle Glas-Toolbar) ──
@@ -392,33 +398,34 @@ export default function ThemeEditorPage() {
               aus, Produkt-Chip schrumpft). Mobil: zwei feste, aufgeräumte
               Reihen — Reihe 1 Navigation/Undo, Reihe 2 Aktionen (scrollt
               horizontal statt untereinander zu stapeln). */}
-          <div className="glass-strong rounded-2xl border border-white/[0.08] px-2.5 py-2 mb-3 lg:mb-4 shrink-0">
+          <div className="glass-strong rounded-xl border border-white/[0.08] px-2 py-1.5 lg:py-1 mb-3 lg:mb-2 shrink-0">
 
-            {/* Desktop-Zeile */}
-            <div className="hidden lg:flex items-center gap-2 flex-nowrap min-w-0">
+            {/* Desktop-Zeile — bewusst KOMPAKT (schmale Paddings/Fonts), damit
+                die Leiste möglichst wenig Höhe frisst. */}
+            <div className="hidden lg:flex items-center gap-1.5 flex-nowrap min-w-0">
               <button
                 onClick={() => router.push("/themes")}
                 title={t.themes.editorBack}
-                className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition"
+                className="shrink-0 flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white transition"
               >
-                <ArrowLeft className="w-3.5 h-3.5" /> <span className="hidden 2xl:inline">{t.themes.editorBack}</span>
+                <ArrowLeft className="w-3.5 h-3.5" />
               </button>
-              <div className="shrink-0 flex items-center gap-1.5 text-[13px] font-bold text-white">
-                <Sparkles className="w-4 h-4" style={{ color: ACCENT }} />
+              <div className="shrink-0 flex items-center gap-1.5 text-[12px] font-bold text-white">
+                <Sparkles className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                 <span className="hidden xl:inline">{t.themes.editorTitle}</span>
               </div>
 
               {activeProduct && (
                 <button
                   onClick={() => setPickerOpen(true)}
-                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2.5 py-1.5 hover:border-[#95BF47]/40 transition min-w-0 shrink"
+                  className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 hover:border-[#95BF47]/40 transition min-w-0 shrink"
                   title={t.themes.editorChangeProduct}
                 >
                   {activeProduct.bildUrl
-                    ? <img src={activeProduct.bildUrl} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
-                    : <span className="w-7 h-7 rounded-md bg-white/[0.06] shrink-0" />}
-                  <span className="text-[12px] font-medium text-white truncate max-w-[240px]">{activeProduct.titel}</span>
-                  <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                    ? <img src={activeProduct.bildUrl} alt="" className="w-5.5 h-5.5 rounded object-cover shrink-0" />
+                    : <span className="w-5.5 h-5.5 rounded bg-white/[0.06] shrink-0" />}
+                  <span className="text-[11.5px] font-medium text-white truncate max-w-[220px]">{activeProduct.titel}</span>
+                  <ChevronRight className="w-3 h-3 text-zinc-500 shrink-0" />
                 </button>
               )}
 
@@ -428,11 +435,10 @@ export default function ThemeEditorPage() {
                   <button
                     onClick={() => setStyleOpen(true)}
                     title={t.themes.editorStyleGallery}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
                   >
                     <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorStyleGallery}</span>
-                    <span className="text-[10.5px] text-zinc-500 hidden 2xl:inline">· {getThemeStyle(doc.global.styleId).label}</span>
                   </button>
                 )}
                 {/* Design-Speicherstände (mit Sync-Codes) */}
@@ -440,38 +446,39 @@ export default function ThemeEditorPage() {
                   <button
                     onClick={() => setDesignsOpen(true)}
                     title={t.themes.editorDesigns}
-                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
                   >
                     <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorDesigns}</span>
-                    {activeDesign && <span className="text-[10.5px] text-zinc-500 hidden 2xl:inline truncate max-w-[110px]">· {activeDesign.name}</span>}
+                    {activeDesign && <span className="text-[10px] text-zinc-500 hidden 2xl:inline truncate max-w-[100px]">· {activeDesign.name}</span>}
                   </button>
                 )}
                 {/* Undo / Redo */}
-                <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                <div className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
                     disabled={!state.past.length}
                     title={`${t.themes.editorUndo} (Ctrl+Z)`}
-                    className="px-2 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
+                    className="px-1.5 py-1 rounded text-zinc-300 hover:text-white disabled:opacity-25 transition"
                   >
-                    <Undo2 className="w-4 h-4" />
+                    <Undo2 className="w-3.5 h-3.5" />
                   </button>
                   <button
                     onClick={() => dispatch({ type: "redo" })}
                     disabled={!state.future.length}
                     title={`${t.themes.editorRedo} (Ctrl+Shift+Z)`}
-                    className="px-2 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
+                    className="px-1.5 py-1 rounded text-zinc-300 hover:text-white disabled:opacity-25 transition"
                   >
-                    <Redo2 className="w-4 h-4" />
+                    <Redo2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
                 <button
                   onClick={handleDownload}
                   disabled={building || !doc.productId}
-                  className="btn-deploy flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] disabled:opacity-50 whitespace-nowrap"
+                  title={cost !== null && cost > 0 ? t.themes.editorFreeNote.replace("{n}", String(cost)) : undefined}
+                  className="btn-deploy flex items-center gap-1.5 px-3 py-1.5 text-[12px] disabled:opacity-50 whitespace-nowrap"
                 >
-                  {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
+                  {building ? <Sparkles className="w-3.5 h-3.5 animate-pulse" /> : <Download className="w-3.5 h-3.5" />}
                   <span>{building ? t.themes.builderBuilding : "Download"}</span>
                 </button>
                 {/* Design live in installierte Shops pushen (Sync-Code, kostenlos) */}
@@ -479,7 +486,7 @@ export default function ThemeEditorPage() {
                   onClick={handleSyncUpdate}
                   disabled={syncing || !doc.productId}
                   title={t.themes.editorSyncHint}
-                  className="flex items-center gap-1.5 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 px-3 py-2 text-[12px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition whitespace-nowrap"
+                  className="flex items-center gap-1.5 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/10 px-2.5 py-1.5 text-[11.5px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition whitespace-nowrap"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
                   <span className="hidden xl:inline">{t.themes.editorSyncUpdate}</span>
@@ -574,11 +581,13 @@ export default function ThemeEditorPage() {
             </div>
           </div>
 
+          {/* Kosten-Hinweis lebt jetzt platzsparend als Tooltip am Download-
+              Button — nur echte Meldungen (ok/Fehler) bekommen eine Zeile. */}
           {msg && (
-            <p className={`mb-3 text-[12px] shrink-0 ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>{msg.text}</p>
+            <p className={`mb-2 text-[12px] shrink-0 ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>{msg.text}</p>
           )}
-          {!msg && cost !== null && cost > 0 && !showPicker && (
-            <p className="mb-3 text-[11.5px] text-zinc-500 shrink-0 hidden sm:block">{t.themes.editorFreeNote.replace("{n}", String(cost))}</p>
+          {!msg && cost !== null && cost > 0 && showPicker && (
+            <p className="mb-3 text-[11.5px] text-zinc-500 shrink-0 text-center">{t.themes.editorFreeNote.replace("{n}", String(cost))}</p>
           )}
 
           {/* ── Schritt 1: Produkt-Bilder-Grid ── */}
@@ -636,7 +645,7 @@ export default function ThemeEditorPage() {
             </div>
           ) : (
             /* ── Split-Pane-Editor ── */
-            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_364px] xl:grid-cols-[320px_minmax(0,1fr)_384px] lg:grid-rows-[minmax(0,1fr)] lg:gap-5 lg:items-stretch lg:flex-1 lg:min-h-0">
+            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_364px] xl:grid-cols-[320px_minmax(0,1fr)_384px] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0">
 
               {/* Mobil: sticky 3-Tab-Leiste (Vorschau · Aufbau · Einstellungen) —
                   klebt unter der App-Navigation, damit man jederzeit umschalten
@@ -668,7 +677,7 @@ export default function ThemeEditorPage() {
                       <button
                         key={p}
                         onClick={() => { setPage(p); setSelected(null); }}
-                        className={`flex-1 px-2 py-2 lg:py-1.5 rounded text-[12px] lg:text-[11px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
+                        className={`flex-1 px-2 py-2 lg:py-1 rounded text-[12px] lg:text-[11px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
                       >
                         {l}
                       </button>
@@ -730,31 +739,44 @@ export default function ThemeEditorPage() {
               {/* Live-Vorschau (Mitte) — mit eigener Toolbar: PC/Handy-Umschalter
                   + Zoom-Regler. Desktop: volle Höhe, Vorschau scrollt intern. */}
               <div className={`order-2 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "vorschau" ? "" : "hidden"} lg:flex lg:flex-col`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] px-2 py-1.5 mb-2 lg:mb-3 flex items-center gap-2 shrink-0">
+                <div className="glass-strong rounded-lg border border-white/[0.08] px-1.5 py-1 mb-2 flex items-center gap-1.5 shrink-0">
                   {/* PC / Handy */}
-                  <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 shrink-0">
+                  <div className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5 shrink-0">
                     <button
                       onClick={() => setViewMode("desktop")}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${viewMode === "desktop" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                      title={t.themes.builderViewDesktop}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-[10.5px] font-medium transition ${viewMode === "desktop" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
                     >
-                      <Monitor className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.builderViewDesktop}</span>
+                      <Monitor className="w-3 h-3" /> <span className="hidden xl:inline">{t.themes.builderViewDesktop}</span>
                     </button>
                     <button
                       onClick={() => setViewMode("mobile")}
-                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${viewMode === "mobile" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                      title={t.themes.builderViewMobile}
+                      className={`flex items-center gap-1 px-2 py-1 rounded text-[10.5px] font-medium transition ${viewMode === "mobile" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
                     >
-                      <Smartphone className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.builderViewMobile}</span>
+                      <Smartphone className="w-3 h-3" /> <span className="hidden xl:inline">{t.themes.builderViewMobile}</span>
                     </button>
                   </div>
-                  {/* Zoom-Regler */}
-                  <div className="flex items-center gap-1.5 ml-auto min-w-0" title={t.themes.editorZoom}>
+                  {/* Fast-Vollbild-Vorschau */}
+                  <button
+                    onClick={() => setFullPreviewOpen(true)}
+                    title={t.themes.editorFullPreviewHint}
+                    className="shrink-0 flex items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                  >
+                    <Maximize2 className="w-3 h-3" style={{ color: ACCENT }} />
+                    <span className="hidden xl:inline">{t.themes.editorFullPreview}</span>
+                  </button>
+                  {/* Zoom-Regler — der Slider ist das EINZIGE flexible Element
+                      der Zeile (flex-1 + min-w), damit die Toolbar auch in der
+                      schmalen lg-Spalte (~272px) nie überläuft. */}
+                  <div className="flex items-center gap-1 ml-auto flex-1 min-w-0 justify-end" title={t.themes.editorZoom}>
                     <button
                       onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
                       disabled={zoom <= 0.5}
-                      className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-white disabled:opacity-25 transition"
-                      aria-label="Zoom −"
+                      className="shrink-0 p-1 rounded text-zinc-400 hover:text-white disabled:opacity-25 transition"
+                      aria-label={`${t.themes.editorZoom} −`}
                     >
-                      <ZoomOut className="w-4 h-4" />
+                      <ZoomOut className="w-3.5 h-3.5" />
                     </button>
                     <input
                       type="range"
@@ -763,21 +785,21 @@ export default function ThemeEditorPage() {
                       step={5}
                       value={Math.round(zoom * 100)}
                       onChange={(e) => setZoom(Number(e.target.value) / 100)}
-                      className="w-[90px] sm:w-[150px] xl:w-[200px] accent-[#95BF47] cursor-pointer"
+                      className="flex-1 min-w-[36px] max-w-[170px] accent-[#95BF47] cursor-pointer"
                       aria-label={t.themes.editorZoom}
                     />
                     <button
                       onClick={() => setZoom((z) => Math.min(2, Math.round((z + 0.1) * 10) / 10))}
                       disabled={zoom >= 2}
-                      className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-white disabled:opacity-25 transition"
-                      aria-label="Zoom +"
+                      className="shrink-0 p-1 rounded text-zinc-400 hover:text-white disabled:opacity-25 transition"
+                      aria-label={`${t.themes.editorZoom} +`}
                     >
-                      <ZoomIn className="w-4 h-4" />
+                      <ZoomIn className="w-3.5 h-3.5" />
                     </button>
                     <button
                       onClick={() => setZoom(1)}
                       title={t.themes.editorZoomReset}
-                      className="shrink-0 w-[42px] text-right text-[11px] font-semibold tabular-nums text-zinc-300 hover:text-white transition"
+                      className="shrink-0 w-[38px] text-right text-[10.5px] font-semibold tabular-nums text-zinc-300 hover:text-white transition"
                     >
                       {Math.round(zoom * 100)}%
                     </button>
@@ -863,6 +885,25 @@ export default function ThemeEditorPage() {
             empty: t.themes.editorDesignsEmpty,
             saved: t.themes.editorDesignCopied,
           }}
+        />
+      )}
+
+      {/* Fast-Vollbild-Vorschau — Website groß ansehen, ohne zu bearbeiten */}
+      {previewData && (
+        <FullPreviewOverlay
+          open={fullPreviewOpen}
+          onClose={() => setFullPreviewOpen(false)}
+          data={previewData}
+          doc={doc}
+          sections={currentSections}
+          page={page}
+          label={page === "home" ? t.themes.builderPageHome : t.themes.builderPageProduct}
+          initialViewMode={viewMode}
+          viewDesktop={t.themes.builderViewDesktop}
+          viewMobile={t.themes.builderViewMobile}
+          zoomResetTitle={t.themes.editorZoomReset}
+          zoomLabel={t.themes.editorZoom}
+          closeLabel={t.themes.editorClose}
         />
       )}
 

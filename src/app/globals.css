@@ -8,9 +8,17 @@
 input,
 textarea,
 select,
-button,
 [contenteditable="true"] {
   font-size: 16px;
+}
+
+/* Buttons lösen den iOS-Zoom nur auf Touch-Geräten aus — auf Tablet/Desktop
+   dürfen die Tailwind text-*-Utilities wieder greifen (diese un-layered Regel
+   würde sie sonst überall überschreiben und alle Buttons auf 16px aufblasen). */
+@media (max-width: 767.98px) {
+  button {
+    font-size: 16px;
+  }
 }
 
 @media (min-width: 768px) {
