@@ -113,10 +113,12 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
-  buyboxCfg = {}, gallery, page = "product", previewBlock, spacing = 15,
+  buyboxCfg = {}, gallery, page = "product", previewBlock, spacing = 15, zoom = 1,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
   radius: number; loading: boolean; label: string; viewMode?: "desktop" | "mobile";
+  /** Zoom-Faktor auf die Einpass-Skalierung (0.5–2); >1 scrollt horizontal. */
+  zoom?: number;
   hiddenSections?: string[]; sectionHeadings?: Record<string, string>;
   buyboxOrder?: string[]; hiddenBlocks?: string[];
   shadow?: number; border?: number; iconStyle?: string; benefitIcons?: string[]; spacing?: number;
@@ -150,17 +152,19 @@ export default function ThemePreview({
 
   // Feste „Gerätebreite" (Desktop 1080px / Handy 390px) und passgenaue Skalierung
   // in die Vorschau-Spalte — so hängt das Layout NICHT an der Viewport-Breite,
-  // sondern zeigt echt, wie es auf PC bzw. Handy aussieht.
+  // sondern zeigt echt, wie es auf PC bzw. Handy aussieht. Der Zoom-Regler
+  // multipliziert die Einpass-Skalierung; bei Überbreite scrollt pm-outer.
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ scale: 1, height: 0 });
   const targetW = viewMode === "mobile" ? 390 : 1080;
+  const zoomClamped = Math.max(0.5, Math.min(2, typeof zoom === "number" && Number.isFinite(zoom) ? zoom : 1));
   useLayoutEffect(() => {
     const outer = outerRef.current, canvas = canvasRef.current;
     if (!outer || !canvas) return;
     const compute = () => {
       const cw = outer.clientWidth;
-      const scale = Math.min(1, cw / targetW);
+      const scale = Math.min(1, cw / targetW) * zoomClamped;
       setBox({ scale, height: canvas.offsetHeight * scale });
     };
     compute();
@@ -168,7 +172,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
+  }, [targetW, zoomClamped, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -734,7 +738,8 @@ export default function ThemePreview({
           <div className="pm-info">{renderBlock(previewBlock)}</div>
         </div>
       ) : (
-      <div ref={outerRef} className="pm-outer" style={{ height: box.height || undefined }}>
+      <div ref={outerRef} className="pm-outer">
+      <div className="pm-frame" style={{ width: Math.round(targetW * box.scale) || undefined, height: box.height || undefined }}>
       <div ref={canvasRef} className={`pm-canvas pm-${viewMode} pm-ic-${iconStyle}`} style={{ width: targetW, transform: `scale(${box.scale})` }}>
       <div className="pm-bar">
         <div className="pm-dots"><span /><span /><span /></div>
@@ -897,6 +902,7 @@ export default function ThemePreview({
       )}
       </div>
       </div>
+      </div>
       )}
     </div>
   );
@@ -915,7 +921,8 @@ function InsertBar({ onClick }: { onClick: () => void }) {
 
 const CSS = `
 .pm-root{width:100%}
-.pm-outer{position:relative;overflow:hidden;width:100%}
+.pm-outer{position:relative;overflow-x:auto;overflow-y:hidden;width:100%;-webkit-overflow-scrolling:touch}
+.pm-frame{position:relative;margin:0 auto;overflow:hidden;border-radius:12px}
 .pm-canvas{position:absolute;top:0;left:0;transform-origin:top left;border:1px solid rgba(0,0,0,.08);border-radius:12px;overflow:hidden;background:#fbfbfc;box-shadow:0 16px 46px -24px rgba(0,0,0,.55)}
 .pm-canvas,.pm-canvas *,.pm-canvas *::before,.pm-canvas *::after{box-sizing:border-box}
 .pm-bar{display:flex;align-items:center;gap:12px;padding:7px 12px;background:#f2f2f4;border-bottom:1px solid rgba(0,0,0,.06)}

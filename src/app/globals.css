@@ -740,3 +740,8 @@ html.theme-light [data-section="admin"] * {
   color: revert !important;
   border-color: revert !important;
 }
+
+/* Horizontale Aktions-Reihen (z. B. Theme-Editor-Toolbar mobil): scrollbar
+   unsichtbar, Inhalt bleibt per Wisch erreichbar. */
+.no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }

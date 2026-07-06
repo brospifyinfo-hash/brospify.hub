@@ -13,7 +13,8 @@ import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
   Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
-  Star, AlignLeft, Image as ImageIcon, Info, GripVertical, type LucideIcon,
+  Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
+  SlidersHorizontal, ZoomIn, ZoomOut, type LucideIcon,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -74,7 +75,7 @@ function RailSectionRow({
       dragControls={controls}
       whileDrag={{ scale: 1.02, zIndex: 30, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
       transition={{ duration: 0.16 }}
-      className={`list-none flex items-center gap-1 rounded-md border px-1 py-1 ${
+      className={`list-none flex items-center gap-1 rounded-md border px-1 py-2 lg:py-1 ${
         on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
       }`}
     >
@@ -82,15 +83,15 @@ function RailSectionRow({
         onPointerDown={(e) => controls.start(e)}
         title={dragTitle}
         style={{ touchAction: "none" }}
-        className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0"
+        className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0 p-1 -m-1 lg:p-0 lg:m-0"
       >
-        <GripVertical className="w-3 h-3" />
+        <GripVertical className="w-3.5 h-3.5 lg:w-3 lg:h-3" />
       </span>
       <Ico className={`w-3.5 h-3.5 shrink-0 ${on ? "text-[#95BF47]" : "text-zinc-500"}`} />
       <button onClick={onClick} className="min-w-0 flex-1 text-left">
-        <span className="block text-[12px] font-medium text-white truncate leading-tight">{name}</span>
+        <span className="block text-[13px] lg:text-[12px] font-medium text-white truncate leading-tight">{name}</span>
       </button>
-      <span className="text-[9px] text-zinc-600 shrink-0 truncate max-w-[62px]">{presetText}</span>
+      <span className="text-[10px] lg:text-[9px] text-zinc-600 shrink-0 truncate max-w-[80px] lg:max-w-[62px]">{presetText}</span>
     </Reorder.Item>
   );
 }
@@ -110,9 +111,11 @@ export default function ThemeEditorPage() {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [page, setPage] = useState<EditorPage>("product");
   const [selected, setSelected] = useState<string | null>(null);
-  // Mobil: nur EIN Panel (Aufbau ODER Einstellungen) unter der Vorschau
-  // zeigen — auf dem Desktop stehen beide nebeneinander (Umschalter versteckt).
-  const [mobileTab, setMobileTab] = useState<"aufbau" | "einstellungen">("aufbau");
+  // Mobil: genau EIN Bereich sichtbar (Vorschau ODER Aufbau ODER Einstellungen),
+  // umgeschaltet über eine sticky 3-Tab-Leiste — Desktop zeigt alles nebeneinander.
+  const [mobileTab, setMobileTab] = useState<"vorschau" | "aufbau" | "einstellungen">("vorschau");
+  // Vorschau-Zoom (Regler): multipliziert die Einpass-Skalierung (50–200 %).
+  const [zoom, setZoom] = useState(1);
   const [libraryAt, setLibraryAt] = useState<number | null>(null);
   const [styleOpen, setStyleOpen] = useState(false);
   const [buyboxGalleryOpen, setBuyboxGalleryOpen] = useState(false);
@@ -375,119 +378,207 @@ export default function ThemeEditorPage() {
   return (
     <>
       <Navigation />
-      <main className="min-h-screen bg-mesh font-sf">
-        <div className="mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 max-w-5xl lg:max-w-none xl:max-w-[1840px]">
+      <main className={`min-h-screen bg-mesh font-sf ${showPicker ? "" : "lg:min-h-0"}`}>
+        {/* Im Editor-Modus (Desktop) wird die Seite zur App-Shell: exakt Viewport-
+            Höhe, nichts scrollt außen — Leisten & Vorschau scrollen INTERN und
+            reichen dadurch immer bis ganz unten. Mobil: normaler Fluss + Platz
+            für die untere Navigations-Leiste. */}
+        <div className={`mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 pb-24 md:pb-6 max-w-5xl lg:max-w-none xl:max-w-[1840px] ${
+          showPicker ? "" : "lg:h-[calc(100vh-56px)] lg:flex lg:flex-col lg:overflow-hidden lg:py-4"
+        }`}>
 
-          {/* ── Top-Bar (edle Glas-Toolbar) ── */}
-          <div className="glass-strong rounded-2xl border border-white/[0.08] px-2.5 py-2 mb-4 flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => router.push("/themes")}
-              className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.editorBack}</span>
-            </button>
-            <div className="flex items-center gap-1.5 text-[13px] font-bold text-white">
-              <Sparkles className="w-4 h-4" style={{ color: ACCENT }} />
-              {t.themes.editorTitle}
+          {/* ── Top-Bar (edle Glas-Toolbar) ──
+              Desktop: EINE Zeile, die nie umbricht (Labels blenden stufenweise
+              aus, Produkt-Chip schrumpft). Mobil: zwei feste, aufgeräumte
+              Reihen — Reihe 1 Navigation/Undo, Reihe 2 Aktionen (scrollt
+              horizontal statt untereinander zu stapeln). */}
+          <div className="glass-strong rounded-2xl border border-white/[0.08] px-2.5 py-2 mb-3 lg:mb-4 shrink-0">
+
+            {/* Desktop-Zeile */}
+            <div className="hidden lg:flex items-center gap-2 flex-nowrap min-w-0">
+              <button
+                onClick={() => router.push("/themes")}
+                title={t.themes.editorBack}
+                className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" /> <span className="hidden 2xl:inline">{t.themes.editorBack}</span>
+              </button>
+              <div className="shrink-0 flex items-center gap-1.5 text-[13px] font-bold text-white">
+                <Sparkles className="w-4 h-4" style={{ color: ACCENT }} />
+                <span className="hidden xl:inline">{t.themes.editorTitle}</span>
+              </div>
+
+              {activeProduct && (
+                <button
+                  onClick={() => setPickerOpen(true)}
+                  className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2.5 py-1.5 hover:border-[#95BF47]/40 transition min-w-0 shrink"
+                  title={t.themes.editorChangeProduct}
+                >
+                  {activeProduct.bildUrl
+                    ? <img src={activeProduct.bildUrl} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
+                    : <span className="w-7 h-7 rounded-md bg-white/[0.06] shrink-0" />}
+                  <span className="text-[12px] font-medium text-white truncate max-w-[240px]">{activeProduct.titel}</span>
+                  <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                </button>
+              )}
+
+              <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                {/* Gesamt-Stil jederzeit änderbar */}
+                {doc.productId && (
+                  <button
+                    onClick={() => setStyleOpen(true)}
+                    title={t.themes.editorStyleGallery}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                  >
+                    <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                    <span className="hidden xl:inline">{t.themes.editorStyleGallery}</span>
+                    <span className="text-[10.5px] text-zinc-500 hidden 2xl:inline">· {getThemeStyle(doc.global.styleId).label}</span>
+                  </button>
+                )}
+                {/* Design-Speicherstände (mit Sync-Codes) */}
+                {doc.productId && (
+                  <button
+                    onClick={() => setDesignsOpen(true)}
+                    title={t.themes.editorDesigns}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                  >
+                    <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                    <span className="hidden xl:inline">{t.themes.editorDesigns}</span>
+                    {activeDesign && <span className="text-[10.5px] text-zinc-500 hidden 2xl:inline truncate max-w-[110px]">· {activeDesign.name}</span>}
+                  </button>
+                )}
+                {/* Undo / Redo */}
+                <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                  <button
+                    onClick={() => dispatch({ type: "undo" })}
+                    disabled={!state.past.length}
+                    title={`${t.themes.editorUndo} (Ctrl+Z)`}
+                    className="px-2 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => dispatch({ type: "redo" })}
+                    disabled={!state.future.length}
+                    title={`${t.themes.editorRedo} (Ctrl+Shift+Z)`}
+                    className="px-2 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
+                  >
+                    <Redo2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <button
+                  onClick={handleDownload}
+                  disabled={building || !doc.productId}
+                  className="btn-deploy flex items-center gap-1.5 px-3.5 py-2 text-[12.5px] disabled:opacity-50 whitespace-nowrap"
+                >
+                  {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
+                  <span>{building ? t.themes.builderBuilding : "Download"}</span>
+                </button>
+                {/* Design live in installierte Shops pushen (Sync-Code, kostenlos) */}
+                <button
+                  onClick={handleSyncUpdate}
+                  disabled={syncing || !doc.productId}
+                  title={t.themes.editorSyncHint}
+                  className="flex items-center gap-1.5 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 px-3 py-2 text-[12px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition whitespace-nowrap"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+                  <span className="hidden xl:inline">{t.themes.editorSyncUpdate}</span>
+                </button>
+              </div>
             </div>
 
-            {activeProduct && (
-              <button
-                onClick={() => setPickerOpen(true)}
-                className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2.5 py-1.5 hover:border-[#95BF47]/40 transition min-w-0"
-                title={t.themes.editorChangeProduct}
-              >
-                {activeProduct.bildUrl
-                  ? <img src={activeProduct.bildUrl} alt="" className="w-7 h-7 rounded-md object-cover shrink-0" />
-                  : <span className="w-7 h-7 rounded-md bg-white/[0.06] shrink-0" />}
-                <span className="text-[12px] font-medium text-white truncate max-w-[140px] sm:max-w-[240px]">{activeProduct.titel}</span>
-                <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
-              </button>
-            )}
+            {/* Mobil/Tablet: 2 Reihen */}
+            <div className="lg:hidden space-y-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <button
+                  onClick={() => router.push("/themes")}
+                  title={t.themes.editorBack}
+                  className="shrink-0 flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] w-9 h-9 text-zinc-300 hover:text-white transition"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                </button>
+                {activeProduct ? (
+                  <button
+                    onClick={() => setPickerOpen(true)}
+                    className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 hover:border-[#95BF47]/40 transition"
+                    title={t.themes.editorChangeProduct}
+                  >
+                    {activeProduct.bildUrl
+                      ? <img src={activeProduct.bildUrl} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />
+                      : <span className="w-6 h-6 rounded-md bg-white/[0.06] shrink-0" />}
+                    <span className="text-[12px] font-medium text-white truncate min-w-0 flex-1 text-left">{activeProduct.titel}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-zinc-500 shrink-0" />
+                  </button>
+                ) : (
+                  <div className="flex-1 min-w-0 flex items-center gap-1.5 text-[13px] font-bold text-white">
+                    <Sparkles className="w-4 h-4 shrink-0" style={{ color: ACCENT }} />
+                    <span className="truncate">{t.themes.editorTitle}</span>
+                  </div>
+                )}
+                <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+                  <button
+                    onClick={() => dispatch({ type: "undo" })}
+                    disabled={!state.past.length}
+                    title={t.themes.editorUndo}
+                    className="px-2.5 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
+                  >
+                    <Undo2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => dispatch({ type: "redo" })}
+                    disabled={!state.future.length}
+                    title={t.themes.editorRedo}
+                    className="px-2.5 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
+                  >
+                    <Redo2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
 
-            <div className="flex items-center gap-1.5 ml-auto">
-              {/* Gesamt-Stil jederzeit änderbar */}
               {doc.productId && (
-                <button
-                  onClick={() => setStyleOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
-                >
-                  <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-                  <span className="hidden sm:inline">{t.themes.editorStyleGallery}</span>
-                  <span className="text-[10.5px] text-zinc-500 hidden md:inline">· {getThemeStyle(doc.global.styleId).label}</span>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <button
+                      onClick={() => setStyleOpen(true)}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap"
+                    >
+                      <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                      {t.themes.editorStyleGallery}
+                    </button>
+                    <button
+                      onClick={() => setDesignsOpen(true)}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap"
+                    >
+                      <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                      {t.themes.editorDesigns}
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleDownload}
+                    disabled={building}
+                    className="shrink-0 btn-deploy flex items-center gap-1.5 px-3 py-2 text-[12px] disabled:opacity-50 whitespace-nowrap"
+                  >
+                    {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
+                    <span>Download</span>
+                  </button>
+                  <button
+                    onClick={handleSyncUpdate}
+                    disabled={syncing}
+                    title={t.themes.editorSyncUpdate}
+                    className="shrink-0 self-stretch flex items-center justify-center rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 w-10 text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
+                  </button>
+                </div>
               )}
-              {/* Design-Speicherstände (mit Sync-Codes) */}
-              {doc.productId && (
-                <button
-                  onClick={() => setDesignsOpen(true)}
-                  className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
-                >
-                  <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-                  <span className="hidden sm:inline">{t.themes.editorDesigns}</span>
-                  {activeDesign && <span className="text-[10.5px] text-zinc-500 hidden md:inline truncate max-w-[110px]">· {activeDesign.name}</span>}
-                </button>
-              )}
-              {/* Undo / Redo */}
-              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
-                <button
-                  onClick={() => dispatch({ type: "undo" })}
-                  disabled={!state.past.length}
-                  title={`${t.themes.editorUndo} (Ctrl+Z)`}
-                  className="px-2 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
-                >
-                  <Undo2 className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => dispatch({ type: "redo" })}
-                  disabled={!state.future.length}
-                  title={`${t.themes.editorRedo} (Ctrl+Shift+Z)`}
-                  className="px-2 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
-                >
-                  <Redo2 className="w-4 h-4" />
-                </button>
-              </div>
-              {/* PC / Handy */}
-              <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
-                <button
-                  onClick={() => setViewMode("desktop")}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${viewMode === "desktop" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
-                >
-                  <Monitor className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.builderViewDesktop}</span>
-                </button>
-                <button
-                  onClick={() => setViewMode("mobile")}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${viewMode === "mobile" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
-                >
-                  <Smartphone className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.builderViewMobile}</span>
-                </button>
-              </div>
-              <button
-                onClick={handleDownload}
-                disabled={building || !doc.productId}
-                className="btn-deploy flex items-center gap-1.5 px-3.5 sm:px-4 py-2 text-[12.5px] disabled:opacity-50"
-              >
-                {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
-                <span>{building ? t.themes.builderBuilding : "Download"}</span>
-              </button>
-              {/* Design live in installierte Shops pushen (Sync-Code, kostenlos) */}
-              <button
-                onClick={handleSyncUpdate}
-                disabled={syncing || !doc.productId}
-                title={t.themes.editorSyncHint}
-                className="flex items-center gap-1.5 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 px-3 py-2 text-[12px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-                <span className="hidden sm:inline">{t.themes.editorSyncUpdate}</span>
-              </button>
             </div>
           </div>
 
           {msg && (
-            <p className={`mb-3 text-[12px] ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>{msg.text}</p>
+            <p className={`mb-3 text-[12px] shrink-0 ${msg.kind === "ok" ? "text-[#cfe9a3]" : "text-amber-300/90"}`}>{msg.text}</p>
           )}
           {!msg && cost !== null && cost > 0 && !showPicker && (
-            <p className="mb-3 text-[11.5px] text-zinc-500">{t.themes.editorFreeNote.replace("{n}", String(cost))}</p>
+            <p className="mb-3 text-[11.5px] text-zinc-500 shrink-0 hidden sm:block">{t.themes.editorFreeNote.replace("{n}", String(cost))}</p>
           )}
 
           {/* ── Schritt 1: Produkt-Bilder-Grid ── */}
@@ -545,33 +636,39 @@ export default function ThemeEditorPage() {
             </div>
           ) : (
             /* ── Split-Pane-Editor ── */
-            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_364px] xl:grid-cols-[320px_minmax(0,1fr)_384px] lg:gap-5 lg:items-start">
+            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_364px] xl:grid-cols-[320px_minmax(0,1fr)_384px] lg:grid-rows-[minmax(0,1fr)] lg:gap-5 lg:items-stretch lg:flex-1 lg:min-h-0">
 
-              {/* Mobil-Umschalter: Aufbau ↔ Einstellungen (Desktop versteckt) */}
-              <div className="order-2 lg:hidden mb-3">
-                <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
-                  {([["aufbau", t.themes.editorStructure], ["einstellungen", t.themes.editorSettings]] as const).map(([tab, label]) => (
+              {/* Mobil: sticky 3-Tab-Leiste (Vorschau · Aufbau · Einstellungen) —
+                  klebt unter der App-Navigation, damit man jederzeit umschalten
+                  kann, ohne nach oben zu scrollen. */}
+              <div className="order-1 lg:hidden sticky top-12 md:top-14 z-30 pt-1.5 pb-2.5 mb-1">
+                <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/10 glass-strong p-1 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.7)]">
+                  {([
+                    ["vorschau", t.themes.editorTabPreview, Eye],
+                    ["aufbau", t.themes.editorTabStructure, Layers],
+                    ["einstellungen", t.themes.editorSettings, SlidersHorizontal],
+                  ] as const).map(([tab, label, Ico]) => (
                     <button
                       key={tab}
                       onClick={() => setMobileTab(tab)}
-                      className={`px-3 py-2.5 rounded-lg text-[12.5px] font-semibold transition ${mobileTab === tab ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-300 hover:text-white"}`}
+                      className={`flex items-center justify-center gap-1.5 px-1 py-2.5 rounded-lg text-[12px] font-semibold transition ${mobileTab === tab ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-300 hover:text-white"}`}
                     >
-                      {label}
+                      <Ico className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">{label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Aufbau (links) */}
-              <aside className={`order-3 lg:order-1 lg:sticky lg:top-4 mb-4 lg:mb-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:block`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:max-h-[calc(100vh-120px)] lg:overflow-y-auto">
+              {/* Aufbau (links) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
+              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
                   <div className="flex rounded-md border border-white/10 bg-black/25 p-0.5 mb-2">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
                       <button
                         key={p}
                         onClick={() => { setPage(p); setSelected(null); }}
-                        className={`flex-1 px-2 py-1.5 rounded text-[11px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
+                        className={`flex-1 px-2 py-2 lg:py-1.5 rounded text-[12px] lg:text-[11px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
                       >
                         {l}
                       </button>
@@ -584,14 +681,14 @@ export default function ThemeEditorPage() {
                   {page === "product" && (
                   <button
                     onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
-                    className={`w-full flex items-center gap-2 rounded-md border px-2 py-1.5 mb-1 transition ${
+                    className={`w-full flex items-center gap-2 rounded-md border px-2 py-2.5 lg:py-1.5 mb-1 transition ${
                       selected === "__buybox" || selected?.startsWith("blk:")
                         ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
                         : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
                     }`}
                   >
                     <ShoppingCart className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
-                    <span className="text-[12px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorBuybox}</span>
+                    <span className="text-[13px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorBuybox}</span>
                     <span className="text-[9.5px] text-zinc-500 shrink-0">{doc.buybox.order.length}</span>
                   </button>
                   )}
@@ -623,44 +720,101 @@ export default function ThemeEditorPage() {
                   )}
                   <button
                     onClick={() => setLibraryAt(currentSections.length)}
-                    className="w-full mt-1.5 flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[11.5px] font-semibold px-3 py-1.5 transition"
+                    className="w-full mt-1.5 flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[12.5px] lg:text-[11.5px] font-semibold px-3 py-2.5 lg:py-1.5 transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> {t.themes.editorAddSection}
                   </button>
                 </div>
               </aside>
 
-              {/* Live-Vorschau (Mitte) */}
-              <div className="order-1 lg:order-2 mb-4 lg:mb-0 lg:sticky lg:top-4" onClick={() => setSelected(null)}>
-                <ThemePreview
-                  data={previewData}
-                  colors={doc.global.colors}
-                  headingFont={doc.global.headingFont}
-                  bodyFont={doc.global.bodyFont}
-                  radius={doc.global.radius}
-                  loading={previewLoading}
-                  label={page === "home" ? t.themes.builderPageHome : t.themes.builderPageProduct}
-                  viewMode={viewMode}
-                  buyboxOrder={doc.buybox.order}
-                  hiddenBlocks={doc.buybox.hidden}
-                  shadow={doc.global.design.shadow}
-                  border={doc.global.design.border}
-                  iconStyle={doc.global.design.iconStyle}
-                  benefitIcons={doc.buybox.benefitIcons}
-                  buyboxCfg={doc.buybox.blocks}
-                  gallery={doc.buybox.gallery}
-                  spacing={doc.buybox.spacing}
-                  docSections={currentSections}
-                  page={page}
-                  selectedUid={selected}
-                  onSelectSection={(uid) => setSelected(uid)}
-                  onInsertAt={(i) => setLibraryAt(i)}
-                />
+              {/* Live-Vorschau (Mitte) — mit eigener Toolbar: PC/Handy-Umschalter
+                  + Zoom-Regler. Desktop: volle Höhe, Vorschau scrollt intern. */}
+              <div className={`order-2 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "vorschau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+                <div className="glass-strong rounded-xl border border-white/[0.08] px-2 py-1.5 mb-2 lg:mb-3 flex items-center gap-2 shrink-0">
+                  {/* PC / Handy */}
+                  <div className="inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5 shrink-0">
+                    <button
+                      onClick={() => setViewMode("desktop")}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${viewMode === "desktop" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                    >
+                      <Monitor className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.builderViewDesktop}</span>
+                    </button>
+                    <button
+                      onClick={() => setViewMode("mobile")}
+                      className={`flex items-center gap-1 px-2.5 py-1.5 rounded-md text-[11px] font-medium transition ${viewMode === "mobile" ? "bg-white/12 text-white" : "text-zinc-400 hover:text-white"}`}
+                    >
+                      <Smartphone className="w-3.5 h-3.5" /> <span className="hidden sm:inline">{t.themes.builderViewMobile}</span>
+                    </button>
+                  </div>
+                  {/* Zoom-Regler */}
+                  <div className="flex items-center gap-1.5 ml-auto min-w-0" title={t.themes.editorZoom}>
+                    <button
+                      onClick={() => setZoom((z) => Math.max(0.5, Math.round((z - 0.1) * 10) / 10))}
+                      disabled={zoom <= 0.5}
+                      className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-white disabled:opacity-25 transition"
+                      aria-label="Zoom −"
+                    >
+                      <ZoomOut className="w-4 h-4" />
+                    </button>
+                    <input
+                      type="range"
+                      min={50}
+                      max={200}
+                      step={5}
+                      value={Math.round(zoom * 100)}
+                      onChange={(e) => setZoom(Number(e.target.value) / 100)}
+                      className="w-[90px] sm:w-[150px] xl:w-[200px] accent-[#95BF47] cursor-pointer"
+                      aria-label={t.themes.editorZoom}
+                    />
+                    <button
+                      onClick={() => setZoom((z) => Math.min(2, Math.round((z + 0.1) * 10) / 10))}
+                      disabled={zoom >= 2}
+                      className="shrink-0 p-1.5 rounded-md text-zinc-400 hover:text-white disabled:opacity-25 transition"
+                      aria-label="Zoom +"
+                    >
+                      <ZoomIn className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setZoom(1)}
+                      title={t.themes.editorZoomReset}
+                      className="shrink-0 w-[42px] text-right text-[11px] font-semibold tabular-nums text-zinc-300 hover:text-white transition"
+                    >
+                      {Math.round(zoom * 100)}%
+                    </button>
+                  </div>
+                </div>
+                <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto" onClick={() => setSelected(null)}>
+                  <ThemePreview
+                    data={previewData}
+                    colors={doc.global.colors}
+                    headingFont={doc.global.headingFont}
+                    bodyFont={doc.global.bodyFont}
+                    radius={doc.global.radius}
+                    loading={previewLoading}
+                    label={page === "home" ? t.themes.builderPageHome : t.themes.builderPageProduct}
+                    viewMode={viewMode}
+                    zoom={zoom}
+                    buyboxOrder={doc.buybox.order}
+                    hiddenBlocks={doc.buybox.hidden}
+                    shadow={doc.global.design.shadow}
+                    border={doc.global.design.border}
+                    iconStyle={doc.global.design.iconStyle}
+                    benefitIcons={doc.buybox.benefitIcons}
+                    buyboxCfg={doc.buybox.blocks}
+                    gallery={doc.buybox.gallery}
+                    spacing={doc.buybox.spacing}
+                    docSections={currentSections}
+                    page={page}
+                    selectedUid={selected}
+                    onSelectSection={(uid) => setSelected(uid)}
+                    onInsertAt={(i) => setLibraryAt(i)}
+                  />
+                </div>
               </div>
 
-              {/* Inspector (rechts) */}
-              <aside ref={inspectorRef} className={`order-4 lg:order-3 lg:sticky lg:top-4 scroll-mt-4 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:block`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:max-h-[calc(100vh-104px)] lg:overflow-y-auto">
+              {/* Inspector (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
+              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col`}>
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}
