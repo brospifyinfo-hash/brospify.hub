@@ -164,6 +164,28 @@ export const BUYBOX_CSS = `
 .bspx-sp-txt strong{font-weight:800}
 .bspx-sp-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.25);animation:bspx-pulse 1.6s ease-in-out infinite}
 
+.bspx-cdt{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;margin:0 0 16px}
+.bspx-cdt-label{font-size:12.5px;font-weight:700}
+.bspx-cdt-boxes{display:flex;gap:8px}
+.bspx-cdt-cell{position:relative;min-width:46px;padding:9px 6px 15px;border-radius:min(var(--bx-r),12px);color:#fff;font-family:var(--bx-h);font-weight:800;font-size:20px;line-height:1}
+.bspx-cdt-cell b{font-weight:800}
+.bspx-cdt-cell em{position:absolute;left:0;right:0;bottom:4px;font-style:normal;font-weight:600;font-size:8.5px;opacity:.85;text-transform:uppercase;letter-spacing:.06em}
+
+.bspx-press{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center;margin:0 0 16px}
+.bspx-press--strip{background:rgba(0,0,0,.04);border-radius:min(var(--bx-r),12px);padding:13px 10px}
+.bspx-press-h{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+.bspx-press-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px 20px}
+.bspx-press-item{font-family:var(--bx-h);font-weight:800;font-size:15px;letter-spacing:.04em;opacity:.72;text-transform:uppercase}
+.bspx-press--accent .bspx-press-item{color:var(--bx-accent);opacity:1}
+
+.bspx-spec{display:flex;flex-direction:column;margin:0 0 16px;font-size:13px}
+.bspx-spec--card{border:var(--bx-bd) solid rgba(0,0,0,.12);border-radius:min(var(--bx-r),14px);padding:4px 14px;background:rgba(0,0,0,.015)}
+.bspx-spec-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.1)}
+.bspx-spec--compact .bspx-spec-row{padding:5px 0;border-bottom:none}
+.bspx-spec-row:last-child{border-bottom:none}
+.bspx-spec-l{font-weight:500;opacity:.6}
+.bspx-spec-v{font-weight:700;text-align:right}
+
 .bspx-cta-sub{display:flex;align-items:center;justify-content:center;gap:6px;font-size:11.5px;font-weight:600;opacity:.6;margin-top:9px}
 
 .bspx-gift{display:flex;align-items:center;gap:13px;margin:0 0 16px;border:var(--bx-bd) solid;border-radius:min(var(--bx-r),16px);padding:13px 15px;background:rgba(0,0,0,.015)}

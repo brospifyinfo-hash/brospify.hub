@@ -673,6 +673,68 @@
         wrap.appendChild(el("span", "bspx-sp-dot"));
         return wrap;
       },
+      countdown_timer: function (b) {
+        var col = b.s.color || "#e0332f";
+        var hours = Math.max(1, Math.min(72, Number(b.s.hours) || 12));
+        var wrap = el("div", "bspx-cdt");
+        wrap.appendChild(el("span", "bspx-cdt-label", "⏰ " + (b.t.text || "Angebot endet in")));
+        var boxes = el("div", "bspx-cdt-boxes");
+        var names = ["Std", "Min", "Sek"];
+        var cells = [];
+        for (var i = 0; i < 3; i++) {
+          var cell = el("span", "bspx-cdt-cell");
+          cell.style.background = col;
+          var b2 = el("b", "", "00");
+          cell.appendChild(b2);
+          cell.appendChild(el("em", "", names[i]));
+          boxes.appendChild(cell);
+          cells.push(b2);
+        }
+        wrap.appendChild(boxes);
+        // Ziel-Zeit stabil pro Browser (sonst neu ab jetzt + Stunden).
+        var key = "bspx_cd_" + hours;
+        var end;
+        try { end = parseInt(localStorage.getItem(key) || "", 10); } catch (e) {}
+        var now = Date.now();
+        if (!end || end < now) { end = now + hours * 3600000; try { localStorage.setItem(key, String(end)); } catch (e2) {} }
+        function pad(n) { return n < 10 ? "0" + n : "" + n; }
+        function tick() {
+          var d = Math.max(0, Math.floor((end - Date.now()) / 1000));
+          cells[0].textContent = pad(Math.floor(d / 3600));
+          cells[1].textContent = pad(Math.floor((d % 3600) / 60));
+          cells[2].textContent = pad(d % 60);
+        }
+        tick();
+        var iv = setInterval(function () {
+          if (!document.body.contains(wrap)) { clearInterval(iv); return; }
+          tick();
+        }, 1000);
+        return wrap;
+      },
+      press_bar: function (b) {
+        var wrap = el("div", "bspx-press bspx-press--" + (b.s.style || "plain"));
+        wrap.appendChild(el("span", "bspx-press-h", b.t.heading || "Bekannt aus"));
+        var row = el("div", "bspx-press-row");
+        [1, 2, 3, 4].forEach(function (n) {
+          var l = b.t["label_" + n];
+          if (!l) return;
+          row.appendChild(el("span", "bspx-press-item", l));
+        });
+        wrap.appendChild(row);
+        return wrap;
+      },
+      spec_list: function (b) {
+        var wrap = el("div", "bspx-spec bspx-spec--" + (b.s.style || "lines"));
+        [1, 2, 3].forEach(function (n) {
+          var l = b.t["label_" + n], val = b.t["value_" + n];
+          if (!l && !val) return;
+          var row = el("div", "bspx-spec-row");
+          row.appendChild(el("span", "bspx-spec-l", l || ""));
+          row.appendChild(el("span", "bspx-spec-v", val || ""));
+          wrap.appendChild(row);
+        });
+        return wrap;
+      },
       free_gift: function (b) {
         // Angebots-/Geschenk-Box (Text). Das eigentliche Gratis-Produkt legt
         // der Kunde in Shopify fest; hier zeigen wir den Reiz-Hinweis.

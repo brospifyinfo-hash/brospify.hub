@@ -56,6 +56,9 @@ export const BUYBOX_BLOCKS: BuyboxBlockDef[] = [
   { type: "collapsible_tab", label: "Aufklapp-Tab (Icon)" },
   { type: "complementary", label: "Passende Produkte" },
   { type: "share", label: "Teilen-Button" },
+  { type: "countdown_timer", label: "Countdown-Timer" },
+  { type: "press_bar", label: "Bekannt aus" },
+  { type: "spec_list", label: "Produkt-Daten" },
 ];
 
 // Fresh-Dokument-Standardreihenfolge (die etablierten 23 Bausteine). Die 5
@@ -75,6 +78,7 @@ export const BUYBOX_DEFAULT_ORDER = [
 // verfügbar (dort werden sie beim Compile einfach übersprungen).
 export const BUYBOX_RUNTIME_ONLY = new Set([
   "stock_bar", "trust_badges", "guarantee", "highlights", "social_proof",
+  "countdown_timer", "press_bar", "spec_list",
 ]);
 
 // ─── Metadaten je Baustein: Kategorie + Icon + Beschreibung (für die
@@ -108,6 +112,9 @@ export const BUYBOX_META: Record<string, BuyboxMeta> = {
   stock_bar: { category: "conversion", icon: "BatteryLow", label: "Lager-Balken", labelEn: "Stock bar", desc: "Dringlichkeit: nur-noch-X mit Balken.", descEn: "Urgency: \"Only X left\" with bar." },
   free_gift: { category: "conversion", icon: "Gift", label: "Gratis-Geschenk", labelEn: "Free gift", desc: "Geschenk-Auswahl im Warenkorb.", descEn: "Free-gift picker in cart." },
   social_proof: { category: "conversion", icon: "Users", label: "Social-Proof", labelEn: "Social proof", desc: "z. B. 12 sehen sich das gerade an.", descEn: "\"12 people viewing right now\"." },
+  countdown_timer: { category: "conversion", icon: "Clock", label: "Countdown-Timer", labelEn: "Countdown timer", desc: "Live-Countdown: Angebot endet in HH:MM:SS.", descEn: "Live countdown: offer ends in HH:MM:SS." },
+  press_bar: { category: "vertrauen", icon: "Award", label: "Bekannt aus", labelEn: "As seen in", desc: "Presse-/Autoritäts-Leiste mit Namen.", descEn: "Press/authority bar with names." },
+  spec_list: { category: "info", icon: "Table", label: "Produkt-Daten", labelEn: "Spec list", desc: "Eigenschaften als Bezeichnung/Wert-Zeilen.", descEn: "Attributes as label/value rows." },
   custom_rating: { category: "vertrauen", icon: "Star", label: "Sterne-Bewertung", labelEn: "Star rating", desc: "Sterne + Anzahl Bewertungen.", descEn: "Stars + review count." },
   benefits_list: { category: "vertrauen", icon: "ListChecks", label: "Vorteile-Liste", labelEn: "Benefits list", desc: "Bis 4 Vorteile mit Icon-Kreisen.", descEn: "Up to 4 benefits with icon circles." },
   trust_badges: { category: "vertrauen", icon: "ShieldCheck", label: "Vertrauens-Badges", labelEn: "Trust badges", desc: "Icon-Leiste: Versand, Rückgabe, sicher.", descEn: "Icon strip: shipping, returns, secure." },
@@ -130,11 +137,11 @@ export const BUYBOX_META: Record<string, BuyboxMeta> = {
 // Nur die AKTIVEN Bausteine werden hiernach sortiert; nicht Gelistetes hängt
 // ans Ende.
 export const BUYBOX_CANONICAL_ORDER = [
-  "sale_banner", "urgency_text", "custom_title", "custom_rating", "custom_price",
+  "sale_banner", "urgency_text", "countdown_timer", "custom_title", "custom_rating", "custom_price",
   "stock_bar", "stock_indicator", "variant_picker", "bundle_selector",
-  "quantity_selector", "buy_buttons", "payment_icons", "trust_badges",
+  "quantity_selector", "buy_buttons", "payment_icons", "trust_badges", "press_bar",
   "guarantee", "benefits_list", "highlights", "delivery_timeline", "free_gift",
-  "social_proof", "feature_box", "icon-with-text", "description", "text",
+  "social_proof", "feature_box", "icon-with-text", "spec_list", "description", "text",
   "custom_divider", "custom_accordion", "collapsible_tab", "complementary", "share",
 ];
 

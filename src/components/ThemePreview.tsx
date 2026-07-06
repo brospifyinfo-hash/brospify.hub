@@ -680,6 +680,45 @@ export default function ThemePreview({
           </div>
         );
       }
+      case "countdown_timer": {
+        const col = str(s.color, "#e0332f");
+        const cells: [string, string][] = [["05", "Std"], ["23", "Min"], ["14", "Sek"]];
+        return (
+          <div className="pm-cdt">
+            <span className="pm-cdt-label">⏰ {bt(type, "text", "Angebot endet in")}</span>
+            <div className="pm-cdt-boxes">
+              {cells.map(([d, l], i) => (
+                <span key={i} className="pm-cdt-cell" style={{ background: col }}><b>{d}</b><em>{l}</em></span>
+              ))}
+            </div>
+          </div>
+        );
+      }
+      case "press_bar": {
+        const style = str(s.style, "plain");
+        const labels = [1, 2, 3, 4].map((n) => bt(type, `label_${n}`, "")).filter(Boolean);
+        return (
+          <div className={`pm-press pm-press--${style}`}>
+            <span className="pm-press-h">{bt(type, "heading", "Bekannt aus")}</span>
+            <div className="pm-press-row">
+              {labels.map((l, i) => <span key={i} className="pm-press-item">{l}</span>)}
+            </div>
+          </div>
+        );
+      }
+      case "spec_list": {
+        const style = str(s.style, "lines");
+        const rows = [1, 2, 3]
+          .map((n) => ({ l: bt(type, `label_${n}`, ""), v: bt(type, `value_${n}`, "") }))
+          .filter((r) => r.l || r.v);
+        return (
+          <div className={`pm-spec pm-spec--${style}`}>
+            {rows.map((r, i) => (
+              <div key={i} className="pm-spec-row"><span className="pm-spec-l">{r.l}</span><span className="pm-spec-v">{r.v}</span></div>
+            ))}
+          </div>
+        );
+      }
       default:
         return null;
     }
@@ -1121,6 +1160,28 @@ const CSS = `
 .pm-sp-txt strong{font-weight:800}
 .pm-sp-dot{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:#22c55e;box-shadow:0 0 0 3px color-mix(in srgb,#22c55e 25%,transparent);animation:pm-pulse 1.6s ease-in-out infinite}
 @keyframes pm-pulse{50%{box-shadow:0 0 0 6px color-mix(in srgb,#22c55e 10%,transparent)}}
+
+.pm-cdt{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:16px;text-align:center}
+.pm-cdt-label{font-size:12.5px;font-weight:700}
+.pm-cdt-boxes{display:flex;gap:8px}
+.pm-cdt-cell{position:relative;min-width:46px;padding:9px 6px 15px;border-radius:min(var(--pv-r),12px);color:#fff;font-family:var(--pv-h);font-weight:800;font-size:20px;line-height:1}
+.pm-cdt-cell b{font-weight:800}
+.pm-cdt-cell em{position:absolute;left:0;right:0;bottom:4px;font-style:normal;font-weight:600;font-size:8.5px;opacity:.85;text-transform:uppercase;letter-spacing:.06em}
+
+.pm-press{display:flex;flex-direction:column;align-items:center;gap:8px;margin-bottom:16px;text-align:center}
+.pm-press--strip{background:color-mix(in srgb,var(--pv-text) 4%,var(--pv-bg));border-radius:min(var(--pv-r),12px);padding:13px 10px}
+.pm-press-h{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;opacity:.55}
+.pm-press-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:12px 20px}
+.pm-press-item{font-family:var(--pv-h);font-weight:800;font-size:15px;letter-spacing:.04em;opacity:.72;text-transform:uppercase}
+.pm-press--accent .pm-press-item{color:var(--pv-accent);opacity:1}
+
+.pm-spec{display:flex;flex-direction:column;margin-bottom:16px;font-size:13px}
+.pm-spec--card{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),14px);padding:4px 14px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
+.pm-spec-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent)}
+.pm-spec--compact .pm-spec-row{padding:5px 0;border-bottom:none}
+.pm-spec-row:last-child{border-bottom:none}
+.pm-spec-l{font-weight:500;opacity:.6}
+.pm-spec-v{font-weight:700;text-align:right}
 .pm-gift2{display:flex;align-items:center;gap:13px;margin-bottom:16px;border:var(--pv-bd) solid;border-radius:min(var(--pv-r),16px);padding:13px 15px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
 .pm-gift2-ic{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
 .pm-gift2-txt{min-width:0}

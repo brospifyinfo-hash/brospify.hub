@@ -883,6 +883,46 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
       { id: "trend", label: "Im Trend", labelEn: "Trending", hint: "Flammen-Icon", settings: { style: "trending", accent: "@accent" } },
     ],
   },
+  {
+    type: "countdown_timer",
+    fields: [{ id: "text", label: "Hinweis-Text", labelEn: "Label", kind: "text", target: { key: "text" }, def: "Angebot endet in" }],
+    presets: [
+      { id: "dringend", label: "Dringend", labelEn: "Urgent", hint: "Rote Kacheln, 8 Std", settings: { color: "#e0332f", hours: 8 } },
+      { id: "akzent", label: "Akzent", labelEn: "Accent", hint: "In deiner Akzentfarbe, 12 Std", settings: { color: "@accent", hours: 12 } },
+      { id: "dezent", label: "Dezent", labelEn: "Subtle", hint: "Warmes Orange, 24 Std", settings: { color: "#f0a020", hours: 24 } },
+    ],
+  },
+  {
+    type: "press_bar",
+    fields: [
+      { id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Bekannt aus" },
+      { id: "label_1", label: "Logo/Name 1", labelEn: "Logo/Name 1", kind: "text", target: { key: "label_1" }, def: "PRESSE" },
+      { id: "label_2", label: "Logo/Name 2", labelEn: "Logo/Name 2", kind: "text", target: { key: "label_2" }, def: "BLOG" },
+      { id: "label_3", label: "Logo/Name 3", labelEn: "Logo/Name 3", kind: "text", target: { key: "label_3" }, def: "TV" },
+      { id: "label_4", label: "Logo/Name 4", labelEn: "Logo/Name 4", kind: "text", target: { key: "label_4" }, def: "PODCAST" },
+    ],
+    presets: [
+      { id: "schlicht", label: "Schlicht", labelEn: "Plain", hint: "Nur Namen, zentriert", settings: { style: "plain", accent: "@accent" } },
+      { id: "streifen", label: "Streifen", labelEn: "Strip", hint: "Getönter Balken", settings: { style: "strip", accent: "@accent" } },
+      { id: "akzent", label: "Akzent", labelEn: "Accent", hint: "Namen in Akzentfarbe", settings: { style: "accent", accent: "@accent" } },
+    ],
+  },
+  {
+    type: "spec_list",
+    fields: [
+      { id: "label_1", label: "Zeile 1 — Bezeichnung", labelEn: "Row 1 — label", kind: "text", target: { key: "label_1" }, def: "Material" },
+      { id: "value_1", label: "Zeile 1 — Wert", labelEn: "Row 1 — value", kind: "text", target: { key: "value_1" }, def: "Premium-Qualität" },
+      { id: "label_2", label: "Zeile 2 — Bezeichnung", labelEn: "Row 2 — label", kind: "text", target: { key: "label_2" }, def: "Größe" },
+      { id: "value_2", label: "Zeile 2 — Wert", labelEn: "Row 2 — value", kind: "text", target: { key: "value_2" }, def: "Universal" },
+      { id: "label_3", label: "Zeile 3 — Bezeichnung", labelEn: "Row 3 — label", kind: "text", target: { key: "label_3" }, def: "Versand" },
+      { id: "value_3", label: "Zeile 3 — Wert", labelEn: "Row 3 — value", kind: "text", target: { key: "value_3" }, def: "1–3 Werktage" },
+    ],
+    presets: [
+      { id: "linien", label: "Linien", labelEn: "Lines", hint: "Zeilen mit Trennlinie", settings: { style: "lines", accent: "@accent" } },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Dicht, ohne Linien", settings: { style: "compact", accent: "@accent" } },
+      { id: "karte", label: "Karte", labelEn: "Card", hint: "In umrandeter Box", settings: { style: "card", accent: "@accent" } },
+    ],
+  },
 ];
 
 export function getBuyboxLib(type: string): BuyboxBlockLib | undefined {
