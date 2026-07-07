@@ -31,7 +31,7 @@ import {
   type BaseSectionInfo,
 } from "@/lib/theme-library";
 import { THEME_STYLES, getThemeStyle } from "@/lib/theme-styles";
-import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
+import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY, sortBuyboxOrder } from "@/lib/theme-sections";
 import { resolveIconId } from "@/lib/theme-icon-resolver";
 import { EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 
@@ -484,9 +484,10 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
         const prev = doc.buybox.blocks[op.blockType] || { presetId: "", texts: {} };
         return { ...doc, buybox: { ...doc.buybox, blocks: { ...doc.buybox.blocks, [op.blockType]: { ...prev, presetId: op.presetId } } } };
       }
-      const order = [...doc.buybox.order];
-      const at = typeof op.position === "number" ? Math.max(0, Math.min(order.length, op.position)) : order.length;
-      order.splice(at, 0, op.blockType);
+      // Position kommt NICHT von der AI: neue Bausteine landen immer an ihrem
+      // Platz im Funnel-Kanon (Conversion über dem Kaufen-Button, Vertrauen/
+      // Versand/Details darunter) — nie wieder Quatsch-Anordnungen.
+      const order = sortBuyboxOrder([...doc.buybox.order, op.blockType]);
       const blocks = op.presetId
         ? { ...doc.buybox.blocks, [op.blockType]: { ...(doc.buybox.blocks[op.blockType] || { presetId: "", texts: {} }), presetId: op.presetId } }
         : doc.buybox.blocks;
@@ -506,14 +507,14 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
         },
       };
     case "reorder_buybox": {
-      // Gewünschte Reihenfolge auf die AKTIVEN Bausteine abbilden: erst die
-      // genannten (in Wunsch-Reihenfolge, dedupliziert), dann der Rest.
+      // Die AI bestimmt nur noch, WELCHE Bausteine sie anspricht — die
+      // Reihenfolge wird IMMER aufs bewährte Funnel-Muster gesnappt
+      // (sortBuyboxOrder): Dringlichkeit/Titel/Bewertung/Preis ÜBER dem
+      // Kaufen-Button, Zahlarten/Vorteile/Versand/Details DARUNTER.
       const active = new Set(doc.buybox.order);
-      const seen = new Set<string>();
-      const wanted = op.order.filter((t) => active.has(t) && !seen.has(t) && (seen.add(t), true));
-      const rest = doc.buybox.order.filter((t) => !seen.has(t));
-      if (!wanted.length) return doc;
-      return { ...doc, buybox: { ...doc.buybox, order: [...wanted, ...rest] } };
+      const wanted = op.order.some((t) => active.has(t));
+      if (!wanted) return doc;
+      return { ...doc, buybox: { ...doc.buybox, order: sortBuyboxOrder(doc.buybox.order) } };
     }
     case "set_block_preset": {
       const prev = doc.buybox.blocks[op.blockType] || { presetId: "", texts: {} };

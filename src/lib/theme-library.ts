@@ -2197,15 +2197,45 @@ export function sortCompositionByFunnel(entries: CompositionEntry[]): Compositio
  * dazu — das Ergebnis folgt IMMER dem Verkaufs-Funnel (Vielfalt ohne Chaos).
  * `rnd` ist injizierbar (Client-Events: Math.random).
  */
+// Rollengleiche Alternativen für den Vielfalts-Tausch: gleiche Funnel-Stufe,
+// gleicher Zweck — nur ein anderes Gesicht. Nur Typen mit generischen
+// Inhalten (keine Kollektions-/Video-Bindung).
+const ROLE_SWAP_POOLS: string[][] = [
+  ["bro-icon-benefits", "bro-benefit-cards", "bro-feature-grid"],
+  ["reviews2", "bro-chat-reviews", "bro-spotlight", "reviews"],
+  ["qanda", "bro-compare", "bro-problem-solution"],
+  ["image-with-text", "bro-callouts", "bro-image-cards"],
+  ["bro-logo-badges", "trustpilot"],
+];
+
 export function shuffleComposition(styleId: string, rnd: () => number = Math.random): CompositionEntry[] {
   const base = STYLE_COMPOSITIONS[styleId] || FALLBACK_COMPOSITION;
   const head = base.slice(0, 1);
-  const middle = base.slice(1);
+  const middle = base.slice(1).map((e) => ({ ...e }));
   for (let i = middle.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [middle[i], middle[j]] = [middle[j], middle[i]];
   }
   const used = new Set(base.map((e) => e.type));
+  // 1–2 Sections gegen ROLLENGLEICHE Alternativen tauschen — dadurch sehen
+  // zwei Produkte im selben Stil wirklich unterschiedlich aus (nicht nur
+  // andere Reihenfolge). Ton-Marker (settings) wandern mit.
+  let swaps = 0;
+  for (const entry of middle) {
+    if (swaps >= 2) break;
+    const pool = ROLE_SWAP_POOLS.find((p) => p.includes(entry.type));
+    if (!pool || rnd() >= 0.45) continue;
+    const candidates = pool.filter((t) => t !== entry.type && !used.has(t));
+    if (!candidates.length) continue;
+    const nextType = candidates[Math.floor(rnd() * candidates.length)];
+    const def = getSectionDef(nextType);
+    if (!def?.presets.length) continue;
+    used.delete(entry.type);
+    used.add(nextType);
+    entry.type = nextType;
+    entry.presetId = def.presets[Math.floor(rnd() * def.presets.length)].id;
+    swaps++;
+  }
   const pool = (STYLE_COMPOSITION_EXTRAS[styleId] || []).filter((e) => !used.has(e.type));
   const take = pool.length ? 1 + Math.floor(rnd() * Math.min(2, pool.length)) : 0;
   for (let k = 0; k < take; k++) {
@@ -2219,6 +2249,22 @@ export function shuffleComposition(styleId: string, rnd: () => number = Math.ran
 }
 
 const FALLBACK_COMPOSITION: CompositionEntry[] = STYLE_COMPOSITIONS.modern;
+
+/** Deterministischer PRNG (mulberry32) aus einem String-Seed — Client und
+ *  Server erzeugen für dasselbe Produkt+Stil exakt dieselbe Komposition. */
+export function seededRnd(seed: string): () => number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < seed.length; i++) {
+    h = Math.imul(h ^ seed.charCodeAt(i), 16777619);
+  }
+  return () => {
+    h = (h + 0x6d2b79f5) >>> 0;
+    let t = h;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 /** Basis-Section der Theme-Basis (id + Typ), vom Preview-Endpoint geliefert. */
 export interface BaseSectionInfo {
@@ -2272,10 +2318,13 @@ export function buildInitialDocument(
   const used = new Set<string>();
   // Komposition immer durch den Verkaufs-Funnel normalisieren (Anker bleibt) —
   // egal ob Stil-Default, Shuffle-Variante oder ältere Overrides.
+  // OHNE Override: pro Produkt+Stil deterministisch „gewürfelt" (Seed) —
+  // zwei Produkte im selben Stil sehen nie identisch aus, aber dasselbe
+  // Produkt baut immer dasselbe Dokument (Client/Server-Parität für AI-Ops).
   const composition = sortCompositionByFunnel(
     compositionOverride?.length
       ? compositionOverride
-      : STYLE_COMPOSITIONS[style.id] || FALLBACK_COMPOSITION,
+      : shuffleComposition(style.id, seededRnd(`${productId}|${style.id}`)),
   );
   const sections: SectionInstance[] = [];
   // Formen-Rhythmus: getönte Sections OHNE explizite Übergangs-Marker bekommen

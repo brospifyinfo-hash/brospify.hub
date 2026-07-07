@@ -995,8 +995,8 @@ export const REPLICA_CSS = `
 .te-frame{position:relative;overflow:hidden}
 .te-frame-pad{position:relative;z-index:1;padding:34px 26px}
 .te-frame-fade{position:absolute;left:0;right:0;height:72px;pointer-events:none;z-index:2}
-.te-frame-divider{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:44px;display:block;z-index:2}
-.te-frame-divider-top{position:absolute;left:0;right:0;top:-1px;width:100%;height:44px;display:block;z-index:2}
+.te-frame-divider{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:32px;display:block;z-index:2}
+.te-frame-divider-top{position:absolute;left:0;right:0;top:-1px;width:100%;height:32px;display:block;z-index:2}
 
 /* ── Icon-Band ── */
 .te-ib{padding:30px 8px}

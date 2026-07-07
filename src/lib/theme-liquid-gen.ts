@@ -34,13 +34,13 @@ export function buildFrameSnippet(): string {
 </style>
 ${liquidCase("fs.sec_divider_top", "bspx_dtop", DIVIDER_TOP_PATHS)}
 {%- if bspx_dtop != blank -%}
-<svg viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;top:-1px;width:100%;height:44px;display:block;z-index:2;pointer-events:none"><path d="{{ bspx_dtop }}" fill="{{ bspx_pagebg }}"/></svg>
+<svg viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;top:-1px;width:100%;height:32px;display:block;z-index:2;pointer-events:none"><path d="{{ bspx_dtop }}" fill="{{ bspx_pagebg }}"/></svg>
 {%- elsif fs.sec_fade == 'top' or fs.sec_fade == 'both' -%}
 <span aria-hidden="true" style="position:absolute;left:0;right:0;top:0;height:72px;z-index:2;pointer-events:none;background:linear-gradient(180deg, {{ bspx_pagebg }} 0%, rgba(255,255,255,0) 100%)"></span>
 {%- endif -%}
 ${liquidCase("fs.sec_divider", "bspx_dbot", DIVIDER_PATHS)}
 {%- if bspx_dbot != blank -%}
-<svg viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:-1px;width:100%;height:44px;display:block;z-index:2;pointer-events:none"><path d="{{ bspx_dbot }}" fill="{{ bspx_pagebg }}"/></svg>
+<svg viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:-1px;width:100%;height:32px;display:block;z-index:2;pointer-events:none"><path d="{{ bspx_dbot }}" fill="{{ bspx_pagebg }}"/></svg>
 {%- elsif fs.sec_fade == 'bottom' or fs.sec_fade == 'both' -%}
 <span aria-hidden="true" style="position:absolute;left:0;right:0;bottom:0;height:72px;z-index:2;pointer-events:none;background:linear-gradient(0deg, {{ bspx_pagebg }} 0%, rgba(255,255,255,0) 100%)"></span>
 {%- endif -%}
