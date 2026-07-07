@@ -2,14 +2,16 @@
 
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
-import { getIcon, DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import { getIconAny } from "@/lib/theme-icon-resolver";
 import type { SectionInstance, BlockConfig, GalleryConfig } from "@/lib/theme-doc";
 import { resolveBlockSettings, getBuyboxLib, getGalleryPreset } from "@/lib/theme-library";
+import { fontStack, GOOGLE_FONTS_ALL } from "@/lib/theme-fonts";
 import SectionReplica, { REPLICA_CSS } from "@/components/theme-editor/SectionReplica";
 
 // Rendert ein Bibliotheks-Icon als SVG (currentColor).
 function BIcon({ id }: { id: string }) {
-  const ic = getIcon(id);
+  const ic = getIconAny(id);
   return (
     <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       {ic.paths.map((d, i) => <path key={i} d={d} />)}
@@ -67,15 +69,7 @@ export interface PreviewData {
 
 export interface ThemeColors { button: string; buttonText: string; background: string; text: string; accent: string }
 
-const FONT_FAMILY: Record<string, string> = {
-  work_sans_n4: "'Work Sans'", poppins_n4: "'Poppins'", montserrat_n4: "'Montserrat'",
-  inter_n4: "'Inter'", roboto_n4: "'Roboto'", lato_n4: "'Lato'", nunito_n4: "'Nunito'",
-  raleway_n4: "'Raleway'", dmsans_n4: "'DM Sans'", assistant_n4: "'Assistant'",
-  oswald_n4: "'Oswald'", bebas_neue_n4: "'Bebas Neue'", playfair_n4: "'Playfair Display'",
-  merriweather_n4: "'Merriweather'", acme_n4: "'Acme'",
-};
-const GOOGLE_ALL =
-  "https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;600;800&family=Poppins:wght@400;600;800&family=Montserrat:wght@400;600;800&family=Inter:wght@400;600;800&family=Roboto:wght@400;500;700&family=Lato:wght@400;700;900&family=Nunito:wght@400;600;800&family=Raleway:wght@400;600;800&family=DM+Sans:wght@400;600;700&family=Assistant:wght@400;600;800&family=Oswald:wght@400;600;700&family=Bebas+Neue&family=Playfair+Display:wght@400;600;800&family=Merriweather:wght@400;700;900&family=Acme&display=swap";
+const GOOGLE_ALL = GOOGLE_FONTS_ALL;
 function ensureFonts() {
   if (typeof document === "undefined" || document.getElementById("tpv-allfonts")) return;
   const link = document.createElement("link");
@@ -177,8 +171,8 @@ export default function ThemePreview({
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
     "--pv-btnText": colors.buttonText, "--pv-accent": colors.accent,
-    "--pv-h": `${FONT_FAMILY[headingFont] || "'Work Sans'"}, sans-serif`,
-    "--pv-b": `${FONT_FAMILY[bodyFont] || "'Work Sans'"}, sans-serif`,
+    "--pv-h": fontStack(headingFont),
+    "--pv-b": fontStack(bodyFont),
     "--pv-r": `${Math.max(0, radius)}px`,
     "--pv-shadow": ["none", "0 4px 14px -8px rgba(0,0,0,.16)", "0 12px 30px -10px rgba(0,0,0,.26)"][Math.max(0, Math.min(2, shadow))],
     "--pv-bd": `${Math.max(1, Math.min(3, border))}px`,
@@ -564,9 +558,12 @@ export default function ThemePreview({
       case "icon-with-text": {
         const vertical = str(s.layout, "horizontal") === "vertical";
         const iconMap: Record<string, string> = { truck: "truck", return: "rotate", lock: "lock", heart: "heart", leaf: "leaf", star: "star" };
+        // Fallbacks je Position wie im Shop (buybox-plan: truck/rotate/lock) —
+        // ohne Preset zeigen Vorschau und Shop dieselben Icons.
+        const iwFallback = ["truck", "rotate", "lock"];
         const items = [1, 2, 3].map((n) => ({
           heading: bt(type, `heading_${n}`, ""),
-          icon: iconMap[str(s[`icon_${n}`], "")] || "check",
+          icon: iconMap[str(s[`icon_${n}`], "")] || iwFallback[n - 1],
         }));
         return (
           <div className={`pm-iwt ${vertical ? "pm-iwt-v" : ""}`}>

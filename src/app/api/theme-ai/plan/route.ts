@@ -1,17 +1,25 @@
 // ─── POST /api/theme-ai/plan — AI Co-Pilot: Plan erstellen ──────────
-// Nimmt {document, prompt, images?, paletteHints?, productTitle?, lang?}
-// und liefert einen bestätigungspflichtigen Plan: Schritte + validierte
-// Operationen + Aufwands-Stufe + Credit-Kosten. Der Plan selbst kostet
-// KEINE Credits (Abzug erst bei /api/theme-ai/apply) — gegen Dauerfeuer
-// gibt es ein Rate-Limit + Mindest-Guthaben-Check.
+// Nimmt {document, prompt, images?, paletteHints?, productTitle?, lang?,
+// mode?} und liefert einen bestätigungspflichtigen Plan: Schritte +
+// validierte Operationen + Aufwands-Stufe + Credit-Kosten + signierten
+// planToken (bindet mode/imageCount an die apply-Route — Kosten-Integrität).
+// Der Plan selbst kostet KEINE Credits (Abzug erst bei /api/theme-ai/apply)
+// — gegen Dauerfeuer gibt es ein Rate-Limit + Mindest-Guthaben-Check.
+// KOSTEN-SPARER: identische Anfragen (gleicher Nutzer/Wunsch/Dokument/Modus,
+// ohne Bilder) werden 10 Minuten lang aus dem Plan-Cache bedient — ein
+// erneuter Klick auf „Plan erstellen" kostet dann keinen Claude-Call.
+// Gecacht wird NUR ein Plan, der die Validierung überstanden hat (sonst
+// würde ein 422 zehn Minuten lang festhängen).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { findKundeByKey, getCreditsState } from "@/lib/sheets";
 import { getCreditCost } from "@/lib/credit-config-server";
 import { isValidDocument } from "@/lib/theme-compile";
-import { generateThemePlan, type ThemeAiImage } from "@/lib/theme-ai";
-import { validateAiOps, aiEffortPoints, aiEffortTier, AI_TIER_KEYS } from "@/lib/theme-ai-ops";
+import { generateThemePlan, normalizeAiMode, type ThemeAiImage, type ThemeAiRawPlan } from "@/lib/theme-ai";
+import { getLearnHints } from "@/lib/theme-ai-learn";
+import { signPlanToken } from "@/lib/theme-ai-token";
+import { validateAiOps, aiEffortPoints, aiEffortTier, aiTierCreditKey } from "@/lib/theme-ai-ops";
 import type { ThemeDocument } from "@/lib/theme-doc";
 
 export const runtime = "nodejs";
@@ -32,6 +40,36 @@ function rateLimited(user: string): boolean {
   return false;
 }
 
+// Plan-Cache (Lambda-lokal): identische Anfrage → gleicher Roh-Plan, ohne
+// erneuten Claude-Call. Nur ohne Bilder (Bild-Bytes hashen lohnt nicht).
+const PLAN_CACHE_TTL_MS = 10 * 60 * 1000;
+const PLAN_CACHE_MAX = 40;
+const planCache = new Map<string, { at: number; raw: ThemeAiRawPlan }>();
+function hashStr(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(36);
+}
+function planCacheGet(key: string): ThemeAiRawPlan | null {
+  const hit = planCache.get(key);
+  if (!hit) return null;
+  if (Date.now() - hit.at > PLAN_CACHE_TTL_MS) {
+    planCache.delete(key);
+    return null;
+  }
+  return hit.raw;
+}
+function planCacheSet(key: string, raw: ThemeAiRawPlan): void {
+  planCache.set(key, { at: Date.now(), raw });
+  if (planCache.size > PLAN_CACHE_MAX) {
+    const oldest = [...planCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+    if (oldest) planCache.delete(oldest[0]);
+  }
+}
+
 const DATA_URL_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
 const MAX_IMAGE_B64 = 6_000_000; // ~4,5 MB pro Bild
 
@@ -42,6 +80,8 @@ interface Body {
   paletteHints?: string[];
   productTitle?: string;
   lang?: string;
+  /** "standard" (Sonnet, günstig) | "expert" (Opus, mehr Credits). */
+  mode?: string;
   /** Section-Typen der Theme-Basis (Editor-Manifest) — hält Validierung/Kosten
    *  deckungsgleich mit dem, was der Client wirklich anwenden kann. */
   capabilities?: string[];
@@ -67,6 +107,7 @@ export async function POST(req: NextRequest) {
   const doc = body.document && isValidDocument(body.document) ? body.document : null;
   if (!doc) return NextResponse.json({ error: "Ungültiges Theme-Dokument." }, { status: 400 });
 
+  const mode = normalizeAiMode(body.mode);
   const prompt = typeof body.prompt === "string" ? body.prompt.trim().slice(0, 2000) : "";
   const images: ThemeAiImage[] = [];
   if (Array.isArray(body.images)) {
@@ -83,15 +124,16 @@ export async function POST(req: NextRequest) {
   const paletteHints = Array.isArray(body.paletteHints)
     ? body.paletteHints.filter((h): h is string => typeof h === "string" && /^#[0-9a-fA-F]{6}$/.test(h)).slice(0, 8)
     : [];
+  const productTitle = typeof body.productTitle === "string" ? body.productTitle.slice(0, 200) : "";
 
-  // Mindest-Guthaben: wer die kleinste Stufe nicht zahlen könnte, bekommt
-  // auch keinen (für uns kostenpflichtigen) Plan.
+  // Mindest-Guthaben: wer die kleinste Stufe (des gewählten Modus) nicht
+  // zahlen könnte, bekommt auch keinen (für uns kostenpflichtigen) Plan.
   const user = session.isAdmin ? "admin" : session.lizenzschluessel || "";
   if (!session.isAdmin) {
     if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
     const kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
-    const minCost = await getCreditCost("THEME_AI_SMALL");
+    const minCost = await getCreditCost(aiTierCreditKey("small", mode));
     const balance = getCreditsState(kunde.profile).balance;
     if (minCost > 0 && balance < minCost) {
       return NextResponse.json(
@@ -100,24 +142,40 @@ export async function POST(req: NextRequest) {
       );
     }
   }
-  if (rateLimited(user)) {
-    return NextResponse.json({ error: "Zu viele Anfragen — warte kurz und versuch es erneut." }, { status: 429 });
-  }
 
-  let raw;
-  try {
-    raw = await generateThemePlan({
-      doc,
-      prompt,
-      images,
-      paletteHints,
-      productTitle: typeof body.productTitle === "string" ? body.productTitle.slice(0, 200) : "",
-      lang: body.lang === "en" ? "en" : "de",
-    });
-  } catch (err) {
-    console.error("[theme-ai] plan failed:", err);
-    const msg = err instanceof Error ? err.message : "Plan konnte nicht erstellt werden.";
-    return NextResponse.json({ error: msg }, { status: 502 });
+  // Lern-Hinweise VOR dem Cache-Key laden (sie fließen in den Prompt ein).
+  const learnHints = productTitle ? await getLearnHints(productTitle) : null;
+
+  // Cache-Key über ALLE prompt-relevanten Eingaben (inkl. paletteHints);
+  // Trenner = Unit Separator (U+001F), damit Feldgrenzen eindeutig bleiben.
+  const cacheKey = images.length
+    ? null
+    : hashStr(
+        [user, mode, body.lang || "de", prompt, productTitle, paletteHints.join(","), learnHints || "", JSON.stringify(doc)].join("\u001f"),
+      );
+  let raw = cacheKey ? planCacheGet(cacheKey) : null;
+  const fromCache = !!raw;
+
+  if (!raw) {
+    if (rateLimited(user)) {
+      return NextResponse.json({ error: "Zu viele Anfragen — warte kurz und versuch es erneut." }, { status: 429 });
+    }
+    try {
+      raw = await generateThemePlan({
+        doc,
+        prompt,
+        images,
+        paletteHints,
+        productTitle,
+        lang: body.lang === "en" ? "en" : "de",
+        mode,
+        learnHints: learnHints || undefined,
+      });
+    } catch (err) {
+      console.error("[theme-ai] plan failed:", err);
+      const msg = err instanceof Error ? err.message : "Plan konnte nicht erstellt werden.";
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
   }
 
   // LLM-Ops → texts-Array in Record umformen, dann STRIKT validieren.
@@ -133,15 +191,18 @@ export async function POST(req: NextRequest) {
   });
   const ops = validateAiOps(normalized, doc, cleanCapabilities(body.capabilities));
   if (!ops.length) {
+    // Bewusst NICHT cachen: ein Retry soll einen frischen Claude-Versuch
+    // bekommen (LLM ist nichtdeterministisch — der nächste Plan kann klappen).
     return NextResponse.json(
       { error: "Dazu hat die AI keine umsetzbaren Änderungen gefunden — formuliere den Wunsch etwas konkreter.", summary: raw.summary },
       { status: 422 },
     );
   }
+  if (cacheKey && !fromCache) planCacheSet(cacheKey, raw);
 
   const points = aiEffortPoints(ops, images.length);
   const tier = aiEffortTier(points);
-  const cost = session.isAdmin ? 0 : await getCreditCost(AI_TIER_KEYS[tier]);
+  const cost = session.isAdmin ? 0 : await getCreditCost(aiTierCreditKey(tier, mode));
 
   return NextResponse.json(
     {
@@ -149,9 +210,13 @@ export async function POST(req: NextRequest) {
       steps: raw.steps,
       ops,
       tier,
+      mode,
       cost,
       imageCount: images.length,
       dropped: Math.max(0, raw.operations.length - ops.length),
+      fromCache,
+      // Signiert (user, mode, imageCount, ops) — Pflicht für /apply.
+      planToken: signPlanToken(user, mode, images.length, ops),
     },
     { headers: { "Cache-Control": "no-store" } },
   );

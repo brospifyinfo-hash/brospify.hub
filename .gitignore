@@ -40,6 +40,8 @@ yarn-error.log*
 !package-lock.json
 !tsconfig.json
 !vercel.json
+# Lucide-Suchbegriffe für den Icon-Katalog-Generator (kein Secret)
+!scripts/lucide-tags.json
 
 # vercel
 .vercel

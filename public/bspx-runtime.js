@@ -626,7 +626,9 @@
       },
       "icon-with-text": function (b) {
         var n = el("div", "bspx-iconrow" + (b.s.layout === "vertical" ? " vertical" : ""));
-        var icons = [TL_ICONS.truck, ["M12 21a9 9 0 1 0-9-9", "M3 12l3-3", "M3 12l3 3"], ["M5 11h14v9H5z", "M8 11V8a4 4 0 0 1 8 0v3"]];
+        // Icon-Pfade kommen aufgelöst aus dem Plan (b.icons) — Fallback nur
+        // für alte gecachte Pläne ohne icons-Feld.
+        var icons = (b.icons && b.icons.length >= 3) ? b.icons : [TL_ICONS.truck, ["M12 21a9 9 0 1 0-9-9", "M3 12l3-3", "M3 12l3 3"], ["M5 11h14v9H5z", "M8 11V8a4 4 0 0 1 8 0v3"]];
         [1, 2, 3].forEach(function (i) {
           var txt = b.t["heading_" + i] || "";
           if (!txt) return;

@@ -7,7 +7,7 @@ import {
   type ColorPalette,
 } from "@/lib/theme-placeholders";
 import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
-import { getIcon } from "@/lib/theme-icons";
+import { getIconAny } from "@/lib/theme-icon-resolver";
 import { COPY_BINDINGS } from "@/lib/theme-copy-bindings";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
 
@@ -205,8 +205,10 @@ export function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
   for (let i = 0; i < 4; i++) {
     const id = benefitIcons[i];
     if (!id) continue;
+    // Katalog-Icons (Lucide) haben keinen Legacy-Select-Wert → "check";
+    // der dynamische Buy-Box-Pfad rendert trotzdem die echten SVG-Pfade.
     bl.settings["icon_" + (i + 1)] = BENEFIT_ICON_SELECT[id] || "check";
-    bl.settings["emoji_" + (i + 1)] = getIcon(id).emoji;
+    bl.settings["emoji_" + (i + 1)] = getIconAny(id).emoji;
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

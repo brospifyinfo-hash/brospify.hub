@@ -30,6 +30,7 @@ import {
   findEntry,
 } from "@/lib/theme-inject";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
+import { ensureDesignSchema, setZipFile, buildFrameSnippet, buildIconSnippet, collectDocIconIds } from "@/lib/theme-liquid-gen";
 
 // ─────────────────────────────────────────────────────────────────
 // Compile-Engine v2: ThemeDocument → fertiges Shopify-Theme-ZIP.
@@ -714,6 +715,18 @@ export function compileDocumentZip(
   // 0) Schemas der Basis reparieren (leere Defaults → Shopify lehnt die
   // Section-Datei sonst beim Upload ab und die Templates kippen mit → 404).
   sanitizeSectionSchemas(zip);
+
+  // 0b) Design-Layer aktualisieren — MUSS vor sanitizeTemplateData laufen,
+  // sonst löscht der Select-Check neue Divider-Werte aus den Templates:
+  //  - Section-Schemas: neue Divider-Formen + sec_divider_top nachrüsten
+  //    (repariert auch ältere Admin-Upload-Basen),
+  //  - bspx-section-frame.liquid frisch generieren (gleiche Pfade wie die
+  //    Vorschau in theme-frame.ts),
+  //  - bspx-icon.liquid mit Basis-Icons + allen im Dokument benutzten
+  //    Katalog-Icons neu backen (nie der komplette 1700er-Katalog).
+  ensureDesignSchema(zip);
+  setZipFile(zip, "snippets/bspx-section-frame.liquid", buildFrameSnippet());
+  setZipFile(zip, "snippets/bspx-icon.liquid", buildIconSnippet(collectDocIconIds(doc)));
 
   // 1) templates/product.json — Struktur + Presets + Texte + Kaufbox.
   const productEntry = findEntry(zip, "templates/product.json");

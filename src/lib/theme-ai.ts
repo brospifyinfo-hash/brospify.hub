@@ -1,9 +1,20 @@
 // ─── AI Co-Pilot: Plan-Generierung (server-only) ────────────────────
-// Claude (Opus 4.8, Vision + Structured Output) bekommt das aktuelle
-// ThemeDocument, den Nutzerwunsch und optionale Produktbilder und liefert
-// einen PLAN: menschenlesbare Schritte + strukturierte Operationen aus der
-// Whitelist in theme-ai-ops. Die AI führt NIE selbst aus — der Nutzer
-// bestätigt den Plan, erst dann wendet der Editor die Ops an.
+// Claude (Vision + Structured Output) bekommt das aktuelle ThemeDocument,
+// den Nutzerwunsch und optionale Produktbilder und liefert einen PLAN:
+// menschenlesbare Schritte + strukturierte Operationen aus der Whitelist in
+// theme-ai-ops. Die AI führt NIE selbst aus — der Nutzer bestätigt zuerst.
+//
+// KOSTEN-ARCHITEKTUR (2026-07):
+//  - Zwei Modi: "standard" (Claude Sonnet 5 — günstig, Alltag) und
+//    "expert" (Claude Opus 4.8 — teurer, maximale Qualität).
+//  - Prompt-Caching: der große statische System-Prompt (Regeln + Katalog)
+//    trägt cache_control — Folge-Aufrufe innerhalb der TTL lesen ihn zu
+//    ~10 % des Input-Preises. Deshalb darf NICHTS Dynamisches in den
+//    System-Prompt (Produkt, Dokument, Lern-Hinweise → User-Content!).
+//  - Dokument-Kompaktierung: lange Texte werden für den Prompt gekürzt
+//    (die AI schreibt ohnehin neue) — spart je nach Doc 30–60 % Input.
+//  - Lern-Hinweise (theme-ai-learn): bewährte Muster früherer Läufe der
+//    gleichen Nische machen auch das Standard-Modell treffsicher.
 // Kosten werden im Provider-Ledger verbucht (recordUsd).
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -14,13 +25,25 @@ import {
   BUYBOX_LIBRARY,
   BUYBOX_CONTROLS,
   GALLERY_PRESETS,
+  SECTION_ROLES,
 } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
-import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
+import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY, BUYBOX_CANONICAL_ORDER } from "@/lib/theme-sections";
 import { THEME_ICONS } from "@/lib/theme-icons";
 import { EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 
-const MODEL = "claude-opus-4-8";
+// ─── Modell-Modi ────────────────────────────────────────────────────
+
+export type ThemeAiMode = "standard" | "expert";
+
+export const THEME_AI_MODELS: Record<ThemeAiMode, string> = {
+  standard: "claude-sonnet-5",
+  expert: "claude-opus-4-8",
+};
+
+export function normalizeAiMode(v: unknown): ThemeAiMode {
+  return v === "expert" ? "expert" : "standard";
+}
 
 export interface ThemeAiImage {
   /** image/png | image/jpeg | image/webp | image/gif */
@@ -37,6 +60,9 @@ export interface ThemeAiInput {
   paletteHints: string[];
   productTitle: string;
   lang: "de" | "en";
+  mode: ThemeAiMode;
+  /** Kompakter Wissens-Block aus früheren erfolgreichen Läufen (theme-ai-learn). */
+  learnHints?: string;
 }
 
 export interface ThemeAiRawPlan {
@@ -49,6 +75,8 @@ export interface ThemeAiRawPlan {
 // Alle Objekte mit additionalProperties:false (Pflicht bei json_schema);
 // die Ops-Items tragen ALLE möglichen Felder als optionale Properties —
 // die harte Validierung passiert danach in validateAiOps.
+
+const DIVIDER_ENUM = ["none", "wave", "waves", "zigzag", "slant", "curve", "peaks"];
 
 const OP_ITEM_SCHEMA: Record<string, unknown> = {
   type: "object",
@@ -98,8 +126,8 @@ const OP_ITEM_SCHEMA: Record<string, unknown> = {
     badge: { type: "string" },
     spacing: { type: "integer" },
     tone: { type: "string", enum: ["none", "tint", "soft", "wash", "deep"] },
-    fade: { type: "string", enum: ["none", "top", "bottom", "both"] },
-    divider: { type: "string", enum: ["none", "wave", "slant", "curve"] },
+    divider: { type: "string", enum: DIVIDER_ENUM },
+    dividerTop: { type: "string", enum: DIVIDER_ENUM },
     icons: { type: "array", items: { type: "string" } },
   },
 };
@@ -130,10 +158,11 @@ function buildCatalog(): string {
   if (catalogCache) return catalogCache;
   const styles = THEME_STYLES.map((s) => `${s.id} („${s.label}“ — ${s.hint})`).join(", ");
   const fonts = EDITOR_FONTS.map((f) => f.value).join(", ");
+  const roleOf = (t: string) => SECTION_ROLES[t] || "story";
   const sections = SECTION_LIBRARY.map((d) => {
     const presets = d.presets.map((p) => p.id).join("|");
     const fields = d.fields.map((f) => f.id).join(",") || "-";
-    return `  ${d.type} [${d.category}] „${d.label}“ · presets: ${presets} · textfelder: ${fields}`;
+    return `  ${d.type} [rolle:${roleOf(d.type)}] „${d.label}“ · presets: ${presets} · textfelder: ${fields}`;
   }).join("\n");
   const libByType = new Map(BUYBOX_LIBRARY.map((b) => [b.type, b]));
   const allBlocks = Array.from(new Set([...BUYBOX_DEFAULT_ORDER, ...BUYBOX_RUNTIME_ONLY]));
@@ -153,20 +182,24 @@ function buildCatalog(): string {
     `THEME-STILE (styleId): ${styles}`,
     `SCHRIFTEN (headingFont/bodyFont): ${fonts}`,
     `GALERIE-PRESETS (set_gallery.presetId): ${gallery}`,
-    `ICONS (für set_benefit_icons + icon_1..icon_4 bei Icon-Band/Callouts — wähle NISCHEN-PASSEND): ${icons}`,
-    `SECTIONS (add_section.type — nur diese Typen/Presets/Felder):\n${sections}`,
+    `BASIS-ICONS: ${icons}`,
+    `WEITERE ICONS: Du hast zusätzlich Zugriff auf ~1.700 Lucide-Icons. Nutze dafür einfach englische kebab-case-Begriffe als Icon-Wert (z. B. "dog", "heart-pulse", "washing-machine", "sun", "battery-charging") — das System löst sie automatisch auf das passende Icon auf. Wähle IMMER das nischen-spezifischste Icon (Hundebett → "dog", nicht "check").`,
+    `KAUFBOX-REIHENFOLGE (bewährtes Funnel-Muster für reorder_buybox): ${BUYBOX_CANONICAL_ORDER.join(" → ")}`,
+    `SECTIONS (add_section.type — nur diese Typen/Presets/Felder; rolle = Platz im Funnel):\n${sections}`,
     `KAUFBOX-BAUSTEINE (blockType — nur diese Typen/Presets/Felder/Settings):\n${blocks}`,
   ].join("\n\n");
   return catalogCache;
 }
 
 // ─── System-Prompt ──────────────────────────────────────────────────
+// WICHTIG: Der System-Prompt ist STATISCH (nur lang-abhängig) und wird per
+// cache_control gecacht — niemals Produkt-/Dokument-/Zeit-Daten einbauen!
 
 function buildSystem(lang: "de" | "en"): string {
   const answerLang = lang === "en" ? "Englisch" : "Deutsch";
   return `Du bist der AI Co-Pilot des Brospify Theme-Editors — ein Experte für hochkonvertierende Shopify-Dropshipping-Shops.
 
-Du bekommst das aktuelle Theme-Dokument (JSON), den Wunsch des Nutzers und optional Produktbilder. Du erstellst einen PLAN: verständliche Schritte + präzise Operationen. Du führst NICHTS selbst aus — der Nutzer bestätigt zuerst.
+Du bekommst das aktuelle Theme-Dokument (JSON, lange Texte gekürzt), den Wunsch des Nutzers und optional Produktbilder. Du erstellst einen PLAN: verständliche Schritte + präzise Operationen. Du führst NICHTS selbst aus — der Nutzer bestätigt zuerst.
 
 OPERATIONEN (Feld "op", nur diese):
 - set_style {styleId, mode:"design"|"full"} — Gesamt-Stil. "design"=nur Farben/Schriften/Design (Aufbau bleibt), "full"=Seiten werden nach Stil-Komposition NEU gebaut (nur bei ausdrücklichem Komplett-Umbau-Wunsch).
@@ -174,15 +207,15 @@ OPERATIONEN (Feld "op", nur diese):
 - set_fonts {headingFont?, bodyFont?} · set_radius {radius:0-40} · set_design {shadow?:0|1|2, border?:1|2, iconStyle?:"dark"|"accent"|"outline"}.
 - add_section {page:"product"|"home", type, presetId?, position?, texts?:[{field,value}], uid?:"new:1"} — uid als Platzhalter, um die neue Section in Folge-Ops zu referenzieren.
 - remove_section {uid} · move_section {uid, to} · set_section_preset {uid, presetId} · set_section_text {uid, field, value}.
-- set_section_tone {uid, tone:"none"|"tint"|"soft"|"wash"|"deep", fade?:"none"|"top"|"bottom"|"both", divider?:"none"|"wave"|"slant"|"curve"} — Hintergrund-Ton der Section, automatisch stimmig aus der Palette abgeleitet, mit weichem Übergang (fade) bzw. dekorativer Unterkante (divider).
-- set_section_setting {uid, key, value} — nur sec_bg/sec_bg2 (Hex), sec_fade, sec_divider, icon_1..icon_4 (Icon-IDs, bei Icon-Band/Callouts).
-- set_benefit_icons {icons:["id","id","id","id"]} — die 4 Icons der Kaufbox-Vorteile.
+- set_section_tone {uid, tone:"none"|"tint"|"soft"|"wash"|"deep", divider?, dividerTop?} — kräftiger Hintergrund-Ton der Section, automatisch stimmig aus der Palette abgeleitet. divider/dividerTop = Formen-Kante unten/oben: "none"|"wave"|"waves"|"zigzag"|"slant"|"curve"|"peaks".
+- set_section_setting {uid, key, value} — nur sec_bg/sec_bg2 (Hex), sec_divider, sec_divider_top, icon_1..icon_4 (Icon-ID oder englisches Keyword).
+- set_benefit_icons {icons:["id","id","id","id"]} — die 4 Icons der Kaufbox-Vorteile (IDs oder englische Keywords).
 - add_buybox_block {blockType, position?, presetId?} · remove_buybox_block {blockType} · reorder_buybox {order:[blockType,…]}.
 - set_block_preset {blockType, presetId} · set_block_text {blockType, field, value} · set_block_setting {blockType, key, value}.
 - set_gallery {presetId?, badge?} · set_buybox_spacing {spacing:4-40}.
 
 HARTE REGELN:
-1. Verwende AUSSCHLIESSLICH styleIds, Section-Typen, presetIds, Feld-IDs, blockTypes, Setting-Keys, Icon-IDs und Schriften aus dem Katalog unten. Nichts erfinden.
+1. Verwende AUSSCHLIESSLICH styleIds, Section-Typen, presetIds, Feld-IDs, blockTypes, Setting-Keys und Schriften aus dem Katalog unten. Icons dürfen zusätzlich freie englische Keywords sein.
 2. Section-uids nur aus dem Dokument übernehmen — neue Sections bekommen "new:1", "new:2", ….
 3. Farben immer als #rrggbb. Achte IMMER auf Kontrast: text lesbar auf background, buttonText lesbar auf button.
 4. Produktbild dabei + keine expliziten Farbwünsche? → Leite eine stimmige Palette aus dem Bild ab (accent = markante Produkt-/Markenfarbe; background hell und dezent, außer ein dunkler Look passt/ist gewünscht).
@@ -191,12 +224,14 @@ HARTE REGELN:
 7. Ist der Wunsch mit den verfügbaren Operationen nicht umsetzbar, liefere die nächstbeste sinnvolle Annäherung — operations darf nur leer sein, wenn wirklich gar nichts passt (das erklärst du dann in summary).
 
 ART-DIRECTION (so entsteht ein Ergebnis auf Agentur-Niveau — dein Anspruch bei JEDEM Plan):
-A. VOLLE SEITE statt Flickwerk: Bei Nischen-/Umbau-Wünschen baue die Produktseite als vollständigen Funnel mit MINDESTENS 9 (besser 10–12) Sections: Einstieg/Hook (bro-hero-luxe ODER bro-hero-split ODER bro-cta-banner/scrollingbild — edle Nische → hero-luxe, freundliche/bunte Nische → hero-split) → Icon-Vorteile (bro-icon-benefits, Icons zur Nische!) → Autorität (bro-logo-badges) → Social Proof (bro-spotlight oder reviews2/bro-chat-reviews) → Produkt-Details (bro-callouts oder image-with-text/bro-image-cards) → Vertrauen (bro-benefit-cards, Texte zur Nische) → Zahlen (bro-stats) → Einwände (qanda oder bro-compare/bro-problem-solution) → Garantie (bro-guarantee) → Abschluss (bro-gradient-cta). Die Premium-Typen (bro-hero-luxe, bro-hero-split, bro-benefit-cards, bro-icon-benefits, bro-spotlight, bro-callouts, bro-gradient-cta, bro-logo-badges, bro-image-cards) sind erste Wahl.
-B. TON-RHYTHMUS (Pflicht bei Umbauten): Wechsle die Hintergrund-Töne der Sections wie ein Art Director — z. B. none → tint → none → wash → soft → none → deep (max. 1–2× deep pro Seite) → none. Nutze set_section_tone mit fade "both" für weiche Übergänge; setze auf 1–2 getönte Sections zusätzlich divider "wave" oder "curve". NIE zwei gleiche Töne direkt hintereinander, NIE alles getönt.
-C. ICONS: Wähle Icons streng nischen-passend (Haustier→paw, Beauty→droplet/sparkle/sun, Fitness→bolt/pulse/battery, Baby→baby/heart/shield, Tech→chip/wifi/plug, Outdoor→mountain/compass/tree, Küche→utensils/coffee …). Setze IMMER set_benefit_icons UND die icon_1..icon_4 der eingefügten Icon-Band/Callout-Sections.
-D. COPY-QUALITÄT: Texte konkret, sensorisch und glaubwürdig — Zahlen und Alltagssituationen statt Floskeln. VERBOTEN: "revolutionär", "einzigartig", "Game-Changer", "unglaublich", generisches "Premium-Qualität". Kurze Sätze, aktive Verben, ${answerLang}. Überschriften max. 6 Wörter, Subtexte max. 16.
-E. STIMMIGKEIT: Ein Look pro Seite — Töne/Icons/Presets zahlen alle auf dieselbe Nische ein. Lieber 10 präzise Ops mehr als ein halbfertiger Umbau.
-F. KAUFBOX AKTIV ANORDNEN (Pflicht bei Umbauten, sonst wenn sinnvoll): Ordne die Kaufbox mit reorder_buybox nach dem bewährten Muster (Dringlichkeit → Titel → Bewertung → Social-Proof-Baustein → Preis → Bundle → Kauf-Buttons → Zahlarten → Vertrauen/Vorteile → Details) und ergänze per add_buybox_block 1–2 passende Vertrauens-Bausteine: avatar_proof direkt nach der Bewertung („X und 1.500+ andere lieben …"), benefit_cards ODER usp_grid nach den Vorteilen. Personalisiere deren Texte mit set_block_text auf die Nische (Emojis passend wählen). Nicht stapeln: max. 2 neue Vertrauens-Bausteine, keine Dopplung mit vorhandenen.
+A. VOLLE SEITE als Funnel: Bei Nischen-/Umbau-Wünschen baue die Produktseite mit MINDESTENS 9 (besser 10–12) Sections entlang der Funnel-Rollen (Reihenfolge = Rollen-Reihenfolge): hero → benefits → authority → story → proof → objections → urgency/offer → guarantee → closing. Pro Rolle wählst du EINE Section aus den Alternativen im Katalog (Feld "rolle").
+B. VIELFALT (Pflicht): Baue NICHT jedes Mal dieselben Sections! Pro Rolle gibt es mehrere gleichwertige Alternativen — wähle die, die zur Nische und zum Produkt passt, und folge der VIELFALTS-EMPFEHLUNG im Nutzer-Kontext, wenn vorhanden. Beispiele: hero = bro-hero-luxe (edel) ODER bro-hero-split (freundlich/bunt) ODER bro-cta-banner+scrollingbild (laut/street); proof = bro-spotlight ODER reviews2 ODER bro-chat-reviews ODER vids; benefits = bro-icon-benefits ODER bro-benefit-cards ODER bro-feature-grid; objections = qanda ODER bro-compare ODER bro-problem-solution; story = bro-callouts ODER image-with-text ODER bro-image-cards. Gleiche Begründung gilt für Kaufbox-Trust-Bausteine (avatar_proof/benefit_cards/usp_grid/review_quote/value_stack — variieren!).
+C. MEHRFARBIGE SEITE MIT DIREKTEN KANTEN (Pflicht bei Umbauten): Wechsle die Hintergrund-Töne wie ein Art Director — z. B. none → tint → none → wash → soft → none → deep (max. 1–2× deep pro Seite). Es gibt KEINE Fades/weichen Verläufe zwischen Sections — Übergänge sind entweder DIREKTE Kanten oder FORMEN (set_section_tone mit divider/dividerTop: wave, waves, zigzag, slant, curve, peaks). Setze auf 2–4 getönte Sections eine Formen-Kante (nicht überall dieselbe Form!); bei deep-Panels wirken divider UND dividerTop zusammen stark. NIE zwei gleiche Töne direkt hintereinander, NIE alles getönt.
+D. ICONS: Wähle Icons streng nischen-spezifisch über englische Keywords (Hundebett → "dog"/"bone"/"paw-print", Beauty → "sparkles"/"droplet"/"sun", Fitness → "dumbbell"/"heart-pulse"/"flame", Baby → "baby"/"heart"/"shield", Tech → "cpu"/"wifi"/"battery-charging", Outdoor → "mountain"/"compass"/"tent", Küche → "chef-hat"/"utensils"/"coffee" …). Setze IMMER set_benefit_icons UND die icon_1..icon_4 der eingefügten Icon-Band/Callout-Sections.
+E. SCHRIFTEN (Pflicht bei Umbauten): Setze set_fonts passend zur Nische — Paarungs-Leitfaden: edel/Beauty → playfair_n4|cormorant_n4|lora_n4 + lato_n4|karla_n4; modern/Tech → inter_n4|archivo_n4 + inter_n4|dmsans_n4; freundlich/Familie/Baby → quicksand_n4|poppins_n4|cabin_n4 + nunito_n4|karla_n4; Sport/Street/Deal → anton_n4|oswald_n4|bebas_neue_n4 + rubik_n4|roboto_n4|work_sans_n4; Natur/Editorial → alegreya_n4|merriweather_n4 + lato_n4|raleway_n4. Überschrift und Fließtext dürfen sich unterscheiden (Kontrast-Paarung wirkt hochwertiger als zweimal dieselbe Schrift).
+F. COPY-QUALITÄT: Texte konkret, sensorisch und glaubwürdig — Zahlen und Alltagssituationen statt Floskeln. VERBOTEN: "revolutionär", "einzigartig", "Game-Changer", "unglaublich", generisches "Premium-Qualität". Kurze Sätze, aktive Verben, ${answerLang}. Überschriften max. 6 Wörter, Subtexte max. 16.
+G. STIMMIGKEIT: Ein Look pro Seite — Töne/Icons/Presets/Schriften zahlen alle auf dieselbe Nische ein. Lieber 10 präzise Ops mehr als ein halbfertiger Umbau.
+H. KAUFBOX AKTIV ANORDNEN (Pflicht bei Umbauten, sonst wenn sinnvoll): Ordne die Kaufbox mit reorder_buybox nach dem bewährten Funnel-Muster aus dem Katalog (KAUFBOX-REIHENFOLGE) und ergänze per add_buybox_block 1–2 passende Vertrauens-Bausteine mit personalisierten Texten (set_block_text, Emojis passend). Nicht stapeln: max. 2 neue Vertrauens-Bausteine, keine Dopplung mit vorhandenen.
 
 KATALOG:
 ${buildCatalog()}`;
@@ -209,6 +244,45 @@ function extractJson(text: string): string {
   if (fence) return fence[1].trim();
   const brace = text.match(/\{[\s\S]*\}/);
   return brace ? brace[0] : text.trim();
+}
+
+/** Dokument für den Prompt kompaktieren: lange Texte kappen (die AI schreibt
+ *  ohnehin neue) — spart deutlich Input-Tokens, Struktur bleibt vollständig. */
+const COMPACT_TEXT = 90;
+function compactDocForAi(doc: ThemeDocument): ThemeDocument {
+  const cut = (s: string) => (s.length > COMPACT_TEXT ? s.slice(0, COMPACT_TEXT) + "…" : s);
+  const cutTexts = (t: Record<string, string> | undefined) =>
+    t ? Object.fromEntries(Object.entries(t).map(([k, v]) => [k, typeof v === "string" ? cut(v) : v])) : t;
+  return {
+    ...doc,
+    sections: doc.sections.map((s) => ({ ...s, texts: cutTexts(s.texts) as Record<string, string> })),
+    home: (doc.home || []).map((s) => ({ ...s, texts: cutTexts(s.texts) as Record<string, string> })),
+    buybox: {
+      ...doc.buybox,
+      blocks: Object.fromEntries(
+        Object.entries(doc.buybox.blocks || {}).map(([k, b]) => [
+          k,
+          { ...b, texts: cutTexts(b.texts) as Record<string, string> },
+        ]),
+      ),
+    },
+  };
+}
+
+/** Deterministische Vielfalts-Empfehlung pro Produkt: nudged die AI, nicht
+ *  immer dieselben Sections zu wählen — gleiche Produkt-ID → gleiche
+ *  Empfehlung (Plan bleibt bei Wiederholung stabil). */
+export function varietyHints(productId: string): string {
+  let h = 0;
+  for (const c of productId || "x") h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  const pick = <T,>(arr: T[], salt: number) => arr[(h + salt) % arr.length];
+  const hero = pick(["bro-hero-luxe", "bro-hero-split", "bro-cta-banner + scrollingbild"], 1);
+  const benefits = pick(["bro-icon-benefits", "bro-benefit-cards", "bro-feature-grid"], 2);
+  const proof = pick(["bro-spotlight", "reviews2", "bro-chat-reviews", "vids"], 3);
+  const story = pick(["bro-callouts", "image-with-text", "bro-image-cards"], 4);
+  const objections = pick(["qanda", "bro-compare", "bro-problem-solution"], 5);
+  const trustBlock = pick(["avatar_proof", "benefit_cards", "usp_grid", "review_quote", "value_stack"], 6);
+  return `VIELFALTS-EMPFEHLUNG für dieses Produkt (bevorzuge diese Alternativen, weiche nur ab wenn die Nische klar dagegen spricht): hero=${hero}, benefits=${benefits}, proof=${proof}, story=${story}, objections=${objections}, kaufbox-trust=${trustBlock}.`;
 }
 
 function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
@@ -224,8 +298,10 @@ function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
     });
   }
   const parts = [
-    `AKTUELLES THEME-DOKUMENT (JSON):\n${JSON.stringify(input.doc)}`,
+    `AKTUELLES THEME-DOKUMENT (JSON, lange Texte gekürzt):\n${JSON.stringify(compactDocForAi(input.doc))}`,
     input.productTitle ? `PRODUKT: ${input.productTitle}` : "",
+    varietyHints(input.doc.productId || input.productTitle),
+    input.learnHints ? `GELERNTES WISSEN (bewährte Muster aus früheren erfolgreichen Generierungen dieser Nische — nutze es als Ausgangspunkt):\n${input.learnHints}` : "",
     input.paletteHints.length ? `AUTOMATISCH AUS DEN BILDERN EXTRAHIERTE FARBTÖNE (Hinweis): ${input.paletteHints.join(", ")}` : "",
     `WUNSCH DES NUTZERS:\n${input.prompt || "(kein Text — richte dich nach den Bildern)"}`,
   ].filter(Boolean);
@@ -241,13 +317,18 @@ export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRaw
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY fehlt.");
   const client = new Anthropic({ apiKey });
-  const system = buildSystem(input.lang);
+  const model = THEME_AI_MODELS[input.mode] || THEME_AI_MODELS.standard;
+  // System-Prompt als Block mit cache_control: der statische Teil (Regeln +
+  // Katalog, ~6k Tokens) wird gecacht — Folge-Calls zahlen ~10 % dafür.
+  const system: Anthropic.TextBlockParam[] = [
+    { type: "text", text: buildSystem(input.lang), cache_control: { type: "ephemeral" } },
+  ];
   const content = buildUserContent(input);
 
   let msg: Anthropic.Message;
   try {
     msg = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 6400,
       thinking: { type: "disabled" },
       output_config: { format: { type: "json_schema", schema: PLAN_SCHEMA } },
@@ -255,20 +336,31 @@ export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRaw
       messages: [{ role: "user", content }],
     });
   } catch (err) {
-    // Fallback ohne Structured Output (z. B. falls das Feature/SDK-Feld auf
-    // der Plattform nicht verfügbar ist) — dann robustes JSON-Extrahieren.
-    console.warn("[theme-ai] structured output fehlgeschlagen, Fallback auf Freitext-JSON:", err);
+    // Fallback ohne Structured Output NUR bei 400/invalid_request (Feature/
+    // SDK-Feld auf der Plattform nicht verfügbar). Bei 429/529/5xx/Auth-
+    // Fehlern KEIN Zweit-Call — das SDK hat bereits intern retried; ein
+    // weiterer voller Call (inkl. Bilder + System-Prompt) würde Overload
+    // verschärfen und die eigentliche Ursache im Log maskieren.
+    const status = (err as { status?: number } | null)?.status;
+    if (status !== 400) throw err;
+    console.warn("[theme-ai] structured output fehlgeschlagen (400), Fallback auf Freitext-JSON:", err);
     msg = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 6400,
       thinking: { type: "disabled" },
-      system: `${system}\n\nAntworte AUSSCHLIESSLICH mit einem JSON-Objekt {summary, steps:[{title,detail}], operations:[…]} — kein Text davor oder danach.`,
+      system: [
+        {
+          type: "text",
+          text: `${buildSystem(input.lang)}\n\nAntworte AUSSCHLIESSLICH mit einem JSON-Objekt {summary, steps:[{title,detail}], operations:[…]} — kein Text davor oder danach.`,
+          cache_control: { type: "ephemeral" },
+        },
+      ],
       messages: [{ role: "user", content }],
     });
   }
 
   try {
-    await recordUsd("anthropic", anthropicCostUsd(MODEL, msg.usage));
+    await recordUsd("anthropic", anthropicCostUsd(model, msg.usage));
   } catch {
     /* Ledger nie fatal */
   }

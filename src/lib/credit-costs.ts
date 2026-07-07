@@ -32,9 +32,14 @@ export const CREDIT_COSTS = {
   // AI Co-Pilot im Theme-Editor: Claude plant Änderungen am Theme
   // (Text + Bilder rein → Plan → Umsetzung). Preis nach AUFWAND des
   // bestätigten Plans (klein/mittel/groß) — Abzug erst bei "Plan umsetzen".
+  // Standard-Modus (Claude Sonnet 5 — günstig, Alltag):
   THEME_AI_SMALL: 15,
   THEME_AI_MEDIUM: 30,
   THEME_AI_LARGE: 50,
+  // Expert-Modus (Claude Opus 4.8 — stärkstes Modell, mehr Credits):
+  THEME_AI_EXPERT_SMALL: 25,
+  THEME_AI_EXPERT_MEDIUM: 50,
+  THEME_AI_EXPERT_LARGE: 85,
 } as const;
 
 // Welcome grant — jeder Kunde bekommt das EINMALIG beim ersten Login.

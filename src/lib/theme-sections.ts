@@ -155,20 +155,34 @@ export const BUYBOX_META: Record<string, BuyboxMeta> = {
   share: { category: "info", icon: "Share2", label: "Teilen-Button", labelEn: "Share button", desc: "Produkt teilen.", descEn: "Share the product." },
 };
 
-// Bewährte Reihenfolge einer hochkonvertierenden Kaufbox (für „Anordnen").
-// Nur die AKTIVEN Bausteine werden hiernach sortiert; nicht Gelistetes hängt
-// ans Ende.
+// Bewährte Reihenfolge einer hochkonvertierenden Kaufbox — der Funnel:
+// Dringlichkeit → Titel → Bewertung/Social-Proof → Preis → Knappheit →
+// Varianten/Bundle → Kaufen → Zahlarten → Vertrauen → Vorteile → Versand →
+// Details. Grundlage für den „Anordnen"-Button, die Stil-Defaults
+// (STYLE_EXTRAS werden beim Laden hiernach normalisiert) und die AI-Regel F.
 export const BUYBOX_CANONICAL_ORDER = [
   "sale_banner", "urgency_text", "countdown_timer", "ship_countdown", "custom_title",
-  "custom_rating", "review_quote", "custom_price", "price_per_day",
+  "custom_rating", "review_quote", "avatar_proof", "social_proof", "custom_price", "price_per_day",
   "stock_bar", "stock_indicator", "variant_picker", "bundle_selector", "value_stack",
   "coupon_code", "quantity_selector", "buy_buttons", "return_promise", "payment_icons",
   "trust_badges", "press_bar",
   "guarantee", "benefits_list", "benefit_cards", "usp_grid", "highlights", "mini_compare", "fit_check",
   "delivery_timeline", "free_gift",
-  "avatar_proof", "social_proof", "feature_box", "icon-with-text", "spec_list", "description", "text",
+  "feature_box", "icon-with-text", "spec_list", "description", "text",
   "custom_divider", "custom_accordion", "collapsible_tab", "complementary", "share",
 ];
+
+const BUYBOX_RANK: Record<string, number> = Object.fromEntries(
+  BUYBOX_CANONICAL_ORDER.map((t, i) => [t, i]),
+);
+
+/** Sortiert eine Baustein-Liste stabil nach dem bewährten Funnel-Muster —
+ *  unbekannte Typen behalten ihre relative Reihenfolge am Ende. */
+export function sortBuyboxOrder(order: string[]): string[] {
+  return [...order].sort(
+    (a, b) => (BUYBOX_RANK[a] ?? 999) - (BUYBOX_RANK[b] ?? 999),
+  );
+}
 
 export function getBuyboxMeta(type: string): BuyboxMeta {
   return BUYBOX_META[type] || { category: "info", icon: "Square", label: type, labelEn: type, desc: "", descEn: "" };

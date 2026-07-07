@@ -40,7 +40,11 @@ export type ProviderLedger = Partial<Record<LedgerProvider, LedgerEntry>>;
 const ANTHROPIC_PRICES: Record<string, { in: number; out: number }> = {
   "claude-sonnet-4-6": { in: 3, out: 15 },
   "claude-haiku-4-5": { in: 1, out: 5 },
-  // Theme-AI-Co-Pilot (Vision + Structured Output)
+  // Theme-AI-Co-Pilot (Vision + Structured Output):
+  // Standard-Modus (Listenpreis; Intro-Rabatt bis 2026-08 wird bewusst
+  // NICHT eingerechnet — lieber konservativ budgetieren)
+  "claude-sonnet-5": { in: 3, out: 15 },
+  // Expert-Modus
   "claude-opus-4-8": { in: 5, out: 25 },
 };
 // Pauschale Kosten pro erfolgreicher Operation (Schätzwerte, $).
@@ -182,12 +186,15 @@ export function anthropicCostUsd(
 ): number {
   if (!usage) return 0;
   const p = ANTHROPIC_PRICES[model] ?? ANTHROPIC_PRICES["claude-sonnet-4-6"];
-  const inTok =
-    (usage.input_tokens || 0) +
-    (usage.cache_read_input_tokens || 0) +
-    (usage.cache_creation_input_tokens || 0);
+  // Prompt-Caching korrekt verrechnen: Cache-Reads ≈ 0,1× Input-Preis,
+  // Cache-Writes (5-min-TTL) ≈ 1,25× — sonst überschätzt das Ledger den
+  // Verbrauch massiv, sobald der Theme-AI-System-Prompt gecacht wird.
+  const inUsd =
+    ((usage.input_tokens || 0) / 1_000_000) * p.in +
+    ((usage.cache_read_input_tokens || 0) / 1_000_000) * p.in * 0.1 +
+    ((usage.cache_creation_input_tokens || 0) / 1_000_000) * p.in * 1.25;
   const outTok = usage.output_tokens || 0;
-  return (inTok / 1_000_000) * p.in + (outTok / 1_000_000) * p.out;
+  return inUsd + (outTok / 1_000_000) * p.out;
 }
 
 export const PROVIDER_LABELS: Record<LedgerProvider, string> = {

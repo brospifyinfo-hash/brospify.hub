@@ -1,5 +1,5 @@
 import type { ColorPalette } from "@/lib/theme-placeholders";
-import { BUYBOX_DEFAULT_ORDER, BUYBOX_OPTIONAL } from "@/lib/theme-sections";
+import { BUYBOX_DEFAULT_ORDER, BUYBOX_OPTIONAL, sortBuyboxOrder } from "@/lib/theme-sections";
 
 // ─────────────────────────────────────────────────────────────────
 // Theme-Stile: vorgefertigte „Looks", die das Theme spürbar anders machen —
@@ -289,9 +289,16 @@ const STYLE_EXTRAS: Record<string, StyleExtra> = {
 for (const s of THEME_STYLES) {
   const e = STYLE_EXTRAS[s.id];
   if (!e) continue;
-  // buyboxOrder als vollständige Permutation (fehlende Typen ans Ende — sie sind
-  // ohnehin über hiddenBlocks aus).
-  s.buyboxOrder = [...e.order, ...BUYBOX_DEFAULT_ORDER.filter((t) => !e.order.includes(t))];
+  // buyboxOrder als vollständige Permutation, GESAMT durch das bewährte
+  // Funnel-Muster normalisiert (sortBuyboxOrder über kuratierte + fehlende
+  // Default-Typen in EINEM Lauf — sonst landen sichtbare Nachzügler wie
+  // description hinter collapsible_tab/complementary). Der Stil bestimmt
+  // WELCHE Bausteine aktiv sind, der Funnel bestimmt WO sie stehen —
+  // nie wieder „Bewertung nach dem Kaufen-Button".
+  s.buyboxOrder = sortBuyboxOrder([
+    ...e.order,
+    ...BUYBOX_DEFAULT_ORDER.filter((t) => !e.order.includes(t)),
+  ]);
   // Opt-in-Bausteine sind je Stil aus — außer der Stil schaltet sie via showB
   // gezielt frei (z. B. Bold → Sale-Banner, Tech → Vertrauens-Icons).
   const show = new Set(e.showB || []);

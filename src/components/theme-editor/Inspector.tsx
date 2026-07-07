@@ -26,7 +26,9 @@ import {
 } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
 import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
-import { THEME_ICONS, DEFAULT_BENEFIT_ICONS, getIcon } from "@/lib/theme-icons";
+import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import { getIconAny, searchIcons } from "@/lib/theme-icon-resolver";
+import { DIVIDER_PATHS, DIVIDER_TOP_PATHS, DIVIDER_SHAPES, DIVIDER_LABELS } from "@/lib/theme-frame";
 import { useI18n } from "@/lib/i18n";
 import { EDITOR_FONTS, segCls, ACCENT } from "@/components/theme-editor/editor-ui";
 import { GroupTitle, PresetPill, FieldLabel, TextField, Segmented, ColorField, SliderField } from "@/components/theme-editor/ui";
@@ -45,11 +47,43 @@ function BlockIcon({ name, className }: { name: string; className?: string }) {
 }
 
 function IconSvg({ id, size = 16 }: { id: string; size?: number }) {
-  const ic = getIcon(id);
+  const ic = getIconAny(id);
   return (
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       {ic.paths.map((d, i) => <path key={i} d={d} />)}
     </svg>
+  );
+}
+
+// Divider-Formen-Auswahl mit Mini-Vorschau der SVG-Form (7 Optionen).
+// `top` zeigt die Oberkanten-Variante der Form (gespiegelte Pfade) — das
+// Thumbnail entspricht damit exakt dem, was gerendert wird.
+function DividerPicker({ value, onChange, lang, top }: { value: string; onChange: (v: string) => void; lang: string; top?: boolean }) {
+  const paths = top ? DIVIDER_TOP_PATHS : DIVIDER_PATHS;
+  const label = (k: string) =>
+    lang === "en"
+      ? ({ none: "Off", wave: "Wave", waves: "Waves", zigzag: "Zigzag", slant: "Slant", curve: "Curve", peaks: "Peaks" }[k] || k)
+      : (DIVIDER_LABELS[k] || k);
+  return (
+    <div className="grid grid-cols-4 gap-1">
+      {["none", ...DIVIDER_SHAPES].map((k) => (
+        <button
+          key={k}
+          type="button"
+          className={segCls(value === k)}
+          onClick={() => onChange(k)}
+          title={label(k)}
+        >
+          {k === "none" ? (
+            <span className="block text-center leading-[14px]">{label(k)}</span>
+          ) : (
+            <svg viewBox="0 0 1440 64" preserveAspectRatio="none" className="block h-[14px] w-full opacity-90" aria-label={label(k)}>
+              <path d={paths[k]} fill="currentColor" />
+            </svg>
+          )}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -139,6 +173,7 @@ export default function Inspector({
   const [openG, setOpenG] = useState<Record<string, boolean>>({ stil: true });
   const toggleG = (id: string) => setOpenG((o) => ({ ...o, [id]: !o[id] }));
   const [iconPickerFor, setIconPickerFor] = useState<number | null>(null);
+  const [iconQuery, setIconQuery] = useState("");
 
   // ── Section ausgewählt (Produktseite ODER Startseite — uids sind global) ──
   const sectionList =
@@ -202,27 +237,28 @@ export default function Inspector({
                       type: "mergeSectionSettings",
                       uid: section.uid,
                       patch: sectionToneSettings(tone as SectionTone, doc.global.colors, {
-                        fade: (section.settings?.sec_fade as never) || undefined,
                         divider: (section.settings?.sec_divider as never) || undefined,
+                        dividerTop: (section.settings?.sec_divider_top as never) || undefined,
                       }),
                     })
                   }
                 />
               </div>
               <div>
-                <FieldLabel>{t.themes.editorSecFade}</FieldLabel>
-                <Segmented
-                  options={[["none", lang === "en" ? "Off" : "Aus"], ["top", lang === "en" ? "Top" : "Oben"], ["bottom", lang === "en" ? "Bottom" : "Unten"], ["both", lang === "en" ? "Both" : "Beide"]]}
-                  value={String(section.settings?.sec_fade || "none")}
-                  onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_fade", value: v })}
+                <FieldLabel>{t.themes.editorSecDividerTop}</FieldLabel>
+                <DividerPicker
+                  top
+                  value={String(section.settings?.sec_divider_top || "none")}
+                  onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_divider_top", value: v })}
+                  lang={lang}
                 />
               </div>
               <div>
                 <FieldLabel>{t.themes.editorSecDivider}</FieldLabel>
-                <Segmented
-                  options={[["none", lang === "en" ? "Off" : "Aus"], ["wave", lang === "en" ? "Wave" : "Welle"], ["slant", lang === "en" ? "Slant" : "Schräge"], ["curve", lang === "en" ? "Curve" : "Bogen"]]}
+                <DividerPicker
                   value={String(section.settings?.sec_divider || "none")}
                   onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_divider", value: v })}
+                  lang={lang}
                 />
               </div>
             </div>
@@ -458,25 +494,34 @@ export default function Inspector({
                     <span className="text-[11px] text-zinc-300 flex-1 min-w-0 truncate">{bLabel}</span>
                   </div>
                   {iconPickerFor === i && (
-                    <div className="grid grid-cols-7 gap-1 mt-1.5 pt-1.5 border-t border-white/[0.06]">
-                      {THEME_ICONS.map((ic) => (
-                        <button
-                          key={ic.id}
-                          title={ic.label}
-                          onClick={() => {
-                            const icons = [...doc.buybox.benefitIcons];
-                            while (icons.length < 4) icons.push(DEFAULT_BENEFIT_ICONS[icons.length]);
-                            icons[i] = ic.id;
-                            dispatch({ type: "setBuybox", patch: { benefitIcons: icons } });
-                            setIconPickerFor(null);
-                          }}
-                          className={`aspect-square rounded-md border flex items-center justify-center transition ${
-                            cur === ic.id ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]"
-                          }`}
-                        >
-                          <IconSvg id={ic.id} size={16} />
-                        </button>
-                      ))}
+                    <div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                      <input
+                        type="text"
+                        value={iconQuery}
+                        onChange={(e) => setIconQuery(e.target.value)}
+                        placeholder={lang === "en" ? "Search 1,700+ icons…" : "1.700+ Icons durchsuchen…"}
+                        className="w-full mb-1.5 rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] text-white placeholder:text-zinc-500 focus:border-[#95BF47]/50 focus:outline-none"
+                      />
+                      <div className="grid grid-cols-7 gap-1 max-h-44 overflow-y-auto">
+                        {searchIcons(iconQuery, 63).map((ic) => (
+                          <button
+                            key={ic.id}
+                            title={ic.label}
+                            onClick={() => {
+                              const icons = [...doc.buybox.benefitIcons];
+                              while (icons.length < 4) icons.push(DEFAULT_BENEFIT_ICONS[icons.length]);
+                              icons[i] = ic.id;
+                              dispatch({ type: "setBuybox", patch: { benefitIcons: icons } });
+                              setIconPickerFor(null);
+                            }}
+                            className={`aspect-square rounded-md border flex items-center justify-center transition ${
+                              cur === ic.id ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]"
+                            }`}
+                          >
+                            <IconSvg id={ic.id} size={16} />
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>

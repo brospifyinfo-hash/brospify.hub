@@ -24,7 +24,6 @@ import {
   buildInitialDocument,
   STYLE_GALLERY,
   SECTION_TONES,
-  SECTION_FADES,
   SECTION_DIVIDERS,
   sectionToneSettings,
   sectionSupportsDesign,
@@ -33,7 +32,7 @@ import {
 } from "@/lib/theme-library";
 import { THEME_STYLES, getThemeStyle } from "@/lib/theme-styles";
 import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
-import { THEME_ICONS } from "@/lib/theme-icons";
+import { resolveIconId } from "@/lib/theme-icon-resolver";
 import { EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 
 // ─── Operationen ────────────────────────────────────────────────────
@@ -49,11 +48,14 @@ export type AiOp =
   | { op: "move_section"; uid: string; to: number }
   | { op: "set_section_preset"; uid: string; presetId: string }
   | { op: "set_section_text"; uid: string; field: string; value: string }
-  // Design-Layer: Hintergrund-Ton + Übergang/Kante EINER Section (aus der
+  // Design-Layer: Hintergrund-Ton + Formen-Kanten EINER Section (aus der
   // Palette abgeleitet — nie „AI-bunt") bzw. rohe Design-/Icon-Settings.
-  | { op: "set_section_tone"; uid: string; tone: SectionTone; fade?: (typeof SECTION_FADES)[number]; divider?: (typeof SECTION_DIVIDERS)[number] }
+  // Fades gibt es für die AI nicht mehr (direkte Kanten/Formen statt Verlauf).
+  | { op: "set_section_tone"; uid: string; tone: SectionTone; divider?: (typeof SECTION_DIVIDERS)[number]; dividerTop?: (typeof SECTION_DIVIDERS)[number] }
   | { op: "set_section_setting"; uid: string; key: string; value: string }
   // Produkt-passende Icons für die Vorteile-Liste der Kaufbox (4 Stück).
+  // Werte dürfen freie englische Keywords sein — resolveIconId löst sie
+  // deterministisch gegen die ~1750-Icon-Bibliothek auf.
   | { op: "set_benefit_icons"; icons: string[] }
   | { op: "add_buybox_block"; blockType: string; position?: number; presetId?: string }
   | { op: "remove_buybox_block"; blockType: string }
@@ -87,9 +89,9 @@ const SECTION_TYPES = new Set(SECTION_LIBRARY.map((s) => s.type));
 const BLOCK_TYPES = new Set<string>([...BUYBOX_DEFAULT_ORDER, ...BUYBOX_RUNTIME_ONLY]);
 const GALLERY_IDS = new Set(GALLERY_PRESETS.map((p) => p.id));
 const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as const;
-const ICON_IDS = new Set(THEME_ICONS.map((i) => i.id));
-/** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf. */
-const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "icon_1", "icon_2", "icon_3", "icon_4"]);
+/** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf.
+ *  sec_fade absichtlich NICHT mehr dabei (keine Fades für neue Designs). */
+const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_divider", "sec_divider_top", "icon_1", "icon_2", "icon_3", "icon_4"]);
 const MAX_OPS = 48;
 const MAX_TEXT = 600;
 
@@ -234,8 +236,8 @@ export function validateAiOps(raw: unknown, doc: ThemeDocument, capabilities: st
           op: "set_section_tone",
           uid: o.uid,
           tone: o.tone as SectionTone,
-          fade: isStr(o.fade) && (SECTION_FADES as readonly string[]).includes(o.fade) ? (o.fade as (typeof SECTION_FADES)[number]) : undefined,
           divider: isStr(o.divider) && (SECTION_DIVIDERS as readonly string[]).includes(o.divider) ? (o.divider as (typeof SECTION_DIVIDERS)[number]) : undefined,
+          dividerTop: isStr(o.dividerTop) && (SECTION_DIVIDERS as readonly string[]).includes(o.dividerTop) ? (o.dividerTop as (typeof SECTION_DIVIDERS)[number]) : undefined,
         });
         break;
       }
@@ -244,17 +246,25 @@ export function validateAiOps(raw: unknown, doc: ThemeDocument, capabilities: st
         const inst = findInstance(doc, o.uid);
         if (inst && !sectionSupportsDesign(inst.type)) break;
         let value: string | undefined;
-        if (o.key.startsWith("icon_")) value = isStr(o.value) && ICON_IDS.has(o.value) ? o.value : undefined;
-        else if (o.key === "sec_fade") value = isStr(o.value) && (SECTION_FADES as readonly string[]).includes(o.value) ? o.value : undefined;
-        else if (o.key === "sec_divider") value = isStr(o.value) && (SECTION_DIVIDERS as readonly string[]).includes(o.value) ? o.value : undefined;
-        else value = isStr(o.value) && (o.value === "" || HEX_RE.test(o.value)) ? o.value.toLowerCase() : undefined;
+        if (o.key.startsWith("icon_")) {
+          // Freie Keywords erlaubt — deterministisch gegen die Icon-
+          // Bibliothek aufgelöst (identisch in plan- und apply-Route).
+          value = isStr(o.value) ? resolveIconId(o.value) ?? undefined : undefined;
+        } else if (o.key === "sec_divider" || o.key === "sec_divider_top") {
+          value = isStr(o.value) && (SECTION_DIVIDERS as readonly string[]).includes(o.value) ? o.value : undefined;
+        } else {
+          value = isStr(o.value) && (o.value === "" || HEX_RE.test(o.value)) ? o.value.toLowerCase() : undefined;
+        }
         if (value === undefined) break;
         out.push({ op: "set_section_setting", uid: o.uid, key: o.key, value });
         break;
       }
       case "set_benefit_icons": {
         const icons = Array.isArray(o.icons)
-          ? (o.icons as unknown[]).filter((i): i is string => isStr(i) && ICON_IDS.has(i)).slice(0, 4)
+          ? (o.icons as unknown[])
+              .map((i) => (isStr(i) ? resolveIconId(i) : null))
+              .filter((i): i is string => !!i)
+              .slice(0, 4)
           : [];
         if (icons.length) out.push({ op: "set_benefit_icons", icons });
         break;
@@ -446,7 +456,7 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       const uid = resolveUid(op.uid);
       const inst = findInstance(doc, uid);
       if (!inst || !sectionSupportsDesign(inst.type)) return doc;
-      const toneSettings = sectionToneSettings(op.tone, doc.global.colors, { fade: op.fade, divider: op.divider });
+      const toneSettings = sectionToneSettings(op.tone, doc.global.colors, { divider: op.divider, dividerTop: op.dividerTop });
       const mapList = (list: SectionInstance[]) =>
         list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), ...toneSettings } } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
@@ -558,6 +568,16 @@ export const AI_TIER_KEYS: Record<AiEffortTier, string> = {
   medium: "THEME_AI_MEDIUM",
   large: "THEME_AI_LARGE",
 };
+export const AI_TIER_KEYS_EXPERT: Record<AiEffortTier, string> = {
+  small: "THEME_AI_EXPERT_SMALL",
+  medium: "THEME_AI_EXPERT_MEDIUM",
+  large: "THEME_AI_EXPERT_LARGE",
+};
+
+/** Credit-Key für Stufe + Modus (standard = Sonnet, expert = Opus). */
+export function aiTierCreditKey(tier: AiEffortTier, mode: "standard" | "expert"): string {
+  return (mode === "expert" ? AI_TIER_KEYS_EXPERT : AI_TIER_KEYS)[tier];
+}
 
 const OP_WEIGHTS: Record<AiOp["op"], number> = {
   set_colors: 1, set_fonts: 1, set_radius: 1, set_design: 1,

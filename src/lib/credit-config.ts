@@ -44,9 +44,12 @@ export const TOOL_PRICING_META: readonly ToolPricingMeta[] = [
   { key: "VIDEO_SCOUT_3", label: "Video Scout · 3 Videos", hint: "Apify TikTok+IG+YT + Claude", defaultApiCostEur: 0.100, group: "ai" },
   { key: "CHARTS_DRAW", label: "Produkt-Drop (Zufall)", hint: "Sheet-Lookup · keine externe API", defaultApiCostEur: 0, group: "tool" },
   { key: "THEME_EXPORT", label: "Produkt-Theme-Export", hint: "DeepSeek-Texte + Theme-Build · pro Download", defaultApiCostEur: 0.008, group: "ai" },
-  { key: "THEME_AI_SMALL", label: "Theme AI Co-Pilot · klein", hint: "Claude Sonnet · kleiner Änderungs-Plan", defaultApiCostEur: 0.02, group: "ai" },
-  { key: "THEME_AI_MEDIUM", label: "Theme AI Co-Pilot · mittel", hint: "Claude Sonnet · mittlerer Änderungs-Plan", defaultApiCostEur: 0.03, group: "ai" },
-  { key: "THEME_AI_LARGE", label: "Theme AI Co-Pilot · groß", hint: "Claude Sonnet · großer Umbau (ggf. mit Bildern)", defaultApiCostEur: 0.05, group: "ai" },
+  { key: "THEME_AI_SMALL", label: "Theme AI Standard · klein", hint: "Claude Sonnet 5 + Prompt-Cache · kleiner Plan", defaultApiCostEur: 0.012, group: "ai" },
+  { key: "THEME_AI_MEDIUM", label: "Theme AI Standard · mittel", hint: "Claude Sonnet 5 + Prompt-Cache · mittlerer Plan", defaultApiCostEur: 0.02, group: "ai" },
+  { key: "THEME_AI_LARGE", label: "Theme AI Standard · groß", hint: "Claude Sonnet 5 + Prompt-Cache · großer Umbau", defaultApiCostEur: 0.035, group: "ai" },
+  { key: "THEME_AI_EXPERT_SMALL", label: "Theme AI Expert · klein", hint: "Claude Opus 4.8 · kleiner Plan", defaultApiCostEur: 0.025, group: "ai" },
+  { key: "THEME_AI_EXPERT_MEDIUM", label: "Theme AI Expert · mittel", hint: "Claude Opus 4.8 · mittlerer Plan", defaultApiCostEur: 0.045, group: "ai" },
+  { key: "THEME_AI_EXPERT_LARGE", label: "Theme AI Expert · groß", hint: "Claude Opus 4.8 · großer Umbau (ggf. mit Bildern)", defaultApiCostEur: 0.075, group: "ai" },
   { key: "BLOG_GENERATE", label: "Blog-Writer (versteckt)", hint: "DeepSeek-chat", defaultApiCostEur: 0.007, group: "ai", hidden: true },
 ] as const;
 

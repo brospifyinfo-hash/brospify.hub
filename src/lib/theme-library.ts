@@ -131,13 +131,16 @@ export function resolvePresetSettings(instance: SectionInstance, palette: ColorP
 
 // ─── Section-Design-Layer: Hintergrund-Töne + Übergänge (alle Sections) ──
 // Jede eigene Section versteht dieselben Schema-Keys — Vorschau (Replica-
-// Frame) und Liquid (bspx-section-frame-Snippet) rendern sie identisch:
-//   sec_bg / sec_bg2   Hintergrund (2. Farbe = vertikaler Verlauf)
-//   sec_fade           weicher Übergang von/zur Seiten-Hintergrundfarbe
-//   sec_divider        dekorative Kante am unteren Rand (Welle/Schräge/Bogen)
-//   sec_pagebg         Seiten-Hintergrund (wird automatisch mit @background
-//                      gefüllt — Referenz für Fades und Divider)
-export const SECTION_DESIGN_KEYS = ["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "sec_pagebg"] as const;
+// Frame) und Liquid (bspx-section-frame-Snippet, wird beim Export generiert)
+// rendern sie identisch:
+//   sec_bg / sec_bg2    Hintergrund (2. Farbe = vertikaler Verlauf)
+//   sec_divider         Formen-Kante am unteren Rand (Welle/Zacken/Bogen …)
+//   sec_divider_top     Formen-Kante am oberen Rand
+//   sec_fade            NUR NOCH Legacy (Alt-Designs) — neue Designs nutzen
+//                       direkte Kanten oder Formen-Übergänge, keine Fades
+//   sec_pagebg          Seiten-Hintergrund (auto mit @background gefüllt —
+//                       Füllfarbe der Divider-Formen)
+export const SECTION_DESIGN_KEYS = ["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "sec_divider_top", "sec_pagebg"] as const;
 /** Section-Typen, deren Liquid den Design-Layer versteht (eigene Sections —
  *  Dawn-Basis-Sections bringen eigene Farbschemata mit und bleiben außen vor,
  *  damit Vorschau ≠ Download nie passieren kann). */
@@ -155,7 +158,8 @@ export function sectionSupportsDesign(type: string): boolean {
   return SECTION_DESIGN_TYPES.has(type);
 }
 export const SECTION_FADES = ["none", "top", "bottom", "both"] as const;
-export const SECTION_DIVIDERS = ["none", "wave", "slant", "curve"] as const;
+/** Divider-Formen — synchron mit DIVIDER_PATHS/DIVIDER_TOP_PATHS (theme-frame.ts). */
+export const SECTION_DIVIDERS = ["none", "wave", "waves", "zigzag", "slant", "curve", "peaks"] as const;
 export type SectionTone = "none" | "tint" | "soft" | "wash" | "deep";
 export const SECTION_TONES: SectionTone[] = ["none", "tint", "soft", "wash", "deep"];
 
@@ -175,45 +179,50 @@ function mixHex(a: string, b: string, t: number): string {
  * Übersetzt einen benannten Hintergrund-Ton in konkrete Design-Settings —
  * deterministisch aus der Palette (Vorschau = Download; auch die AI nutzt
  * genau diese Auflösung, damit Töne immer stimmig statt „AI-bunt" sind).
- *   tint  = Hauch Akzent (≈6 %)          soft = spürbarer Akzent-Verlauf
- *   wash  = neutraler Grauton             deep = dunkles Panel (heller Text)
+ * Kontraste bewusst kräftig: mehrfarbige Seiten mit DIREKTEN Kanten bzw.
+ * Formen-Übergängen (kein Fade — Design-Entscheidung 2026-07).
+ *   tint  = deutlicher Akzent-Hauch (≈14 %)   soft = kräftiger Akzent-Verlauf
+ *   wash  = ruhiger Grauton (≈10 %)           deep = dunkles Panel (heller Text)
  */
 export function sectionToneSettings(
   tone: SectionTone,
   palette: ColorPalette,
-  opts: { fade?: (typeof SECTION_FADES)[number]; divider?: (typeof SECTION_DIVIDERS)[number] } = {},
+  opts: {
+    fade?: (typeof SECTION_FADES)[number];
+    divider?: (typeof SECTION_DIVIDERS)[number];
+    dividerTop?: (typeof SECTION_DIVIDERS)[number];
+  } = {},
 ): Record<string, string> {
   const bg = palette.background;
   const out: Record<string, string> = {
     // Merker für UI/AI (im Liquid-Schema unbekannt → von Shopify ignoriert).
     sec_tone: tone,
     sec_pagebg: bg,
-    sec_fade: opts.fade ?? "both",
+    // Fades nur noch explizit (Legacy) — Standard ist die direkte Kante.
+    sec_fade: opts.fade ?? "none",
     sec_divider: opts.divider ?? "none",
+    sec_divider_top: opts.dividerTop ?? "none",
   };
   switch (tone) {
     case "tint":
-      out.sec_bg = mixHex(bg, palette.accent, 0.07);
+      out.sec_bg = mixHex(bg, palette.accent, 0.14);
       out.sec_bg2 = "";
       break;
     case "soft":
-      out.sec_bg = mixHex(bg, palette.accent, 0.1);
-      out.sec_bg2 = mixHex(bg, palette.accent, 0.22);
+      out.sec_bg = mixHex(bg, palette.accent, 0.18);
+      out.sec_bg2 = mixHex(bg, palette.accent, 0.36);
       break;
     case "wash":
-      out.sec_bg = mixHex(bg, palette.text, 0.05);
+      out.sec_bg = mixHex(bg, palette.text, 0.1);
       out.sec_bg2 = "";
       break;
     case "deep":
       out.sec_bg = mixHex(palette.text, palette.button, 0.35);
-      out.sec_bg2 = mixHex(mixHex(palette.text, palette.button, 0.35), palette.accent, 0.18);
-      // dunkle Panels blenden hart besser als mit Fade
-      out.sec_fade = opts.fade ?? "none";
+      out.sec_bg2 = mixHex(mixHex(palette.text, palette.button, 0.35), palette.accent, 0.22);
       break;
     default:
       out.sec_bg = "";
       out.sec_bg2 = "";
-      out.sec_fade = "none";
   }
   return out;
 }
@@ -2130,11 +2139,63 @@ export const STYLE_COMPOSITION_EXTRAS: Record<string, CompositionEntry[]> = {
   ],
 };
 
+// ─── Verkaufs-Funnel: jede Section hat eine Rolle mit fester Stufe ─────────
+// Hook → Vorteile → Autorität → Produkt-Story → Social Proof → Einwände →
+// Dringlichkeit → Cross-Sell → Garantie → Abschluss → Fußbereich.
+// Kompositionen werden hiernach STABIL sortiert (kuratierte Reihenfolge
+// innerhalb einer Stufe bleibt) — nie wieder „FAQ vor dem Hero".
+
+export type SectionRole =
+  | "hero" | "benefits" | "authority" | "story" | "proof" | "objections"
+  | "urgency" | "offer" | "guarantee" | "closing" | "footer";
+
+const ROLE_RANK: Record<SectionRole, number> = {
+  hero: 0, benefits: 1, authority: 2, story: 3, proof: 4, objections: 5,
+  urgency: 6, offer: 7, guarantee: 8, closing: 9, footer: 10,
+};
+
+export const SECTION_ROLES: Record<string, SectionRole> = {
+  "slideshow2": "hero", "bro-hero-luxe": "hero", "bro-hero-split": "hero",
+  // bro-cta-banner ist in noir/retro der ABSCHLUSS-CTA (closing) — als Hook
+  // funktioniert er nur als Anker an Position 0 (street), die der Funnel-Sort
+  // ohnehin nie anfasst.
+  "bro-cta-banner": "closing",
+  "bro-icon-benefits": "benefits", "benefits": "benefits", "bro-feature-grid": "benefits",
+  "bro-benefit-cards": "benefits", "multicolumn": "benefits",
+  "bro-logo-badges": "authority", "trustpilot": "authority",
+  "image-with-text": "story", "bro-callouts": "story", "bro-image-cards": "story",
+  "scrollingbild": "story", "photo": "story", "collage": "story", "video": "story",
+  "bro-steps": "story", "bro-info-tabs": "story", "rich-text": "story", "animatedtext": "story",
+  "reviews2": "proof", "reviews": "proof", "bro-chat-reviews": "proof", "vids": "proof",
+  "bro-spotlight": "proof", "bro-stats": "proof",
+  "bro-compare": "objections", "bro-problem-solution": "objections", "qanda": "objections",
+  "collapsible-content": "objections",
+  "countdown": "urgency",
+  "featured-collection": "offer", "kollektionen": "offer",
+  "bro-guarantee": "guarantee",
+  "bro-gradient-cta": "closing",
+  "socialicons": "footer", "map": "footer",
+};
+
+export function sectionRoleRank(type: string): number {
+  const role = SECTION_ROLES[type];
+  return role ? ROLE_RANK[role] : ROLE_RANK.story; // Unbekanntes in die Mitte
+}
+
+/** Sortiert eine Komposition stabil nach dem Verkaufs-Funnel — der erste
+ *  Eintrag bleibt als Anker (kuratierter Hook, z. B. Countdown bei „deal"). */
+export function sortCompositionByFunnel(entries: CompositionEntry[]): CompositionEntry[] {
+  if (entries.length <= 2) return entries;
+  const [head, ...rest] = entries;
+  return [head, ...[...rest].sort((a, b) => sectionRoleRank(a.type) - sectionRoleRank(b.type))];
+}
+
 /**
  * Mischt die Komposition eines Stils zu einer individuellen Variante:
- * Die erste Section bleibt als Anker (Hero-Charakter), die Mitte wird
- * permutiert und 1–2 stil-passende Extra-Sections kommen an zufällige
- * Positionen dazu. `rnd` ist injizierbar (Client-Events: Math.random).
+ * Die erste Section bleibt als Anker (Hero-Charakter), innerhalb jeder
+ * Funnel-Stufe wird permutiert und 1–2 stil-passende Extra-Sections kommen
+ * dazu — das Ergebnis folgt IMMER dem Verkaufs-Funnel (Vielfalt ohne Chaos).
+ * `rnd` ist injizierbar (Client-Events: Math.random).
  */
 export function shuffleComposition(styleId: string, rnd: () => number = Math.random): CompositionEntry[] {
   const base = STYLE_COMPOSITIONS[styleId] || FALLBACK_COMPOSITION;
@@ -2152,7 +2213,9 @@ export function shuffleComposition(styleId: string, rnd: () => number = Math.ran
     const [extra] = pool.splice(idx, 1);
     middle.splice(Math.floor(rnd() * (middle.length + 1)), 0, extra);
   }
-  return [...head, ...middle];
+  // Volle Permutation + stabile Funnel-Sortierung = Zufall NUR innerhalb
+  // der Funnel-Stufen; die Stufen selbst stehen immer richtig.
+  return sortCompositionByFunnel([...head, ...middle]);
 }
 
 const FALLBACK_COMPOSITION: CompositionEntry[] = STYLE_COMPOSITIONS.modern;
@@ -2207,10 +2270,19 @@ export function buildInitialDocument(
   };
 
   const used = new Set<string>();
-  const composition = compositionOverride?.length
-    ? compositionOverride
-    : STYLE_COMPOSITIONS[style.id] || FALLBACK_COMPOSITION;
+  // Komposition immer durch den Verkaufs-Funnel normalisieren (Anker bleibt) —
+  // egal ob Stil-Default, Shuffle-Variante oder ältere Overrides.
+  const composition = sortCompositionByFunnel(
+    compositionOverride?.length
+      ? compositionOverride
+      : STYLE_COMPOSITIONS[style.id] || FALLBACK_COMPOSITION,
+  );
   const sections: SectionInstance[] = [];
+  // Formen-Rhythmus: getönte Sections OHNE explizite Übergangs-Marker bekommen
+  // deterministisch (Stil + Position) eine Formen-Kante — Wellen/Zacken statt
+  // Fades; dunkle Panels werden oben UND unten von der Seitenfarbe angeschnitten.
+  const styleOffset = Array.from(style.id).reduce((a, c) => a + c.charCodeAt(0), 0);
+  let toneIdx = 0;
   for (const entry of composition) {
     if (caps.size && !caps.has(entry.type)) continue; // Basis kennt den Typ nicht
     const base = baseSections.find((b) => b.type === entry.type && !used.has(b.id));
@@ -2218,11 +2290,22 @@ export function buildInitialDocument(
     // Settings der Stil-Palette expandieren (Vorschau = Download).
     let settings = entry.settings ? { ...entry.settings } : undefined;
     if (settings && typeof settings.sec_tone === "string" && SECTION_TONES.includes(settings.sec_tone as SectionTone)) {
-      const { sec_tone, sec_fade, sec_divider, ...rest } = settings;
+      const { sec_tone, sec_fade, sec_divider, sec_divider_top, ...rest } = settings;
+      const tone = sec_tone as SectionTone;
+      let divider = typeof sec_divider === "string" ? (sec_divider as (typeof SECTION_DIVIDERS)[number]) : undefined;
+      let dividerTop = typeof sec_divider_top === "string" ? (sec_divider_top as (typeof SECTION_DIVIDERS)[number]) : undefined;
+      const hasExplicitEdge = divider !== undefined || dividerTop !== undefined || typeof sec_fade === "string";
+      if (!hasExplicitEdge && tone !== "none") {
+        const shapes = SECTION_DIVIDERS.filter((d) => d !== "none");
+        divider = shapes[(styleOffset + toneIdx) % shapes.length];
+        if (tone === "deep") dividerTop = shapes[(styleOffset + toneIdx + 2) % shapes.length];
+        toneIdx++;
+      }
       settings = {
-        ...sectionToneSettings(sec_tone as SectionTone, style.palette, {
+        ...sectionToneSettings(tone, style.palette, {
           fade: typeof sec_fade === "string" ? (sec_fade as (typeof SECTION_FADES)[number]) : undefined,
-          divider: typeof sec_divider === "string" ? (sec_divider as (typeof SECTION_DIVIDERS)[number]) : undefined,
+          divider,
+          dividerTop,
         }),
         ...rest,
       };

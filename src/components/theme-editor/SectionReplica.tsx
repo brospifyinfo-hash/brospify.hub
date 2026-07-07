@@ -11,13 +11,15 @@ import type { CSSProperties, ReactNode } from "react";
 import type { SectionInstance } from "@/lib/theme-doc";
 import type { ColorPalette } from "@/lib/theme-placeholders";
 import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef, sectionSupportsDesign } from "@/lib/theme-library";
-import { getIcon } from "@/lib/theme-icons";
+import { getIconAny } from "@/lib/theme-icon-resolver";
+import { DIVIDER_PATHS, DIVIDER_TOP_PATHS } from "@/lib/theme-frame";
 
-/** SVG-Line-Icon aus der Icon-Bibliothek (identische Pfade wie im Liquid-Snippet). */
+/** SVG-Line-Icon aus der Icon-Bibliothek inkl. Lucide-Katalog
+ *  (identische Pfade wie im beim Export generierten Liquid-Snippet). */
 function RIcon({ id, size = 20, color }: { id: string; size?: number; color?: string }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      {getIcon(id).paths.map((d, i) => (
+      {getIconAny(id).paths.map((d, i) => (
         <path key={i} d={d} />
       ))}
     </svg>
@@ -52,15 +54,11 @@ function str(v: unknown, fb: string): string {
   return typeof v === "string" && v ? v : fb;
 }
 
-// ─── Design-Frame: Hintergrund-Töne + Übergänge (Design-Layer) ──────
-// Liest die sec_*-Settings (Ton, 2-Farb-Verlauf, Fades zur Seiten-Farbe,
-// Divider-Kante) — 1:1-Pendant zum bspx-section-frame-Snippet im Liquid.
-
-const DIVIDER_PATHS: Record<string, string> = {
-  wave: "M0,32 C240,64 480,0 720,24 C960,48 1200,8 1440,36 L1440,64 L0,64 Z",
-  slant: "M0,64 L1440,12 L1440,64 Z",
-  curve: "M0,64 C480,8 960,8 1440,64 Z",
-};
+// ─── Design-Frame: Hintergrund-Töne + Formen-Übergänge (Design-Layer) ──────
+// Liest die sec_*-Settings (Ton, 2-Farb-Verlauf, Divider-Formen oben/unten)
+// — 1:1-Pendant zum beim Export generierten bspx-section-frame-Snippet.
+// Die Pfade kommen aus theme-frame.ts (gleiche Quelle wie das Liquid).
+// Fades (sec_fade) werden nur noch für Alt-Designs gerendert.
 
 function DesignFrame({ s, children }: { s: Record<string, string | number | boolean>; children: ReactNode }) {
   const bg = typeof s.sec_bg === "string" ? s.sec_bg : "";
@@ -69,12 +67,17 @@ function DesignFrame({ s, children }: { s: Record<string, string | number | bool
   const pagebg = typeof s.sec_pagebg === "string" && s.sec_pagebg ? s.sec_pagebg : "var(--pv-bg)";
   const fade = String(s.sec_fade || "none");
   const divider = String(s.sec_divider || "none");
+  const dividerTop = String(s.sec_divider_top || "none");
   const background = bg2 ? `linear-gradient(170deg, ${bg} 0%, ${bg2} 100%)` : bg;
   return (
     <div className="te-frame" style={{ background }}>
-      {(fade === "top" || fade === "both") && (
+      {DIVIDER_TOP_PATHS[dividerTop] ? (
+        <svg className="te-frame-divider-top" viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden>
+          <path d={DIVIDER_TOP_PATHS[dividerTop]} fill={pagebg} />
+        </svg>
+      ) : (fade === "top" || fade === "both") ? (
         <span className="te-frame-fade" style={{ top: 0, background: `linear-gradient(180deg, ${pagebg} 0%, transparent 100%)` }} />
-      )}
+      ) : null}
       <div className="te-frame-pad">{children}</div>
       {(fade === "bottom" || fade === "both") && divider === "none" && (
         <span className="te-frame-fade" style={{ bottom: 0, background: `linear-gradient(0deg, ${pagebg} 0%, transparent 100%)` }} />
@@ -993,6 +996,7 @@ export const REPLICA_CSS = `
 .te-frame-pad{position:relative;z-index:1;padding:34px 26px}
 .te-frame-fade{position:absolute;left:0;right:0;height:72px;pointer-events:none;z-index:2}
 .te-frame-divider{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:44px;display:block;z-index:2}
+.te-frame-divider-top{position:absolute;left:0;right:0;top:-1px;width:100%;height:44px;display:block;z-index:2}
 
 /* ── Icon-Band ── */
 .te-ib{padding:30px 8px}

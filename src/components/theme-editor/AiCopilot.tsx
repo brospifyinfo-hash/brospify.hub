@@ -37,9 +37,24 @@ interface PlanResponse {
   tier: string;
   cost: number;
   imageCount: number;
+  mode?: AiMode;
+  /** Signiert mode/imageCount/ops — Pflicht beim Bestätigen (apply). */
+  planToken?: string;
 }
 
 type Phase = "idle" | "planning" | "plan" | "applying" | "done";
+
+// Standard = Claude Sonnet (günstig, Alltag) · Expert = Claude Opus (stärker,
+// mehr Credits). Wahl bleibt über localStorage erhalten.
+type AiMode = "standard" | "expert";
+const AI_MODE_LS = "bspx:aiMode";
+function loadAiMode(): AiMode {
+  try {
+    return localStorage.getItem(AI_MODE_LS) === "expert" ? "expert" : "standard";
+  } catch {
+    return "standard";
+  }
+}
 
 /** Dominante Farbtöne eines Bildes clientseitig extrahieren (Canvas). */
 async function extractPalette(dataUrl: string): Promise<string[]> {
@@ -99,6 +114,16 @@ export default function AiCopilot({
   const [open, setOpen] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle");
   const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState<AiMode>("standard");
+  useEffect(() => setMode(loadAiMode()), []);
+  function pickMode(m: AiMode) {
+    setMode(m);
+    try {
+      localStorage.setItem(AI_MODE_LS, m);
+    } catch {
+      /* Private Mode etc. */
+    }
+  }
   const [images, setImages] = useState<AiImage[]>([]);
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [progress, setProgress] = useState(0);
@@ -163,6 +188,7 @@ export default function AiCopilot({
           paletteHints: images.flatMap((i) => i.hints).slice(0, 8),
           productTitle,
           lang,
+          mode,
           capabilities,
         }),
       });
@@ -192,7 +218,13 @@ export default function AiCopilot({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
-        body: JSON.stringify({ document: docRef.current, ops: plan.ops, imageCount: plan.imageCount, capabilities }),
+        body: JSON.stringify({
+          document: docRef.current,
+          ops: plan.ops,
+          planToken: plan.planToken,
+          productTitle,
+          capabilities,
+        }),
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -401,6 +433,26 @@ export default function AiCopilot({
               ) : (
                 /* ── Eingabe: Text + Bilder ── */
                 <>
+                  {/* Modus: Standard (Sonnet, günstig) vs. Expert (Opus, mehr Credits) */}
+                  <div className="flex items-center gap-1" role="radiogroup" aria-label={t.themes.aiModeLabel}>
+                    {(["standard", "expert"] as const).map((m) => (
+                      <button
+                        key={m}
+                        role="radio"
+                        aria-checked={mode === m}
+                        onClick={() => pickMode(m)}
+                        disabled={phase === "planning"}
+                        title={m === "expert" ? t.themes.aiModeExpertHint : t.themes.aiModeStandardHint}
+                        className={`flex-1 h-6 rounded-md border text-[10px] font-semibold transition ${
+                          mode === m
+                            ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white"
+                            : "border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/[0.07]"
+                        }`}
+                      >
+                        {m === "expert" ? t.themes.aiModeExpert : t.themes.aiModeStandard}
+                      </button>
+                    ))}
+                  </div>
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}

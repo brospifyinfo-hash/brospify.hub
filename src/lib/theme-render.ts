@@ -2,6 +2,7 @@ import "server-only";
 import AdmZip from "adm-zip";
 import { Liquid } from "liquidjs";
 import { getPlaceholderValues, recolorByRole, type ColorPalette, type ThemeCopy } from "@/lib/theme-placeholders";
+import { THEME_FONTS } from "@/lib/theme-fonts";
 
 // ─────────────────────────────────────────────────────────────────
 // ECHTES Theme-Rendering: rendert die tatsächlichen Shopify-Liquid-Sections
@@ -19,23 +20,9 @@ export interface RenderProduct {
   descriptionHtml: string;
 }
 
-export const RENDER_FONTS: Record<string, { family: string; param: string }> = {
-  work_sans_n4: { family: "Work Sans", param: "Work+Sans:wght@400;600;800" },
-  acme_n4: { family: "Acme", param: "Acme" },
-  assistant_n4: { family: "Assistant", param: "Assistant:wght@400;600;800" },
-  montserrat_n4: { family: "Montserrat", param: "Montserrat:wght@400;600;800" },
-  poppins_n4: { family: "Poppins", param: "Poppins:wght@400;600;800" },
-  roboto_n4: { family: "Roboto", param: "Roboto:wght@400;500;700" },
-  inter_n4: { family: "Inter", param: "Inter:wght@400;600;800" },
-  lato_n4: { family: "Lato", param: "Lato:wght@400;700;900" },
-  nunito_n4: { family: "Nunito", param: "Nunito:wght@400;600;800" },
-  raleway_n4: { family: "Raleway", param: "Raleway:wght@400;600;800" },
-  oswald_n4: { family: "Oswald", param: "Oswald:wght@400;600;700" },
-  bebas_neue_n4: { family: "Bebas Neue", param: "Bebas+Neue" },
-  playfair_n4: { family: "Playfair Display", param: "Playfair+Display:wght@400;600;800" },
-  merriweather_n4: { family: "Merriweather", param: "Merriweather:wght@400;700;900" },
-  dmsans_n4: { family: "DM Sans", param: "DM+Sans:wght@400;600;700" },
-};
+// Abgeleitet aus der zentralen Font-Bibliothek (src/lib/theme-fonts.ts).
+export const RENDER_FONTS: Record<string, { family: string; param: string }> =
+  Object.fromEntries(THEME_FONTS.map((f) => [f.value, { family: f.family, param: f.google }]));
 
 const PLACEHOLDER_IMG =
   "data:image/svg+xml;utf8," +

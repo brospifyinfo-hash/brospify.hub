@@ -16,8 +16,9 @@ import {
   effectiveBuyboxPresetId,
   getBuyboxPreset,
 } from "@/lib/theme-library";
-import { getIcon, DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
-import { FONT_FAMILY } from "@/components/theme-editor/editor-ui";
+import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import { fontStack, googleFontsUrlFor } from "@/lib/theme-fonts";
+import { getIconAny } from "@/lib/theme-icon-resolver";
 
 /** Baustein-Typen, die die Runtime im Shop rendern kann. `free_gift` und
  *  `complementary` brauchen Shop-Daten (Geschenk-Produkte/Empfehlungen),
@@ -41,6 +42,9 @@ export const DYNAMIC_SUPPORTED = new Set([
 
 export interface BuyboxPlanBlock {
   type: string;
+  /** Aufgelöste Icon-SVG-Pfade (z. B. icon-with-text) — Runtime rendert sie
+   *  direkt, statt hartkodierte Icons zu zeigen. */
+  icons?: string[][];
   /** Aufgelöste Preset-Settings (Palette-Refs bereits ersetzt). */
   s: Record<string, string | number | boolean>;
   /** Aufgelöste Texte (Feld-Defaults ⊕ KI-Texte ⊕ Nutzer-Eingaben). */
@@ -62,15 +66,10 @@ export interface BuyboxPlan {
 }
 
 // Google-Fonts-URL nur für die zwei benötigten Familien (Storefront-Perf).
+// Gewichts-Sonderfälle (Display-Fonts ohne 600/800) löst die zentrale
+// Font-Bibliothek (theme-fonts.ts) über per-Font-Parameter.
 function googleFontsUrl(headingHandle: string, bodyHandle: string): string {
-  const fam = (h: string) => (FONT_FAMILY[h] || "'Work Sans'").replace(/'/g, "");
-  const families = Array.from(new Set([fam(headingHandle), fam(bodyHandle)]));
-  const parts = families.map((f) =>
-    f === "Bebas Neue" || f === "Acme"
-      ? `family=${f.replace(/ /g, "+")}`
-      : `family=${f.replace(/ /g, "+")}:wght@400;600;800`,
-  );
-  return `https://fonts.googleapis.com/css2?${parts.join("&")}&display=swap`;
+  return googleFontsUrlFor([headingHandle, bodyHandle]);
 }
 
 /** KI-Texte je Baustein-Typ als Text-Defaults einspeisen (gleiche Quellen
@@ -136,7 +135,20 @@ export function buildBuyboxPlan(doc: ThemeDocument, themeCopy: ThemeCopy | undef
       if (typeof v === "string" && v.trim()) t[k] = v;
     }
 
-    blocks.push({ type, s, t });
+    const block: BuyboxPlanBlock = { type, s, t };
+    // icon-with-text: Icon-Settings (Legacy-Select-Werte) serverseitig zu
+    // SVG-Pfaden auflösen — die Runtime zeigte hier früher immer dieselben
+    // 3 hartkodierten Icons, egal was eingestellt war.
+    if (type === "icon-with-text") {
+      const legacy: Record<string, string> = { return: "rotate", package: "box", lightning: "bolt" };
+      const fallbacks = ["truck", "rotate", "lock"];
+      block.icons = [1, 2, 3].map((n) => {
+        const raw = s[`icon_${n}`];
+        const v = typeof raw === "string" && raw ? raw : fallbacks[n - 1];
+        return getIconAny(legacy[v] || v).paths;
+      });
+    }
+    blocks.push(block);
   }
 
   // Vorteile: gewählte Icons (SVG-Pfade für die Runtime) + Texte.
@@ -148,7 +160,7 @@ export function buildBuyboxPlan(doc: ThemeDocument, themeCopy: ThemeCopy | undef
   ];
   const benefitsCfg = blockCfgs["benefits_list"]?.texts || {};
   const benefits = [0, 1, 2, 3].map((i) => {
-    const icon = getIcon(bb.benefitIcons?.[i] || DEFAULT_BENEFIT_ICONS[i] || "check");
+    const icon = getIconAny(bb.benefitIcons?.[i] || DEFAULT_BENEFIT_ICONS[i] || "check");
     const userText = benefitsCfg[`text_${i + 1}`];
     return {
       paths: icon.paths,
@@ -173,8 +185,8 @@ export function buildBuyboxPlan(doc: ThemeDocument, themeCopy: ThemeCopy | undef
       gap: Math.max(4, Math.min(40, typeof bb.spacing === "number" ? bb.spacing : 15)),
     },
     fonts: {
-      heading: (FONT_FAMILY[g.headingFont] || "'Work Sans'") + ", sans-serif",
-      body: (FONT_FAMILY[g.bodyFont] || "'Work Sans'") + ", sans-serif",
+      heading: fontStack(g.headingFont),
+      body: fontStack(g.bodyFont),
       url: googleFontsUrl(g.headingFont, g.bodyFont),
     },
     blocks,
