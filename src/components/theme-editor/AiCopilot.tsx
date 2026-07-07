@@ -1,17 +1,19 @@
 "use client";
 
-// ─── AI Co-Pilot (Leiste UNTER der Live-Vorschau) ───────────────────
+// ─── AI Co-Pilot (einklappbares Panel in der LINKEN Editor-Spalte) ──
 // Texteingabe + Bild-Drag&Drop → die AI schlägt IMMER zuerst einen Plan
 // vor (Schritte + Credit-Kosten nach Aufwand). Erst nach Bestätigung werden
 // die Operationen Schritt für Schritt mit Animation auf das ThemeDocument
 // angewandt — die Live-Preview aktualisiert sich dabei ohne Reload, und
 // Ctrl+Z macht den GANZEN AI-Lauf als einen Schritt rückgängig.
-// Die Leiste liegt bewusst im normalen Fluss (nie über der Preview).
+// Das Panel sitzt über der Aufbau-Leiste (nie über der Preview) und ist
+// per Kopfzeile einklappbar; der Status (Plan bereit / % beim Umsetzen)
+// bleibt auch eingeklappt in der Kopfzeile sichtbar.
 
 import { useEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import {
-  Sparkles, ImagePlus, X, Check, CircleDashed, Coins, ArrowUp, Undo2,
+  Sparkles, ImagePlus, X, Check, CircleDashed, Coins, Undo2, ChevronDown,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
@@ -94,6 +96,7 @@ export default function AiCopilot({
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
+  const [open, setOpen] = useState(true);
   const [phase, setPhase] = useState<Phase>("idle");
   const [prompt, setPrompt] = useState("");
   const [images, setImages] = useState<AiImage[]>([]);
@@ -249,64 +252,97 @@ export default function AiCopilot({
   };
   const activeStep = plan ? stepForOp(Math.max(0, progress - 1)) : 0;
 
+  const showPlanCard = (phase === "plan" || phase === "applying" || phase === "done") && !!plan;
+  const applyPct = plan ? Math.round((progress / Math.max(1, plan.ops.length)) * 100) : 0;
+
   return (
-    <div className="mt-2 shrink-0">
-      <AnimatePresence initial={false}>
-        {/* ── Plan-Karte / Umsetzungs-Animation ── */}
-        {(phase === "plan" || phase === "applying" || phase === "done") && plan && (
-          <motion.div
-            key="plan"
-            initial={{ opacity: 0, y: 10, height: 0 }}
-            animate={{ opacity: 1, y: 0, height: "auto" }}
-            exit={{ opacity: 0, y: 8, height: 0 }}
-            transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-            className="overflow-hidden"
-          >
+    <div
+      className={`mb-2 shrink-0 rounded-xl border overflow-hidden transition ${
+        drag ? "border-[#95BF47] bg-[#95BF47]/[0.06]" : "border-white/[0.1] glass-strong"
+      }`}
+    >
+      {/* ── Kopfzeile: immer sichtbar, klappt das Panel ein/aus ── */}
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title={t.themes.aiHint}
+        className="w-full flex items-center gap-2 px-2.5 py-2 text-left hover:bg-white/[0.04] transition"
+      >
+        <span className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border border-[#95BF47]/30 bg-gradient-to-br from-[#95BF47]/35 to-[#95BF47]/5">
+          <Sparkles className={`w-4 h-4 ${phase === "planning" || phase === "applying" ? "animate-pulse" : ""}`} style={{ color: ACCENT }} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[12.5px] font-bold text-white leading-tight">{t.themes.aiTitle}</span>
+          <span className="block text-[9px] uppercase tracking-[0.14em] font-semibold text-zinc-500 truncate">{t.themes.aiTagline}</span>
+        </span>
+        {/* Status auch im eingeklappten Zustand sichtbar */}
+        {phase === "planning" && <CircleDashed className="w-3.5 h-3.5 animate-spin text-[#cfe9a3] shrink-0" />}
+        {phase === "plan" && (
+          <span className="shrink-0 inline-flex items-center rounded-full border border-amber-300/30 bg-amber-300/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-200">
+            {t.themes.aiPlanReady}
+          </span>
+        )}
+        {phase === "applying" && <span className="shrink-0 text-[10px] font-bold tabular-nums text-[#cfe9a3]">{applyPct}%</span>}
+        {phase === "done" && <Check className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />}
+        <ChevronDown className={`w-4 h-4 text-zinc-500 shrink-0 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {/* Einklapp-Animation über CSS-Grid (0fr→1fr) — robust, und der
+          Eingabe-State (Text/Bilder) bleibt beim Einklappen erhalten. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}
+        aria-hidden={!open}
+      >
+        <div className="min-h-0 overflow-hidden">
             <div
-              className={`relative rounded-xl border p-3 mb-2 ${
-                phase === "applying"
-                  ? "border-[#95BF47]/60 bg-[#95BF47]/[0.06]"
-                  : phase === "done"
-                    ? "border-[#95BF47]/50 bg-[#95BF47]/[0.08]"
-                    : "border-white/[0.12] glass-strong"
-              }`}
+              onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+              onDragLeave={() => setDrag(false)}
+              onDrop={onDrop}
+              className="px-2.5 pb-2.5 space-y-2 max-h-[46vh] overflow-y-auto"
             >
-              {/* animierter Schimmer während der Umsetzung */}
-              {phase === "applying" && (
-                <motion.span
-                  aria-hidden
-                  className="pointer-events-none absolute inset-0 rounded-xl"
-                  style={{ background: "linear-gradient(110deg, transparent 30%, rgba(149,191,71,0.14) 50%, transparent 70%)", backgroundSize: "220% 100%" }}
-                  animate={{ backgroundPositionX: ["120%", "-120%"] }}
-                  transition={{ repeat: Infinity, duration: 1.6, ease: "linear" }}
-                />
-              )}
-              <div className="flex items-start gap-2.5">
-                <span className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style={{ background: "rgba(149,191,71,0.15)" }}>
-                  <Sparkles className={`w-4 h-4 ${phase === "applying" ? "animate-pulse" : ""}`} style={{ color: ACCENT }} />
-                </span>
-                <div className="min-w-0 flex-1">
+              {error && <p className="text-[11px] text-amber-300/90 leading-snug">{error}</p>}
+
+              {showPlanCard && plan ? (
+                /* ── Plan-Karte / Umsetzungs-Animation ── */
+                <div
+                  className={`relative rounded-lg border p-2.5 ${
+                    phase === "applying"
+                      ? "border-[#95BF47]/60 bg-[#95BF47]/[0.06]"
+                      : phase === "done"
+                        ? "border-[#95BF47]/50 bg-[#95BF47]/[0.08]"
+                        : "border-white/[0.12] bg-white/[0.03]"
+                  }`}
+                >
+                  {phase === "applying" && (
+                    <motion.span
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 rounded-lg"
+                      style={{ background: "linear-gradient(110deg, transparent 30%, rgba(149,191,71,0.14) 50%, transparent 70%)", backgroundSize: "220% 100%" }}
+                      animate={{ backgroundPositionX: ["120%", "-120%"] }}
+                      transition={{ repeat: Infinity, duration: 1.6, ease: "linear" }}
+                    />
+                  )}
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-bold text-white">
+                    <span className="text-[12.5px] font-bold text-white">
                       {phase === "done" ? t.themes.aiDone : phase === "applying" ? t.themes.aiApplying : t.themes.aiPlanTitle}
                     </span>
                     {phase !== "done" && plan.cost > 0 && (
-                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10.5px] font-semibold text-amber-200">
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
                         <Coins className="w-3 h-3" /> {t.themes.aiPlanCost.replace("{n}", String(plan.cost))}
                       </span>
                     )}
-                    {phase === "done" && (
-                      <span className="inline-flex items-center gap-1 text-[10.5px] text-zinc-400">
-                        <Undo2 className="w-3 h-3" /> {t.themes.aiUndoHint}
-                      </span>
-                    )}
                   </div>
+                  {phase === "done" && (
+                    <p className="mt-1 inline-flex items-center gap-1 text-[10.5px] text-zinc-400">
+                      <Undo2 className="w-3 h-3" /> {t.themes.aiUndoHint}
+                    </p>
+                  )}
                   {phase === "plan" && plan.summary && (
-                    <p className="text-[11.5px] text-zinc-400 mt-0.5 leading-snug">{plan.summary}</p>
+                    <p className="text-[11px] text-zinc-400 mt-1 leading-snug">{plan.summary}</p>
                   )}
                   {/* Schritte — beim Umsetzen haken sie nacheinander ab */}
                   {phase !== "done" && (
-                    <ul className="mt-2 space-y-1 max-h-[180px] overflow-y-auto pr-1">
+                    <ul className="mt-2 space-y-1.5">
                       {plan.steps.map((s, i) => {
                         const stepDone = phase === "applying" && (i < activeStep || progress >= plan.ops.length);
                         const stepActive = phase === "applying" && i === activeStep && progress < plan.ops.length;
@@ -324,8 +360,8 @@ export default function AiCopilot({
                               )}
                             </span>
                             <span className="min-w-0">
-                              <span className={`block text-[12px] font-semibold leading-tight ${stepActive ? "text-white" : stepDone ? "text-[#cfe9a3]" : "text-zinc-300"}`}>{s.title}</span>
-                              <span className="block text-[10.5px] text-zinc-500 leading-snug">{s.detail}</span>
+                              <span className={`block text-[11.5px] font-semibold leading-tight ${stepActive ? "text-white" : stepDone ? "text-[#cfe9a3]" : "text-zinc-300"}`}>{s.title}</span>
+                              <span className="block text-[10px] text-zinc-500 leading-snug">{s.detail}</span>
                             </span>
                           </li>
                         );
@@ -338,102 +374,90 @@ export default function AiCopilot({
                       <motion.div
                         className="h-full rounded-full"
                         style={{ background: ACCENT }}
-                        animate={{ width: `${Math.round((progress / Math.max(1, plan.ops.length)) * 100)}%` }}
+                        animate={{ width: `${applyPct}%` }}
                         transition={{ duration: 0.25, ease: "easeOut" }}
                       />
                     </div>
                   )}
-                  {/* Aktionen */}
+                  {/* Aktionen — in der schmalen Spalte gestapelt */}
                   {phase === "plan" && (
-                    <div className="flex items-center gap-2 mt-2.5">
+                    <div className="space-y-1.5 mt-2.5">
                       <button
                         onClick={confirmPlan}
-                        className="flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-[12.5px] font-bold text-white hover:brightness-110 transition"
+                        className="w-full flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold text-white hover:brightness-110 transition"
                         style={{ background: ACCENT }}
                       >
                         <Sparkles className="w-3.5 h-3.5" /> {t.themes.aiApply}
                       </button>
                       <button
                         onClick={discard}
-                        className="rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition"
+                        className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white transition"
                       >
                         {t.themes.aiDiscard}
                       </button>
                     </div>
                   )}
                 </div>
-              </div>
+              ) : (
+                /* ── Eingabe: Text + Bilder ── */
+                <>
+                  <textarea
+                    value={prompt}
+                    onChange={(e) => setPrompt(e.target.value)}
+                    onPaste={onPaste}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        requestPlan();
+                      }
+                    }}
+                    placeholder={phase === "planning" ? t.themes.aiPlanning : t.themes.aiPlaceholder}
+                    rows={3}
+                    disabled={phase === "planning"}
+                    className="w-full resize-none rounded-lg border border-white/10 bg-black/25 px-2.5 py-2 text-[12px] text-white placeholder:text-zinc-500 outline-none focus:border-[#95BF47]/60 transition disabled:opacity-60"
+                    style={{ scrollbarWidth: "thin" }}
+                  />
+                  {images.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {images.map((img, i) => (
+                        <span key={i} className="relative">
+                          <img src={img.dataUrl} alt={img.name} className="w-10 h-10 rounded-md object-cover border border-white/15" />
+                          <button
+                            onClick={() => setImages(images.filter((_, x) => x !== i))}
+                            className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"
+                            aria-label={t.themes.aiImageRemove}
+                          >
+                            <X className="w-2.5 h-2.5" />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      disabled={images.length >= 3 || phase === "planning"}
+                      title={t.themes.aiImageHint}
+                      className="shrink-0 w-9 h-9 rounded-lg border border-dashed border-white/15 bg-white/[0.03] text-zinc-400 hover:text-white hover:border-[#95BF47]/50 disabled:opacity-30 flex items-center justify-center transition"
+                    >
+                      <ImagePlus className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={requestPlan}
+                      disabled={phase === "planning" || (!prompt.trim() && !images.length)}
+                      className="flex-1 h-9 flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-bold text-white disabled:opacity-35 transition hover:brightness-110"
+                      style={{ background: ACCENT }}
+                    >
+                      {phase === "planning"
+                        ? <><CircleDashed className="w-4 h-4 animate-spin" /> {t.themes.aiPlanning}</>
+                        : <><Sparkles className="w-4 h-4" /> {t.themes.aiSend}</>}
+                    </button>
+                  </div>
+                  <p className="text-[9.5px] text-zinc-600 leading-snug">{t.themes.aiHint}</p>
+                </>
+              )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {error && <p className="mb-1.5 text-[11.5px] text-amber-300/90">{error}</p>}
-
-      {/* ── Eingabe-Leiste (Text + Bilder) ── */}
-      <div
-        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-        onDragLeave={() => setDrag(false)}
-        onDrop={onDrop}
-        title={t.themes.aiHint}
-        className={`rounded-xl border transition ${
-          drag ? "border-[#95BF47] bg-[#95BF47]/[0.08]" : "border-white/[0.1] glass-strong"
-        } ${phase === "applying" ? "opacity-60 pointer-events-none" : ""}`}
-      >
-        {images.length > 0 && (
-          <div className="flex items-center gap-1.5 px-2 pt-2 flex-wrap">
-            {images.map((img, i) => (
-              <span key={i} className="relative group/img">
-                <img src={img.dataUrl} alt={img.name} className="w-9 h-9 rounded-md object-cover border border-white/15" />
-                <button
-                  onClick={() => setImages(images.filter((_, x) => x !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"
-                  aria-label={t.themes.aiImageRemove}
-                >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            ))}
-          </div>
-        )}
-        <div className="flex items-end gap-1.5 p-1.5">
-          <span className="pl-1.5 pb-2 shrink-0" title={t.themes.aiTitle}>
-            <Sparkles className={`w-4 h-4 ${phase === "planning" ? "animate-pulse" : ""}`} style={{ color: ACCENT }} />
-          </span>
-          <textarea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            onPaste={onPaste}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                requestPlan();
-              }
-            }}
-            placeholder={phase === "planning" ? t.themes.aiPlanning : t.themes.aiPlaceholder}
-            rows={1}
-            disabled={phase === "planning"}
-            className="flex-1 min-w-0 resize-none bg-transparent px-1 py-2 text-[12.5px] text-white placeholder:text-zinc-500 outline-none max-h-[92px] disabled:opacity-60"
-            style={{ scrollbarWidth: "thin" }}
-          />
-          <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-          <button
-            onClick={() => fileRef.current?.click()}
-            disabled={images.length >= 3 || phase === "planning"}
-            title={t.themes.aiImageHint}
-            className="shrink-0 w-8 h-8 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-400 hover:text-white disabled:opacity-30 flex items-center justify-center transition"
-          >
-            <ImagePlus className="w-4 h-4" />
-          </button>
-          <button
-            onClick={requestPlan}
-            disabled={phase === "planning" || (!prompt.trim() && !images.length)}
-            title={t.themes.aiSend}
-            className="shrink-0 w-8 h-8 rounded-lg text-white disabled:opacity-30 flex items-center justify-center transition hover:brightness-110"
-            style={{ background: ACCENT }}
-          >
-            {phase === "planning" ? <CircleDashed className="w-4 h-4 animate-spin" /> : <ArrowUp className="w-4 h-4" />}
-          </button>
         </div>
       </div>
     </div>

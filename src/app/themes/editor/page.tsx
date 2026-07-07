@@ -887,9 +887,19 @@ export default function ThemeEditorPage() {
               </div>
 
               {/* Aufbau (links) — Desktop: volle Höhe bis ganz unten, scrollt intern.
-                  Während der AI-Umsetzung gesperrt (kein Eingriff zwischen den Ops). */}
-              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+                  Oben sitzt der einklappbare AI Co-Pilot; die Aufbau-Leiste
+                  darunter ist während der AI-Umsetzung gesperrt. */}
+              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+                <AiCopilot
+                  doc={doc}
+                  dispatch={dispatch}
+                  baseSections={baseSections}
+                  capabilities={capabilities}
+                  homeSections={homeSections}
+                  productTitle={activeProduct?.titel}
+                  onBusyChange={setAiBusy}
+                />
+                <div className={`glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
                   <div className="flex rounded-md border border-white/10 bg-black/25 p-0.5 mb-2">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
@@ -1051,16 +1061,6 @@ export default function ThemeEditorPage() {
                     onInsertAt={(i) => setLibraryAt(i)}
                   />
                 </div>
-                {/* AI Co-Pilot — bewusst UNTER der Vorschau (nie davor/darüber) */}
-                <AiCopilot
-                  doc={doc}
-                  dispatch={dispatch}
-                  baseSections={baseSections}
-                  capabilities={capabilities}
-                  homeSections={homeSections}
-                  productTitle={activeProduct?.titel}
-                  onBusyChange={setAiBusy}
-                />
               </div>
 
               {/* Inspector (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
