@@ -20,7 +20,10 @@ import {
 } from "lucide-react";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
 import type { PreviewData } from "@/components/ThemePreview";
-import { getSectionDef, getBuyboxLib, GALLERY_PRESETS, getBuyboxControls, resolveBlockSettings } from "@/lib/theme-library";
+import {
+  getSectionDef, getBuyboxLib, GALLERY_PRESETS, getBuyboxControls, resolveBlockSettings,
+  sectionSupportsDesign, sectionToneSettings, type SectionTone,
+} from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
 import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
 import { THEME_ICONS, DEFAULT_BENEFIT_ICONS, getIcon } from "@/lib/theme-icons";
@@ -180,6 +183,48 @@ export default function Inspector({
                   onClick={() => dispatch({ type: "setPreset", uid: section.uid, presetId: p.id })}
                 />
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Hintergrund-Ton + Übergänge (Design-Layer) */}
+        {sectionSupportsDesign(section.type) && (
+          <div>
+            <GroupTitle>{t.themes.editorSecDesign}</GroupTitle>
+            <div className="space-y-1.5">
+              <div>
+                <FieldLabel>{t.themes.editorSecTone}</FieldLabel>
+                <Segmented
+                  options={[["none", lang === "en" ? "Off" : "Aus"], ["tint", "Tint"], ["soft", "Soft"], ["wash", lang === "en" ? "Gray" : "Grau"], ["deep", lang === "en" ? "Dark" : "Dunkel"]]}
+                  value={String(section.settings?.sec_tone || (section.settings?.sec_bg ? "custom" : "none"))}
+                  onChange={(tone) =>
+                    dispatch({
+                      type: "mergeSectionSettings",
+                      uid: section.uid,
+                      patch: sectionToneSettings(tone as SectionTone, doc.global.colors, {
+                        fade: (section.settings?.sec_fade as never) || undefined,
+                        divider: (section.settings?.sec_divider as never) || undefined,
+                      }),
+                    })
+                  }
+                />
+              </div>
+              <div>
+                <FieldLabel>{t.themes.editorSecFade}</FieldLabel>
+                <Segmented
+                  options={[["none", lang === "en" ? "Off" : "Aus"], ["top", lang === "en" ? "Top" : "Oben"], ["bottom", lang === "en" ? "Bottom" : "Unten"], ["both", lang === "en" ? "Both" : "Beide"]]}
+                  value={String(section.settings?.sec_fade || "none")}
+                  onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_fade", value: v })}
+                />
+              </div>
+              <div>
+                <FieldLabel>{t.themes.editorSecDivider}</FieldLabel>
+                <Segmented
+                  options={[["none", lang === "en" ? "Off" : "Aus"], ["wave", lang === "en" ? "Wave" : "Welle"], ["slant", lang === "en" ? "Slant" : "Schräge"], ["curve", lang === "en" ? "Curve" : "Bogen"]]}
+                  value={String(section.settings?.sec_divider || "none")}
+                  onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_divider", value: v })}
+                />
+              </div>
             </div>
           </div>
         )}

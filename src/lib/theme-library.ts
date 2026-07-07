@@ -112,14 +112,106 @@ export function resolveTexts(instance: SectionInstance): Record<string, string> 
 }
 
 /** Effektive Preset-Settings einer Instanz (Palette-Refs aufgelöst).
- *  presetId "" = NEUTRAL: keine Overrides — die Section behält ihren
- *  Basis-Zustand (wichtig für übernommene Startseiten-Sections). */
+ *  presetId "" = NEUTRAL: keine Preset-Overrides — die Section behält ihren
+ *  Basis-Zustand (wichtig für übernommene Startseiten-Sections). Instanz-
+ *  Feineinstellungen (instance.settings — Design-Layer, Icons) liegen IMMER
+ *  über den Preset-Werten; identische Auflösung in Vorschau UND Compile. */
 export function resolvePresetSettings(instance: SectionInstance, palette: ColorPalette): Record<string, string | number | boolean> {
-  if (!instance.presetId) return {};
-  const def = getSectionDef(instance.type);
-  const preset = getPresetDef(def, instance.presetId);
   const out: Record<string, string | number | boolean> = {};
-  for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  if (instance.presetId) {
+    const def = getSectionDef(instance.type);
+    const preset = getPresetDef(def, instance.presetId);
+    for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  }
+  for (const [k, v] of Object.entries(instance.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  return out;
+}
+
+// ─── Section-Design-Layer: Hintergrund-Töne + Übergänge (alle Sections) ──
+// Jede eigene Section versteht dieselben Schema-Keys — Vorschau (Replica-
+// Frame) und Liquid (bspx-section-frame-Snippet) rendern sie identisch:
+//   sec_bg / sec_bg2   Hintergrund (2. Farbe = vertikaler Verlauf)
+//   sec_fade           weicher Übergang von/zur Seiten-Hintergrundfarbe
+//   sec_divider        dekorative Kante am unteren Rand (Welle/Schräge/Bogen)
+//   sec_pagebg         Seiten-Hintergrund (wird automatisch mit @background
+//                      gefüllt — Referenz für Fades und Divider)
+export const SECTION_DESIGN_KEYS = ["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "sec_pagebg"] as const;
+/** Section-Typen, deren Liquid den Design-Layer versteht (eigene Sections —
+ *  Dawn-Basis-Sections bringen eigene Farbschemata mit und bleiben außen vor,
+ *  damit Vorschau ≠ Download nie passieren kann). */
+export const SECTION_DESIGN_TYPES = new Set([
+  "bro-cta-banner", "bro-chat-reviews", "bro-compare", "bro-feature-grid",
+  "bro-guarantee", "bro-info-tabs", "bro-problem-solution", "bro-stats",
+  "bro-steps", "qanda", "reviews", "reviews2", "trustpilot", "vids",
+  "countdown", "benefits", "photo", "kollektionen", "socialicons",
+  "animatedtext", "map", "slideshow2",
+  "bro-icon-benefits", "bro-spotlight", "bro-callouts", "bro-gradient-cta",
+  "bro-logo-badges", "bro-image-cards",
+]);
+export function sectionSupportsDesign(type: string): boolean {
+  return SECTION_DESIGN_TYPES.has(type);
+}
+export const SECTION_FADES = ["none", "top", "bottom", "both"] as const;
+export const SECTION_DIVIDERS = ["none", "wave", "slant", "curve"] as const;
+export type SectionTone = "none" | "tint" | "soft" | "wash" | "deep";
+export const SECTION_TONES: SectionTone[] = ["none", "tint", "soft", "wash", "deep"];
+
+function mixHex(a: string, b: string, t: number): string {
+  const pa = /^#([0-9a-f]{6})$/i.exec(a)?.[1];
+  const pb = /^#([0-9a-f]{6})$/i.exec(b)?.[1];
+  if (!pa || !pb) return a;
+  const c = (o: number) => {
+    const va = parseInt(pa.slice(o, o + 2), 16);
+    const vb = parseInt(pb.slice(o, o + 2), 16);
+    return Math.round(va + (vb - va) * t).toString(16).padStart(2, "0");
+  };
+  return `#${c(0)}${c(2)}${c(4)}`;
+}
+
+/**
+ * Übersetzt einen benannten Hintergrund-Ton in konkrete Design-Settings —
+ * deterministisch aus der Palette (Vorschau = Download; auch die AI nutzt
+ * genau diese Auflösung, damit Töne immer stimmig statt „AI-bunt" sind).
+ *   tint  = Hauch Akzent (≈6 %)          soft = spürbarer Akzent-Verlauf
+ *   wash  = neutraler Grauton             deep = dunkles Panel (heller Text)
+ */
+export function sectionToneSettings(
+  tone: SectionTone,
+  palette: ColorPalette,
+  opts: { fade?: (typeof SECTION_FADES)[number]; divider?: (typeof SECTION_DIVIDERS)[number] } = {},
+): Record<string, string> {
+  const bg = palette.background;
+  const out: Record<string, string> = {
+    // Merker für UI/AI (im Liquid-Schema unbekannt → von Shopify ignoriert).
+    sec_tone: tone,
+    sec_pagebg: bg,
+    sec_fade: opts.fade ?? "both",
+    sec_divider: opts.divider ?? "none",
+  };
+  switch (tone) {
+    case "tint":
+      out.sec_bg = mixHex(bg, palette.accent, 0.07);
+      out.sec_bg2 = "";
+      break;
+    case "soft":
+      out.sec_bg = mixHex(bg, palette.accent, 0.1);
+      out.sec_bg2 = mixHex(bg, palette.accent, 0.22);
+      break;
+    case "wash":
+      out.sec_bg = mixHex(bg, palette.text, 0.05);
+      out.sec_bg2 = "";
+      break;
+    case "deep":
+      out.sec_bg = mixHex(palette.text, palette.button, 0.35);
+      out.sec_bg2 = mixHex(mixHex(palette.text, palette.button, 0.35), palette.accent, 0.18);
+      // dunkle Panels blenden hart besser als mit Fade
+      out.sec_fade = opts.fade ?? "none";
+      break;
+    default:
+      out.sec_bg = "";
+      out.sec_bg2 = "";
+      out.sec_fade = "none";
+  }
   return out;
 }
 
@@ -743,6 +835,133 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "whatsapp", label: "WhatsApp-Look", labelEn: "WhatsApp look", hint: "Beiger Chat, grüne Haken", settings: { look: "whatsapp", accent_color: "@accent" } },
       { id: "imessage", label: "iMessage-Look", labelEn: "iMessage look", hint: "Weiß mit grauen Bubbles", settings: { look: "imessage", accent_color: "@accent" } },
       { id: "neutral", label: "Theme-Farben", labelEn: "Theme colors", hint: "Bubbles in Akzent-Tönung", settings: { look: "neutral", accent_color: "@accent" } },
+    ],
+  },
+
+  // ── Premium-Sections (v3): hochwertig, mit Icon- und Design-Layer ──
+  {
+    type: "bro-icon-benefits",
+    category: "content",
+    label: "Icon-Band",
+    labelEn: "Icon band",
+    desc: "3–4 Produkt-Vorteile mit passenden Icons — der Klassiker unter dem Hero.",
+    descEn: "3–4 product benefits with matching icons — the classic under the hero.",
+    fields: [
+      { id: "heading", label: "Überschrift (optional)", labelEn: "Heading (optional)", kind: "text", target: { key: "heading" }, def: "" },
+      { id: "t1", label: "Vorteil 1 — Titel", labelEn: "Benefit 1 — title", kind: "text", target: { key: "t1" }, def: "Sofort spürbar" },
+      { id: "d1", label: "Vorteil 1 — Text", labelEn: "Benefit 1 — text", kind: "text", target: { key: "d1" }, def: "Wirkung ab der ersten Anwendung" },
+      { id: "t2", label: "Vorteil 2 — Titel", labelEn: "Benefit 2 — title", kind: "text", target: { key: "t2" }, def: "Für jeden Tag" },
+      { id: "d2", label: "Vorteil 2 — Text", labelEn: "Benefit 2 — text", kind: "text", target: { key: "d2" }, def: "In unter 10 Minuten angewendet" },
+      { id: "t3", label: "Vorteil 3 — Titel", labelEn: "Benefit 3 — title", kind: "text", target: { key: "t3" }, def: "Geprüfte Qualität" },
+      { id: "d3", label: "Vorteil 3 — Text", labelEn: "Benefit 3 — text", kind: "text", target: { key: "d3" }, def: "Streng getestet und zertifiziert" },
+      { id: "t4", label: "Vorteil 4 — Titel (optional)", labelEn: "Benefit 4 — title (optional)", kind: "text", target: { key: "t4" }, def: "30 Tage testen" },
+      { id: "d4", label: "Vorteil 4 — Text", labelEn: "Benefit 4 — text", kind: "text", target: { key: "d4" }, def: "Geld-zurück-Garantie inklusive" },
+    ],
+    presets: [
+      { id: "band", label: "Band", labelEn: "Band", hint: "Icons in Akzent-Kreisen, luftig", settings: { layout: "band", accent_color: "@accent" } },
+      { id: "karten", label: "Karten", labelEn: "Cards", hint: "4 Karten mit Schatten", settings: { layout: "karten", accent_color: "@accent" } },
+      { id: "minimal", label: "Kompakt", labelEn: "Compact", hint: "Einzeilig, dezent", settings: { layout: "minimal", accent_color: "@accent" } },
+    ],
+  },
+  {
+    type: "bro-spotlight",
+    category: "social",
+    label: "Kunden-Spotlight",
+    labelEn: "Customer spotlight",
+    desc: "EIN großes Testimonial mit Serifen-Zitat, Sternen und Avatar — Editorial-Klasse.",
+    descEn: "ONE big testimonial with serif quote, stars and avatar — editorial class.",
+    fields: [
+      { id: "quote", label: "Zitat", labelEn: "Quote", kind: "textarea", target: { key: "quote" }, def: "Ich war skeptisch — aber schon nach einer Woche wollte ich es nicht mehr hergeben. Es fühlt sich einfach hochwertig an." },
+      { id: "name", label: "Name", labelEn: "Name", kind: "text", target: { key: "name" }, def: "Anna K." },
+      { id: "role", label: "Zeile unter dem Namen", labelEn: "Line under the name", kind: "text", target: { key: "role" }, def: "Verifizierte Käuferin" },
+    ],
+    presets: [
+      { id: "editorial", label: "Editorial", labelEn: "Editorial", hint: "Frei stehend, großes Zitat", settings: { layout: "editorial", accent_color: "@accent" } },
+      { id: "karte", label: "Karte", labelEn: "Card", hint: "Als Premium-Karte mit Schatten", settings: { layout: "karte", accent_color: "@accent" } },
+    ],
+  },
+  {
+    type: "bro-callouts",
+    category: "content",
+    label: "Produkt-Callouts",
+    labelEn: "Product callouts",
+    desc: "Produktbild in der Mitte, Feature-Punkte mit Icons und Linien außen — DTC-Premium.",
+    descEn: "Product image center, feature points with icons and lines around it — DTC premium.",
+    fields: [
+      { id: "heading", label: "Überschrift (optional)", labelEn: "Heading (optional)", kind: "text", target: { key: "heading" }, def: "Im Detail durchdacht" },
+      { id: "c1", label: "Punkt 1", labelEn: "Point 1", kind: "text", target: { key: "c1" }, def: "Hochwertige Materialien" },
+      { id: "c2", label: "Punkt 2", labelEn: "Point 2", kind: "text", target: { key: "c2" }, def: "Entwickelt für den Alltag" },
+      { id: "c3", label: "Punkt 3", labelEn: "Point 3", kind: "text", target: { key: "c3" }, def: "Einfach zu bedienen" },
+      { id: "c4", label: "Punkt 4", labelEn: "Point 4", kind: "text", target: { key: "c4" }, def: "Langlebig & robust" },
+    ],
+    presets: [
+      { id: "hell", label: "Klar", labelEn: "Clean", hint: "Ruhig, ohne Glow", settings: { layout: "hell", accent_color: "@accent" } },
+      { id: "glow", label: "Akzent-Glow", labelEn: "Accent glow", hint: "Weicher Farbschein hinter dem Produkt", settings: { layout: "glow", accent_color: "@accent" } },
+    ],
+  },
+  {
+    type: "bro-gradient-cta",
+    category: "conversion",
+    label: "Gradient-CTA",
+    labelEn: "Gradient CTA",
+    desc: "Abschluss-Band mit Premium-Farbverlauf, Benefit-Chips und großem Kauf-Button.",
+    descEn: "Closing band with premium gradient, benefit chips and a big CTA.",
+    fields: [
+      { id: "eyebrow", label: "Eyebrow (optional)", labelEn: "Eyebrow (optional)", kind: "text", target: { key: "eyebrow" }, def: "Bereit, wenn du es bist" },
+      { id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Starte heute — risikofrei" },
+      { id: "subheading", label: "Untertitel", labelEn: "Subheading", kind: "textarea", target: { key: "subheading" }, def: "Schließe dich tausenden zufriedenen Kunden an und überzeuge dich selbst." },
+      { id: "chip1", label: "Chip 1", labelEn: "Chip 1", kind: "text", target: { key: "chip1" }, def: "Gratis Versand" },
+      { id: "chip2", label: "Chip 2", labelEn: "Chip 2", kind: "text", target: { key: "chip2" }, def: "30 Tage Rückgabe" },
+      { id: "chip3", label: "Chip 3 (optional)", labelEn: "Chip 3 (optional)", kind: "text", target: { key: "chip3" }, def: "Käuferschutz" },
+      { id: "cta", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "cta" }, def: "Jetzt bestellen" },
+      { id: "note", label: "Zeile unter dem Button (optional)", labelEn: "Line under button (optional)", kind: "text", target: { key: "note" }, def: "" },
+    ],
+    presets: [
+      { id: "aurora", label: "Aurora", labelEn: "Aurora", hint: "Akzent → Button-Farbe, kühl", settings: { g1: "@accent", g2: "@button", g3: "", radius: 26 } },
+      { id: "deep", label: "Deep", labelEn: "Deep", hint: "Dunkel mit Akzent-Schimmer", settings: { g1: "@text", g2: "@button", g3: "@accent", radius: 26 } },
+      { id: "mono", label: "Mono", labelEn: "Mono", hint: "Nur Akzent, satt", settings: { g1: "@accent", g2: "@accent", g3: "", radius: 26 } },
+    ],
+  },
+  {
+    type: "bro-logo-badges",
+    category: "social",
+    label: "Bekannt-aus-Band",
+    labelEn: "Featured-in band",
+    desc: "Presse-/Badge-Namen als elegantes Laufband — Autorität in einer Zeile.",
+    descEn: "Press/badge names as an elegant marquee — authority in one line.",
+    fields: [
+      { id: "heading", label: "Kopfzeile", labelEn: "Header line", kind: "text", target: { key: "heading" }, def: "Bekannt aus" },
+      { id: "b1", label: "Badge 1", labelEn: "Badge 1", kind: "text", target: { key: "b1" }, def: "GALILEO" },
+      { id: "b2", label: "Badge 2", labelEn: "Badge 2", kind: "text", target: { key: "b2" }, def: "VOGUE" },
+      { id: "b3", label: "Badge 3", labelEn: "Badge 3", kind: "text", target: { key: "b3" }, def: "FOCUS" },
+      { id: "b4", label: "Badge 4", labelEn: "Badge 4", kind: "text", target: { key: "b4" }, def: "STERN" },
+      { id: "b5", label: "Badge 5 (optional)", labelEn: "Badge 5 (optional)", kind: "text", target: { key: "b5" }, def: "TREND" },
+    ],
+    presets: [
+      { id: "marquee", label: "Laufband", labelEn: "Marquee", hint: "Läuft langsam durch", settings: { layout: "marquee" } },
+      { id: "statisch", label: "Statisch", labelEn: "Static", hint: "Eine ruhige Zeile", settings: { layout: "statisch" } },
+    ],
+  },
+  {
+    type: "bro-image-cards",
+    category: "media",
+    label: "Premium Bild-Karten",
+    labelEn: "Premium image cards",
+    desc: "3 große Bild-Karten mit Verlauf und Caption — Lookbook-Gefühl statt Raster.",
+    descEn: "3 big image cards with gradient and caption — lookbook feel instead of a grid.",
+    fields: [
+      { id: "heading", label: "Überschrift (optional)", labelEn: "Heading (optional)", kind: "text", target: { key: "heading" }, def: "" },
+      { id: "c1_t", label: "Karte 1 — Titel", labelEn: "Card 1 — title", kind: "text", target: { key: "c1_t" }, def: "Für deinen Alltag" },
+      { id: "c1_d", label: "Karte 1 — Untertitel", labelEn: "Card 1 — caption", kind: "text", target: { key: "c1_d" }, def: "Jeden Tag im Einsatz" },
+      { id: "c2_t", label: "Karte 2 — Titel", labelEn: "Card 2 — title", kind: "text", target: { key: "c2_t" }, def: "Bis ins Detail" },
+      { id: "c2_d", label: "Karte 2 — Untertitel", labelEn: "Card 2 — caption", kind: "text", target: { key: "c2_d" }, def: "Durchdacht verarbeitet" },
+      { id: "c3_t", label: "Karte 3 — Titel", labelEn: "Card 3 — title", kind: "text", target: { key: "c3_t" }, def: "Bereit für dich" },
+      { id: "c3_d", label: "Karte 3 — Untertitel", labelEn: "Card 3 — caption", kind: "text", target: { key: "c3_d" }, def: "In wenigen Tagen bei dir" },
+    ],
+    presets: [
+      { id: "drei", label: "Drei gleich", labelEn: "Three equal", hint: "Ruhig und ausgewogen", settings: { layout: "drei", radius: 20 } },
+      { id: "versetzt", label: "Versetzt", labelEn: "Staggered", hint: "Mittlere Karte versetzt", settings: { layout: "versetzt", radius: 20 } },
+      { id: "breit", label: "Eine breit", labelEn: "One wide", hint: "Erste Karte doppelt breit", settings: { layout: "breit", radius: 20 } },
     ],
   },
 ];
@@ -1396,170 +1615,237 @@ export const STYLE_GALLERY: Record<string, string> = {
 export interface CompositionEntry {
   type: string;
   presetId: string;
+  /** Optionale Instanz-Settings (Design-Layer: Töne/Fades/Divider, Icons) —
+   *  Palette-Refs erlaubt; landen als instance.settings auf der Section. */
+  settings?: Record<string, string | number | boolean>;
 }
 
 export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   modern: [
     { type: "bro-feature-grid", presetId: "icons" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint" } },
+    { type: "bro-logo-badges", presetId: "marquee" },
     { type: "bro-info-tabs", presetId: "mittig" },
-    { type: "reviews2", presetId: "hell" },
+    { type: "reviews2", presetId: "hell", settings: { sec_tone: "wash", sec_divider: "curve" } },
     { type: "featured-collection", presetId: "galerie" },
     { type: "qanda", presetId: "glass" },
+    { type: "bro-gradient-cta", presetId: "aurora" },
   ],
   elegant: [
     { type: "image-with-text", presetId: "overlap" },
+    { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "tint" } },
+    { type: "bro-logo-badges", presetId: "statisch" },
     { type: "reviews", presetId: "ruhig" },
-    { type: "trustpilot", presetId: "gross" },
+    { type: "bro-image-cards", presetId: "versetzt", settings: { sec_tone: "wash" } },
     { type: "bro-info-tabs", presetId: "links" },
     { type: "collapsible-content", presetId: "sektion" },
   ],
   bold: [
     { type: "bro-cta-banner", presetId: "vollbild" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep", sec_divider: "slant" } },
     { type: "bro-feature-grid", presetId: "kacheln" },
+    { type: "bro-stats", presetId: "band" },
     { type: "reviews2", presetId: "dunkel" },
     { type: "countdown", presetId: "akzent" },
     { type: "featured-collection", presetId: "slider" },
+    { type: "bro-gradient-cta", presetId: "deep" },
   ],
   playful: [
     { type: "animatedtext", presetId: "stern" },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave" } },
     { type: "bro-feature-grid", presetId: "icons" },
     { type: "vids", presetId: "hell" },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "tint" } },
     { type: "reviews2", presetId: "getoent" },
     { type: "qanda", presetId: "offen" },
+    { type: "bro-gradient-cta", presetId: "mono" },
   ],
   minimal: [
     { type: "rich-text", presetId: "mittig" },
+    { type: "bro-icon-benefits", presetId: "minimal" },
     { type: "featured-collection", presetId: "editorial" },
+    { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "wash" } },
     { type: "qanda", presetId: "kompakt" },
   ],
   noir: [
     { type: "scrollingbild", presetId: "kino" },
+    { type: "bro-logo-badges", presetId: "statisch" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep" } },
     { type: "reviews2", presetId: "dunkel" },
+    { type: "bro-image-cards", presetId: "drei" },
     { type: "trustpilot", presetId: "kompakt" },
     { type: "bro-cta-banner", presetId: "editorial" },
   ],
   sunset: [
     { type: "image-with-text", presetId: "split" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", sec_divider: "wave" } },
     { type: "multicolumn", presetId: "karten" },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft" } },
     { type: "reviews", presetId: "fade" },
     { type: "qanda", presetId: "glass" },
-    { type: "socialicons", presetId: "mittig" },
+    { type: "bro-gradient-cta", presetId: "mono" },
   ],
   ocean: [
     { type: "bro-feature-grid", presetId: "icons" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint" } },
     { type: "video", presetId: "standard" },
+    { type: "bro-callouts", presetId: "hell", settings: { sec_tone: "wash", sec_divider: "curve" } },
     { type: "reviews2", presetId: "hell" },
     { type: "collapsible-content", presetId: "reihen" },
+    { type: "bro-gradient-cta", presetId: "aurora" },
   ],
   nature: [
     { type: "image-with-text", presetId: "zentriert" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "leaf", icon_2: "sprout", icon_3: "shield", icon_4: "rotate" } },
     { type: "multicolumn", presetId: "drei" },
+    { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "wash" } },
     { type: "reviews", presetId: "ruhig" },
     { type: "qanda", presetId: "glass" },
   ],
   candy: [
     { type: "animatedtext", presetId: "herz" },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave" } },
     { type: "collage", presetId: "links" },
     { type: "reviews2", presetId: "getoent" },
     { type: "vids", presetId: "getoent" },
     { type: "countdown", presetId: "dunkel" },
+    { type: "bro-gradient-cta", presetId: "mono" },
   ],
   tech: [
     { type: "bro-feature-grid", presetId: "kompakt" },
+    { type: "bro-icon-benefits", presetId: "minimal", settings: { sec_tone: "wash", icon_1: "chip", icon_2: "battery", icon_3: "wifi", icon_4: "shield" } },
+    { type: "bro-callouts", presetId: "glow" },
     { type: "rich-text", presetId: "mittig" },
+    { type: "bro-stats", presetId: "hell", settings: { sec_tone: "tint" } },
     { type: "trustpilot", presetId: "flow" },
     { type: "qanda", presetId: "kompakt" },
+    { type: "bro-gradient-cta", presetId: "aurora" },
   ],
   royal: [
     { type: "bro-cta-banner", presetId: "karte" },
+    { type: "bro-logo-badges", presetId: "statisch" },
     { type: "image-with-text", presetId: "overlap" },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "tint" } },
     { type: "reviews", presetId: "gross" },
+    { type: "bro-image-cards", presetId: "breit", settings: { sec_tone: "wash" } },
     { type: "trustpilot", presetId: "gross" },
   ],
   luxe: [
     { type: "scrollingbild", presetId: "kino" },
+    { type: "bro-logo-badges", presetId: "statisch" },
     { type: "image-with-text", presetId: "bildrechts" },
-    { type: "reviews", presetId: "gross" },
+    { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "tint" } },
+    { type: "bro-image-cards", presetId: "versetzt" },
+    { type: "reviews", presetId: "gross", settings: { sec_tone: "wash" } },
     { type: "featured-collection", presetId: "editorial" },
     { type: "qanda", presetId: "luftig" },
   ],
   street: [
     { type: "bro-cta-banner", presetId: "streifen" },
+    { type: "bro-logo-badges", presetId: "marquee", settings: { sec_tone: "deep" } },
     { type: "scrollingbild", presetId: "vollbild" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "fire", icon_2: "bolt", icon_3: "truck", icon_4: "shield" } },
     { type: "bro-stats", presetId: "band" },
     { type: "reviews2", presetId: "dunkel" },
     { type: "countdown", presetId: "akzent" },
+    { type: "bro-gradient-cta", presetId: "deep" },
   ],
   clinic: [
     { type: "bro-steps", presetId: "kreise" },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "tint", icon_1: "medic", icon_2: "shield", icon_3: "pulse", icon_4: "rotate" } },
     { type: "bro-guarantee", presetId: "siegel" },
+    { type: "bro-callouts", presetId: "hell", settings: { sec_tone: "wash", sec_divider: "curve" } },
     { type: "bro-feature-grid", presetId: "duo" },
     { type: "reviews", presetId: "ruhig" },
     { type: "qanda", presetId: "kompakt" },
+    { type: "bro-gradient-cta", presetId: "aurora" },
   ],
   cozy: [
     { type: "image-with-text", presetId: "split" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "home", icon_2: "bed", icon_3: "heart", icon_4: "truck" } },
     { type: "collage", presetId: "karten" },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft", sec_divider: "wave" } },
     { type: "benefits", presetId: "luftig" },
     { type: "reviews2", presetId: "sand" },
     { type: "photo", presetId: "getoent" },
   ],
   sport: [
     { type: "bro-cta-banner", presetId: "vollbild" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep", sec_divider: "slant", icon_1: "bolt", icon_2: "pulse", icon_3: "battery", icon_4: "trophy" } },
     { type: "bro-stats", presetId: "hell" },
     { type: "vids", presetId: "dunkel" },
+    { type: "bro-callouts", presetId: "glow", settings: { sec_tone: "wash" } },
     { type: "bro-feature-grid", presetId: "kacheln" },
     { type: "reviews2", presetId: "hell" },
+    { type: "bro-gradient-cta", presetId: "deep" },
   ],
   fresh: [
     { type: "benefits", presetId: "standard" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "utensils", icon_2: "leaf", icon_3: "clock", icon_4: "smile" } },
     { type: "multicolumn", presetId: "karten" },
-    { type: "bro-chat-reviews", presetId: "whatsapp" },
+    { type: "bro-chat-reviews", presetId: "whatsapp", settings: { sec_tone: "wash", sec_divider: "wave" } },
     { type: "image-with-text", presetId: "zentriert" },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft" } },
     { type: "qanda", presetId: "offen" },
   ],
   family: [
     { type: "bro-feature-grid", presetId: "icons" },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave", icon_1: "baby", icon_2: "heart", icon_3: "shield", icon_4: "smile" } },
     { type: "bro-chat-reviews", presetId: "imessage" },
     { type: "image-with-text", presetId: "overlap" },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "tint" } },
     { type: "qanda", presetId: "luftig" },
     { type: "bro-guarantee", presetId: "akzent" },
   ],
   carbon: [
     { type: "video", presetId: "vollbreit" },
+    { type: "bro-icon-benefits", presetId: "minimal", settings: { sec_tone: "deep", icon_1: "chip", icon_2: "battery", icon_3: "plug", icon_4: "wifi" } },
     { type: "bro-compare", presetId: "dunkel" },
+    { type: "bro-callouts", presetId: "glow" },
     { type: "bro-stats", presetId: "band" },
     { type: "reviews2", presetId: "dunkel" },
     { type: "collapsible-content", presetId: "schlicht" },
+    { type: "bro-gradient-cta", presetId: "deep" },
   ],
   retro: [
     { type: "bro-problem-solution", presetId: "gestapelt" },
+    { type: "bro-logo-badges", presetId: "statisch", settings: { sec_tone: "wash" } },
     { type: "image-with-text", presetId: "bildrechts" },
+    { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "tint" } },
     { type: "reviews", presetId: "fade" },
     { type: "multicolumn", presetId: "zwei" },
     { type: "bro-cta-banner", presetId: "karte" },
   ],
   spa: [
     { type: "image-with-text", presetId: "overlap" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", sec_divider: "wave", icon_1: "droplet", icon_2: "sun", icon_3: "sprout", icon_4: "smile" } },
     { type: "bro-steps", presetId: "timeline" },
+    { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "soft" } },
     { type: "reviews", presetId: "ruhig" },
+    { type: "bro-image-cards", presetId: "versetzt", settings: { sec_tone: "wash" } },
     { type: "photo", presetId: "hell" },
     { type: "qanda", presetId: "luftig" },
   ],
   outdoor: [
     { type: "scrollingbild", presetId: "panorama" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "mountain", icon_2: "compass", icon_3: "shield", icon_4: "feather" } },
     { type: "bro-feature-grid", presetId: "kacheln" },
-    { type: "bro-stats", presetId: "karten" },
+    { type: "bro-stats", presetId: "karten", settings: { sec_tone: "wash", sec_divider: "slant" } },
+    { type: "bro-image-cards", presetId: "breit" },
     { type: "reviews2", presetId: "sand" },
     { type: "map", presetId: "rechts" },
+    { type: "bro-gradient-cta", presetId: "deep" },
   ],
   deal: [
     { type: "countdown", presetId: "akzent" },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "percent", icon_2: "truck", icon_3: "rotate", icon_4: "lock" } },
     { type: "bro-compare", presetId: "klassisch" },
     { type: "bro-problem-solution", presetId: "kontrast" },
+    { type: "bro-stats", presetId: "band" },
     { type: "reviews2", presetId: "getoent" },
     { type: "bro-guarantee", presetId: "akzent" },
     { type: "qanda", presetId: "kompakt" },
+    { type: "bro-gradient-cta", presetId: "mono" },
   ],
 };
 
@@ -1775,11 +2061,24 @@ export function buildInitialDocument(
   for (const entry of composition) {
     if (caps.size && !caps.has(entry.type)) continue; // Basis kennt den Typ nicht
     const base = baseSections.find((b) => b.type === entry.type && !used.has(b.id));
+    // Kompakte Ton-Marker ({ sec_tone: "tint", … }) in konkrete Design-
+    // Settings der Stil-Palette expandieren (Vorschau = Download).
+    let settings = entry.settings ? { ...entry.settings } : undefined;
+    if (settings && typeof settings.sec_tone === "string" && SECTION_TONES.includes(settings.sec_tone as SectionTone)) {
+      const { sec_tone, sec_fade, sec_divider, ...rest } = settings;
+      settings = {
+        ...sectionToneSettings(sec_tone as SectionTone, style.palette, {
+          fade: typeof sec_fade === "string" ? (sec_fade as (typeof SECTION_FADES)[number]) : undefined,
+          divider: typeof sec_divider === "string" ? (sec_divider as (typeof SECTION_DIVIDERS)[number]) : undefined,
+        }),
+        ...rest,
+      };
+    }
     if (base) {
       used.add(base.id);
-      sections.push({ uid: base.id, type: entry.type, presetId: entry.presetId, source: "template", texts: {} });
+      sections.push({ uid: base.id, type: entry.type, presetId: entry.presetId, source: "template", texts: {}, settings });
     } else {
-      sections.push({ uid: newSectionUid(), type: entry.type, presetId: entry.presetId, source: "library", texts: {} });
+      sections.push({ uid: newSectionUid(), type: entry.type, presetId: entry.presetId, source: "library", texts: {}, settings });
     }
   }
   doc.sections = sections;

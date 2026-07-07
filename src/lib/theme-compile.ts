@@ -166,6 +166,16 @@ function applyInstanceToSection(section: any, instance: SectionInstance, palette
   for (const [k, v] of Object.entries(preset?.settings || {})) {
     section.settings[k] = resolvePaletteRef(v, palette);
   }
+  // 1b) Instanz-Feineinstellungen (Design-Layer: Töne/Fades/Divider, Icons)
+  //     liegen ÜBER den Preset-Werten — identisch zu resolvePresetSettings.
+  for (const [k, v] of Object.entries(instance.settings || {})) {
+    section.settings[k] = resolvePaletteRef(v, palette);
+  }
+  // Design-Layer: Fades/Divider blenden zur SEITEN-Hintergrundfarbe — die
+  // Referenz automatisch mitgeben, falls ein Ton gesetzt wurde.
+  if (typeof section.settings.sec_bg === "string" && section.settings.sec_bg && !section.settings.sec_pagebg) {
+    section.settings.sec_pagebg = palette.background;
+  }
 
   // 2) Kuratierte Texte. Regel: NUTZER-Eingaben überschreiben immer;
   //    Feld-Defaults füllen nur LEERE Ziele — vorhandene Inhalte (KI-Texte

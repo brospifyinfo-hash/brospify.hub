@@ -17,6 +17,7 @@ import {
 } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
 import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
+import { THEME_ICONS } from "@/lib/theme-icons";
 import { EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 
 const MODEL = "claude-opus-4-8";
@@ -96,6 +97,10 @@ const OP_ITEM_SCHEMA: Record<string, unknown> = {
     key: { type: "string" },
     badge: { type: "string" },
     spacing: { type: "integer" },
+    tone: { type: "string", enum: ["none", "tint", "soft", "wash", "deep"] },
+    fade: { type: "string", enum: ["none", "top", "bottom", "both"] },
+    divider: { type: "string", enum: ["none", "wave", "slant", "curve"] },
+    icons: { type: "array", items: { type: "string" } },
   },
 };
 
@@ -142,11 +147,13 @@ function buildCatalog(): string {
     return `  ${t} · presets: ${presets} · textfelder: ${fields}${ctls ? ` · settings: ${ctls}` : ""}`;
   }).join("\n");
   const gallery = GALLERY_PRESETS.map((p) => p.id).join("|");
+  const icons = THEME_ICONS.map((i) => `${i.id}(${i.label})`).join(", ");
 
   catalogCache = [
     `THEME-STILE (styleId): ${styles}`,
     `SCHRIFTEN (headingFont/bodyFont): ${fonts}`,
     `GALERIE-PRESETS (set_gallery.presetId): ${gallery}`,
+    `ICONS (für set_benefit_icons + icon_1..icon_4 bei Icon-Band/Callouts — wähle NISCHEN-PASSEND): ${icons}`,
     `SECTIONS (add_section.type — nur diese Typen/Presets/Felder):\n${sections}`,
     `KAUFBOX-BAUSTEINE (blockType — nur diese Typen/Presets/Felder/Settings):\n${blocks}`,
   ].join("\n\n");
@@ -167,19 +174,28 @@ OPERATIONEN (Feld "op", nur diese):
 - set_fonts {headingFont?, bodyFont?} · set_radius {radius:0-40} · set_design {shadow?:0|1|2, border?:1|2, iconStyle?:"dark"|"accent"|"outline"}.
 - add_section {page:"product"|"home", type, presetId?, position?, texts?:[{field,value}], uid?:"new:1"} — uid als Platzhalter, um die neue Section in Folge-Ops zu referenzieren.
 - remove_section {uid} · move_section {uid, to} · set_section_preset {uid, presetId} · set_section_text {uid, field, value}.
+- set_section_tone {uid, tone:"none"|"tint"|"soft"|"wash"|"deep", fade?:"none"|"top"|"bottom"|"both", divider?:"none"|"wave"|"slant"|"curve"} — Hintergrund-Ton der Section, automatisch stimmig aus der Palette abgeleitet, mit weichem Übergang (fade) bzw. dekorativer Unterkante (divider).
+- set_section_setting {uid, key, value} — nur sec_bg/sec_bg2 (Hex), sec_fade, sec_divider, icon_1..icon_4 (Icon-IDs, bei Icon-Band/Callouts).
+- set_benefit_icons {icons:["id","id","id","id"]} — die 4 Icons der Kaufbox-Vorteile.
 - add_buybox_block {blockType, position?, presetId?} · remove_buybox_block {blockType} · reorder_buybox {order:[blockType,…]}.
 - set_block_preset {blockType, presetId} · set_block_text {blockType, field, value} · set_block_setting {blockType, key, value}.
 - set_gallery {presetId?, badge?} · set_buybox_spacing {spacing:4-40}.
 
 HARTE REGELN:
-1. Verwende AUSSCHLIESSLICH styleIds, Section-Typen, presetIds, Feld-IDs, blockTypes, Setting-Keys und Schriften aus dem Katalog unten. Nichts erfinden.
+1. Verwende AUSSCHLIESSLICH styleIds, Section-Typen, presetIds, Feld-IDs, blockTypes, Setting-Keys, Icon-IDs und Schriften aus dem Katalog unten. Nichts erfinden.
 2. Section-uids nur aus dem Dokument übernehmen — neue Sections bekommen "new:1", "new:2", ….
 3. Farben immer als #rrggbb. Achte IMMER auf Kontrast: text lesbar auf background, buttonText lesbar auf button.
 4. Produktbild dabei + keine expliziten Farbwünsche? → Leite eine stimmige Palette aus dem Bild ab (accent = markante Produkt-/Markenfarbe; background hell und dezent, außer ein dunkler Look passt/ist gewünscht).
-5. So wenig Ops wie nötig, so viele wie für ein stimmiges Ergebnis sinnvoll (max. 30). Nutzerwunsch geht vor Eigeninitiative. set_style (falls genutzt) steht IMMER als erste Operation — Detail-Ops (Farben, Texte, Bausteine) danach, damit sie den Stil verfeinern.
-6. Verkaufstexte: kurz, konkret, auf ${answerLang}, ohne übertriebene Superlative.
-7. summary (1–2 Sätze) und steps (2–8) auf ${answerLang}, für Laien verständlich — KEINE technischen op-Namen oder IDs in den Schritten. Jeder Schritt beschreibt eine sichtbare Veränderung.
-8. Ist der Wunsch mit den verfügbaren Operationen nicht umsetzbar, liefere die nächstbeste sinnvolle Annäherung — operations darf nur leer sein, wenn wirklich gar nichts passt (das erklärst du dann in summary).
+5. set_style (falls genutzt) steht IMMER als erste Operation — Detail-Ops danach, damit sie den Stil verfeinern. Max. 40 Operationen.
+6. summary (1–2 Sätze) und steps (2–8) auf ${answerLang}, für Laien verständlich — KEINE technischen op-Namen oder IDs in den Schritten. Jeder Schritt beschreibt eine sichtbare Veränderung.
+7. Ist der Wunsch mit den verfügbaren Operationen nicht umsetzbar, liefere die nächstbeste sinnvolle Annäherung — operations darf nur leer sein, wenn wirklich gar nichts passt (das erklärst du dann in summary).
+
+ART-DIRECTION (so entsteht ein Ergebnis auf Agentur-Niveau — dein Anspruch bei JEDEM Plan):
+A. VOLLE SEITE statt Flickwerk: Bei Nischen-/Umbau-Wünschen baue die Produktseite als vollständigen Funnel mit 8–12 Sections: Einstieg/Hook (bro-gradient-cta ODER bro-cta-banner ODER scrollingbild) → Icon-Vorteile (bro-icon-benefits, Icons zur Nische!) → Autorität (bro-logo-badges) → Social Proof (bro-spotlight oder reviews2/bro-chat-reviews) → Produkt-Details (bro-callouts oder image-with-text/bro-image-cards) → Zahlen (bro-stats) → Einwände (qanda oder bro-compare/bro-problem-solution) → Garantie (bro-guarantee) → Abschluss (bro-gradient-cta). Die neuen Premium-Typen (bro-icon-benefits, bro-spotlight, bro-callouts, bro-gradient-cta, bro-logo-badges, bro-image-cards) sind erste Wahl.
+B. TON-RHYTHMUS (Pflicht bei Umbauten): Wechsle die Hintergrund-Töne der Sections wie ein Art Director — z. B. none → tint → none → wash → soft → none → deep (max. 1–2× deep pro Seite) → none. Nutze set_section_tone mit fade "both" für weiche Übergänge; setze auf 1–2 getönte Sections zusätzlich divider "wave" oder "curve". NIE zwei gleiche Töne direkt hintereinander, NIE alles getönt.
+C. ICONS: Wähle Icons streng nischen-passend (Haustier→paw, Beauty→droplet/sparkle/sun, Fitness→bolt/pulse/battery, Baby→baby/heart/shield, Tech→chip/wifi/plug, Outdoor→mountain/compass/tree, Küche→utensils/coffee …). Setze IMMER set_benefit_icons UND die icon_1..icon_4 der eingefügten Icon-Band/Callout-Sections.
+D. COPY-QUALITÄT: Texte konkret, sensorisch und glaubwürdig — Zahlen und Alltagssituationen statt Floskeln. VERBOTEN: "revolutionär", "einzigartig", "Game-Changer", "unglaublich", generisches "Premium-Qualität". Kurze Sätze, aktive Verben, ${answerLang}. Überschriften max. 6 Wörter, Subtexte max. 16.
+E. STIMMIGKEIT: Ein Look pro Seite — Töne/Icons/Presets zahlen alle auf dieselbe Nische ein. Lieber 10 präzise Ops mehr als ein halbfertiger Umbau.
 
 KATALOG:
 ${buildCatalog()}`;
@@ -231,7 +247,7 @@ export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRaw
   try {
     msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 6400,
       thinking: { type: "disabled" },
       output_config: { format: { type: "json_schema", schema: PLAN_SCHEMA } },
       system,
@@ -243,7 +259,7 @@ export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRaw
     console.warn("[theme-ai] structured output fehlgeschlagen, Fallback auf Freitext-JSON:", err);
     msg = await client.messages.create({
       model: MODEL,
-      max_tokens: 4000,
+      max_tokens: 6400,
       thinking: { type: "disabled" },
       system: `${system}\n\nAntworte AUSSCHLIESSLICH mit einem JSON-Objekt {summary, steps:[{title,detail}], operations:[…]} — kein Text davor oder danach.`,
       messages: [{ role: "user", content }],

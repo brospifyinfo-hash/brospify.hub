@@ -23,10 +23,17 @@ import {
   createLibraryInstance,
   buildInitialDocument,
   STYLE_GALLERY,
+  SECTION_TONES,
+  SECTION_FADES,
+  SECTION_DIVIDERS,
+  sectionToneSettings,
+  sectionSupportsDesign,
+  type SectionTone,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
 import { THEME_STYLES, getThemeStyle } from "@/lib/theme-styles";
 import { BUYBOX_DEFAULT_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
+import { THEME_ICONS } from "@/lib/theme-icons";
 import { EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 
 // ─── Operationen ────────────────────────────────────────────────────
@@ -42,6 +49,12 @@ export type AiOp =
   | { op: "move_section"; uid: string; to: number }
   | { op: "set_section_preset"; uid: string; presetId: string }
   | { op: "set_section_text"; uid: string; field: string; value: string }
+  // Design-Layer: Hintergrund-Ton + Übergang/Kante EINER Section (aus der
+  // Palette abgeleitet — nie „AI-bunt") bzw. rohe Design-/Icon-Settings.
+  | { op: "set_section_tone"; uid: string; tone: SectionTone; fade?: (typeof SECTION_FADES)[number]; divider?: (typeof SECTION_DIVIDERS)[number] }
+  | { op: "set_section_setting"; uid: string; key: string; value: string }
+  // Produkt-passende Icons für die Vorteile-Liste der Kaufbox (4 Stück).
+  | { op: "set_benefit_icons"; icons: string[] }
   | { op: "add_buybox_block"; blockType: string; position?: number; presetId?: string }
   | { op: "remove_buybox_block"; blockType: string }
   | { op: "reorder_buybox"; order: string[] }
@@ -74,7 +87,10 @@ const SECTION_TYPES = new Set(SECTION_LIBRARY.map((s) => s.type));
 const BLOCK_TYPES = new Set<string>([...BUYBOX_DEFAULT_ORDER, ...BUYBOX_RUNTIME_ONLY]);
 const GALLERY_IDS = new Set(GALLERY_PRESETS.map((p) => p.id));
 const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as const;
-const MAX_OPS = 30;
+const ICON_IDS = new Set(THEME_ICONS.map((i) => i.id));
+/** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf. */
+const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "icon_1", "icon_2", "icon_3", "icon_4"]);
+const MAX_OPS = 40;
 const MAX_TEXT = 600;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
@@ -208,6 +224,39 @@ export function validateAiOps(raw: unknown, doc: ThemeDocument, capabilities: st
         const inst = findInstance(doc, o.uid);
         if (inst && !getSectionDef(inst.type)?.fields.some((f) => f.id === o.field)) break;
         out.push({ op: "set_section_text", uid: o.uid, field: o.field, value: cleanText(o.value) });
+        break;
+      }
+      case "set_section_tone": {
+        if (!uidOk(o.uid) || !isStr(o.tone) || !SECTION_TONES.includes(o.tone as SectionTone)) break;
+        const inst = findInstance(doc, o.uid);
+        if (inst && !sectionSupportsDesign(inst.type)) break; // "new:"-uids prüft die Anwendung
+        out.push({
+          op: "set_section_tone",
+          uid: o.uid,
+          tone: o.tone as SectionTone,
+          fade: isStr(o.fade) && (SECTION_FADES as readonly string[]).includes(o.fade) ? (o.fade as (typeof SECTION_FADES)[number]) : undefined,
+          divider: isStr(o.divider) && (SECTION_DIVIDERS as readonly string[]).includes(o.divider) ? (o.divider as (typeof SECTION_DIVIDERS)[number]) : undefined,
+        });
+        break;
+      }
+      case "set_section_setting": {
+        if (!uidOk(o.uid) || !isStr(o.key) || !SECTION_SETTING_KEYS.has(o.key)) break;
+        const inst = findInstance(doc, o.uid);
+        if (inst && !sectionSupportsDesign(inst.type)) break;
+        let value: string | undefined;
+        if (o.key.startsWith("icon_")) value = isStr(o.value) && ICON_IDS.has(o.value) ? o.value : undefined;
+        else if (o.key === "sec_fade") value = isStr(o.value) && (SECTION_FADES as readonly string[]).includes(o.value) ? o.value : undefined;
+        else if (o.key === "sec_divider") value = isStr(o.value) && (SECTION_DIVIDERS as readonly string[]).includes(o.value) ? o.value : undefined;
+        else value = isStr(o.value) && (o.value === "" || HEX_RE.test(o.value)) ? o.value.toLowerCase() : undefined;
+        if (value === undefined) break;
+        out.push({ op: "set_section_setting", uid: o.uid, key: o.key, value });
+        break;
+      }
+      case "set_benefit_icons": {
+        const icons = Array.isArray(o.icons)
+          ? (o.icons as unknown[]).filter((i): i is string => isStr(i) && ICON_IDS.has(i)).slice(0, 4)
+          : [];
+        if (icons.length) out.push({ op: "set_benefit_icons", icons });
         break;
       }
       case "add_buybox_block": {
@@ -393,6 +442,31 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
         list.map((s) => (s.uid === uid ? { ...s, texts: { ...s.texts, [op.field]: op.value } } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
     }
+    case "set_section_tone": {
+      const uid = resolveUid(op.uid);
+      const inst = findInstance(doc, uid);
+      if (!inst || !sectionSupportsDesign(inst.type)) return doc;
+      const toneSettings = sectionToneSettings(op.tone, doc.global.colors, { fade: op.fade, divider: op.divider });
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), ...toneSettings } } : s));
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
+    case "set_section_setting": {
+      const uid = resolveUid(op.uid);
+      const inst = findInstance(doc, uid);
+      if (!inst || !sectionSupportsDesign(inst.type)) return doc;
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), [op.key]: op.value } } : s));
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
+    case "set_benefit_icons": {
+      // Auf 4 auffüllen (Rest = bestehende Icons), damit die Vorteile-Liste
+      // immer vollständig besetzt bleibt.
+      const cur = doc.buybox.benefitIcons || [];
+      const icons = [...op.icons];
+      for (let i = icons.length; i < 4; i++) icons.push(cur[i] || "check");
+      return { ...doc, buybox: { ...doc.buybox, benefitIcons: icons.slice(0, 4) } };
+    }
     case "add_buybox_block": {
       if (doc.buybox.order.includes(op.blockType)) {
         // Schon aktiv → höchstens die Style-Art übernehmen.
@@ -490,6 +564,7 @@ const OP_WEIGHTS: Record<AiOp["op"], number> = {
   set_gallery: 1, set_buybox_spacing: 1,
   set_section_text: 1, set_block_text: 1, set_block_setting: 1,
   set_section_preset: 1, set_block_preset: 1,
+  set_section_tone: 1, set_section_setting: 1, set_benefit_icons: 1,
   add_buybox_block: 2, remove_buybox_block: 2, reorder_buybox: 2,
   add_section: 3, remove_section: 2, move_section: 2,
   set_style: 4,

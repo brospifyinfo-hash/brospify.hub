@@ -7,10 +7,22 @@
 // Farben/Schriften kommen über die --pv-* CSS-Variablen des Vorschau-Canvas;
 // preset-eigene Farben (bg_color …) werden direkt gerendert.
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import type { SectionInstance } from "@/lib/theme-doc";
 import type { ColorPalette } from "@/lib/theme-placeholders";
-import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef } from "@/lib/theme-library";
+import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef, sectionSupportsDesign } from "@/lib/theme-library";
+import { getIcon } from "@/lib/theme-icons";
+
+/** SVG-Line-Icon aus der Icon-Bibliothek (identische Pfade wie im Liquid-Snippet). */
+function RIcon({ id, size = 20, color }: { id: string; size?: number; color?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {getIcon(id).paths.map((d, i) => (
+        <path key={i} d={d} />
+      ))}
+    </svg>
+  );
+}
 
 export interface ReplicaCtx {
   images: string[];
@@ -40,8 +52,55 @@ function str(v: unknown, fb: string): string {
   return typeof v === "string" && v ? v : fb;
 }
 
-/** Rendert die Replica einer Bibliotheks-Section. Unbekannter Typ → null. */
+// ─── Design-Frame: Hintergrund-Töne + Übergänge (Design-Layer) ──────
+// Liest die sec_*-Settings (Ton, 2-Farb-Verlauf, Fades zur Seiten-Farbe,
+// Divider-Kante) — 1:1-Pendant zum bspx-section-frame-Snippet im Liquid.
+
+const DIVIDER_PATHS: Record<string, string> = {
+  wave: "M0,32 C240,64 480,0 720,24 C960,48 1200,8 1440,36 L1440,64 L0,64 Z",
+  slant: "M0,64 L1440,12 L1440,64 Z",
+  curve: "M0,64 C480,8 960,8 1440,64 Z",
+};
+
+function DesignFrame({ s, children }: { s: Record<string, string | number | boolean>; children: ReactNode }) {
+  const bg = typeof s.sec_bg === "string" ? s.sec_bg : "";
+  if (!bg) return <>{children}</>;
+  const bg2 = typeof s.sec_bg2 === "string" ? s.sec_bg2 : "";
+  const pagebg = typeof s.sec_pagebg === "string" && s.sec_pagebg ? s.sec_pagebg : "var(--pv-bg)";
+  const fade = String(s.sec_fade || "none");
+  const divider = String(s.sec_divider || "none");
+  const background = bg2 ? `linear-gradient(170deg, ${bg} 0%, ${bg2} 100%)` : bg;
+  return (
+    <div className="te-frame" style={{ background }}>
+      {(fade === "top" || fade === "both") && (
+        <span className="te-frame-fade" style={{ top: 0, background: `linear-gradient(180deg, ${pagebg} 0%, transparent 100%)` }} />
+      )}
+      <div className="te-frame-pad">{children}</div>
+      {(fade === "bottom" || fade === "both") && divider === "none" && (
+        <span className="te-frame-fade" style={{ bottom: 0, background: `linear-gradient(0deg, ${pagebg} 0%, transparent 100%)` }} />
+      )}
+      {DIVIDER_PATHS[divider] && (
+        <svg className="te-frame-divider" viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden>
+          <path d={DIVIDER_PATHS[divider]} fill={pagebg} />
+        </svg>
+      )}
+    </div>
+  );
+}
+
+/** Rendert die Replica einer Bibliotheks-Section (inkl. Design-Frame).
+ *  Unbekannter Typ → null. */
 export default function SectionReplica({ instance, ctx }: { instance: SectionInstance; ctx: ReplicaCtx }) {
+  if (!getSectionDef(instance.type)) return null;
+  const body = <SectionBody instance={instance} ctx={ctx} />;
+  // Frame nur für Typen, deren Liquid den Design-Layer versteht — sonst
+  // würde die Vorschau etwas zeigen, das der Download nicht kann.
+  if (!sectionSupportsDesign(instance.type)) return body;
+  const s = resolvePresetSettings(instance, ctx.palette);
+  return <DesignFrame s={s}>{body}</DesignFrame>;
+}
+
+function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: ReplicaCtx }) {
   const def = getSectionDef(instance.type);
   if (!def) return null;
   const preset = getPresetDef(def, instance.presetId);
@@ -671,6 +730,167 @@ export default function SectionReplica({ instance, ctx }: { instance: SectionIns
       );
     }
 
+    // ── Premium-Sections (v3) ────────────────────────────────────────
+
+    case "bro-icon-benefits": {
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const look = str(s.layout, "band");
+      const onDark = !!s.sec_bg && look === "dunkel";
+      const items = [1, 2, 3, 4]
+        .map((i) => ({ icon: str(s[`icon_${i}`], ["truck", "shield", "rotate", "star"][i - 1]), title: t[`t${i}`], sub: t[`d${i}`] }))
+        .filter((x) => x.title);
+      return (
+        <div className={`te-ib te-ib-${look}`} style={onDark ? { color: "#fff" } : undefined}>
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }}>{t.heading}</h2>}
+          <div className="te-ib-grid" style={{ gridTemplateColumns: `repeat(${Math.max(items.length, 1)},1fr)` }}>
+            {items.map((it, i) => (
+              <div key={i} className="te-ib-item">
+                <span
+                  className="te-ib-chip"
+                  style={look === "karten" ? { background: `color-mix(in srgb, ${ac} 14%, transparent)`, color: ac } : { background: `color-mix(in srgb, ${ac} 12%, transparent)`, color: ac }}
+                >
+                  <RIcon id={it.icon} size={look === "minimal" ? 18 : 22} />
+                </span>
+                <strong className="te-ib-title">{it.title}</strong>
+                {it.sub && look !== "minimal" && <span className="te-ib-sub">{it.sub}</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-spotlight": {
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const look = str(s.layout, "editorial");
+      const initials = (t.name || "A K").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+      const inner = (
+        <>
+          <span className="te-spot-mark" style={{ color: ac }}>„</span>
+          <blockquote className="te-spot-quote">{t.quote}</blockquote>
+          <div className="te-spot-stars" style={{ color: ac }}>{STARS}</div>
+          <div className="te-spot-who">
+            <span className="te-spot-avatar" style={{ background: `color-mix(in srgb, ${ac} 18%, transparent)`, color: ac }}>{initials}</span>
+            <span>
+              <strong>{t.name}</strong>
+              <em>{t.role}</em>
+            </span>
+          </div>
+        </>
+      );
+      if (look === "karte") {
+        return (
+          <div className="te-sec">
+            <div className="te-spot te-spot-card">{inner}</div>
+          </div>
+        );
+      }
+      return <div className={`te-spot te-spot-${look}`}>{inner}</div>;
+    }
+
+    case "bro-callouts": {
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const glow = str(s.layout, "hell") === "glow";
+      const items = [1, 2, 3, 4].map((i) => ({ icon: str(s[`icon_${i}`], ["check", "bolt", "shield", "sparkle"][i - 1]), text: t[`c${i}`] })).filter((x) => x.text);
+      const left = items.slice(0, Math.ceil(items.length / 2));
+      const right = items.slice(Math.ceil(items.length / 2));
+      const callout = (it: { icon: string; text: string }, k: number, side: "l" | "r") => (
+        <div key={k} className={`te-call-item te-call-${side}`}>
+          <span className="te-call-chip" style={{ background: `color-mix(in srgb, ${ac} 14%, transparent)`, color: ac }}>
+            <RIcon id={it.icon} size={17} />
+          </span>
+          <span className="te-call-text">{it.text}</span>
+          <span className="te-call-line" style={{ background: `color-mix(in srgb, ${ac} 45%, transparent)` }} />
+        </div>
+      );
+      return (
+        <div className="te-call">
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 26 }}>{t.heading}</h2>}
+          <div className="te-call-stage">
+            <div className="te-call-col">{left.map((it, i) => callout(it, i, "l"))}</div>
+            <div className="te-call-imgwrap">
+              {glow && <span className="te-call-glow" style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${ac} 32%, transparent), transparent)` }} />}
+              {img(0) ? <img className="te-call-img" src={img(0)} alt="" /> : <span className="te-call-img te-noimg" />}
+            </div>
+            <div className="te-call-col">{right.map((it, i) => callout(it, i, "r"))}</div>
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-gradient-cta": {
+      const g1 = str(s.g1, ctx.palette.accent);
+      const g2 = str(s.g2, ctx.palette.button);
+      const g3 = str(s.g3, "");
+      const chips = [t.chip1, t.chip2, t.chip3].filter(Boolean);
+      const grad = g3
+        ? `linear-gradient(135deg, ${g1} 0%, ${g2} 55%, ${g3} 100%)`
+        : `linear-gradient(135deg, ${g1} 0%, ${g2} 100%)`;
+      return (
+        <div className="te-gcta" style={{ background: grad, borderRadius: num(s.radius, 24) }}>
+          <span className="te-gcta-shine" />
+          <div className="te-gcta-inner">
+            {t.eyebrow && <span className="te-eyebrow" style={{ color: "rgba(255,255,255,.85)" }}>{t.eyebrow}</span>}
+            <h2 className="te-gcta-h">{t.heading}</h2>
+            {t.subheading && <p className="te-gcta-sub">{t.subheading}</p>}
+            {chips.length > 0 && (
+              <div className="te-gcta-chips">
+                {chips.map((c, i) => (
+                  <span key={i} className="te-gcta-chip"><RIcon id="check" size={13} /> {c}</span>
+                ))}
+              </div>
+            )}
+            <span className="te-gcta-btn">{t.cta} →</span>
+            {t.note && <span className="te-gcta-note">{t.note}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-logo-badges": {
+      const look = str(s.layout, "marquee");
+      const badges = [t.b1, t.b2, t.b3, t.b4, t.b5].filter(Boolean);
+      const row = (key: string) => (
+        <div key={key} className="te-logos-row">
+          {badges.map((b, i) => (
+            <span key={i} className="te-logos-item">{b}</span>
+          ))}
+        </div>
+      );
+      return (
+        <div className="te-logos">
+          {t.heading && <span className="te-logos-head">{t.heading}</span>}
+          {look === "marquee" ? (
+            <div className="te-logos-track"><div className="te-logos-scroll">{row("a")}{row("b")}</div></div>
+          ) : (
+            row("static")
+          )}
+        </div>
+      );
+    }
+
+    case "bro-image-cards": {
+      const look = str(s.layout, "drei");
+      const cards = [1, 2, 3].map((i) => ({ title: t[`c${i}_t`], sub: t[`c${i}_d`], src: img(i - 1) })).filter((c) => c.title);
+      return (
+        <div className="te-imgc">
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }}>{t.heading}</h2>}
+          <div className={`te-imgc-grid te-imgc-${look}`}>
+            {cards.map((c, i) => (
+              <figure key={i} className="te-imgc-card" style={{ borderRadius: "min(var(--pv-r),20px)", marginTop: look === "versetzt" && i === 1 ? 26 : 0 }}>
+                {c.src ? <img src={c.src} alt="" /> : <span className="te-noimg" style={{ position: "absolute", inset: 0 }} />}
+                <span className="te-imgc-shade" />
+                <figcaption>
+                  <strong>{c.title}</strong>
+                  {c.sub && <span>{c.sub}</span>}
+                </figcaption>
+              </figure>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -678,6 +898,85 @@ export default function SectionReplica({ instance, ctx }: { instance: SectionIns
 
 // Eigene Styles der Replicas (werden vom Vorschau-Canvas einmal injiziert).
 export const REPLICA_CSS = `
+/* ── Design-Frame: Section-Töne + Übergänge ── */
+.te-frame{position:relative;overflow:hidden}
+.te-frame-pad{position:relative;z-index:1;padding:34px 26px}
+.te-frame-fade{position:absolute;left:0;right:0;height:72px;pointer-events:none;z-index:2}
+.te-frame-divider{position:absolute;left:0;right:0;bottom:-1px;width:100%;height:44px;display:block;z-index:2}
+
+/* ── Icon-Band ── */
+.te-ib{padding:30px 8px}
+.te-ib-grid{display:grid;gap:20px 14px}
+.te-ib-item{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px}
+.te-ib-chip{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:18px}
+.te-ib-karten .te-ib-item{background:var(--pv-bg);border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 10%,transparent);border-radius:min(var(--pv-r),18px);padding:20px 14px;box-shadow:var(--pv-shadow)}
+.te-ib-minimal .te-ib-item{flex-direction:row;text-align:left;gap:10px}
+.te-ib-minimal .te-ib-chip{width:36px;height:36px;border-radius:12px;flex-shrink:0}
+.te-ib-title{font-size:13px;font-weight:700;letter-spacing:-.01em}
+.te-ib-sub{font-size:11px;opacity:.6;line-height:1.45;max-width:200px}
+
+/* ── Testimonial-Spotlight ── */
+.te-spot{position:relative;max-width:640px;margin:0 auto;padding:34px 20px;text-align:center}
+.te-spot-card{background:var(--pv-bg);border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 9%,transparent);border-radius:min(var(--pv-r),22px);box-shadow:var(--pv-shadow);padding:34px 30px}
+.te-spot-mark{display:block;font-family:var(--pv-h);font-size:64px;line-height:.6;font-weight:800;margin-bottom:14px;opacity:.9}
+.te-spot-quote{font-family:var(--pv-h);font-size:20px;font-weight:600;line-height:1.42;letter-spacing:-.01em;margin:0 0 14px}
+.te-spot-stars{letter-spacing:2.5px;font-size:15px;margin-bottom:16px}
+.te-spot-who{display:flex;align-items:center;justify-content:center;gap:11px}
+.te-spot-avatar{display:flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:50%;font-size:13px;font-weight:800}
+.te-spot-who span strong{display:block;font-size:13px;font-weight:700;text-align:left}
+.te-spot-who span em{display:block;font-style:normal;font-size:11px;opacity:.55;text-align:left}
+
+/* ── Produkt-Callouts ── */
+.te-call{padding:30px 8px}
+.te-call-stage{display:grid;grid-template-columns:1fr minmax(200px,300px) 1fr;align-items:center;gap:18px}
+.te-call-imgwrap{position:relative;display:flex;align-items:center;justify-content:center}
+.te-call-glow{position:absolute;inset:-14%;border-radius:50%}
+.te-call-img{position:relative;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:min(var(--pv-r),24px);box-shadow:var(--pv-shadow)}
+.te-call-col{display:flex;flex-direction:column;gap:22px}
+.te-call-item{position:relative;display:flex;align-items:center;gap:10px}
+.te-call-l{flex-direction:row-reverse;text-align:right}
+.te-call-chip{display:flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:13px;flex-shrink:0}
+.te-call-text{font-size:12.5px;font-weight:600;line-height:1.4;max-width:190px}
+.te-call-line{height:2px;flex:1;min-width:16px;border-radius:2px;opacity:.65}
+.pm-mobile .te-call-stage{grid-template-columns:1fr;gap:14px}
+.pm-mobile .te-call-l{flex-direction:row;text-align:left}
+.pm-mobile .te-call-line{display:none}
+
+/* ── Gradient-CTA ── */
+.te-gcta{position:relative;overflow:hidden;margin:26px 0;padding:44px 30px;color:#fff;text-align:center}
+.te-gcta-shine{position:absolute;top:-40%;left:-10%;width:60%;height:120%;background:radial-gradient(closest-side,rgba(255,255,255,.22),transparent);transform:rotate(18deg);pointer-events:none}
+.te-gcta-inner{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
+.te-gcta-h{font-family:var(--pv-h);font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:0 0 10px;color:#fff}
+.te-gcta-sub{font-size:13.5px;opacity:.88;max-width:480px;margin:0 0 16px;line-height:1.55}
+.te-gcta-chips{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:18px}
+.te-gcta-chip{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(4px);border-radius:100px;padding:6px 12px;font-size:11px;font-weight:700}
+.te-gcta-btn{display:inline-block;background:#fff;color:#111;font-weight:800;font-size:14px;padding:13px 30px;border-radius:100px;box-shadow:0 10px 26px -10px rgba(0,0,0,.4)}
+.te-gcta-note{margin-top:10px;font-size:11px;opacity:.75}
+
+/* ── Logo-/Badge-Band ── */
+.te-logos{padding:22px 0;text-align:center}
+.te-logos-head{display:block;font-size:10.5px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;opacity:.5;margin-bottom:14px}
+.te-logos-row{display:flex;gap:38px;align-items:center;justify-content:center;flex-shrink:0;padding:0 19px}
+.te-logos-item{font-family:var(--pv-h);font-size:17px;font-weight:800;letter-spacing:.04em;opacity:.45;white-space:nowrap}
+.te-logos-track{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.te-logos-scroll{display:flex;width:max-content;animation:teLogos 22s linear infinite}
+@keyframes teLogos{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ── Premium Bild-Karten ── */
+.te-imgc{padding:30px 8px}
+.te-imgc-grid{display:grid;gap:16px}
+.te-imgc-drei{grid-template-columns:repeat(3,1fr)}
+.te-imgc-versetzt{grid-template-columns:repeat(3,1fr)}
+.te-imgc-breit{grid-template-columns:1.6fr 1fr 1fr}
+.pm-mobile .te-imgc-grid{grid-template-columns:1fr}
+.te-imgc-card{position:relative;margin:0;overflow:hidden;aspect-ratio:4/5;box-shadow:var(--pv-shadow);transition:transform .25s ease}
+.te-imgc-card:hover{transform:translateY(-4px)}
+.te-imgc-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.te-imgc-shade{position:absolute;inset:0;background:linear-gradient(180deg,transparent 45%,rgba(0,0,0,.62) 100%)}
+.te-imgc-card figcaption{position:absolute;left:16px;right:16px;bottom:14px;color:#fff}
+.te-imgc-card figcaption strong{display:block;font-family:var(--pv-h);font-size:16px;font-weight:800;letter-spacing:-.01em}
+.te-imgc-card figcaption span{display:block;font-size:11.5px;opacity:.85;margin-top:2px}
+
 .te-sec{padding:26px 0}
 .te-fullpad{padding:30px 24px;border-radius:min(var(--pv-r),18px)}
 .te-clip{overflow:hidden}

@@ -175,6 +175,17 @@ const BENEFIT_ICON_SELECT: Record<string, string> = {
   card: "lock", gift: "gift", heart: "heart", leaf: "check", clock: "check",
   check: "check", bolt: "lightning", box: "package", medal: "star",
   thumb: "check", sparkle: "star", globe: "check", fire: "lightning",
+  // Nischen-Icons → nächstliegender Wert der statischen Auswahl (der
+  // dynamische Buy-Box-Pfad rendert die echten SVG-Pfade aus dem Plan;
+  // das hier ist nur der Offline-/Legacy-Fallback im ZIP).
+  droplet: "check", sun: "star", moon: "check", smile: "heart", sprout: "check",
+  pulse: "heart", medic: "shield", home: "package", utensils: "check",
+  coffee: "check", bed: "check", plug: "lightning", battery: "lightning",
+  wifi: "check", chip: "check", phone: "check", camera: "check",
+  headphones: "check", paw: "heart", mountain: "check", compass: "check",
+  tree: "check", shirt: "check", diamond: "star", custom: "check",
+  feather: "check", target: "check", trophy: "star", wind: "check",
+  baby: "heart", percent: "star", calendar: "check",
 };
 export function applyBenefitIcons(data: any, benefitIcons?: string[]): void {
   if (!Array.isArray(benefitIcons) || !benefitIcons.length) return;

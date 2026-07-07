@@ -34,6 +34,10 @@ export interface SectionInstance {
   source: "template" | "library";
   /** Kuratierte editierbare Texte (Feld-ID → Wert), s. theme-library fields. */
   texts: Record<string, string>;
+  /** Feineinstellungen (rohe Setting-Overrides über den Preset-Werten) —
+   *  v. a. der Design-Layer: Hintergrund-Ton, Übergänge/Fades, Divider,
+   *  Icon-Wahl. Werte dürfen Palette-Refs ("@accent" …) enthalten. */
+  settings?: Record<string, string | number | boolean>;
 }
 
 /** Konfiguration EINES Kaufbox-Bausteins: Style-Art + kuratierte Texte +
@@ -130,6 +134,8 @@ export type EditorAction =
   | { type: "reorderSections"; page: EditorPage; order: string[] }
   | { type: "setPreset"; uid: string; presetId: string }
   | { type: "setText"; uid: string; field: string; value: string }
+  | { type: "setSectionSetting"; uid: string; key: string; value: string | number | boolean }
+  | { type: "mergeSectionSettings"; uid: string; patch: Record<string, string | number | boolean> }
   | { type: "setBuybox"; patch: Partial<BuyboxConfig> }
   | { type: "setBlockPreset"; blockType: string; presetId: string }
   | { type: "setBlockText"; blockType: string; field: string; value: string }
@@ -212,6 +218,21 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
     case "setText": {
       const mapList = (list: SectionInstance[]) =>
         list.map((s) => (s.uid === action.uid ? { ...s, texts: { ...s.texts, [action.field]: action.value } } : s));
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
+    case "setSectionSetting": {
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) =>
+          s.uid === action.uid ? { ...s, settings: { ...(s.settings || {}), [action.key]: action.value } } : s,
+        );
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
+    case "mergeSectionSettings": {
+      // Mehrere Design-Settings als EIN History-Schritt (z. B. Ton-Wechsel).
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) =>
+          s.uid === action.uid ? { ...s, settings: { ...(s.settings || {}), ...action.patch } } : s,
+        );
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
     }
     case "setBuybox":
