@@ -631,7 +631,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Du liebst es – oder du bekommst dein Geld zurück" },
       { id: "text", label: "Text", labelEn: "Text", kind: "textarea", target: { key: "text" }, def: "Teste es 30 Tage lang völlig risikofrei. Wenn du nicht begeistert bist, erstatten wir dir jeden Cent – ohne Fragen, ohne Kleingedrucktes." },
       { id: "bullet_1", label: "Punkt 1", labelEn: "Bullet 1", kind: "text", target: { key: "bullet_1" }, def: "100 % Geld-zurück-Garantie" },
-      { id: "bullet_2", label: "Punkt 2", labelEn: "Bullet 2", kind: "text", target: { key: "bullet_2" }, def: "Kostenloser Rückversand" },
+      { id: "bullet_2", label: "Punkt 2", labelEn: "Bullet 2", kind: "text", target: { key: "bullet_2" }, def: "Unkomplizierte Rückgabe" },
       { id: "bullet_3", label: "Punkt 3", labelEn: "Bullet 3", kind: "text", target: { key: "bullet_3" }, def: "Deutscher Support antwortet in 24 h" },
       { id: "cta_label", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "cta_label" }, def: "Jetzt risikofrei bestellen" },
       { id: "note", label: "Hinweiszeile", labelEn: "Note", kind: "text", target: { key: "note" }, def: "Heute versandkostenfrei" },
@@ -653,7 +653,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "So einfach geht's" },
       { id: "subheading", label: "Unterzeile", labelEn: "Subheading", kind: "text", target: { key: "subheading" }, def: "In 3 Schritten zum Ergebnis" },
       { id: "s1_title", label: "Schritt 1 — Titel", labelEn: "Step 1 — title", kind: "text", target: { key: "s1_title" }, def: "Bestellen" },
-      { id: "s1_text", label: "Schritt 1 — Text", labelEn: "Step 1 — text", kind: "text", target: { key: "s1_text" }, def: "Heute bestellt – in 2–4 Tagen bei dir" },
+      { id: "s1_text", label: "Schritt 1 — Text", labelEn: "Step 1 — text", kind: "text", target: { key: "s1_text" }, def: "Heute bestellt – in wenigen Tagen bei dir" },
       { id: "s2_title", label: "Schritt 2 — Titel", labelEn: "Step 2 — title", kind: "text", target: { key: "s2_title" }, def: "Auspacken" },
       { id: "s2_text", label: "Schritt 2 — Text", labelEn: "Step 2 — text", kind: "text", target: { key: "s2_text" }, def: "Sofort einsatzbereit, ganz ohne Einrichtung" },
       { id: "s3_title", label: "Schritt 3 — Titel", labelEn: "Step 3 — title", kind: "text", target: { key: "s3_title" }, def: "Genießen" },
@@ -734,7 +734,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "c2_m2", label: "Chat 2 — Nachricht 2", labelEn: "Chat 2 — message 2", kind: "text", target: { key: "c2_m2" }, def: "Beste Entscheidung dieses Jahr 💪" },
       { id: "c2_time", label: "Chat 2 — Uhrzeit", labelEn: "Chat 2 — time", kind: "text", target: { key: "c2_time" }, def: "09:18" },
       { id: "c3_name", label: "Chat 3 — Name", labelEn: "Chat 3 — name", kind: "text", target: { key: "c3_name" }, def: "Marie" },
-      { id: "c3_m1", label: "Chat 3 — Nachricht 1", labelEn: "Chat 3 — message 1", kind: "text", target: { key: "c3_m1" }, def: "Gestern bestellt, heute schon da!" },
+      { id: "c3_m1", label: "Chat 3 — Nachricht 1", labelEn: "Chat 3 — message 1", kind: "text", target: { key: "c3_m1" }, def: "Mein Paket kam schneller als gedacht!" },
       { id: "c3_m2", label: "Chat 3 — Nachricht 2", labelEn: "Chat 3 — message 2", kind: "text", target: { key: "c3_m2" }, def: "Qualität ist deutlich besser als erwartet" },
       { id: "c3_time", label: "Chat 3 — Uhrzeit", labelEn: "Chat 3 — time", kind: "text", target: { key: "c3_time" }, def: "19:47" },
       { id: "note", label: "Disclaimer (optional)", labelEn: "Disclaimer (optional)", kind: "text", target: { key: "note" }, def: "" },
@@ -1086,7 +1086,7 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
       { id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Das bekommst du heute:" },
       { id: "item_1", label: "Position 1", labelEn: "Item 1", kind: "text", target: { key: "item_1" }, def: "1× Premium-Produkt" },
       { id: "value_1", label: "Wert 1 (oder GRATIS)", labelEn: "Value 1 (or GRATIS)", kind: "text", target: { key: "value_1" }, def: "49,95 €" },
-      { id: "item_2", label: "Position 2", labelEn: "Item 2", kind: "text", target: { key: "item_2" }, def: "Premium E-Book (Deutsch)" },
+      { id: "item_2", label: "Position 2", labelEn: "Item 2", kind: "text", target: { key: "item_2" }, def: "Premium-E-Book (Deutsch)" },
       { id: "value_2", label: "Wert 2 (oder GRATIS)", labelEn: "Value 2 (or GRATIS)", kind: "text", target: { key: "value_2" }, def: "GRATIS" },
       { id: "item_3", label: "Position 3", labelEn: "Item 3", kind: "text", target: { key: "item_3" }, def: "Express-Versand" },
       { id: "value_3", label: "Wert 3 (oder GRATIS)", labelEn: "Value 3 (or GRATIS)", kind: "text", target: { key: "value_3" }, def: "GRATIS" },
@@ -1106,8 +1106,8 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
     type: "review_quote",
     fields: [
       { id: "text", label: "Zitat", labelEn: "Quote", kind: "textarea", target: { key: "text" }, def: "Ich war skeptisch – aber schon nach einer Woche will ich es nicht mehr hergeben!" },
-      { id: "name", label: "Name + Ort", labelEn: "Name + city", kind: "text", target: { key: "name" }, def: "Sarah M. aus München" },
-      { id: "initials", label: "Initialen (Avatar)", labelEn: "Initials (avatar)", kind: "text", target: { key: "initials" }, def: "SM" },
+      { id: "name", label: "Name + Ort", labelEn: "Name + city", kind: "text", target: { key: "name" }, def: "Melanie K. aus Köln" },
+      { id: "initials", label: "Initialen (Avatar)", labelEn: "Initials (avatar)", kind: "text", target: { key: "initials" }, def: "MK" },
       { id: "verified", label: "Verifiziert-Label", labelEn: "Verified label", kind: "text", target: { key: "verified" }, def: "Verifizierter Kauf" },
     ],
     presets: [
@@ -1134,7 +1134,7 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
     type: "return_promise",
     fields: [
       { id: "title", label: "Überschrift", labelEn: "Title", kind: "text", target: { key: "title" }, def: "30 Tage Rückgaberecht" },
-      { id: "subtitle", label: "Unterzeile", labelEn: "Subtitle", kind: "text", target: { key: "subtitle" }, def: "Kostenloser Rückversand – ohne Wenn und Aber" },
+      { id: "subtitle", label: "Unterzeile", labelEn: "Subtitle", kind: "text", target: { key: "subtitle" }, def: "Einfache Rückgabe – ohne Wenn und Aber" },
     ],
     presets: [
       { id: "zeile", label: "Zeile", labelEn: "Inline", hint: "Kompakte Icon-Zeile", settings: { style: "line", accent: "@accent" } },
@@ -1335,6 +1335,11 @@ export const BUYBOX_CONTROLS: Record<string, BuyboxControl[]> = {
   social_proof: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
   stock_bar: [{ key: "color", label: "Balkenfarbe", labelEn: "Bar color", kind: "color" }, { key: "level", label: "Füllstand", labelEn: "Fill level", kind: "slider", min: 6, max: 60, suffix: "%" }],
   feature_box: [{ key: "accent_color", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+  ship_countdown: [
+    { key: "cutoff", label: "Annahmeschluss (Uhrzeit)", labelEn: "Cutoff (hour)", kind: "slider", min: 8, max: 22, suffix: " Uhr" },
+    { key: "eta_min", label: "Lieferzeit ab (Werktage)", labelEn: "Delivery from (workdays)", kind: "slider", min: 1, max: 10, suffix: " Tage" },
+    { key: "eta_max", label: "Lieferzeit bis (Werktage)", labelEn: "Delivery to (workdays)", kind: "slider", min: 1, max: 14, suffix: " Tage" },
+  ],
 };
 
 export function getBuyboxControls(type: string): BuyboxControl[] {

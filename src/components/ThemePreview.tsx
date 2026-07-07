@@ -317,12 +317,24 @@ export default function ThemePreview({
           dark_circle: "pm-bl-dark", accent_circle: "pm-bl-accent",
           soft_circle: "pm-bl-soft", outlined: "pm-bl-outline", emoji: "pm-bl-emoji",
         };
-        const cls = styleMap[str(s.icon_style, "")] || "";
+        const iconStyleSel = str(s.icon_style, "");
+        const cls = styleMap[iconStyleSel] || "";
+        // Feineinstellungs-Farben schlagen die Style-Art (wie in der Runtime).
+        const iconBg = str(s.icon_bg, "");
+        const iconColor = str(s.icon_color, "");
+        const textColor = str(s.text_color, "");
+        const icStyle: CSSProperties = {};
+        if (iconBg || iconColor) {
+          if (iconStyleSel === "soft_circle") icStyle.background = `color-mix(in srgb,${iconBg || colors.accent} 14%,transparent)`;
+          else if (iconStyleSel === "outlined") { icStyle.background = "transparent"; icStyle.border = `2px solid ${iconBg || colors.accent}`; }
+          else if (iconBg) icStyle.background = iconBg;
+          if (iconColor) icStyle.color = iconColor;
+        }
         return (
           <div className={`pm-benefits ${cls}`} style={{ gap: num(s.item_gap, 10) }}>
             {data.benefits.slice(0, 4).map((b, i) => (
-              <div key={i} className="pm-benefit" style={{ fontSize: num(s.font_size, 13.5) }}>
-                <span className="pm-bic"><BIcon id={benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check"} /></span>
+              <div key={i} className="pm-benefit" style={{ fontSize: num(s.font_size, 13.5), ...(textColor ? { color: textColor } : {}) }}>
+                <span className="pm-bic" style={icStyle}><BIcon id={benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check"} /></span>
                 {bt(type, `text_${i + 1}`, b.text)}
               </div>
             ))}
@@ -900,7 +912,7 @@ export default function ThemePreview({
             {title && <strong className="pm-coup-h">{title}</strong>}
             <div className="pm-coup-row">
               <span className="pm-coup-code" style={{ color: ac, borderColor: `color-mix(in srgb,${ac} 40%,transparent)` }}>{bt(type, "code", "")}</span>
-              <button type="button" className="pm-coup-btn" style={{ background: ac }} onClick={(e) => e.stopPropagation()}>{bt(type, "button", "Kopieren")}</button>
+              <button type="button" className="pm-coup-btn" style={{ background: ac }} onClick={(e) => e.stopPropagation()}>{bt(type, "button", "")}</button>
             </div>
             {note && <em className="pm-coup-note">{note}</em>}
           </div>
@@ -915,7 +927,7 @@ export default function ThemePreview({
         const per = Number.isFinite(priceNum) && priceNum > 0
           ? `${(Math.ceil((priceNum / days) * 100) / 100).toFixed(2).replace(".", ",")} €`
           : "0,55 €";
-        const tpl = bt(type, "text", "Nur {betrag} pro Tag");
+        const tpl = bt(type, "text", "");
         const parts = tpl.split("{betrag}");
         return (
           <div
@@ -1295,10 +1307,10 @@ const CSS = `
 .pm-blk{border-radius:8px;outline:2px solid transparent;outline-offset:3px;transition:outline-color .15s;cursor:pointer}
 .pm-blk:hover{outline-color:color-mix(in srgb,#95BF47 45%,transparent)}
 .pm-blk-on{outline-color:#95BF47!important}
-.pm-bl-dark .pm-bic{background:color-mix(in srgb,var(--pv-text) 88%,#000)!important;border:0!important;color:#fff!important}
-.pm-bl-accent .pm-bic{background:var(--pv-accent)!important;border:0!important;color:#fff!important}
-.pm-bl-soft .pm-bic{background:color-mix(in srgb,var(--pv-accent) 14%,transparent)!important;border:0!important;color:var(--pv-accent)!important}
-.pm-bl-outline .pm-bic{background:transparent!important;border:2px solid var(--pv-accent)!important;color:var(--pv-accent)!important}
+.pm-bl-dark .pm-bic,.pm-ic-dark .pm-bl-dark .pm-bic,.pm-ic-accent .pm-bl-dark .pm-bic,.pm-ic-outline .pm-bl-dark .pm-bic{background:color-mix(in srgb,var(--pv-text) 88%,#000);border:0;color:#fff}
+.pm-bl-accent .pm-bic,.pm-ic-dark .pm-bl-accent .pm-bic,.pm-ic-accent .pm-bl-accent .pm-bic,.pm-ic-outline .pm-bl-accent .pm-bic{background:var(--pv-accent);border:0;color:#fff}
+.pm-bl-soft .pm-bic,.pm-ic-dark .pm-bl-soft .pm-bic,.pm-ic-accent .pm-bl-soft .pm-bic,.pm-ic-outline .pm-bl-soft .pm-bic{background:color-mix(in srgb,var(--pv-accent) 14%,transparent);border:0;color:var(--pv-accent)}
+.pm-bl-outline .pm-bic,.pm-ic-dark .pm-bl-outline .pm-bic,.pm-ic-accent .pm-bl-outline .pm-bic,.pm-ic-outline .pm-bl-outline .pm-bic{background:transparent;border:2px solid var(--pv-accent);color:var(--pv-accent)}
 .pm-sale{text-align:center;font-weight:800;font-size:13px;letter-spacing:.03em;padding:10px 14px;margin-bottom:14px}
 .pm-combo{display:flex;gap:8px;margin-top:8px}
 .pm-combo-btn{flex:1;display:flex;align-items:center;justify-content:center;height:38px;border-radius:min(var(--pv-r),12px);font-size:13px}

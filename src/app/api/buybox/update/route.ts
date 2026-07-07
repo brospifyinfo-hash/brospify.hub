@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { getAllProdukte, findKundeByKey, saveBuyboxPlan, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
+import { upsertLiveDesign } from "@/lib/design-autosave";
 import { isValidDocument } from "@/lib/theme-compile";
 import { buildBuyboxPlan } from "@/lib/buybox-plan";
 import type { ThemeDocument } from "@/lib/theme-doc";
@@ -75,9 +76,13 @@ export async function POST(req: NextRequest) {
   const plan = buildBuyboxPlan(doc, produkt.extra?.themeCopy);
   try {
     await saveBuyboxPlan(code, user, doc.productId, JSON.stringify(plan));
-    // Gespeicherten Design-Speicherstand synchron halten.
+    // Gespeicherten Design-Speicherstand synchron halten — ohne benanntes
+    // Design wird der Stand rollend als „Aktueller Shop-Stand" gesichert,
+    // damit man nach jedem Live-Update auf den Stand zurückgreifen kann.
     if (designName) {
       await saveThemeDesign(code, user, doc.productId, designName, JSON.stringify(doc));
+    } else {
+      await upsertLiveDesign(code, user, doc.productId, doc);
     }
   } catch (err) {
     console.error("[buybox/update] save failed:", err);

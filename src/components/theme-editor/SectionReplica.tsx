@@ -630,6 +630,7 @@ export default function SectionReplica({ instance, ctx }: { instance: SectionIns
               ))}
             </div>
           </div>
+          {layout !== "stack" && t.bridge && <div className="te-pas-bridge" style={{ marginTop: 12 }}>{t.bridge}</div>}
           {t.cta_label && <div style={{ textAlign: "center", marginTop: 14 }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
         </div>
       );

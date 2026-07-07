@@ -304,6 +304,10 @@
         if (b.s.auto_date !== false) txt += " " + dateIn(2);
         var n = el("div", "bspx-offer", "🔥 " + txt);
         if (b.s.alignment === "center") n.style.cssText += "display:block;text-align:center";
+        if (b.s.font_size) n.style.fontSize = b.s.font_size + "px";
+        if (b.s.is_bold === true) n.style.fontWeight = "800";
+        else if (b.s.is_bold === false) n.style.fontWeight = "500";
+        if (b.s.text_color) n.style.color = String(b.s.text_color);
         return n;
       },
       custom_title: function (b) {
@@ -311,21 +315,54 @@
         n.style.fontSize = (b.s.font_size_desktop || 28) + "px";
         n.style.fontWeight = String(b.s.font_weight || 800);
         if (b.s.alignment) n.style.textAlign = b.s.alignment;
+        if (b.s.text_color) n.style.color = String(b.s.text_color);
         return n;
       },
       custom_rating: function (b) {
         var pill = b.s.__preset === "pill" || b.s.layout_style === "compact_pill";
         var n = el("div", "bspx-rating" + (pill ? " pill" : ""));
-        n.appendChild(el("span", "bspx-stars", "★★★★★"));
+        var stars = el("span", "bspx-stars", "★★★★★");
+        if (b.s.star_size) stars.style.fontSize = b.s.star_size + "px";
+        if (b.s.star_color) stars.style.color = String(b.s.star_color);
+        n.appendChild(stars);
         n.appendChild(el("strong", "", b.s.average_value || "4.9"));
         n.appendChild(el("span", "", "· " + (b.t.rating_text || "")));
+        if (b.s.text_color) n.style.color = String(b.s.text_color);
+        if (b.s.alignment) n.style.justifyContent = String(b.s.alignment);
         return n;
       },
-      benefits_list: function () {
+      benefits_list: function (b) {
+        // Style-Art des Bausteins (icon_style) schlägt den globalen Icon-Stil;
+        // Feineinstellungen (icon_bg/icon_color/text_color/font_size) schlagen
+        // beides — exakt wie in der Editor-Vorschau.
+        var st = String(b.s.icon_style || "");
+        var iconBg = b.s.icon_bg ? String(b.s.icon_bg) : "";
+        var iconColor = b.s.icon_color ? String(b.s.icon_color) : "";
+        var textColor = b.s.text_color ? String(b.s.text_color) : "";
+        var fontSize = Number(b.s.font_size) || 0;
+        var gap = Number(b.s.item_gap) || 0;
         var n = el("div", "bspx-benefits");
+        if (gap) n.style.gap = gap + "px";
         (plan.benefits || []).forEach(function (bf) {
           var row = el("div", "bspx-benefit");
+          if (fontSize) row.style.fontSize = fontSize + "px";
+          if (textColor) row.style.color = textColor;
           var ic = el("span", "bspx-bic");
+          if (st === "dark_circle") {
+            ic.style.background = iconBg || "#161616"; ic.style.color = iconColor || "#fff"; ic.style.border = "0";
+          } else if (st === "accent_circle") {
+            ic.style.background = iconBg || v.accent; ic.style.color = iconColor || "#fff"; ic.style.border = "0";
+          } else if (st === "soft_circle") {
+            ic.style.background = "color-mix(in srgb," + (iconBg || v.accent) + " 14%,transparent)";
+            ic.style.color = iconColor || v.accent; ic.style.border = "0";
+          } else if (st === "outlined") {
+            ic.style.background = "transparent";
+            ic.style.border = "2px solid " + (iconBg || v.accent);
+            ic.style.color = iconColor || v.accent;
+          } else {
+            if (iconBg) ic.style.background = iconBg;
+            if (iconColor) ic.style.color = iconColor;
+          }
           ic.appendChild(svg(bf.paths, 15));
           row.appendChild(ic);
           row.appendChild(el("span", "", bf.text));
@@ -335,9 +372,17 @@
       },
       stock_indicator: function (b) {
         var n = el("div", "bspx-stock");
-        n.appendChild(el("span", "bspx-dot"));
+        var dot = el("span", "bspx-dot");
+        if (b.s.dot_color) {
+          dot.style.background = String(b.s.dot_color);
+          dot.style.boxShadow = "0 0 0 3px color-mix(in srgb," + b.s.dot_color + " 25%,transparent)";
+        }
+        n.appendChild(dot);
         n.appendChild(el("span", "", b.t.text || ""));
-        if (b.s.alignment === "center") n.style.justifyContent = "center";
+        if (b.s.alignment) n.style.justifyContent = String(b.s.alignment);
+        if (b.s.text_color) n.style.color = String(b.s.text_color);
+        if (b.s.font_size) n.style.fontSize = b.s.font_size + "px";
+        if (b.s.font_weight) n.style.fontWeight = String(b.s.font_weight);
         return n;
       },
       variant_picker: function () {
@@ -377,8 +422,11 @@
         var n = el("div", "bspx-price");
         var strong = el("strong");
         strong.style.fontSize = (b.s.price_size_desk || 30) + "px";
+        if (b.s.price_color) strong.style.color = String(b.s.price_color);
         var s = el("s");
         var badge = el("span", "bspx-save");
+        if (b.s.badge_bg) badge.style.background = String(b.s.badge_bg);
+        if (b.s.badge_text) badge.style.color = String(b.s.badge_text);
         n.appendChild(strong);
         if (b.s.show_compare !== false) n.appendChild(s);
         if (b.s.show_badge !== false) n.appendChild(badge);
@@ -402,6 +450,14 @@
           { qty: Number(b.s.opt3_qty) || 3, disc: Number(b.s.opt3_discount) || 25, badge: b.s.opt3_badge || "" },
         ];
         var current = 1;
+        var activeBorder = b.s.active_border ? String(b.s.active_border) : "";
+        var savingsColor = b.s.savings_color ? String(b.s.savings_color) : "";
+        function applyActiveBorder() {
+          if (!activeBorder) return;
+          list.querySelectorAll(".bspx-bundle").forEach(function (x) {
+            x.style.borderColor = x.classList.contains("on") ? activeBorder : "";
+          });
+        }
         opts.forEach(function (o, i) {
           var card = el("button", "bspx-bundle" + styleCls + (i === current ? " on" : ""));
           card.type = "button";
@@ -422,6 +478,7 @@
           nameRow.appendChild(document.createTextNode(" " + o.qty + "x " + (product.title || "")));
           var per = el("span", "bspx-bundle-per");
           var save = el("span", "bspx-bundle-save");
+          if (savingsColor) save.style.color = savingsColor;
           main.appendChild(nameRow); main.appendChild(per); main.appendChild(save);
           card.appendChild(main);
           var right = el("span", "bspx-bundle-right");
@@ -445,9 +502,11 @@
             state.bundleDisc = o.disc;
             list.querySelectorAll(".bspx-bundle").forEach(function (x) { x.classList.remove("on"); });
             card.classList.add("on");
+            applyActiveBorder();
           });
           if (i === current) { state.bundleQty = o.qty; state.bundleDisc = o.disc; }
         });
+        applyActiveBorder();
         wrap.appendChild(list);
         return wrap;
       },
@@ -491,7 +550,15 @@
         if (b.t.heading) wrap.appendChild(el("div", "bspx-pay-head", b.t.heading));
         var alignCls = b.s.alignment === "flex-start" ? " align-left" : b.s.alignment === "flex-end" ? " align-right" : "";
         var row = el("div", "bspx-pay" + alignCls);
-        ["visa", "mc", "klarna", "paypal", "apple", "google"].forEach(function (p) { row.appendChild(payMark(p)); });
+        var iconW = Number(b.s.icon_width) || 0;
+        ["visa", "mc", "klarna", "paypal", "apple", "google"].forEach(function (p) {
+          var mark = payMark(p);
+          if (iconW) {
+            mark.style.width = iconW + "px";
+            mark.style.height = Math.round(iconW * 0.66) + "px";
+          }
+          row.appendChild(mark);
+        });
         wrap.appendChild(row);
         return wrap;
       },
@@ -509,6 +576,9 @@
         wrap.appendChild(count);
         var ship = Number(b.s.ship_days != null ? b.s.ship_days : 1);
         var del = Number(b.s.delivery_days != null ? b.s.delivery_days : 3);
+        if (b.s.countdown_color) strong.style.color = String(b.s.countdown_color);
+        var tlOutlined = b.s.__preset === "umriss" || b.s.circle_style === "outlined";
+        var cSize = Number(b.s.circle_size) || 0;
         var tl = el("div", "bspx-timeline");
         [
           { ic: TL_ICONS.bag, label: b.t.label_1 || "Bestellt", date: dateIn(0) },
@@ -517,6 +587,14 @@
         ].forEach(function (s) {
           var step = el("div", "bspx-step");
           var ic = el("span", "bspx-step-ic");
+          if (cSize) { ic.style.width = cSize + "px"; ic.style.height = cSize + "px"; }
+          if (tlOutlined) {
+            if (b.s.circle_border) ic.style.borderColor = String(b.s.circle_border);
+            if (b.s.icon_color) ic.style.color = String(b.s.icon_color);
+          } else {
+            if (b.s.circle_bg) ic.style.background = String(b.s.circle_bg);
+            if (b.s.icon_color) ic.style.color = String(b.s.icon_color);
+          }
           ic.appendChild(svg(s.ic, 17));
           step.appendChild(ic);
           step.appendChild(el("span", "bspx-step-label", s.label));
@@ -535,7 +613,12 @@
           var text = b.t["text_" + i] || (b.s["text_" + i] != null ? String(b.s["text_" + i]) : "");
           if (!title && !text) return;
           var card = el("div", "bspx-feature " + styleCls);
-          if (title) card.appendChild(el("strong", "", title));
+          if (b.s.card_radius != null) card.style.borderRadius = b.s.card_radius + "px";
+          if (title) {
+            var featTitle = el("strong", "", title);
+            if (b.s.accent_color) featTitle.style.color = String(b.s.accent_color);
+            card.appendChild(featTitle);
+          }
           if (text) card.appendChild(el("p", "", text));
           n.appendChild(card);
         });
@@ -833,7 +916,11 @@
           var now = new Date();
           var end = new Date(now);
           end.setHours(cutoff, 0, 0, 0);
-          var late = now >= end;
+          // Am Wochenende gibt es keinen Same-Day-Versand → immer der
+          // „nächster Werktag"-Text (sonst würde samstags fälschlich
+          // „Versand noch heute" versprochen).
+          var wd = now.getDay();
+          var late = wd === 0 || wd === 6 || now >= end;
           txt.textContent = "";
           if (late) {
             txt.appendChild(document.createTextNode(b.t.late || ""));
@@ -982,10 +1069,39 @@
               btn.disabled = false;
             }, 2500);
           }
+          // Erfolg NUR melden, wenn wirklich kopiert wurde — sonst den Code
+          // markieren, damit der Käufer ihn selbst kopieren kann.
+          function copyFallback() {
+            try {
+              var ta = document.createElement("textarea");
+              ta.value = val;
+              ta.setAttribute("readonly", "");
+              ta.style.cssText = "position:fixed;left:-9999px;top:0";
+              document.body.appendChild(ta);
+              ta.select();
+              ta.setSelectionRange(0, val.length);
+              var ok = document.execCommand("copy");
+              document.body.removeChild(ta);
+              return ok;
+            } catch (e) { return false; }
+          }
+          function selectCode() {
+            try {
+              var range = document.createRange();
+              range.selectNodeContents(code);
+              var sel = window.getSelection();
+              sel.removeAllRanges();
+              sel.addRange(range);
+            } catch (e) { /* Code bleibt sichtbar */ }
+          }
+          function fail() {
+            if (copyFallback()) done();
+            else selectCode();
+          }
           if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(val).then(done, done);
+            navigator.clipboard.writeText(val).then(done, fail);
           } else {
-            done();
+            fail();
           }
         });
         row.appendChild(btn);

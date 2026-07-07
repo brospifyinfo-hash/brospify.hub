@@ -30,6 +30,7 @@ import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
+import { upsertLiveDesign, snapshotDesign } from "@/lib/design-autosave";
 import { BUYBOX_CSS } from "@/lib/buybox-css";
 
 // Öffentliche Hub-URL für die Storefront-Fetches der Kunden-Shops.
@@ -220,10 +221,17 @@ export async function POST(req: NextRequest) {
       payloadJson = JSON.stringify({ v: 1, css: BUYBOX_CSS, plan });
       const owner = session.isAdmin ? "admin" : session.lizenzschluessel || "";
       await saveBuyboxPlan(syncCode, owner, produkt.id, JSON.stringify(plan));
-      // Download eines gespeicherten Designs hält den Speicherstand synchron.
+      // Download eines gespeicherten Designs hält den Speicherstand synchron;
+      // ohne aktives Design wird der Stand rollend als „Aktueller Shop-Stand"
+      // gesichert (nur beim stabilen Kunden-Produkt-Code).
       if (designName) {
         await saveThemeDesign(syncCode, owner, produkt.id, designName, JSON.stringify(doc));
+      } else if (kunde) {
+        await upsertLiveDesign(syncCode, owner, produkt.id, doc);
       }
+      // JEDER Download legt zusätzlich automatisch eine datierte
+      // Design-Vorlage an (History — ältere Stände bleiben abrufbar).
+      await snapshotDesign(owner, produkt.id, doc, JSON.stringify(plan));
     } catch (err) {
       // Sheet-Ausfall blockiert den Download NICHT mehr — der eingebackene
       // Plan rendert die Buy Box auch ohne Live-Sync; Sync greift beim

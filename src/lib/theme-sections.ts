@@ -69,9 +69,9 @@ export const BUYBOX_BLOCKS: BuyboxBlockDef[] = [
   { type: "price_per_day", label: "Preis pro Tag" },
 ];
 
-// Fresh-Dokument-Standardreihenfolge (die etablierten 23 Bausteine). Die 5
-// neuen (nur Runtime-gerendert: stock_bar, trust_badges, guarantee,
-// highlights, social_proof) sind opt-in über die Baustein-Galerie.
+// Fresh-Dokument-Standardreihenfolge (die etablierten 23 Bausteine). Alle
+// weiteren, nur Runtime-gerenderten Bausteine (siehe BUYBOX_RUNTIME_ONLY)
+// sind opt-in über die Baustein-Galerie.
 export const BUYBOX_DEFAULT_ORDER = [
   "sale_banner", "urgency_text", "custom_title", "custom_rating", "benefits_list",
   "stock_indicator", "variant_picker", "quantity_selector", "custom_price",
