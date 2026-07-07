@@ -790,6 +790,66 @@ export default function ThemePreview({
           </div>
         );
       }
+      case "benefit_cards": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "pastel");
+        const bgs = style === "pastel"
+          ? [str(s.c1_bg, "#f7f4ec"), str(s.c2_bg, "#eaf4ec")]
+          : style === "tint"
+            ? [`color-mix(in srgb,${ac} 8%,var(--pv-bg))`, `color-mix(in srgb,${ac} 14%,var(--pv-bg))`]
+            : ["transparent", "transparent"];
+        return (
+          <div className={`pm-bcards pm-bcards--${style}`}>
+            {[1, 2].map((n, i) => (
+              <div key={n} className="pm-bcards-card" style={{ background: bgs[i] }}>
+                <span className="pm-bcards-emoji">{bt(type, `e${n}`, "")}</span>
+                <strong className="pm-bcards-title">{bt(type, `t${n}`, "")}</strong>
+                <span className="pm-bcards-text">{bt(type, `d${n}`, "")}</span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case "usp_grid": {
+        const style = str(s.style, "lines");
+        const items = [1, 2, 3, 4, 5, 6]
+          .map((n) => ({ e: bt(type, `e${n}`, ""), t: bt(type, `t${n}`, ""), sub: bt(type, `s${n}`, "") }))
+          .filter((it) => it.t || it.e);
+        return (
+          <div className={`pm-uspg pm-uspg--${style}`}>
+            {items.map((it, i) => (
+              <div key={i} className="pm-uspg-cell">
+                <span className="pm-uspg-emoji">{it.e}</span>
+                <span className="pm-uspg-txt">
+                  <strong>{it.t}</strong>
+                  {style !== "compact" && it.sub ? <em>{it.sub}</em> : null}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case "avatar_proof": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "pill");
+        const initials = bt(type, "initials", "SM,TK,LB").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+        return (
+          <div
+            className={`pm-avp pm-avp--${style}`}
+            style={style === "tint" ? { background: `color-mix(in srgb,${ac} 9%,var(--pv-bg))` } : undefined}
+          >
+            <span className="pm-avp-avs">
+              {initials.map((x, i) => (
+                <span key={i} className="pm-avp-av" style={{ background: `color-mix(in srgb,${ac} ${72 - i * 16}%,var(--pv-text))` }}>{x}</span>
+              ))}
+            </span>
+            <span className="pm-avp-txt">
+              <strong>{bt(type, "name", "")}</strong>
+              <span className="pm-avp-check">✓</span> {bt(type, "join", "und")} <strong>{bt(type, "count", "")}</strong> {bt(type, "text", "")}
+            </span>
+          </div>
+        );
+      }
       case "ship_countdown": {
         const ac = str(s.accent, colors.accent);
         const style = str(s.style, "inline");
@@ -1433,6 +1493,36 @@ const CSS = `
 .pm-rq-who{display:flex;flex-direction:column;line-height:1.25}
 .pm-rq-who strong{font-size:12px;font-weight:700}
 .pm-rq-ver{font-style:normal;font-size:10.5px;font-weight:600;color:#1d9e55}
+
+.pm-bcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.pm-bcards-card{display:flex;flex-direction:column;gap:5px;padding:14px 13px;border-radius:min(var(--pv-r),18px);line-height:1.4}
+.pm-bcards--outline .pm-bcards-card{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 13%,transparent)}
+.pm-bcards-emoji{font-size:20px;line-height:1}
+.pm-bcards-title{font-size:12.5px;font-weight:800}
+.pm-bcards-text{font-size:11.5px;opacity:.72}
+
+.pm-uspg{display:grid;grid-template-columns:1fr 1fr;margin-bottom:16px}
+.pm-uspg-cell{display:flex;align-items:center;gap:9px;padding:10px 6px;min-width:0}
+.pm-uspg--lines .pm-uspg-cell{border-bottom:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent)}
+.pm-uspg--lines .pm-uspg-cell:nth-last-child(-n+2){border-bottom:none}
+.pm-uspg--lines .pm-uspg-cell:nth-child(odd){border-right:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent);padding-right:12px}
+.pm-uspg--lines .pm-uspg-cell:nth-child(even){padding-left:12px}
+.pm-uspg--cards{gap:8px}
+.pm-uspg--cards .pm-uspg-cell{background:color-mix(in srgb,var(--pv-text) 3.5%,var(--pv-bg));border-radius:min(var(--pv-r),12px);padding:10px 11px}
+.pm-uspg--compact .pm-uspg-cell{padding:6px 6px}
+.pm-uspg-emoji{font-size:17px;line-height:1;flex:0 0 auto}
+.pm-uspg-txt{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.pm-uspg-txt strong{font-size:11.5px;font-weight:800}
+.pm-uspg-txt em{font-style:normal;font-size:10.5px;opacity:.62}
+
+.pm-avp{display:flex;align-items:center;gap:11px;margin-bottom:16px;border-radius:min(var(--pv-r),16px);padding:11px 13px;background:color-mix(in srgb,var(--pv-text) 4.5%,var(--pv-bg))}
+.pm-avp--plain{background:transparent;padding:0;border-radius:0}
+.pm-avp-avs{display:inline-flex;flex:0 0 auto}
+.pm-avp-av{width:26px;height:26px;border-radius:50%;color:#fff;font-size:9px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;border:2px solid var(--pv-bg)}
+.pm-avp-av+.pm-avp-av{margin-left:-8px}
+.pm-avp-txt{font-size:11.5px;line-height:1.45;min-width:0}
+.pm-avp-txt strong{font-weight:800}
+.pm-avp-check{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:#1d9e55;color:#fff;font-size:8.5px;font-weight:800;margin-left:3px;vertical-align:1px}
 
 .pm-shipc{display:flex;flex-direction:column;gap:4px;margin-bottom:16px;font-size:12.5px}
 .pm-shipc--box{border:var(--pv-bd) solid;border-radius:min(var(--pv-r),14px);padding:11px 13px}

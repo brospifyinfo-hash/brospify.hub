@@ -213,6 +213,36 @@ export const BUYBOX_CSS = `
 .bspx-rq-who strong{font-size:12px;font-weight:700}
 .bspx-rq-ver{font-style:normal;font-size:10.5px;font-weight:600;color:#1d9e55}
 
+.bspx-bcards{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 16px}
+.bspx-bcards-card{display:flex;flex-direction:column;gap:5px;padding:14px 13px;border-radius:min(var(--bx-r),18px);line-height:1.4}
+.bspx-bcards--outline .bspx-bcards-card{border:var(--bx-bd) solid rgba(0,0,0,.13)}
+.bspx-bcards-emoji{font-size:20px;line-height:1}
+.bspx-bcards-title{font-size:12.5px;font-weight:800}
+.bspx-bcards-text{font-size:11.5px;opacity:.72}
+
+.bspx-uspg{display:grid;grid-template-columns:1fr 1fr;margin:0 0 16px}
+.bspx-uspg-cell{display:flex;align-items:center;gap:9px;padding:10px 6px;min-width:0}
+.bspx-uspg--lines .bspx-uspg-cell{border-bottom:1px solid rgba(0,0,0,.1)}
+.bspx-uspg--lines .bspx-uspg-cell:nth-last-child(-n+2){border-bottom:none}
+.bspx-uspg--lines .bspx-uspg-cell:nth-child(odd){border-right:1px solid rgba(0,0,0,.1);padding-right:12px}
+.bspx-uspg--lines .bspx-uspg-cell:nth-child(even){padding-left:12px}
+.bspx-uspg--cards{gap:8px}
+.bspx-uspg--cards .bspx-uspg-cell{background:rgba(0,0,0,.035);border-radius:min(var(--bx-r),12px);padding:10px 11px}
+.bspx-uspg--compact .bspx-uspg-cell{padding:6px 6px}
+.bspx-uspg-emoji{font-size:17px;line-height:1;flex:0 0 auto}
+.bspx-uspg-txt{display:flex;flex-direction:column;line-height:1.3;min-width:0}
+.bspx-uspg-txt strong{font-size:11.5px;font-weight:800}
+.bspx-uspg-txt em{font-style:normal;font-size:10.5px;opacity:.62}
+
+.bspx-avp{display:flex;align-items:center;gap:11px;margin:0 0 16px;border-radius:min(var(--bx-r),16px);padding:11px 13px;background:rgba(0,0,0,.045)}
+.bspx-avp--plain{background:transparent;padding:0;border-radius:0}
+.bspx-avp-avs{display:inline-flex;flex:0 0 auto}
+.bspx-avp-av{width:26px;height:26px;border-radius:50%;color:#fff;font-size:9px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;border:2px solid #fff}
+.bspx-avp-av+.bspx-avp-av{margin-left:-8px}
+.bspx-avp-txt{font-size:11.5px;line-height:1.45;min-width:0}
+.bspx-avp-txt strong{font-weight:800}
+.bspx-avp-check{display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:#1d9e55;color:#fff;font-size:8.5px;font-weight:800;margin-left:3px;vertical-align:1px}
+
 .bspx-shipc{display:flex;flex-direction:column;gap:4px;margin:0 0 16px;font-size:12.5px}
 .bspx-shipc--box{border:var(--bx-bd) solid;border-radius:min(var(--bx-r),14px);padding:11px 13px}
 .bspx-shipc--stack{text-align:center;align-items:center}

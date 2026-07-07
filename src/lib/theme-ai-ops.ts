@@ -90,7 +90,7 @@ const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as c
 const ICON_IDS = new Set(THEME_ICONS.map((i) => i.id));
 /** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf. */
 const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "icon_1", "icon_2", "icon_3", "icon_4"]);
-const MAX_OPS = 40;
+const MAX_OPS = 48;
 const MAX_TEXT = 600;
 
 const isStr = (v: unknown): v is string => typeof v === "string";

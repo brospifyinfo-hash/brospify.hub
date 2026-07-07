@@ -891,6 +891,96 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       );
     }
 
+    case "bro-hero-luxe": {
+      const look = str(s.look, "glass");
+      const h = str(s.height, "full");
+      const pos = str(s.card_pos, "left");
+      const overlay = num(s.overlay, 28) / 100;
+      const serif = s.serif !== false && s.serif !== "false";
+      const cardStyle: CSSProperties =
+        look === "light"
+          ? { background: "rgba(255,255,255,.94)", color: "#14161a" }
+          : look === "dark"
+            ? { background: "rgba(12,14,18,.72)", color: "#fff", backdropFilter: "blur(10px)" }
+            : { background: "rgba(255,255,255,.14)", color: "#fff", backdropFilter: "blur(14px)", border: "1px solid rgba(255,255,255,.22)" };
+      return (
+        <div
+          className="te-bhlx"
+          style={{
+            minHeight: h === "full" ? 380 : h === "tall" ? 320 : 250,
+            justifyContent: pos === "center" ? "center" : pos === "right" ? "flex-end" : "flex-start",
+          }}
+        >
+          {img(0) ? <img className="te-bhlx-img" src={img(0)} alt="" /> : <span className="te-bhlx-img te-noimg" />}
+          <span className="te-bhlx-shade" style={{ background: `linear-gradient(to top, rgba(0,0,0,${overlay}), transparent 55%)` }} />
+          <div className="te-bhlx-card" style={cardStyle}>
+            {t.trust_label && (
+              <div className="te-bhlx-trust">
+                <span className="te-tstars">{[0, 1, 2, 3, 4].map((i) => <i key={i}>★</i>)}</span>
+                <span>{t.trust_label} {t.trust_score}</span>
+              </div>
+            )}
+            <h2 className="te-bhlx-h" style={serif ? { fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic", fontWeight: 500 } : undefined}>{t.heading}</h2>
+            {t.text && <p className="te-bhlx-p">{t.text}</p>}
+            {t.cta && <span className="te-bhlx-btn" style={look === "light" ? { background: "#14161a", color: "#fff" } : undefined}>{t.cta}</span>}
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-hero-split": {
+      const bg = str(s.bg, "#f6cdd6");
+      const tc = str(s.text_color, "#1c1417");
+      const inits = str(s.initials, "SM,TK,LB").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+      return (
+        <div className="te-bhsp" style={{ background: bg, color: tc }}>
+          <div className="te-bhsp-col">
+            <div className="te-bhsp-social">
+              <span className="te-bhsp-avs">
+                {inits.map((x, i) => (
+                  <span key={i} className="te-bhsp-av" style={{ background: `color-mix(in srgb, ${tc} ${65 - i * 14}%, ${bg})`, borderColor: bg }}>{x}</span>
+                ))}
+              </span>
+              {t.customers && <b>{t.customers}</b>}
+              {t.rating && <span className="te-bhsp-rating"><span className="te-tstars">{[0, 1, 2, 3, 4].map((i) => <i key={i}>★</i>)}</span>{t.rating}</span>}
+            </div>
+            <h2 className="te-bhsp-h">
+              {t.heading_pre} {t.heading_mark && <u>{t.heading_mark}</u>} {t.heading_post}
+            </h2>
+            {t.text && <p className="te-bhsp-p">{t.text}</p>}
+            <div className="te-bhsp-btns">
+              {t.cta1 && <span className="te-bhsp-btn te-bhsp-btn--fill">{t.cta1}</span>}
+              {t.cta2 && <span className="te-bhsp-btn te-bhsp-btn--line" style={{ borderColor: tc, color: tc }}>{t.cta2}</span>}
+            </div>
+          </div>
+          <div className="te-bhsp-imgwrap">
+            {img(0) ? <img src={img(0)} alt="" /> : <span className="te-noimg" style={{ position: "absolute", inset: 0 }} />}
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-benefit-cards": {
+      const cards = [1, 2, 3, 4]
+        .map((i) => ({ emoji: t[`emoji_${i}`], title: t[`title_${i}`], text: t[`text_${i}`], bg: str(s[`bg_${i}`], "#f7f4ec") }))
+        .filter((c) => c.title);
+      const cols = cards.length >= 4 ? 4 : cards.length === 3 ? 3 : 2;
+      return (
+        <div className="te-bbcs">
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }}>{t.heading}</h2>}
+          <div className="te-bbcs-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+            {cards.map((c, i) => (
+              <div key={i} className="te-bbcs-card" style={{ background: c.bg }}>
+                {c.emoji && <span className="te-bbcs-emoji">{c.emoji}</span>}
+                <strong className="te-bbcs-title">{c.title}</strong>
+                {c.text && <p className="te-bbcs-text">{c.text}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -1205,6 +1295,47 @@ export const REPLICA_CSS = `
 .te-chat-bubble em{display:block;font-style:normal;font-size:9px;opacity:.55;text-align:right;margin-top:3px}
 .te-chat-note{text-align:center;font-size:10.5px;opacity:.55;margin:10px 0 0}
 
+/* ── Trustpilot-Sterne (Hero Luxe / Hero Split) ── */
+.te-tstars{display:inline-flex;gap:2px}
+.te-tstars i{width:15px;height:15px;display:inline-flex;align-items:center;justify-content:center;background:#00b67a;color:#fff;font-style:normal;font-size:10px;line-height:1}
+
+/* ── Hero Luxe ── */
+.te-bhlx{position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:22px}
+.te-bhlx-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.te-bhlx-shade{position:absolute;inset:0;pointer-events:none}
+.te-bhlx-card{position:relative;z-index:1;width:100%;max-width:340px;padding:20px 18px 16px;border-radius:18px;box-shadow:0 24px 60px -28px rgba(0,0,0,.5)}
+.te-bhlx-trust{display:flex;align-items:center;gap:7px;font-size:11px;font-weight:700;margin-bottom:10px}
+.te-bhlx-h{margin:0 0 8px;font-size:24px;line-height:1.12;letter-spacing:-.01em}
+.te-bhlx-p{margin:0 0 14px;font-size:11.5px;line-height:1.6;opacity:.88}
+.te-bhlx-btn{display:block;width:100%;text-align:center;box-sizing:border-box;background:#fff;color:#14161a;font-weight:700;font-size:12px;padding:12px 16px;border-radius:100px}
+
+/* ── Hero Split ── */
+.te-bhsp{display:grid;grid-template-columns:1.05fr .95fr;gap:30px;align-items:center;padding:44px 34px}
+.te-bhsp-social{display:flex;align-items:center;gap:9px;margin-bottom:14px;flex-wrap:wrap}
+.te-bhsp-avs{display:inline-flex}
+.te-bhsp-av{width:28px;height:28px;border-radius:50%;border:2px solid;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;color:#fff}
+.te-bhsp-av+.te-bhsp-av{margin-left:-9px}
+.te-bhsp-social b{font-size:11.5px;font-weight:800}
+.te-bhsp-rating{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700}
+.te-bhsp-h{margin:0 0 12px;font-size:32px;line-height:1.08;font-weight:800;letter-spacing:-.02em}
+.te-bhsp-h u{text-decoration:none;position:relative;white-space:nowrap}
+.te-bhsp-h u::after{content:"";position:absolute;left:0;right:0;bottom:.04em;height:.14em;background:currentColor;border-radius:3px;opacity:.9}
+.te-bhsp-p{margin:0 0 18px;font-size:12.5px;line-height:1.65;max-width:380px;opacity:.82}
+.te-bhsp-btns{display:flex;gap:10px;flex-wrap:wrap}
+.te-bhsp-btn{display:inline-block;font-weight:800;font-size:12px;padding:12px 22px;border-radius:100px}
+.te-bhsp-btn--fill{background:#fff;color:#14161a;box-shadow:0 10px 26px -14px rgba(0,0,0,.35)}
+.te-bhsp-btn--line{border:2px solid;padding:10px 20px}
+.te-bhsp-imgwrap{position:relative;border-radius:18px;overflow:hidden;min-height:220px}
+.te-bhsp-imgwrap img{width:100%;height:100%;object-fit:cover;display:block;position:absolute;inset:0}
+
+/* ── Benefit-Karten (Section) ── */
+.te-bbcs{padding:6px 2px}
+.te-bbcs-grid{display:grid;gap:12px}
+.te-bbcs-card{display:flex;flex-direction:column;gap:7px;padding:22px 20px;border-radius:20px;line-height:1.5}
+.te-bbcs-emoji{font-size:26px;line-height:1}
+.te-bbcs-title{font-size:14px;font-weight:800}
+.te-bbcs-text{margin:0;font-size:11.5px;opacity:.72}
+
 .pm-mobile .te-cta-h{font-size:26px!important}
 .pm-mobile .te-benefits2{grid-template-columns:1fr}
 .pm-mobile .te-photo{flex-direction:column}
@@ -1217,4 +1348,7 @@ export const REPLICA_CSS = `
 .pm-mobile .te-stats-grid{grid-template-columns:repeat(2,1fr)!important}
 .pm-mobile .te-pas--split,.pm-mobile .te-pas--contrast{flex-direction:column}
 .pm-mobile .te-chat-grid{grid-template-columns:1fr}
+.pm-mobile .te-bhsp{grid-template-columns:1fr;padding:30px 20px}
+.pm-mobile .te-bhsp-h{font-size:26px}
+.pm-mobile .te-bbcs-grid{grid-template-columns:1fr 1fr!important}
 `;

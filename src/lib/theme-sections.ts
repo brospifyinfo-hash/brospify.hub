@@ -89,6 +89,7 @@ export const BUYBOX_RUNTIME_ONLY = new Set([
   "countdown_timer", "press_bar", "spec_list",
   "value_stack", "review_quote", "ship_countdown", "return_promise",
   "fit_check", "mini_compare", "coupon_code", "price_per_day",
+  "benefit_cards", "usp_grid", "avatar_proof",
 ]);
 
 // ─── Metadaten je Baustein: Kategorie + Icon + Beschreibung (für die
@@ -130,6 +131,9 @@ export const BUYBOX_META: Record<string, BuyboxMeta> = {
   price_per_day: { category: "conversion", icon: "Calculator", label: "Preis pro Tag", labelEn: "Price per day", desc: "Rechnet den Preis auf „nur X € pro Tag“ um.", descEn: "Reframes the price as \"only X per day\"." },
   fit_check: { category: "conversion", icon: "UserCheck", label: "Zielgruppen-Check", labelEn: "Audience check", desc: "„Perfekt für dich, wenn …“ — Selbst-Qualifizierung.", descEn: "\"Perfect for you if …\" — self-qualification." },
   review_quote: { category: "vertrauen", icon: "Quote", label: "Kunden-Zitat", labelEn: "Customer quote", desc: "Testimonial mit Sternen & Verifiziert-Badge.", descEn: "Testimonial with stars & verified badge." },
+  benefit_cards: { category: "vertrauen", icon: "LayoutGrid", label: "Benefit-Karten", labelEn: "Benefit cards", desc: "2 pastell-getönte Karten: Emoji + Titel + Text (z. B. Rückgabe + Mission).", descEn: "2 pastel-tinted cards: emoji + title + text (e.g. returns + mission)." },
+  usp_grid: { category: "vertrauen", icon: "Table", label: "USP-Raster", labelEn: "USP grid", desc: "6 Vorteile im 2-Spalten-Raster mit feinen Trennlinien.", descEn: "6 benefits in a 2-column grid with fine dividers." },
+  avatar_proof: { category: "vertrauen", icon: "Users", label: "Avatar-Proof", labelEn: "Avatar proof", desc: "„Davie ✓ und 1500+ andere lieben es“ — Avatare + Verifiziert-Badge.", descEn: "\"Davie ✓ and 1500+ others love it\" — avatars + verified badge." },
   return_promise: { category: "vertrauen", icon: "RotateCcw", label: "Retouren-Versprechen", labelEn: "Return promise", desc: "30 Tage Rückgabe — direkt am Kaufen-Button.", descEn: "30-day returns — right at the buy button." },
   press_bar: { category: "vertrauen", icon: "Award", label: "Bekannt aus", labelEn: "As seen in", desc: "Presse-/Autoritäts-Leiste mit Namen.", descEn: "Press/authority bar with names." },
   spec_list: { category: "info", icon: "Table", label: "Produkt-Daten", labelEn: "Spec list", desc: "Eigenschaften als Bezeichnung/Wert-Zeilen.", descEn: "Attributes as label/value rows." },
@@ -160,9 +164,9 @@ export const BUYBOX_CANONICAL_ORDER = [
   "stock_bar", "stock_indicator", "variant_picker", "bundle_selector", "value_stack",
   "coupon_code", "quantity_selector", "buy_buttons", "return_promise", "payment_icons",
   "trust_badges", "press_bar",
-  "guarantee", "benefits_list", "highlights", "mini_compare", "fit_check",
+  "guarantee", "benefits_list", "benefit_cards", "usp_grid", "highlights", "mini_compare", "fit_check",
   "delivery_timeline", "free_gift",
-  "social_proof", "feature_box", "icon-with-text", "spec_list", "description", "text",
+  "avatar_proof", "social_proof", "feature_box", "icon-with-text", "spec_list", "description", "text",
   "custom_divider", "custom_accordion", "collapsible_tab", "complementary", "share",
 ];
 

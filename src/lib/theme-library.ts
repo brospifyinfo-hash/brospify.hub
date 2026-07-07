@@ -85,6 +85,8 @@ const PALETTE_REF: Record<string, keyof ColorPalette> = {
 /** Löst "@accent" & Co. gegen die Palette auf; andere Werte unverändert. */
 export function resolvePaletteRef(value: string | number | boolean, palette: ColorPalette): string | number | boolean {
   if (typeof value === "string" && value.startsWith("@")) {
+    // Berechneter Ref: zarte Pastell-Tönung der Akzentfarbe (Karten-Hintergründe).
+    if (value === "@accentSoft") return mixHex("#ffffff", palette.accent, 0.12);
     const role = PALETTE_REF[value];
     if (role) return palette[role];
   }
@@ -147,6 +149,7 @@ export const SECTION_DESIGN_TYPES = new Set([
   "animatedtext", "map", "slideshow2",
   "bro-icon-benefits", "bro-spotlight", "bro-callouts", "bro-gradient-cta",
   "bro-logo-badges", "bro-image-cards",
+  "bro-hero-luxe", "bro-hero-split", "bro-benefit-cards",
 ]);
 export function sectionSupportsDesign(type: string): boolean {
   return SECTION_DESIGN_TYPES.has(type);
@@ -964,6 +967,79 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "breit", label: "Eine breit", labelEn: "One wide", hint: "Erste Karte doppelt breit", settings: { layout: "breit", radius: 20 } },
     ],
   },
+
+  // ─── Referenz-Nachbauten v4 (Kunden-Screenshots) ───
+  {
+    type: "bro-hero-luxe",
+    category: "media",
+    label: "Hero Luxe",
+    labelEn: "Hero luxe",
+    desc: "Fullscreen-Bild mit Glas-Karte unten: Trustpilot-Zeile, Serifen-Headline, großer weißer Button.",
+    descEn: "Fullscreen image with a glass card at the bottom: Trustpilot line, serif headline, big white button.",
+    fields: [
+      { id: "trust_label", label: "Trust-Zeile (leer = aus)", labelEn: "Trust line (empty = off)", kind: "text", target: { key: "trust_label" }, def: "Hervorragend" },
+      { id: "trust_score", label: "Bewertung", labelEn: "Rating", kind: "text", target: { key: "trust_score" }, def: "4,6" },
+      { id: "heading", label: "Überschrift", labelEn: "Heading", kind: "textarea", target: { key: "heading" }, def: "Spürbar besser — vom ersten Tag an" },
+      { id: "text", label: "Beschreibung", labelEn: "Description", kind: "textarea", target: { key: "text" }, def: "Entwickelt für deinen Alltag: hochwertige Materialien, durchdachtes Design und ein Ergebnis, das man sieht." },
+      { id: "cta", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "cta" }, def: "Jetzt entdecken" },
+    ],
+    presets: [
+      { id: "glas", label: "Glas", labelEn: "Glass", hint: "Milchglas-Karte auf dem Bild", settings: { look: "glass", card_pos: "left", height: "full", overlay: 28, serif: true } },
+      { id: "hell", label: "Hell", labelEn: "Light", hint: "Weiße Karte, dunkler Button", settings: { look: "light", card_pos: "left", height: "tall", overlay: 20, serif: true } },
+      { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Dunkle Karte, mittig", settings: { look: "dark", card_pos: "center", height: "full", overlay: 36, serif: false } },
+    ],
+  },
+  {
+    type: "bro-hero-split",
+    category: "media",
+    label: "Hero Split",
+    labelEn: "Hero split",
+    desc: "Farbfläche mit Avataren + Bewertung, fetter Headline mit unterstrichenem Wort, 2 Buttons + Produktbild.",
+    descEn: "Flat color hero with avatars + rating, bold headline with underlined word, 2 buttons + product photo.",
+    fields: [
+      { id: "customers", label: "Kunden-Zeile", labelEn: "Customers line", kind: "text", target: { key: "customers" }, def: "50.000+ zufriedene Kunden" },
+      { id: "rating", label: "Bewertung (leer = aus)", labelEn: "Rating (empty = off)", kind: "text", target: { key: "rating" }, def: "4,7" },
+      { id: "heading_pre", label: "Überschrift — Teil 1", labelEn: "Heading — part 1", kind: "text", target: { key: "heading_pre" }, def: "Dein Alltag." },
+      { id: "heading_mark", label: "Unterstrichenes Wort", labelEn: "Underlined word", kind: "text", target: { key: "heading_mark" }, def: "Nur besser" },
+      { id: "heading_post", label: "Überschrift — Teil 2 (optional)", labelEn: "Heading — part 2 (optional)", kind: "text", target: { key: "heading_post" }, def: "" },
+      { id: "text", label: "Beschreibung", labelEn: "Description", kind: "textarea", target: { key: "text" }, def: "Das Original, dem tausende vertrauen: durchdacht bis ins Detail und in wenigen Tagen bei dir." },
+      { id: "cta1", label: "Button 1", labelEn: "Button 1", kind: "text", target: { key: "cta1" }, def: "Jetzt bestellen" },
+      { id: "cta2", label: "Button 2 (leer = aus)", labelEn: "Button 2 (empty = off)", kind: "text", target: { key: "cta2" }, def: "Mehr erfahren" },
+    ],
+    presets: [
+      { id: "rosa", label: "Rosé", labelEn: "Rose", hint: "Zarte Rosa-Fläche wie im Referenz-Look", settings: { bg: "#f6cdd6", text_color: "#1c1417" } },
+      { id: "creme", label: "Creme", labelEn: "Cream", hint: "Warmer Creme-Ton", settings: { bg: "#f3ead9", text_color: "#241d12" } },
+      { id: "akzent", label: "Akzent", labelEn: "Accent", hint: "Nutzt die Akzentfarbe der Palette", settings: { bg: "@accent", text_color: "#ffffff" } },
+    ],
+  },
+  {
+    type: "bro-benefit-cards",
+    category: "info",
+    label: "Benefit-Karten",
+    labelEn: "Benefit cards",
+    desc: "2–4 pastellgetönte Karten mit Emoji, Titel und Text — ruhiger Vertrauens-Block ohne KI-Optik.",
+    descEn: "2–4 pastel-tinted cards with emoji, title and text — a calm trust block.",
+    fields: [
+      { id: "heading", label: "Überschrift (optional)", labelEn: "Heading (optional)", kind: "text", target: { key: "heading" }, def: "" },
+      { id: "emoji_1", label: "Karte 1 — Emoji", labelEn: "Card 1 — emoji", kind: "text", target: { key: "emoji_1" }, def: "😊" },
+      { id: "title_1", label: "Karte 1 — Titel", labelEn: "Card 1 — title", kind: "text", target: { key: "title_1" }, def: "Kostenlose Rückgabe" },
+      { id: "text_1", label: "Karte 1 — Text", labelEn: "Card 1 — text", kind: "textarea", target: { key: "text_1" }, def: "Du wirst es lieben — und falls nicht, schick es einfach 30 Tage lang kostenlos zurück." },
+      { id: "emoji_2", label: "Karte 2 — Emoji", labelEn: "Card 2 — emoji", kind: "text", target: { key: "emoji_2" }, def: "🌳" },
+      { id: "title_2", label: "Karte 2 — Titel", labelEn: "Card 2 — title", kind: "text", target: { key: "title_2" }, def: "Gutes tun inklusive" },
+      { id: "text_2", label: "Karte 2 — Text", labelEn: "Card 2 — text", kind: "textarea", target: { key: "text_2" }, def: "Für jede Bestellung pflanzen wir gemeinsam mit unseren Partnern einen Baum." },
+      { id: "emoji_3", label: "Karte 3 — Emoji", labelEn: "Card 3 — emoji", kind: "text", target: { key: "emoji_3" }, def: "🚚" },
+      { id: "title_3", label: "Karte 3 — Titel (leer = aus)", labelEn: "Card 3 — title (empty = off)", kind: "text", target: { key: "title_3" }, def: "" },
+      { id: "text_3", label: "Karte 3 — Text", labelEn: "Card 3 — text", kind: "textarea", target: { key: "text_3" }, def: "" },
+      { id: "emoji_4", label: "Karte 4 — Emoji", labelEn: "Card 4 — emoji", kind: "text", target: { key: "emoji_4" }, def: "🔒" },
+      { id: "title_4", label: "Karte 4 — Titel (leer = aus)", labelEn: "Card 4 — title (empty = off)", kind: "text", target: { key: "title_4" }, def: "" },
+      { id: "text_4", label: "Karte 4 — Text", labelEn: "Card 4 — text", kind: "textarea", target: { key: "text_4" }, def: "" },
+    ],
+    presets: [
+      { id: "duo", label: "Pastell-Duo", labelEn: "Pastel duo", hint: "Creme + Mint wie im Referenz-Look", settings: { bg_1: "#f7f4ec", bg_2: "#eaf4ec", bg_3: "#eef1f6", bg_4: "#f6ecf1" } },
+      { id: "quartett", label: "Pastell-Quartett", labelEn: "Pastel quartet", hint: "4 Karten in 4 zarten Tönen", settings: { bg_1: "#f7f4ec", bg_2: "#eaf4ec", bg_3: "#eef1f6", bg_4: "#f6ecf1", title_3: "Schnelle Lieferung", text_3: "In 2–4 Werktagen bei dir — mit Sendungsverfolgung.", title_4: "Sichere Zahlung", text_4: "SSL-verschlüsselt mit Käuferschutz bei jeder Bestellung." } },
+      { id: "akzent", label: "Akzent-Töne", labelEn: "Accent tints", hint: "Karten in der Palette getönt", settings: { bg_1: "@accentSoft", bg_2: "@accentSoft", bg_3: "@accentSoft", bg_4: "@accentSoft" } },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -1335,6 +1411,67 @@ export const BUYBOX_LIBRARY: BuyboxBlockLib[] = [
       { id: "minimal", label: "Minimal", labelEn: "Minimal", hint: "Kursives Zitat ohne Rahmen", settings: { style: "plain", accent: "@accent" } },
     ],
   },
+
+  // ─── Trust-Pack v4 (nach Kunden-Referenzen — Emoji + Pastell-Optik) ───
+  {
+    type: "benefit_cards",
+    fields: [
+      { id: "e1", label: "Karte 1 — Emoji", labelEn: "Card 1 — emoji", kind: "text", target: { key: "e1" }, def: "😊" },
+      { id: "t1", label: "Karte 1 — Titel", labelEn: "Card 1 — title", kind: "text", target: { key: "t1" }, def: "Kostenlose Rückgabe" },
+      { id: "d1", label: "Karte 1 — Text", labelEn: "Card 1 — text", kind: "text", target: { key: "d1" }, def: "Du wirst es lieben — 30 Tage risikofrei testen." },
+      { id: "e2", label: "Karte 2 — Emoji", labelEn: "Card 2 — emoji", kind: "text", target: { key: "e2" }, def: "🌳" },
+      { id: "t2", label: "Karte 2 — Titel", labelEn: "Card 2 — title", kind: "text", target: { key: "t2" }, def: "Gutes tun inklusive" },
+      { id: "d2", label: "Karte 2 — Text", labelEn: "Card 2 — text", kind: "text", target: { key: "d2" }, def: "1 Bestellung = 1 gepflanzter Baum." },
+    ],
+    presets: [
+      { id: "pastell", label: "Pastell-Duo", labelEn: "Pastel duo", hint: "Creme + Mint wie im Referenz-Look", settings: { style: "pastel", c1_bg: "#f7f4ec", c2_bg: "#eaf4ec", accent: "@accent" } },
+      { id: "akzent", label: "Akzent-Tönung", labelEn: "Accent tint", hint: "Beide Karten im Palette-Ton", settings: { style: "tint", accent: "@accent" } },
+      { id: "umriss", label: "Umriss", labelEn: "Outline", hint: "Weiße Karten mit feinem Rand", settings: { style: "outline", accent: "@accent" } },
+    ],
+  },
+  {
+    type: "usp_grid",
+    fields: [
+      { id: "e1", label: "Feld 1 — Emoji", labelEn: "Cell 1 — emoji", kind: "text", target: { key: "e1" }, def: "🏆" },
+      { id: "t1", label: "Feld 1 — Titel", labelEn: "Cell 1 — title", kind: "text", target: { key: "t1" }, def: "Gratis Versand" },
+      { id: "s1", label: "Feld 1 — Unterzeile", labelEn: "Cell 1 — subline", kind: "text", target: { key: "s1" }, def: "ab 25 € Bestellwert" },
+      { id: "e2", label: "Feld 2 — Emoji", labelEn: "Cell 2 — emoji", kind: "text", target: { key: "e2" }, def: "🔒" },
+      { id: "t2", label: "Feld 2 — Titel", labelEn: "Cell 2 — title", kind: "text", target: { key: "t2" }, def: "Sichere Zahlung" },
+      { id: "s2", label: "Feld 2 — Unterzeile", labelEn: "Cell 2 — subline", kind: "text", target: { key: "s2" }, def: "SSL-verschlüsselt" },
+      { id: "e3", label: "Feld 3 — Emoji", labelEn: "Cell 3 — emoji", kind: "text", target: { key: "e3" }, def: "⭐" },
+      { id: "t3", label: "Feld 3 — Titel", labelEn: "Cell 3 — title", kind: "text", target: { key: "t3" }, def: "Geprüfte Qualität" },
+      { id: "s3", label: "Feld 3 — Unterzeile", labelEn: "Cell 3 — subline", kind: "text", target: { key: "s3" }, def: "von Kunden bewertet" },
+      { id: "e4", label: "Feld 4 — Emoji", labelEn: "Cell 4 — emoji", kind: "text", target: { key: "e4" }, def: "🚚" },
+      { id: "t4", label: "Feld 4 — Titel", labelEn: "Cell 4 — title", kind: "text", target: { key: "t4" }, def: "Schnelle Lieferung" },
+      { id: "s4", label: "Feld 4 — Unterzeile", labelEn: "Cell 4 — subline", kind: "text", target: { key: "s4" }, def: "mit Sendungsverfolgung" },
+      { id: "e5", label: "Feld 5 — Emoji", labelEn: "Cell 5 — emoji", kind: "text", target: { key: "e5" }, def: "💬" },
+      { id: "t5", label: "Feld 5 — Titel", labelEn: "Cell 5 — title", kind: "text", target: { key: "t5" }, def: "Persönlicher Support" },
+      { id: "s5", label: "Feld 5 — Unterzeile", labelEn: "Cell 5 — subline", kind: "text", target: { key: "s5" }, def: "antwortet innerhalb 24 h" },
+      { id: "e6", label: "Feld 6 — Emoji", labelEn: "Cell 6 — emoji", kind: "text", target: { key: "e6" }, def: "📮" },
+      { id: "t6", label: "Feld 6 — Titel", labelEn: "Cell 6 — title", kind: "text", target: { key: "t6" }, def: "Kostenlose Rückgabe" },
+      { id: "s6", label: "Feld 6 — Unterzeile", labelEn: "Cell 6 — subline", kind: "text", target: { key: "s6" }, def: "30 Tage" },
+    ],
+    presets: [
+      { id: "linien", label: "Linien-Raster", labelEn: "Line grid", hint: "Feine Trennlinien wie im Referenz-Look", settings: { style: "lines", accent: "@accent" } },
+      { id: "karten", label: "Mini-Karten", labelEn: "Mini cards", hint: "6 kleine Karten", settings: { style: "cards", accent: "@accent" } },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Ohne Unterzeilen, dichter", settings: { style: "compact", accent: "@accent" } },
+    ],
+  },
+  {
+    type: "avatar_proof",
+    fields: [
+      { id: "name", label: "Name (fett, mit ✓)", labelEn: "Name (bold, with ✓)", kind: "text", target: { key: "name" }, def: "David" },
+      { id: "join", label: "Verbinder (z. B. „und“)", labelEn: "Connector (e.g. \"and\")", kind: "text", target: { key: "join" }, def: "und" },
+      { id: "count", label: "Zahl (fett)", labelEn: "Count (bold)", kind: "text", target: { key: "count" }, def: "1.500+" },
+      { id: "text", label: "Text danach", labelEn: "Text after", kind: "text", target: { key: "text" }, def: "andere lieben unser Produkt und haben mehr als einmal bestellt!" },
+      { id: "initials", label: "Avatar-Initialen (3, mit Komma)", labelEn: "Avatar initials (3, comma)", kind: "text", target: { key: "initials" }, def: "SM,TK,LB" },
+    ],
+    presets: [
+      { id: "pill", label: "Graue Pille", labelEn: "Gray pill", hint: "Heller Banner wie im Referenz-Look", settings: { style: "pill", accent: "@accent" } },
+      { id: "akzent", label: "Akzent-Tönung", labelEn: "Accent tint", hint: "Leicht eingefärbt", settings: { style: "tint", accent: "@accent" } },
+      { id: "schlicht", label: "Ohne Hintergrund", labelEn: "Plain", hint: "Nur Avatare + Zeile", settings: { style: "plain", accent: "@accent" } },
+    ],
+  },
   {
     type: "ship_countdown",
     fields: [
@@ -1559,6 +1696,13 @@ export const BUYBOX_CONTROLS: Record<string, BuyboxControl[]> = {
     { key: "eta_min", label: "Lieferzeit ab (Werktage)", labelEn: "Delivery from (workdays)", kind: "slider", min: 1, max: 10, suffix: " Tage" },
     { key: "eta_max", label: "Lieferzeit bis (Werktage)", labelEn: "Delivery to (workdays)", kind: "slider", min: 1, max: 14, suffix: " Tage" },
   ],
+  benefit_cards: [
+    { key: "c1_bg", label: "Karte 1 — Hintergrund", labelEn: "Card 1 — background", kind: "color" },
+    { key: "c2_bg", label: "Karte 2 — Hintergrund", labelEn: "Card 2 — background", kind: "color" },
+    { key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" },
+  ],
+  usp_grid: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+  avatar_proof: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
 };
 
 export function getBuyboxControls(type: string): BuyboxControl[] {
@@ -1632,6 +1776,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-gradient-cta", presetId: "aurora" },
   ],
   elegant: [
+    { type: "bro-hero-luxe", presetId: "hell" },
     { type: "image-with-text", presetId: "overlap" },
     { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "tint" } },
     { type: "bro-logo-badges", presetId: "statisch" },
@@ -1663,12 +1808,13 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   minimal: [
     { type: "rich-text", presetId: "mittig" },
     { type: "bro-icon-benefits", presetId: "minimal" },
+    { type: "bro-benefit-cards", presetId: "duo" },
     { type: "featured-collection", presetId: "editorial" },
     { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "wash" } },
     { type: "qanda", presetId: "kompakt" },
   ],
   noir: [
-    { type: "scrollingbild", presetId: "kino" },
+    { type: "bro-hero-luxe", presetId: "dunkel" },
     { type: "bro-logo-badges", presetId: "statisch" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep" } },
     { type: "reviews2", presetId: "dunkel" },
@@ -1697,12 +1843,14 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   nature: [
     { type: "image-with-text", presetId: "zentriert" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "leaf", icon_2: "sprout", icon_3: "shield", icon_4: "rotate" } },
+    { type: "bro-benefit-cards", presetId: "duo" },
     { type: "multicolumn", presetId: "drei" },
     { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "wash" } },
     { type: "reviews", presetId: "ruhig" },
     { type: "qanda", presetId: "glass" },
   ],
   candy: [
+    { type: "bro-hero-split", presetId: "rosa" },
     { type: "animatedtext", presetId: "herz" },
     { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave" } },
     { type: "collage", presetId: "links" },
@@ -1731,7 +1879,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "trustpilot", presetId: "gross" },
   ],
   luxe: [
-    { type: "scrollingbild", presetId: "kino" },
+    { type: "bro-hero-luxe", presetId: "glas" },
     { type: "bro-logo-badges", presetId: "statisch" },
     { type: "image-with-text", presetId: "bildrechts" },
     { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "tint" } },
@@ -1763,6 +1911,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   cozy: [
     { type: "image-with-text", presetId: "split" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "home", icon_2: "bed", icon_3: "heart", icon_4: "truck" } },
+    { type: "bro-benefit-cards", presetId: "duo" },
     { type: "collage", presetId: "karten" },
     { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft", sec_divider: "wave" } },
     { type: "benefits", presetId: "luftig" },
@@ -1782,6 +1931,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   fresh: [
     { type: "benefits", presetId: "standard" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "utensils", icon_2: "leaf", icon_3: "clock", icon_4: "smile" } },
+    { type: "bro-benefit-cards", presetId: "quartett" },
     { type: "multicolumn", presetId: "karten" },
     { type: "bro-chat-reviews", presetId: "whatsapp", settings: { sec_tone: "wash", sec_divider: "wave" } },
     { type: "image-with-text", presetId: "zentriert" },
@@ -1789,6 +1939,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "qanda", presetId: "offen" },
   ],
   family: [
+    { type: "bro-hero-split", presetId: "creme" },
     { type: "bro-feature-grid", presetId: "icons" },
     { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave", icon_1: "baby", icon_2: "heart", icon_3: "shield", icon_4: "smile" } },
     { type: "bro-chat-reviews", presetId: "imessage" },
@@ -1817,9 +1968,11 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-cta-banner", presetId: "karte" },
   ],
   spa: [
+    { type: "bro-hero-luxe", presetId: "glas" },
     { type: "image-with-text", presetId: "overlap" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", sec_divider: "wave", icon_1: "droplet", icon_2: "sun", icon_3: "sprout", icon_4: "smile" } },
     { type: "bro-steps", presetId: "timeline" },
+    { type: "bro-benefit-cards", presetId: "duo" },
     { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "soft" } },
     { type: "reviews", presetId: "ruhig" },
     { type: "bro-image-cards", presetId: "versetzt", settings: { sec_tone: "wash" } },

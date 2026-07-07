@@ -874,6 +874,69 @@
         wrap.appendChild(meta);
         return wrap;
       },
+      benefit_cards: function (b) {
+        var ac = b.s.accent || v.accent;
+        var style = b.s.style || "pastel";
+        var wrap = el("div", "bspx-bcards bspx-bcards--" + style);
+        var bgs = style === "pastel"
+          ? [b.s.c1_bg || "#f7f4ec", b.s.c2_bg || "#eaf4ec"]
+          : style === "tint"
+            ? ["color-mix(in srgb," + ac + " 8%,transparent)", "color-mix(in srgb," + ac + " 14%,transparent)"]
+            : ["", ""];
+        for (var i = 1; i <= 2; i++) {
+          var card = el("div", "bspx-bcards-card");
+          if (bgs[i - 1]) card.style.background = bgs[i - 1];
+          card.appendChild(el("span", "bspx-bcards-emoji", b.t["e" + i] || ""));
+          card.appendChild(el("strong", "bspx-bcards-title", b.t["t" + i] || ""));
+          card.appendChild(el("span", "bspx-bcards-text", b.t["d" + i] || ""));
+          wrap.appendChild(card);
+        }
+        return wrap;
+      },
+      usp_grid: function (b) {
+        var style = b.s.style || "lines";
+        var wrap = el("div", "bspx-uspg bspx-uspg--" + style);
+        for (var i = 1; i <= 6; i++) {
+          var t = b.t["t" + i] || "";
+          var e = b.t["e" + i] || "";
+          var sub = b.t["s" + i] || "";
+          if (!t && !e) continue;
+          var cell = el("div", "bspx-uspg-cell");
+          cell.appendChild(el("span", "bspx-uspg-emoji", e));
+          var txt = el("span", "bspx-uspg-txt");
+          txt.appendChild(el("strong", "", t));
+          if (style !== "compact" && sub) txt.appendChild(el("em", "", sub));
+          cell.appendChild(txt);
+          wrap.appendChild(cell);
+        }
+        return wrap;
+      },
+      avatar_proof: function (b) {
+        var ac = b.s.accent || v.accent;
+        var style = b.s.style || "pill";
+        var wrap = el("div", "bspx-avp bspx-avp--" + style);
+        if (style === "tint") wrap.style.background = "color-mix(in srgb," + ac + " 9%,transparent)";
+        var avs = el("span", "bspx-avp-avs");
+        var inits = (b.t.initials || "SM,TK,LB").split(",");
+        var n = 0;
+        for (var j = 0; j < inits.length && n < 3; j++) {
+          var x = inits[j].replace(/^\s+|\s+$/g, "");
+          if (!x) continue;
+          var av = el("span", "bspx-avp-av", x);
+          av.style.background = "color-mix(in srgb," + ac + " " + (72 - n * 16) + "%,currentColor)";
+          avs.appendChild(av);
+          n++;
+        }
+        wrap.appendChild(avs);
+        var txt = el("span", "bspx-avp-txt");
+        txt.appendChild(el("strong", "", b.t.name || ""));
+        txt.appendChild(el("span", "bspx-avp-check", "✓"));
+        txt.appendChild(document.createTextNode(" " + (b.t.join || "und") + " "));
+        txt.appendChild(el("strong", "", b.t.count || ""));
+        txt.appendChild(document.createTextNode(" " + (b.t.text || "")));
+        wrap.appendChild(txt);
+        return wrap;
+      },
       ship_countdown: function (b) {
         var ac = b.s.accent || v.accent;
         var cutoff = Math.max(0, Math.min(23, Number(b.s.cutoff) || 16));

@@ -240,7 +240,8 @@ const U = "urgency_text", T = "custom_title", R = "custom_rating", B = "benefits
   CD = "countdown_timer", SBAR = "stock_bar", GU = "guarantee", TB = "trust_badges",
   SP = "social_proof", RQ = "review_quote", VS = "value_stack", SL = "spec_list",
   PD = "price_per_day", CC = "coupon_code", MC = "mini_compare", HL = "highlights",
-  SC = "ship_countdown", RP = "return_promise";
+  SC = "ship_countdown", RP = "return_promise",
+  BC = "benefit_cards", UG = "usp_grid", AP = "avatar_proof";
 interface StyleExtra {
   order: string[];
   hideB: string[];
@@ -250,28 +251,28 @@ interface StyleExtra {
   showB?: string[];
 }
 const STYLE_EXTRAS: Record<string, StyleExtra> = {
-  modern:  { order: [T, R, P, B, BN, BT, PI], hideB: [U, S, G, TL], hideS: ["bro-info-tabs", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" } },
+  modern:  { order: [T, R, P, B, UG, BN, BT, PI], hideB: [U, S, G, TL], hideS: ["bro-info-tabs", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" } },
   elegant: { order: [U, T, R, B, S, P, BN, BT, PI, G, CT], hideB: [TL], hideS: ["vids"], design: { shadow: 2, border: 1, iconStyle: "outline" }, showB: [CT] },
   bold:    { order: [SB, U, T, P, BN, BT, B, R, S, PI], hideB: [G, TL], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" }, showB: [SB] },
-  playful: { order: [U, T, R, BN, B, S, P, BT, G, PI, TL, FB], hideB: [], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" }, showB: [FB] },
+  playful: { order: [U, T, R, AP, BN, B, S, P, BT, G, PI, TL, FB], hideB: [], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" }, showB: [FB] },
   minimal: { order: [T, P, BN, BT], hideB: [U, R, B, S, PI, G, TL], hideS: ["bro-info-tabs", "brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "outline" } },
   noir:    { order: [U, T, R, P, BN, BT, PI, G, TL], hideB: [B, S], hideS: ["featured-collection"], design: { shadow: 2, border: 1, iconStyle: "accent" } },
-  sunset:  { order: [U, T, R, B, P, BN, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
-  ocean:   { order: [T, R, B, S, P, BN, BT, PI, TL, IW], hideB: [U, G], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "dark" }, showB: [IW] },
-  nature:  { order: [T, B, R, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: ["featured-collection"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
-  candy:   { order: [SB, U, T, R, BN, P, B, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 2, iconStyle: "accent" }, showB: [SB] },
-  tech:    { order: [T, P, R, B, BN, BT, PI, IW], hideB: [U, S, G, TL], hideS: ["brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" }, showB: [IW] },
+  sunset:  { order: [U, T, R, B, BC, P, BN, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
+  ocean:   { order: [T, R, B, UG, S, P, BN, BT, PI, TL, IW], hideB: [U, G], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "dark" }, showB: [IW] },
+  nature:  { order: [T, B, BC, R, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: ["featured-collection"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
+  candy:   { order: [SB, U, T, R, AP, BN, P, B, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 2, iconStyle: "accent" }, showB: [SB] },
+  tech:    { order: [T, P, R, B, UG, BN, BT, PI, IW], hideB: [U, S, G, TL], hideS: ["brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" }, showB: [IW] },
   royal:   { order: [U, T, R, P, B, BN, BT, PI, G, TL, CO], hideB: [S], hideS: [], design: { shadow: 2, border: 1, iconStyle: "accent" }, showB: [CO] },
   luxe:    { order: [T, P, R, BT, PI, B], hideB: [U, S, G, TL, BN], hideS: ["vids", "bro-info-tabs"], design: { shadow: 0, border: 1, iconStyle: "outline" } },
-  street:  { order: [SB, CD, T, R, P, SBAR, BT, PI, SP], hideB: [U, S, G, TL, B, BN], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" }, showB: [SB] },
-  clinic:  { order: [T, R, GU, B, P, BT, PI, TL, TB], hideB: [U, S, G, BN], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
-  cozy:    { order: [T, R, B, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: [], design: { shadow: 1, border: 1, iconStyle: "dark" } },
+  street:  { order: [SB, CD, T, R, P, SBAR, BT, PI, AP], hideB: [U, S, G, TL, B, BN], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" }, showB: [SB] },
+  clinic:  { order: [T, R, GU, B, UG, P, BT, PI, TL, TB], hideB: [U, S, G, BN], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
+  cozy:    { order: [T, R, B, BC, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: [], design: { shadow: 1, border: 1, iconStyle: "dark" } },
   sport:   { order: [U, T, R, RQ, P, BN, BT, SBAR, PI, B], hideB: [S, G, TL], hideS: [], design: { shadow: 0, border: 2, iconStyle: "accent" } },
-  fresh:   { order: [T, R, B, P, VS, BT, PI, G], hideB: [U, S, TL, BN], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
-  family:  { order: [T, R, B, GU, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" } },
+  fresh:   { order: [T, R, AP, B, P, VS, BT, PI, G], hideB: [U, S, TL, BN], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
+  family:  { order: [T, R, AP, B, GU, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" } },
   carbon:  { order: [T, R, SL, P, PD, BN, BT, PI, IW], hideB: [U, S, G, TL, B], hideS: ["bro-info-tabs"], design: { shadow: 2, border: 1, iconStyle: "accent" }, showB: [IW] },
-  retro:   { order: [U, T, R, P, B, BT, PI, CC], hideB: [S, G, TL, BN], hideS: ["vids"], design: { shadow: 0, border: 2, iconStyle: "dark" } },
-  spa:     { order: [T, R, B, P, BT, RP, PI, G, TL], hideB: [U, S, BN], hideS: [], design: { shadow: 1, border: 1, iconStyle: "outline" } },
+  retro:   { order: [U, T, R, AP, P, B, BT, PI, CC], hideB: [S, G, TL, BN], hideS: ["vids"], design: { shadow: 0, border: 2, iconStyle: "dark" } },
+  spa:     { order: [T, R, B, BC, P, BT, RP, PI, G, TL], hideB: [U, S, BN], hideS: [], design: { shadow: 1, border: 1, iconStyle: "outline" } },
   outdoor: { order: [T, R, HL, P, BN, BT, PI, SC, TL], hideB: [U, S, G, B], hideS: [], design: { shadow: 0, border: 2, iconStyle: "dark" } },
   deal:    { order: [SB, CD, U, T, R, P, MC, BN, CC, BT, SBAR, PI, G, TL], hideB: [S, B], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" }, showB: [SB] },
 };
