@@ -40,6 +40,8 @@ export type ProviderLedger = Partial<Record<LedgerProvider, LedgerEntry>>;
 const ANTHROPIC_PRICES: Record<string, { in: number; out: number }> = {
   "claude-sonnet-4-6": { in: 3, out: 15 },
   "claude-haiku-4-5": { in: 1, out: 5 },
+  // Theme-AI-Co-Pilot (Vision + Structured Output)
+  "claude-opus-4-8": { in: 5, out: 25 },
 };
 // Pauschale Kosten pro erfolgreicher Operation (Schätzwerte, $).
 export const FAL_BG_REMOVE_USD = 0.005;

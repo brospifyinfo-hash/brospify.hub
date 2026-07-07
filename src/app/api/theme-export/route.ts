@@ -12,14 +12,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import {
-  getAllProdukte,
-  findKundeByKey,
   getCreditsState,
   deductCredits,
-  updateProduktExtra,
   type Produkt,
   type KundeProfile,
 } from "@/lib/sheets";
+import { resolveEditorProduct, type ResolvedProduct } from "@/lib/custom-products";
 import { getCreditCost } from "@/lib/credit-config-server";
 import { getEditorBaseThemeZip } from "@/lib/theme-master";
 import { generateThemeCopy } from "@/lib/theme-copy";
@@ -114,33 +112,33 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Ungültige Schriftart." }, { status: 400 });
   }
 
-  // Produkt laden.
-  let produkt: Produkt | undefined;
+  // Produkt laden — Katalog-Produkt (gezogen/Admin) ODER eigenes Produkt.
+  let resolved: ResolvedProduct | null;
   try {
-    produkt = (await getAllProdukte()).find((p) => p.id === productId);
+    resolved = await resolveEditorProduct(session, productId);
   } catch (err) {
-    console.error("[theme-export] getAllProdukte failed:", err);
+    console.error("[theme-export] Produkt-Resolve failed:", err);
     return NextResponse.json({ error: "Produkte konnten nicht geladen werden." }, { status: 500 });
   }
-  if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
+  if (!resolved) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
+  const produkt: Produkt = resolved.produkt;
+  const kunde = resolved.kunde;
 
   // Autorisierung. Credits kosten NUR echte API-Kosten: die einmalige
   // KI-Text-Erstellung pro Produkt (DeepSeek). Download/Build selbst ist
   // kostenlos — liegen die Texte schon am Produkt, wird nichts abgezogen.
+  // Eigene Produkte OHNE Titel: keine Text-Basis → keine Generierung, 0 Credits.
   let chargeRow: number | null = null;
-  let chargeProfile: import("@/lib/sheets").KundeProfile | null = null;
-  let kunde: Awaited<ReturnType<typeof findKundeByKey>> = null;
+  let chargeProfile: KundeProfile | null = null;
   let cost = 0;
-  const needsCopyGen = !produkt.extra?.themeCopy || Object.keys(produkt.extra.themeCopy).length === 0;
+  const needsCopyGen =
+    resolved.hasTitle && (!produkt.extra?.themeCopy || Object.keys(produkt.extra.themeCopy).length === 0);
   if (!session.isAdmin) {
     if (!session.lizenzschluessel) {
       return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
     }
-    kunde = await findKundeByKey(session.lizenzschluessel);
     if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
-
-    const drawn = Array.isArray(kunde.profile?.drawnProducts) ? kunde.profile.drawnProducts : [];
-    if (!drawn.includes(produkt.id)) {
+    if (!resolved.owned) {
       return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
     }
 
@@ -160,17 +158,14 @@ export async function POST(req: NextRequest) {
 
   // Theme-Texte: vorhandene nutzen ODER on-demand per DeepSeek generieren —
   // so scheitert der Download nie an "noch keine Texte". Generierte Texte
-  // werden für künftige Builds am Produkt gecached.
+  // werden für künftige Builds gecached (Katalog: Produkt-Extra, eigenes
+  // Produkt: Profil/Settings — via resolved.saveThemeCopy).
   let themeCopy = produkt.extra?.themeCopy;
-  if (!themeCopy || Object.keys(themeCopy).length === 0) {
+  if (needsCopyGen) {
     try {
       const result = await generateThemeCopy({ name: produkt.titel, brief: produkt.beschreibung });
       themeCopy = result.copy;
-      try {
-        await updateProduktExtra(produkt.rowIndex, { ...produkt.extra, themeCopy: result.copy });
-      } catch (e) {
-        console.warn("[theme-export] themeCopy cache write failed:", e);
-      }
+      await resolved.saveThemeCopy(result.copy);
     } catch (err) {
       console.error("[theme-export] on-demand generation failed:", err);
       const msg = err instanceof Error ? err.message : "Theme-Texte konnten nicht erstellt werden.";

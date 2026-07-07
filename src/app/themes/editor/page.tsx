@@ -14,7 +14,8 @@ import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
   Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
-  SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, type LucideIcon,
+  SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, Trash2, UploadCloud, X,
+  type LucideIcon,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
@@ -25,18 +26,21 @@ import StyleGalleryOverlay from "@/components/theme-editor/StyleGalleryOverlay";
 import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
 import BuyboxGalleryOverlay from "@/components/theme-editor/BuyboxGalleryOverlay";
 import FullPreviewOverlay from "@/components/theme-editor/FullPreviewOverlay";
+import AiCopilot from "@/components/theme-editor/AiCopilot";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import {
   editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
 } from "@/lib/theme-doc";
 import {
-  buildInitialDocument, createLibraryInstance, getSectionDef,
+  buildInitialDocument, createLibraryInstance, getSectionDef, shuffleComposition,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
 import { THEME_STYLES, DEFAULT_STYLE_ID, getThemeStyle, type StyleDesign } from "@/lib/theme-styles";
 import { STYLE_GALLERY } from "@/lib/theme-library";
 
 interface DrawnProduct { id: string; titel: string; bildUrl?: string }
+/** Eigenes (selbst angelegtes) Produkt — alle Felder außer id optional. */
+interface CustomProductLite { id: string; titel?: string; bildUrl?: string; preis?: string; beschreibung?: string }
 interface PreviewResponse extends PreviewData {
   baseSections?: BaseSectionInfo[];
   homeSections?: BaseSectionInfo[];
@@ -105,6 +109,13 @@ export default function ThemeEditorPage() {
   const doc = state.present;
 
   const [products, setProducts] = useState<DrawnProduct[] | null>(null);
+  // Eigene Produkte (kein Katalog-Zwang) + Anlege-Formular (alles optional).
+  const [customProducts, setCustomProducts] = useState<CustomProductLite[]>([]);
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customForm, setCustomForm] = useState({ titel: "", preis: "", beschreibung: "", bildUrl: "" });
+  const [customUploading, setCustomUploading] = useState(false);
+  const [customSaving, setCustomSaving] = useState(false);
+  const [customDrag, setCustomDrag] = useState(false);
   const [previewData, setPreviewData] = useState<PreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [baseSections, setBaseSections] = useState<BaseSectionInfo[]>([]);
@@ -130,6 +141,10 @@ export default function ThemeEditorPage() {
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  /** true, solange der AI Co-Pilot Ops anwendet — Editor-Eingriffe (Undo,
+   *  Leisten, Download/Sync) sind dann gesperrt, damit kein Animations-
+   *  Schritt eine parallele Nutzer-Änderung überschreibt. */
+  const [aiBusy, setAiBusy] = useState(false);
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
@@ -163,6 +178,10 @@ export default function ThemeEditorPage() {
       .then((r) => r.json())
       .then((d) => { if (!cancelled) { const c = d?.costs?.THEME_EXPORT; setCost(Number.isFinite(c) ? c : 100); } })
       .catch(() => setCost(100));
+    fetch("/api/custom-products", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && Array.isArray(d?.products)) setCustomProducts(d.products as CustomProductLite[]); })
+      .catch(() => {});
     return () => { cancelled = true; };
   }, [lang, router]);
 
@@ -196,14 +215,18 @@ export default function ThemeEditorPage() {
   }, [doc.sections.length, doc.global.styleId]);
 
   // Stil wechseln = neue Seiten-Architektur (Komposition des Stils).
-  const pickStyle = useCallback((styleId: string) => {
-    dispatch({ type: "replace", doc: buildInitialDocument(doc.productId, styleId, baseSections, capabilities, homeSections) });
+  // shuffle=true mischt die Komposition zu einer individuellen Variante
+  // (Anker bleibt, Mitte permutiert + 1–2 stil-passende Extra-Sections).
+  const pickStyle = useCallback((styleId: string, shuffle = false) => {
+    const composition = shuffle ? shuffleComposition(styleId) : undefined;
+    dispatch({ type: "replace", doc: buildInitialDocument(doc.productId, styleId, baseSections, capabilities, homeSections, composition) });
     setSelected(null);
   }, [doc.productId, baseSections, capabilities, homeSections]);
 
   const randomize = useCallback(() => {
     const s = randFrom(THEME_STYLES);
-    const next = buildInitialDocument(doc.productId, s.id, baseSections, capabilities, homeSections);
+    // Zufalls-Look = Stil + individuell gemischte Section-Anordnung.
+    const next = buildInitialDocument(doc.productId, s.id, baseSections, capabilities, homeSections, shuffleComposition(s.id));
     next.global.colors = { ...next.global.colors, accent: randomAccent() };
     next.global.headingFont = randFrom(EDITOR_FONTS).value;
     next.global.bodyFont = randFrom(EDITOR_FONTS).value;
@@ -223,10 +246,10 @@ export default function ThemeEditorPage() {
   // Stil NACHTRÄGLICH anwenden: „Nur Design" behält Aufbau/Texte (nur Farben,
   // Schriften, Ecken, Design, Galerie-Look); „Kompletter Stil" baut beide
   // Seiten nach der Stil-Komposition neu.
-  const applyStyle = useCallback((styleId: string, full: boolean) => {
+  const applyStyle = useCallback((styleId: string, full: boolean, shuffle = false) => {
     setStyleOpen(false);
     if (full) {
-      pickStyle(styleId);
+      pickStyle(styleId, shuffle);
       return;
     }
     const s = getThemeStyle(styleId);
@@ -273,7 +296,7 @@ export default function ThemeEditorPage() {
   // Ctrl+Z das Dokument dort unsichtbar mutieren.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (fullPreviewOpen) return;
+      if (fullPreviewOpen || aiBusy) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
@@ -287,7 +310,7 @@ export default function ThemeEditorPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullPreviewOpen]);
+  }, [fullPreviewOpen, aiBusy]);
 
   // Sanfter Einstieg des Editor-Shells (GSAP statt Layout-Sprung).
   useEffect(() => {
@@ -359,10 +382,75 @@ export default function ThemeEditorPage() {
     }
   }
 
-  const activeProduct = useMemo(
-    () => (products || []).find((p) => p.id === doc.productId) || null,
-    [products, doc.productId],
-  );
+  // ── Eigene Produkte: Bild hochladen, anlegen, entfernen ──
+  const uploadCustomImage = useCallback(async (file: File | null | undefined) => {
+    if (!file || !file.type.startsWith("image/")) return;
+    setCustomUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/upload", { method: "POST", body: fd });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && typeof d?.url === "string") {
+        setCustomForm((f) => ({ ...f, bildUrl: d.url as string }));
+      } else {
+        setMsg({ kind: "err", text: d?.error || t.themes.builderErr });
+      }
+    } catch {
+      setMsg({ kind: "err", text: t.themes.builderErr });
+    } finally {
+      setCustomUploading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t.themes.builderErr]);
+
+  async function handleCreateCustom() {
+    if (customSaving) return;
+    setCustomSaving(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/custom-products", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify(customForm),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok || !d?.product?.id) {
+        setMsg({ kind: "err", text: d?.error || t.themes.builderErr });
+        return;
+      }
+      setCustomProducts(Array.isArray(d.products) ? (d.products as CustomProductLite[]) : [d.product, ...customProducts]);
+      setCustomOpen(false);
+      setCustomForm({ titel: "", preis: "", beschreibung: "", bildUrl: "" });
+      pickProduct(d.product.id as string);
+    } catch {
+      setMsg({ kind: "err", text: t.themes.builderErr });
+    } finally {
+      setCustomSaving(false);
+    }
+  }
+
+  async function handleDeleteCustom(id: string) {
+    if (id === doc.productId) return; // aktives Produkt nicht entfernen
+    try {
+      const res = await fetch(`/api/custom-products?id=${encodeURIComponent(id)}`, { method: "DELETE", cache: "no-store" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setCustomProducts(Array.isArray(d.products) ? (d.products as CustomProductLite[]) : customProducts.filter((p) => p.id !== id));
+      }
+    } catch {
+      /* Anzeige bleibt — nächster Reload räumt auf */
+    }
+  }
+
+  const activeProduct = useMemo(() => {
+    const drawn = (products || []).find((p) => p.id === doc.productId);
+    if (drawn) return drawn;
+    const custom = customProducts.find((p) => p.id === doc.productId);
+    return custom ? { id: custom.id, titel: custom.titel || t.themes.editorCustomUntitled, bildUrl: custom.bildUrl } : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [products, customProducts, doc.productId]);
   const sectionLabel = (type: string) => {
     const def = getSectionDef(type);
     return def ? (lang === "en" ? def.labelEn : def.label) : type;
@@ -434,8 +522,9 @@ export default function ThemeEditorPage() {
                 {doc.productId && (
                   <button
                     onClick={() => setStyleOpen(true)}
+                    disabled={aiBusy}
                     title={t.themes.editorStyleGallery}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
                   >
                     <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorStyleGallery}</span>
@@ -445,8 +534,9 @@ export default function ThemeEditorPage() {
                 {doc.productId && (
                   <button
                     onClick={() => setDesignsOpen(true)}
+                    disabled={aiBusy}
                     title={t.themes.editorDesigns}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
                   >
                     <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorDesigns}</span>
@@ -457,7 +547,7 @@ export default function ThemeEditorPage() {
                 <div className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
-                    disabled={!state.past.length}
+                    disabled={!state.past.length || aiBusy}
                     title={`${t.themes.editorUndo} (Ctrl+Z)`}
                     className="px-1.5 py-1 rounded text-zinc-300 hover:text-white disabled:opacity-25 transition"
                   >
@@ -465,7 +555,7 @@ export default function ThemeEditorPage() {
                   </button>
                   <button
                     onClick={() => dispatch({ type: "redo" })}
-                    disabled={!state.future.length}
+                    disabled={!state.future.length || aiBusy}
                     title={`${t.themes.editorRedo} (Ctrl+Shift+Z)`}
                     className="px-1.5 py-1 rounded text-zinc-300 hover:text-white disabled:opacity-25 transition"
                   >
@@ -474,7 +564,7 @@ export default function ThemeEditorPage() {
                 </div>
                 <button
                   onClick={handleDownload}
-                  disabled={building || !doc.productId}
+                  disabled={building || !doc.productId || aiBusy}
                   title={cost !== null && cost > 0 ? t.themes.editorFreeNote.replace("{n}", String(cost)) : undefined}
                   className="btn-deploy flex items-center gap-1.5 px-3 py-1.5 text-[12px] disabled:opacity-50 whitespace-nowrap"
                 >
@@ -484,7 +574,7 @@ export default function ThemeEditorPage() {
                 {/* Design live in installierte Shops pushen (Sync-Code, kostenlos) */}
                 <button
                   onClick={handleSyncUpdate}
-                  disabled={syncing || !doc.productId}
+                  disabled={syncing || !doc.productId || aiBusy}
                   title={t.themes.editorSyncHint}
                   className="flex items-center gap-1.5 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/10 px-2.5 py-1.5 text-[11.5px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition whitespace-nowrap"
                 >
@@ -525,7 +615,7 @@ export default function ThemeEditorPage() {
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
-                    disabled={!state.past.length}
+                    disabled={!state.past.length || aiBusy}
                     title={t.themes.editorUndo}
                     className="px-2.5 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
                   >
@@ -533,7 +623,7 @@ export default function ThemeEditorPage() {
                   </button>
                   <button
                     onClick={() => dispatch({ type: "redo" })}
-                    disabled={!state.future.length}
+                    disabled={!state.future.length || aiBusy}
                     title={t.themes.editorRedo}
                     className="px-2.5 py-1.5 rounded-md text-zinc-300 hover:text-white disabled:opacity-25 transition"
                   >
@@ -547,14 +637,16 @@ export default function ThemeEditorPage() {
                   <div className="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                     <button
                       onClick={() => setStyleOpen(true)}
-                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap"
+                      disabled={aiBusy}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap disabled:opacity-40"
                     >
                       <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                       {t.themes.editorStyleGallery}
                     </button>
                     <button
                       onClick={() => setDesignsOpen(true)}
-                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap"
+                      disabled={aiBusy}
+                      className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap disabled:opacity-40"
                     >
                       <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                       {t.themes.editorDesigns}
@@ -562,7 +654,7 @@ export default function ThemeEditorPage() {
                   </div>
                   <button
                     onClick={handleDownload}
-                    disabled={building}
+                    disabled={building || aiBusy}
                     className="shrink-0 btn-deploy flex items-center gap-1.5 px-3 py-2 text-[12px] disabled:opacity-50 whitespace-nowrap"
                   >
                     {building ? <Sparkles className="w-4 h-4 animate-pulse" /> : <Download className="w-4 h-4" />}
@@ -570,7 +662,7 @@ export default function ThemeEditorPage() {
                   </button>
                   <button
                     onClick={handleSyncUpdate}
-                    disabled={syncing}
+                    disabled={syncing || aiBusy}
                     title={t.themes.editorSyncUpdate}
                     className="shrink-0 self-stretch flex items-center justify-center rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/10 w-10 text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition"
                   >
@@ -635,6 +727,130 @@ export default function ThemeEditorPage() {
                   ))}
                 </div>
               )}
+              {/* ── Eigene Produkte: kein Katalog-Zwang, alles optional ── */}
+              <div className="mt-9">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="h-3 w-[3px] rounded-full" style={{ background: ACCENT }} />
+                  <h2 className="text-[15px] font-bold text-white">{t.themes.editorCustomHeading}</h2>
+                </div>
+                <p className="text-[11.5px] text-zinc-500 mb-3">{t.themes.editorCustomHint}</p>
+
+                {customOpen && (
+                  <div className="glass-strong rounded-2xl border border-white/[0.1] p-4 mb-3 max-w-2xl mx-auto">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Package className="w-4 h-4" style={{ color: ACCENT }} />
+                      <span className="text-[13px] font-bold text-white flex-1">{t.themes.editorCustomCreate}</span>
+                      <button onClick={() => setCustomOpen(false)} className="p-1 rounded text-zinc-400 hover:text-white transition" aria-label={t.themes.editorCustomCancel}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-[150px_1fr] gap-3">
+                      {/* Bild-Dropzone (optional) */}
+                      <label
+                        onDragOver={(e) => { e.preventDefault(); setCustomDrag(true); }}
+                        onDragLeave={() => setCustomDrag(false)}
+                        onDrop={(e) => { e.preventDefault(); setCustomDrag(false); uploadCustomImage(e.dataTransfer.files?.[0]); }}
+                        className={`relative flex flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed aspect-square cursor-pointer overflow-hidden transition ${
+                          customDrag ? "border-[#95BF47] bg-[#95BF47]/[0.1]" : "border-white/20 bg-white/[0.03] hover:border-[#95BF47]/50"
+                        }`}
+                      >
+                        <input type="file" accept="image/*" className="hidden" onChange={(e) => { uploadCustomImage(e.target.files?.[0]); e.target.value = ""; }} />
+                        {customForm.bildUrl ? (
+                          <img src={customForm.bildUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <UploadCloud className={`w-5 h-5 ${customUploading ? "animate-pulse" : ""} text-zinc-400`} />
+                            <span className="text-[10px] text-zinc-500 text-center px-2 leading-snug">{t.themes.editorCustomImageDrop}</span>
+                          </>
+                        )}
+                        {customUploading && <span className="absolute inset-0 bg-black/50 flex items-center justify-center text-[11px] text-white">…</span>}
+                      </label>
+                      <div className="space-y-2">
+                        <input
+                          value={customForm.titel}
+                          onChange={(e) => setCustomForm((f) => ({ ...f, titel: e.target.value }))}
+                          placeholder={t.themes.editorCustomName}
+                          className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] text-white placeholder:text-zinc-600 focus:border-[#95BF47]/60 outline-none transition"
+                        />
+                        <input
+                          value={customForm.preis}
+                          onChange={(e) => setCustomForm((f) => ({ ...f, preis: e.target.value }))}
+                          placeholder={t.themes.editorCustomPrice}
+                          className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] text-white placeholder:text-zinc-600 focus:border-[#95BF47]/60 outline-none transition"
+                        />
+                        <textarea
+                          value={customForm.beschreibung}
+                          onChange={(e) => setCustomForm((f) => ({ ...f, beschreibung: e.target.value }))}
+                          placeholder={t.themes.editorCustomDesc}
+                          rows={3}
+                          className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[13px] text-white placeholder:text-zinc-600 focus:border-[#95BF47]/60 outline-none transition resize-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end gap-2 mt-3">
+                      <button onClick={() => setCustomOpen(false)} className="rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition">
+                        {t.themes.editorCustomCancel}
+                      </button>
+                      <button
+                        onClick={handleCreateCustom}
+                        disabled={customSaving || customUploading}
+                        className="btn-deploy flex items-center gap-1.5 px-4 py-2 text-[12.5px] disabled:opacity-50"
+                      >
+                        {customSaving ? <Sparkles className="w-3.5 h-3.5 animate-pulse" /> : <Plus className="w-3.5 h-3.5" />}
+                        {t.themes.editorCustomSave}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                  {!customOpen && (
+                    <button
+                      onClick={() => setCustomOpen(true)}
+                      className="rounded-2xl border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.05] hover:bg-[#95BF47]/[0.12] transition flex flex-col items-center justify-center gap-2 min-h-[160px] aspect-square sm:aspect-auto"
+                    >
+                      <Plus className="w-6 h-6" style={{ color: ACCENT }} />
+                      <span className="text-[12px] font-semibold text-[#cfe9a3] text-center px-3 leading-snug">{t.themes.editorCustomCreate}</span>
+                    </button>
+                  )}
+                  {customProducts.map((p) => {
+                    const isActive = p.id === doc.productId;
+                    return (
+                      <div
+                        key={p.id}
+                        className={`group relative text-left rounded-2xl border overflow-hidden transition cursor-pointer ${
+                          isActive
+                            ? "border-[#95BF47]/70 bg-[#95BF47]/[0.07]"
+                            : "border-white/[0.08] bg-white/[0.02] hover:border-[#95BF47]/40 hover:bg-white/[0.05]"
+                        }`}
+                        onClick={() => pickProduct(p.id)}
+                      >
+                        <div className="aspect-square bg-white/[0.04] overflow-hidden">
+                          {p.bildUrl
+                            ? <img src={p.bildUrl} alt="" className="w-full h-full object-cover group-hover:scale-[1.04] transition duration-300" />
+                            : <div className="w-full h-full flex items-center justify-center"><Package className="w-7 h-7 text-zinc-600" /></div>}
+                        </div>
+                        <span className="absolute top-2 left-2 rounded-full bg-black/55 backdrop-blur px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#cfe9a3]">
+                          {t.themes.editorCustomBadge}
+                        </span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCustom(p.id); }}
+                          disabled={isActive}
+                          title={isActive ? t.themes.editorCustomActiveHint : t.themes.editorCustomDeleteHint}
+                          className="absolute top-1.5 right-1.5 w-7 h-7 rounded-lg bg-black/55 backdrop-blur text-zinc-300 hover:text-red-300 disabled:opacity-30 flex items-center justify-center transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                        <div className="p-2.5">
+                          <div className="text-[12px] font-semibold text-white leading-snug line-clamp-2">{p.titel || t.themes.editorCustomUntitled}</div>
+                          {p.preis && <div className="text-[10.5px] text-zinc-500 mt-0.5">{p.preis}</div>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {doc.productId && (
                 <div className="text-center mt-5">
                   <button onClick={() => setPickerOpen(false)} className="text-[12px] text-zinc-400 hover:text-white underline underline-offset-4 transition">
@@ -645,7 +861,9 @@ export default function ThemeEditorPage() {
             </div>
           ) : (
             /* ── Split-Pane-Editor ── */
-            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_364px] xl:grid-cols-[320px_minmax(0,1fr)_384px] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0">
+            /* Rechte Leiste bewusst schmal (300/316px) — der gewonnene Platz
+               geht komplett an die Live-Vorschau in der Mitte. */
+            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_300px] xl:grid-cols-[320px_minmax(0,1fr)_316px] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0">
 
               {/* Mobil: sticky 3-Tab-Leiste (Vorschau · Aufbau · Einstellungen) —
                   klebt unter der App-Navigation, damit man jederzeit umschalten
@@ -668,8 +886,9 @@ export default function ThemeEditorPage() {
                 </div>
               </div>
 
-              {/* Aufbau (links) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
-              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+              {/* Aufbau (links) — Desktop: volle Höhe bis ganz unten, scrollt intern.
+                  Während der AI-Umsetzung gesperrt (kein Eingriff zwischen den Ops). */}
+              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                 <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
                   <div className="flex rounded-md border border-white/10 bg-black/25 p-0.5 mb-2">
@@ -805,7 +1024,7 @@ export default function ThemeEditorPage() {
                     </button>
                   </div>
                 </div>
-                <div className="lg:flex-1 lg:min-h-0 lg:overflow-y-auto" onClick={() => setSelected(null)}>
+                <div className={`lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none" : ""}`} onClick={() => setSelected(null)}>
                   <ThemePreview
                     data={previewData}
                     colors={doc.global.colors}
@@ -832,10 +1051,20 @@ export default function ThemeEditorPage() {
                     onInsertAt={(i) => setLibraryAt(i)}
                   />
                 </div>
+                {/* AI Co-Pilot — bewusst UNTER der Vorschau (nie davor/darüber) */}
+                <AiCopilot
+                  doc={doc}
+                  dispatch={dispatch}
+                  baseSections={baseSections}
+                  capabilities={capabilities}
+                  homeSections={homeSections}
+                  productTitle={activeProduct?.titel}
+                  onBusyChange={setAiBusy}
+                />
               </div>
 
               {/* Inspector (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
-              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col`}>
+              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                 <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
@@ -942,6 +1171,8 @@ export default function ThemeEditorPage() {
           modeFull={t.themes.editorStyleModeFull}
           modeFullSub={t.themes.editorStyleModeFullSub}
           applyLabel={t.themes.editorStyleApply}
+          shuffleLabel={t.themes.editorStyleShuffle}
+          shuffleSub={t.themes.editorStyleShuffleSub}
         />
       )}
 

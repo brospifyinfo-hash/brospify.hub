@@ -1375,6 +1375,18 @@ export const STYLE_GALLERY: Record<string, string> = {
   candy: "thumbs-unten",
   tech: "thumbs-links",
   royal: "portrait",
+  luxe: "portrait",
+  street: "kino",
+  clinic: "thumbs-unten",
+  cozy: "thumbs-links",
+  sport: "kino",
+  fresh: "thumbs-unten",
+  family: "thumbs-unten",
+  carbon: "portrait",
+  retro: "thumbs-links",
+  spa: "portrait",
+  outdoor: "kino",
+  deal: "thumbs-unten",
 };
 
 // ─── Theme-Stile v2: Default-Sektionskomposition je Stil ───────────
@@ -1464,7 +1476,245 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "reviews", presetId: "gross" },
     { type: "trustpilot", presetId: "gross" },
   ],
+  luxe: [
+    { type: "scrollingbild", presetId: "kino" },
+    { type: "image-with-text", presetId: "bildrechts" },
+    { type: "reviews", presetId: "gross" },
+    { type: "featured-collection", presetId: "editorial" },
+    { type: "qanda", presetId: "luftig" },
+  ],
+  street: [
+    { type: "bro-cta-banner", presetId: "streifen" },
+    { type: "scrollingbild", presetId: "vollbild" },
+    { type: "bro-stats", presetId: "band" },
+    { type: "reviews2", presetId: "dunkel" },
+    { type: "countdown", presetId: "akzent" },
+  ],
+  clinic: [
+    { type: "bro-steps", presetId: "kreise" },
+    { type: "bro-guarantee", presetId: "siegel" },
+    { type: "bro-feature-grid", presetId: "duo" },
+    { type: "reviews", presetId: "ruhig" },
+    { type: "qanda", presetId: "kompakt" },
+  ],
+  cozy: [
+    { type: "image-with-text", presetId: "split" },
+    { type: "collage", presetId: "karten" },
+    { type: "benefits", presetId: "luftig" },
+    { type: "reviews2", presetId: "sand" },
+    { type: "photo", presetId: "getoent" },
+  ],
+  sport: [
+    { type: "bro-cta-banner", presetId: "vollbild" },
+    { type: "bro-stats", presetId: "hell" },
+    { type: "vids", presetId: "dunkel" },
+    { type: "bro-feature-grid", presetId: "kacheln" },
+    { type: "reviews2", presetId: "hell" },
+  ],
+  fresh: [
+    { type: "benefits", presetId: "standard" },
+    { type: "multicolumn", presetId: "karten" },
+    { type: "bro-chat-reviews", presetId: "whatsapp" },
+    { type: "image-with-text", presetId: "zentriert" },
+    { type: "qanda", presetId: "offen" },
+  ],
+  family: [
+    { type: "bro-feature-grid", presetId: "icons" },
+    { type: "bro-chat-reviews", presetId: "imessage" },
+    { type: "image-with-text", presetId: "overlap" },
+    { type: "qanda", presetId: "luftig" },
+    { type: "bro-guarantee", presetId: "akzent" },
+  ],
+  carbon: [
+    { type: "video", presetId: "vollbreit" },
+    { type: "bro-compare", presetId: "dunkel" },
+    { type: "bro-stats", presetId: "band" },
+    { type: "reviews2", presetId: "dunkel" },
+    { type: "collapsible-content", presetId: "schlicht" },
+  ],
+  retro: [
+    { type: "bro-problem-solution", presetId: "gestapelt" },
+    { type: "image-with-text", presetId: "bildrechts" },
+    { type: "reviews", presetId: "fade" },
+    { type: "multicolumn", presetId: "zwei" },
+    { type: "bro-cta-banner", presetId: "karte" },
+  ],
+  spa: [
+    { type: "image-with-text", presetId: "overlap" },
+    { type: "bro-steps", presetId: "timeline" },
+    { type: "reviews", presetId: "ruhig" },
+    { type: "photo", presetId: "hell" },
+    { type: "qanda", presetId: "luftig" },
+  ],
+  outdoor: [
+    { type: "scrollingbild", presetId: "panorama" },
+    { type: "bro-feature-grid", presetId: "kacheln" },
+    { type: "bro-stats", presetId: "karten" },
+    { type: "reviews2", presetId: "sand" },
+    { type: "map", presetId: "rechts" },
+  ],
+  deal: [
+    { type: "countdown", presetId: "akzent" },
+    { type: "bro-compare", presetId: "klassisch" },
+    { type: "bro-problem-solution", presetId: "kontrast" },
+    { type: "reviews2", presetId: "getoent" },
+    { type: "bro-guarantee", presetId: "akzent" },
+    { type: "qanda", presetId: "kompakt" },
+  ],
 };
+
+// ─── Zufalls-Baukasten: optionale Zusatz-Sections je Stil ──────────
+// Der Zufallsmodus („individuelle Anordnung") mischt die Mitte der Stil-
+// Komposition und würfelt 1–2 dieser stil-passenden Extras dazu — so entsteht
+// aus demselben Stil jedes Mal eine eigene Seiten-Architektur.
+export const STYLE_COMPOSITION_EXTRAS: Record<string, CompositionEntry[]> = {
+  modern: [
+    { type: "trustpilot", presetId: "flow" },
+    { type: "bro-stats", presetId: "hell" },
+    { type: "rich-text", presetId: "mittig" },
+    { type: "bro-guarantee", presetId: "split" },
+  ],
+  elegant: [
+    { type: "photo", presetId: "getoent" },
+    { type: "rich-text", presetId: "links" },
+    { type: "bro-steps", presetId: "timeline" },
+  ],
+  bold: [
+    { type: "bro-problem-solution", presetId: "kontrast" },
+    { type: "bro-stats", presetId: "band" },
+    { type: "vids", presetId: "dunkel" },
+  ],
+  playful: [
+    { type: "bro-chat-reviews", presetId: "imessage" },
+    { type: "collage", presetId: "links" },
+    { type: "socialicons", presetId: "mittig" },
+  ],
+  minimal: [
+    { type: "image-with-text", presetId: "zentriert" },
+    { type: "reviews", presetId: "ruhig" },
+    { type: "collapsible-content", presetId: "schlicht" },
+  ],
+  noir: [
+    { type: "video", presetId: "vollbreit" },
+    { type: "bro-stats", presetId: "band" },
+    { type: "image-with-text", presetId: "bildrechts" },
+  ],
+  sunset: [
+    { type: "photo", presetId: "getoent" },
+    { type: "benefits", presetId: "luftig" },
+    { type: "bro-guarantee", presetId: "akzent" },
+  ],
+  ocean: [
+    { type: "bro-steps", presetId: "kreise" },
+    { type: "bro-stats", presetId: "hell" },
+    { type: "image-with-text", presetId: "split" },
+  ],
+  nature: [
+    { type: "bro-guarantee", presetId: "siegel" },
+    { type: "photo", presetId: "hell" },
+    { type: "bro-steps", presetId: "timeline" },
+  ],
+  candy: [
+    { type: "bro-chat-reviews", presetId: "imessage" },
+    { type: "socialicons", presetId: "gross" },
+    { type: "photo", presetId: "getoent" },
+  ],
+  tech: [
+    { type: "bro-compare", presetId: "karten" },
+    { type: "video", presetId: "standard" },
+    { type: "bro-stats", presetId: "band" },
+  ],
+  royal: [
+    { type: "scrollingbild", presetId: "karte" },
+    { type: "bro-guarantee", presetId: "siegel" },
+    { type: "reviews2", presetId: "getoent" },
+  ],
+  luxe: [
+    { type: "collage", presetId: "rechts" },
+    { type: "trustpilot", presetId: "premium" },
+    { type: "rich-text", presetId: "breit" },
+  ],
+  street: [
+    { type: "vids", presetId: "dunkel" },
+    { type: "bro-problem-solution", presetId: "kontrast" },
+    { type: "socialicons", presetId: "links" },
+  ],
+  clinic: [
+    { type: "bro-stats", presetId: "hell" },
+    { type: "collapsible-content", presetId: "reihen" },
+    { type: "trustpilot", presetId: "kompakt" },
+  ],
+  cozy: [
+    { type: "multicolumn", presetId: "zwei" },
+    { type: "qanda", presetId: "offen" },
+    { type: "bro-guarantee", presetId: "split" },
+  ],
+  sport: [
+    { type: "bro-steps", presetId: "kreise" },
+    { type: "bro-problem-solution", presetId: "split" },
+    { type: "countdown", presetId: "dunkel" },
+  ],
+  fresh: [
+    { type: "bro-steps", presetId: "kreise" },
+    { type: "photo", presetId: "hell" },
+    { type: "featured-collection", presetId: "galerie" },
+  ],
+  family: [
+    { type: "benefits", presetId: "luftig" },
+    { type: "multicolumn", presetId: "drei" },
+    { type: "photo", presetId: "hell" },
+  ],
+  carbon: [
+    { type: "bro-feature-grid", presetId: "kompakt" },
+    { type: "trustpilot", presetId: "flow" },
+    { type: "rich-text", presetId: "mittig" },
+  ],
+  retro: [
+    { type: "collage", presetId: "links" },
+    { type: "qanda", presetId: "offen" },
+    { type: "trustpilot", presetId: "kompakt" },
+  ],
+  spa: [
+    { type: "benefits", presetId: "schmal" },
+    { type: "collage", presetId: "kartenrechts" },
+    { type: "bro-chat-reviews", presetId: "neutral" },
+  ],
+  outdoor: [
+    { type: "vids", presetId: "sand" },
+    { type: "image-with-text", presetId: "split" },
+    { type: "bro-problem-solution", presetId: "gestapelt" },
+  ],
+  deal: [
+    { type: "bro-stats", presetId: "hell" },
+    { type: "vids", presetId: "getoent" },
+    { type: "bro-chat-reviews", presetId: "whatsapp" },
+  ],
+};
+
+/**
+ * Mischt die Komposition eines Stils zu einer individuellen Variante:
+ * Die erste Section bleibt als Anker (Hero-Charakter), die Mitte wird
+ * permutiert und 1–2 stil-passende Extra-Sections kommen an zufällige
+ * Positionen dazu. `rnd` ist injizierbar (Client-Events: Math.random).
+ */
+export function shuffleComposition(styleId: string, rnd: () => number = Math.random): CompositionEntry[] {
+  const base = STYLE_COMPOSITIONS[styleId] || FALLBACK_COMPOSITION;
+  const head = base.slice(0, 1);
+  const middle = base.slice(1);
+  for (let i = middle.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [middle[i], middle[j]] = [middle[j], middle[i]];
+  }
+  const used = new Set(base.map((e) => e.type));
+  const pool = (STYLE_COMPOSITION_EXTRAS[styleId] || []).filter((e) => !used.has(e.type));
+  const take = pool.length ? 1 + Math.floor(rnd() * Math.min(2, pool.length)) : 0;
+  for (let k = 0; k < take; k++) {
+    const idx = Math.floor(rnd() * pool.length);
+    const [extra] = pool.splice(idx, 1);
+    middle.splice(Math.floor(rnd() * (middle.length + 1)), 0, extra);
+  }
+  return [...head, ...middle];
+}
 
 const FALLBACK_COMPOSITION: CompositionEntry[] = STYLE_COMPOSITIONS.modern;
 
@@ -1487,6 +1737,8 @@ export function buildInitialDocument(
   baseSections: BaseSectionInfo[],
   capabilities: string[],
   homeSections: BaseSectionInfo[] = [],
+  /** Optionale Kompositions-Variante (z. B. aus shuffleComposition) statt der Stil-Default-Komposition. */
+  compositionOverride?: CompositionEntry[],
 ): ThemeDocument {
   const style = getThemeStyle(styleId);
   const caps = new Set(capabilities);
@@ -1516,7 +1768,9 @@ export function buildInitialDocument(
   };
 
   const used = new Set<string>();
-  const composition = STYLE_COMPOSITIONS[style.id] || FALLBACK_COMPOSITION;
+  const composition = compositionOverride?.length
+    ? compositionOverride
+    : STYLE_COMPOSITIONS[style.id] || FALLBACK_COMPOSITION;
   const sections: SectionInstance[] = [];
   for (const entry of composition) {
     if (caps.size && !caps.has(entry.type)) continue; // Basis kennt den Typ nicht

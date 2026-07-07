@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, findKundeByKey, saveBuyboxPlan, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
+import { saveBuyboxPlan, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
+import { resolveEditorProduct } from "@/lib/custom-products";
 import { upsertLiveDesign } from "@/lib/design-autosave";
 import { isValidDocument } from "@/lib/theme-compile";
 import { buildBuyboxPlan } from "@/lib/buybox-plan";
@@ -28,14 +29,16 @@ export async function POST(req: NextRequest) {
   const doc = body.document && isValidDocument(body.document) ? body.document : null;
   if (!doc || !doc.productId) return NextResponse.json({ error: "Ungültiges Theme-Dokument." }, { status: 400 });
 
-  // Produkt (für gecachte KI-Texte im Plan).
+  // Produkt (für gecachte KI-Texte im Plan) — Katalog ODER eigenes Produkt.
   let produkt;
+  let resolved;
   try {
-    produkt = (await getAllProdukte()).find((p) => p.id === doc.productId);
+    resolved = await resolveEditorProduct(session, doc.productId);
   } catch {
     return NextResponse.json({ error: "Produkte konnten nicht geladen werden." }, { status: 500 });
   }
-  if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
+  if (!resolved) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
+  produkt = resolved.produkt;
 
   // Code auflösen: explizit übergebener Design-Code (Besitz prüfen) hat
   // Vorrang; sonst Kunde → gespeicherter Produkt-Code; Admin → body.code.
@@ -46,10 +49,9 @@ export async function POST(req: NextRequest) {
 
   if (!session.isAdmin) {
     if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
-    const kunde = await findKundeByKey(session.lizenzschluessel);
+    const kunde = resolved.kunde;
     if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
-    const drawn = Array.isArray(kunde.profile?.drawnProducts) ? kunde.profile.drawnProducts : [];
-    if (!drawn.includes(doc.productId)) {
+    if (!resolved.owned) {
       return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
     }
     user = session.lizenzschluessel;

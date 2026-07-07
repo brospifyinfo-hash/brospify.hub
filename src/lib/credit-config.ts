@@ -44,6 +44,9 @@ export const TOOL_PRICING_META: readonly ToolPricingMeta[] = [
   { key: "VIDEO_SCOUT_3", label: "Video Scout · 3 Videos", hint: "Apify TikTok+IG+YT + Claude", defaultApiCostEur: 0.100, group: "ai" },
   { key: "CHARTS_DRAW", label: "Produkt-Drop (Zufall)", hint: "Sheet-Lookup · keine externe API", defaultApiCostEur: 0, group: "tool" },
   { key: "THEME_EXPORT", label: "Produkt-Theme-Export", hint: "DeepSeek-Texte + Theme-Build · pro Download", defaultApiCostEur: 0.008, group: "ai" },
+  { key: "THEME_AI_SMALL", label: "Theme AI Co-Pilot · klein", hint: "Claude Sonnet · kleiner Änderungs-Plan", defaultApiCostEur: 0.02, group: "ai" },
+  { key: "THEME_AI_MEDIUM", label: "Theme AI Co-Pilot · mittel", hint: "Claude Sonnet · mittlerer Änderungs-Plan", defaultApiCostEur: 0.03, group: "ai" },
+  { key: "THEME_AI_LARGE", label: "Theme AI Co-Pilot · groß", hint: "Claude Sonnet · großer Umbau (ggf. mit Bildern)", defaultApiCostEur: 0.05, group: "ai" },
   { key: "BLOG_GENERATE", label: "Blog-Writer (versteckt)", hint: "DeepSeek-chat", defaultApiCostEur: 0.007, group: "ai", hidden: true },
 ] as const;
 

@@ -259,6 +259,24 @@ export interface KundeProfile {
   /** Wie viele 28-Tage-Gutschriften bereits vergeben wurden (idempotent). */
   recurringPeriodsGranted?: number;
   lastRecurringGrantAt?: string;
+  /** Eigene (selbst angelegte) Produkte für den Theme-Editor — unabhängig
+   *  vom Produkt-Katalog. Alle Felder außer id optional; Cap klein halten
+   *  (Profil-JSON teilt sich EINE 50k-Zelle). */
+  customProducts?: CustomProduct[];
+}
+
+/** Ein vom Nutzer selbst angelegtes Produkt (Theme-Editor). Bewusst alles
+ *  optional außer der id (Präfix "cust_" — kollidiert nie mit Katalog-IDs). */
+export interface CustomProduct {
+  id: string;
+  titel?: string;
+  bildUrl?: string;
+  images?: string[];
+  preis?: string;
+  beschreibung?: string;
+  /** KI-Texte, on-demand beim ersten Export generiert (wie ProduktExtra.themeCopy). */
+  themeCopy?: Record<string, string>;
+  createdAt?: string;
 }
 
 // ─── CREDIT SYSTEM ────────────────────────────────────────────

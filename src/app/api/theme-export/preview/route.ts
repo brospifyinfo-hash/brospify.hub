@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { getAllProdukte, findKundeByKey, type Produkt } from "@/lib/sheets";
+import { type Produkt } from "@/lib/sheets";
+import { resolveEditorProduct } from "@/lib/custom-products";
 import { getEditorBaseThemeZip } from "@/lib/theme-master";
 import { readBaseManifest, type BaseManifest } from "@/lib/theme-compile";
 
@@ -59,22 +60,18 @@ export async function GET(req: NextRequest) {
   const productId = req.nextUrl.searchParams.get("productId") || "";
   if (!productId) return NextResponse.json({ error: "productId fehlt." }, { status: 400 });
 
-  let produkt: Produkt | undefined;
+  // Katalog-Produkt (gezogen/Admin) ODER eigenes Produkt des Nutzers.
+  let produkt: Produkt;
   try {
-    produkt = (await getAllProdukte()).find((p) => p.id === productId);
-  } catch (err) {
-    console.error("[theme-preview] getAllProdukte failed:", err);
-    return NextResponse.json({ error: "Produkte konnten nicht geladen werden." }, { status: 500 });
-  }
-  if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
-
-  if (!session.isAdmin) {
-    if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
-    const kunde = await findKundeByKey(session.lizenzschluessel);
-    const drawn = Array.isArray(kunde?.profile?.drawnProducts) ? kunde!.profile.drawnProducts : [];
-    if (!drawn.includes(produkt.id)) {
+    const resolved = await resolveEditorProduct(session, productId);
+    if (!resolved) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
+    if (!resolved.owned) {
       return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
     }
+    produkt = resolved.produkt;
+  } catch (err) {
+    console.error("[theme-preview] Produkt-Resolve failed:", err);
+    return NextResponse.json({ error: "Produkte konnten nicht geladen werden." }, { status: 500 });
   }
 
   const tc = produkt.extra?.themeCopy || {};

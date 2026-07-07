@@ -29,6 +29,12 @@ export const CREDIT_COSTS = {
   // befüllte Shopify-Theme-ZIP (KI-Texte + eigene Farb-Palette + Schrift).
   // Pro Build/Download fällig (jede Farb-/Schrift-Anpassung = neuer Build).
   THEME_EXPORT: 100,
+  // AI Co-Pilot im Theme-Editor: Claude plant Änderungen am Theme
+  // (Text + Bilder rein → Plan → Umsetzung). Preis nach AUFWAND des
+  // bestätigten Plans (klein/mittel/groß) — Abzug erst bei "Plan umsetzen".
+  THEME_AI_SMALL: 15,
+  THEME_AI_MEDIUM: 30,
+  THEME_AI_LARGE: 50,
 } as const;
 
 // Welcome grant — jeder Kunde bekommt das EINMALIG beim ersten Login.

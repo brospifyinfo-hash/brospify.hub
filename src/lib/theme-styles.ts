@@ -142,6 +142,90 @@ export const THEME_STYLES: ThemeStyle[] = [
     settingOverrides: so(10, { card: "card", spacing: 20, headingScale: 120 }),
     hiddenTypes: ["wave"],
   },
+  {
+    id: "luxe", label: "Luxe", hint: "High-Fashion, monochrom, editorial",
+    palette: { button: "#000000", buttonText: "#ffffff", background: "#ffffff", text: "#111111", accent: "#9a8866" },
+    headingFont: "oswald_n4", bodyFont: "lato_n4",
+    settingOverrides: so(0, { spacing: 34, pageWidth: 1250, headingScale: 128 }),
+    hiddenTypes: ["wave", "map", "socialicons"],
+  },
+  {
+    id: "street", label: "Street", hint: "Streetwear, laut, Hype-Drops",
+    palette: { button: "#101010", buttonText: "#ffffff", background: "#f4f4f0", text: "#101010", accent: "#a3e635" },
+    headingFont: "bebas_neue_n4", bodyFont: "work_sans_n4",
+    settingOverrides: so(0, { spacing: 10, pageWidth: 1500, headingScale: 150, extra: { buttons_border_thickness: 2 } }),
+    hiddenTypes: ["wave", "map"],
+  },
+  {
+    id: "clinic", label: "Care", hint: "Sauber & seriös, Vertrauen zuerst",
+    palette: { button: "#0e7490", buttonText: "#ffffff", background: "#ffffff", text: "#16333a", accent: "#14b8a6" },
+    headingFont: "work_sans_n4", bodyFont: "assistant_n4",
+    settingOverrides: so(10, { card: "card", spacing: 22, headingScale: 110 }),
+    hiddenTypes: ["wave", "socialicons"],
+  },
+  {
+    id: "cozy", label: "Cozy", hint: "Warm, wohnlich, Interior",
+    palette: { button: "#4a3426", buttonText: "#fff7ee", background: "#faf3ea", text: "#3a2c22", accent: "#c2703d" },
+    headingFont: "merriweather_n4", bodyFont: "nunito_n4",
+    settingOverrides: so(18, { card: "card", spacing: 26, headingScale: 116 }),
+    hiddenTypes: ["wave"],
+  },
+  {
+    id: "sport", label: "Sport", hint: "Performance, Energie, Tempo",
+    palette: { button: "#111111", buttonText: "#ffffff", background: "#fafafa", text: "#111318", accent: "#ef4444" },
+    headingFont: "oswald_n4", bodyFont: "roboto_n4",
+    settingOverrides: so(4, { spacing: 12, pageWidth: 1450, headingScale: 136, extra: { buttons_border_thickness: 2 } }),
+    hiddenTypes: ["map"],
+  },
+  {
+    id: "fresh", label: "Fresh", hint: "Frisch & leicht, Food & Küche",
+    palette: { button: "#166534", buttonText: "#ffffff", background: "#fbfef7", text: "#1d2b1a", accent: "#65a30d" },
+    headingFont: "poppins_n4", bodyFont: "lato_n4",
+    settingOverrides: so(16, { card: "card", spacing: 18, headingScale: 112 }),
+    hiddenTypes: ["wave"],
+  },
+  {
+    id: "family", label: "Family", hint: "Sanft, pastellig, Familie & Kids",
+    palette: { button: "#4f7dd9", buttonText: "#ffffff", background: "#f8fbff", text: "#2f3a56", accent: "#f9a8d4" },
+    headingFont: "nunito_n4", bodyFont: "assistant_n4",
+    settingOverrides: so(26, { card: "card", spacing: 20, headingScale: 110 }),
+    hiddenTypes: ["wave", "map"],
+  },
+  {
+    id: "carbon", label: "Carbon", hint: "Dunkel, technisch, Gadgets",
+    palette: { button: "#22d3ee", buttonText: "#06222a", background: "#0b0f14", text: "#e6edf3", accent: "#22d3ee" },
+    headingFont: "dmsans_n4", bodyFont: "dmsans_n4",
+    settingOverrides: so(8, { card: "card", spacing: 16, pageWidth: 1400, headingScale: 118 }),
+    hiddenTypes: ["wave", "map"],
+  },
+  {
+    id: "retro", label: "Retro", hint: "Vintage-Charme, warm & nostalgisch",
+    palette: { button: "#7f1d1d", buttonText: "#fdf3e3", background: "#f8efe0", text: "#45301f", accent: "#d97706" },
+    headingFont: "acme_n4", bodyFont: "merriweather_n4",
+    settingOverrides: so(6, { card: "card", spacing: 24, headingScale: 120, extra: { buttons_border_thickness: 2 } }),
+    hiddenTypes: ["wave", "socialicons"],
+  },
+  {
+    id: "spa", label: "Spa", hint: "Beauty & Selfcare, weich und hell",
+    palette: { button: "#8f5f76", buttonText: "#ffffff", background: "#fdf7f7", text: "#4a3a41", accent: "#d48aa8" },
+    headingFont: "playfair_n4", bodyFont: "raleway_n4",
+    settingOverrides: so(22, { card: "card", spacing: 28, headingScale: 114 }),
+    hiddenTypes: ["wave", "map"],
+  },
+  {
+    id: "outdoor", label: "Outdoor", hint: "Rau, erdig, Abenteuer",
+    palette: { button: "#1c2f23", buttonText: "#f2f6ec", background: "#f4f3ec", text: "#24301f", accent: "#cc5f22" },
+    headingFont: "montserrat_n4", bodyFont: "roboto_n4",
+    settingOverrides: so(2, { spacing: 20, pageWidth: 1450, headingScale: 124, extra: { buttons_border_thickness: 2 } }),
+    hiddenTypes: [],
+  },
+  {
+    id: "deal", label: "Deal", hint: "Maximale Conversion, Angebots-Druck",
+    palette: { button: "#dc2626", buttonText: "#ffffff", background: "#ffffff", text: "#18181b", accent: "#f59e0b" },
+    headingFont: "work_sans_n4", bodyFont: "inter_n4",
+    settingOverrides: so(8, { spacing: 10, headingScale: 118 }),
+    hiddenTypes: ["wave", "map"],
+  },
 ];
 
 // ─── Pro Stil: eigene Baustein-Anordnung + Sichtbarkeit + Karten-Design ──
@@ -151,7 +235,12 @@ export const THEME_STYLES: ThemeStyle[] = [
 const U = "urgency_text", T = "custom_title", R = "custom_rating", B = "benefits_list",
   S = "stock_indicator", P = "custom_price", BN = "bundle_selector", BT = "buy_buttons",
   PI = "payment_icons", G = "free_gift", TL = "delivery_timeline",
-  SB = "sale_banner", FB = "feature_box", IW = "icon-with-text", CT = "collapsible_tab", CO = "complementary";
+  SB = "sale_banner", FB = "feature_box", IW = "icon-with-text", CT = "collapsible_tab", CO = "complementary",
+  // Runtime-Bausteine (nur dynamische Buy Box) — geben den Stilen eigene Layouts:
+  CD = "countdown_timer", SBAR = "stock_bar", GU = "guarantee", TB = "trust_badges",
+  SP = "social_proof", RQ = "review_quote", VS = "value_stack", SL = "spec_list",
+  PD = "price_per_day", CC = "coupon_code", MC = "mini_compare", HL = "highlights",
+  SC = "ship_countdown", RP = "return_promise";
 interface StyleExtra {
   order: string[];
   hideB: string[];
@@ -173,6 +262,18 @@ const STYLE_EXTRAS: Record<string, StyleExtra> = {
   candy:   { order: [SB, U, T, R, BN, P, B, BT, G, PI, TL], hideB: [S], hideS: [], design: { shadow: 2, border: 2, iconStyle: "accent" }, showB: [SB] },
   tech:    { order: [T, P, R, B, BN, BT, PI, IW], hideB: [U, S, G, TL], hideS: ["brospify-hero", "vids"], design: { shadow: 0, border: 1, iconStyle: "dark" }, showB: [IW] },
   royal:   { order: [U, T, R, P, B, BN, BT, PI, G, TL, CO], hideB: [S], hideS: [], design: { shadow: 2, border: 1, iconStyle: "accent" }, showB: [CO] },
+  luxe:    { order: [T, P, R, BT, PI, B], hideB: [U, S, G, TL, BN], hideS: ["vids", "bro-info-tabs"], design: { shadow: 0, border: 1, iconStyle: "outline" } },
+  street:  { order: [SB, CD, T, R, P, SBAR, BT, PI, SP], hideB: [U, S, G, TL, B, BN], hideS: ["bro-info-tabs"], design: { shadow: 0, border: 2, iconStyle: "accent" }, showB: [SB] },
+  clinic:  { order: [T, R, GU, B, P, BT, PI, TL, TB], hideB: [U, S, G, BN], hideS: ["vids"], design: { shadow: 1, border: 1, iconStyle: "outline" } },
+  cozy:    { order: [T, R, B, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: [], design: { shadow: 1, border: 1, iconStyle: "dark" } },
+  sport:   { order: [U, T, R, RQ, P, BN, BT, SBAR, PI, B], hideB: [S, G, TL], hideS: [], design: { shadow: 0, border: 2, iconStyle: "accent" } },
+  fresh:   { order: [T, R, B, P, VS, BT, PI, G], hideB: [U, S, TL, BN], hideS: [], design: { shadow: 1, border: 1, iconStyle: "accent" } },
+  family:  { order: [T, R, B, GU, P, BN, BT, G, PI], hideB: [U, S, TL], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" } },
+  carbon:  { order: [T, R, SL, P, PD, BN, BT, PI, IW], hideB: [U, S, G, TL, B], hideS: ["bro-info-tabs"], design: { shadow: 2, border: 1, iconStyle: "accent" }, showB: [IW] },
+  retro:   { order: [U, T, R, P, B, BT, PI, CC], hideB: [S, G, TL, BN], hideS: ["vids"], design: { shadow: 0, border: 2, iconStyle: "dark" } },
+  spa:     { order: [T, R, B, P, BT, RP, PI, G, TL], hideB: [U, S, BN], hideS: [], design: { shadow: 1, border: 1, iconStyle: "outline" } },
+  outdoor: { order: [T, R, HL, P, BN, BT, PI, SC, TL], hideB: [U, S, G, B], hideS: [], design: { shadow: 0, border: 2, iconStyle: "dark" } },
+  deal:    { order: [SB, CD, U, T, R, P, MC, BN, CC, BT, SBAR, PI, G, TL], hideB: [S, B], hideS: [], design: { shadow: 1, border: 2, iconStyle: "accent" }, showB: [SB] },
 };
 for (const s of THEME_STYLES) {
   const e = STYLE_EXTRAS[s.id];

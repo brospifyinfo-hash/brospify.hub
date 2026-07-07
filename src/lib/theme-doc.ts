@@ -140,6 +140,10 @@ export type EditorAction =
   | { type: "removeBuyboxBlock"; blockType: string }
   | { type: "reorderBuybox"; order: string[] }
   | { type: "arrangeBuybox"; canonical: string[] }
+  // AI Co-Pilot: Ops werden fürs Live-Gefühl einzeln angewandt, landen aber
+  // als EIN History-Schritt (Ctrl+Z macht den ganzen AI-Lauf rückgängig).
+  | { type: "aiApply"; doc: ThemeDocument }
+  | { type: "aiBoundary" }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -152,6 +156,7 @@ export function initialEditorState(doc?: ThemeDocument): EditorState {
 function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
   switch (action.type) {
     case "replace":
+    case "aiApply":
       return action.doc;
     case "setProduct":
       return { ...doc, productId: action.productId };
@@ -288,6 +293,12 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
 }
 
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
+  // Grenze zwischen zwei AI-Läufen: beendet nur die Koaleszenz (kein Doc-
+  // Change, kein History-Eintrag) — der nächste aiApply beginnt einen
+  // frischen History-Schritt.
+  if (action.type === "aiBoundary") {
+    return state.lastTextTarget === null ? state : { ...state, lastTextTarget: null };
+  }
   if (action.type === "undo") {
     if (!state.past.length) return state;
     const past = [...state.past];
@@ -304,15 +315,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
   if (next === state.present) return state;
 
   // Tipp-Serien im selben Feld nicht als einzelne History-Schritte stapeln
-  // (gilt für Section-Texte, Block-Texte und das Galerie-Badge).
+  // (gilt für Section-Texte, Block-Texte, das Galerie-Badge und die
+  // Schritt-für-Schritt angewandten Ops EINES AI-Laufs).
   const isGalleryTyping = action.type === "setGallery" && action.patch.badge !== undefined && action.patch.presetId === undefined;
-  if (action.type === "setText" || action.type === "setBlockText" || isGalleryTyping) {
+  if (action.type === "setText" || action.type === "setBlockText" || isGalleryTyping || action.type === "aiApply") {
     const target =
       action.type === "setText"
         ? `sec|${action.uid}|${action.field}`
         : action.type === "setBlockText"
           ? `blk|${action.blockType}|${action.field}`
-          : "gallery|badge";
+          : action.type === "aiApply"
+            ? "ai|batch"
+            : "gallery|badge";
     if (state.lastTextTarget === target) {
       return { ...state, present: next, future: [], lastTextTarget: target };
     }
