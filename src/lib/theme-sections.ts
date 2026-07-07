@@ -59,6 +59,14 @@ export const BUYBOX_BLOCKS: BuyboxBlockDef[] = [
   { type: "countdown_timer", label: "Countdown-Timer" },
   { type: "press_bar", label: "Bekannt aus" },
   { type: "spec_list", label: "Produkt-Daten" },
+  { type: "value_stack", label: "Wert-Stapel" },
+  { type: "review_quote", label: "Kunden-Zitat" },
+  { type: "ship_countdown", label: "Versand-Countdown" },
+  { type: "return_promise", label: "Retouren-Versprechen" },
+  { type: "fit_check", label: "Zielgruppen-Check" },
+  { type: "mini_compare", label: "Mini-Vergleich" },
+  { type: "coupon_code", label: "Rabattcode-Box" },
+  { type: "price_per_day", label: "Preis pro Tag" },
 ];
 
 // Fresh-Dokument-Standardreihenfolge (die etablierten 23 Bausteine). Die 5
@@ -79,6 +87,8 @@ export const BUYBOX_DEFAULT_ORDER = [
 export const BUYBOX_RUNTIME_ONLY = new Set([
   "stock_bar", "trust_badges", "guarantee", "highlights", "social_proof",
   "countdown_timer", "press_bar", "spec_list",
+  "value_stack", "review_quote", "ship_countdown", "return_promise",
+  "fit_check", "mini_compare", "coupon_code", "price_per_day",
 ]);
 
 // ─── Metadaten je Baustein: Kategorie + Icon + Beschreibung (für die
@@ -113,6 +123,14 @@ export const BUYBOX_META: Record<string, BuyboxMeta> = {
   free_gift: { category: "conversion", icon: "Gift", label: "Gratis-Geschenk", labelEn: "Free gift", desc: "Geschenk-Auswahl im Warenkorb.", descEn: "Free-gift picker in cart." },
   social_proof: { category: "conversion", icon: "Users", label: "Social-Proof", labelEn: "Social proof", desc: "z. B. 12 sehen sich das gerade an.", descEn: "\"12 people viewing right now\"." },
   countdown_timer: { category: "conversion", icon: "Clock", label: "Countdown-Timer", labelEn: "Countdown timer", desc: "Live-Countdown: Angebot endet in HH:MM:SS.", descEn: "Live countdown: offer ends in HH:MM:SS." },
+  value_stack: { category: "conversion", icon: "Boxes", label: "Wert-Stapel", labelEn: "Value stack", desc: "„Das bekommst du heute“: Boni mit GRATIS-Badges & Ersparnis.", descEn: "\"What you get today\": bonuses with FREE badges & savings." },
+  ship_countdown: { category: "conversion", icon: "Timer", label: "Versand-Countdown", labelEn: "Shipping countdown", desc: "Bestelle in X Std → Versand heute + Lieferdatum.", descEn: "Order within X hrs → ships today + delivery date." },
+  mini_compare: { category: "conversion", icon: "Scale", label: "Mini-Vergleich", labelEn: "Mini comparison", desc: "Wir ✓ vs. Andere ✗ — kompakt in der Kaufbox.", descEn: "Us ✓ vs. others ✗ — compact in the buy box." },
+  coupon_code: { category: "conversion", icon: "Ticket", label: "Rabattcode-Box", labelEn: "Coupon box", desc: "Gutschein-Code zum Kopieren per Klick.", descEn: "Coupon code with click-to-copy." },
+  price_per_day: { category: "conversion", icon: "Calculator", label: "Preis pro Tag", labelEn: "Price per day", desc: "Rechnet den Preis auf „nur X € pro Tag“ um.", descEn: "Reframes the price as \"only X per day\"." },
+  fit_check: { category: "conversion", icon: "UserCheck", label: "Zielgruppen-Check", labelEn: "Audience check", desc: "„Perfekt für dich, wenn …“ — Selbst-Qualifizierung.", descEn: "\"Perfect for you if …\" — self-qualification." },
+  review_quote: { category: "vertrauen", icon: "Quote", label: "Kunden-Zitat", labelEn: "Customer quote", desc: "Testimonial mit Sternen & Verifiziert-Badge.", descEn: "Testimonial with stars & verified badge." },
+  return_promise: { category: "vertrauen", icon: "RotateCcw", label: "Retouren-Versprechen", labelEn: "Return promise", desc: "30 Tage Rückgabe — direkt am Kaufen-Button.", descEn: "30-day returns — right at the buy button." },
   press_bar: { category: "vertrauen", icon: "Award", label: "Bekannt aus", labelEn: "As seen in", desc: "Presse-/Autoritäts-Leiste mit Namen.", descEn: "Press/authority bar with names." },
   spec_list: { category: "info", icon: "Table", label: "Produkt-Daten", labelEn: "Spec list", desc: "Eigenschaften als Bezeichnung/Wert-Zeilen.", descEn: "Attributes as label/value rows." },
   custom_rating: { category: "vertrauen", icon: "Star", label: "Sterne-Bewertung", labelEn: "Star rating", desc: "Sterne + Anzahl Bewertungen.", descEn: "Stars + review count." },
@@ -137,10 +155,13 @@ export const BUYBOX_META: Record<string, BuyboxMeta> = {
 // Nur die AKTIVEN Bausteine werden hiernach sortiert; nicht Gelistetes hängt
 // ans Ende.
 export const BUYBOX_CANONICAL_ORDER = [
-  "sale_banner", "urgency_text", "countdown_timer", "custom_title", "custom_rating", "custom_price",
-  "stock_bar", "stock_indicator", "variant_picker", "bundle_selector",
-  "quantity_selector", "buy_buttons", "payment_icons", "trust_badges", "press_bar",
-  "guarantee", "benefits_list", "highlights", "delivery_timeline", "free_gift",
+  "sale_banner", "urgency_text", "countdown_timer", "ship_countdown", "custom_title",
+  "custom_rating", "review_quote", "custom_price", "price_per_day",
+  "stock_bar", "stock_indicator", "variant_picker", "bundle_selector", "value_stack",
+  "coupon_code", "quantity_selector", "buy_buttons", "return_promise", "payment_icons",
+  "trust_badges", "press_bar",
+  "guarantee", "benefits_list", "highlights", "mini_compare", "fit_check",
+  "delivery_timeline", "free_gift",
   "social_proof", "feature_box", "icon-with-text", "spec_list", "description", "text",
   "custom_divider", "custom_accordion", "collapsible_tab", "complementary", "share",
 ];

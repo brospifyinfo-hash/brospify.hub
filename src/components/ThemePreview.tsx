@@ -723,6 +723,211 @@ export default function ThemePreview({
           </div>
         );
       }
+
+      // ── Conversion-Pack (CRO-Bausteine) — 1:1-Spiegel der Shop-Runtime ──
+      case "value_stack": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "list");
+        const rows = [1, 2, 3, 4]
+          .map((n) => ({ item: bt(type, `item_${n}`, ""), val: bt(type, `value_${n}`, "").trim() }))
+          .filter((r) => r.item);
+        const heading = bt(type, "heading", "");
+        const total = bt(type, "total_label", "");
+        const today = bt(type, "today_label", "");
+        const save = bt(type, "save_text", "");
+        return (
+          <div className={`pm-vstack pm-vstack--${style}`} style={style === "accent" ? { background: `color-mix(in srgb,${ac} 8%,transparent)` } : undefined}>
+            {heading && <strong className="pm-vstack-h">{heading}</strong>}
+            {rows.map((r, i) => (
+              <div key={i} className="pm-vstack-row">
+                <span className="pm-vstack-item">
+                  <span className="pm-vstack-ic" style={{ color: ac }}><Ic d="M20 6L9 17l-5-5" s={13} /></span>
+                  {r.item}
+                </span>
+                {/^(gratis|free)$/i.test(r.val)
+                  ? <span className="pm-vstack-free" style={{ background: ac }}>{r.val.toUpperCase()}</span>
+                  : r.val ? <s className="pm-vstack-val">{r.val}</s> : null}
+              </div>
+            ))}
+            {(total || today || save) && (
+              <div className="pm-vstack-foot">
+                {total && <s className="pm-vstack-total">{total}</s>}
+                {today && <strong className="pm-vstack-today" style={{ color: ac }}>{today}</strong>}
+                {save && <span className="pm-vstack-save">{save}</span>}
+              </div>
+            )}
+          </div>
+        );
+      }
+      case "review_quote": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "bubble");
+        const initials = bt(type, "initials", "");
+        const verified = bt(type, "verified", "");
+        return (
+          <div className={`pm-rq pm-rq--${style}`}>
+            <div className="pm-rq-stars">★★★★★</div>
+            <p className="pm-rq-text">{bt(type, "text", "")}</p>
+            <div className="pm-rq-meta">
+              {initials && <span className="pm-rq-av" style={{ background: ac }}>{initials}</span>}
+              <span className="pm-rq-who">
+                <strong>{bt(type, "name", "")}</strong>
+                {verified && <em className="pm-rq-ver">✓ {verified}</em>}
+              </span>
+            </div>
+          </div>
+        );
+      }
+      case "ship_countdown": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "inline");
+        const etaMin = num(s.eta_min, 2);
+        const etaMax = Math.max(etaMin, num(s.eta_max, 4));
+        const businessDate = (days: number) => {
+          const d = new Date();
+          let added = 0;
+          while (added < days) {
+            d.setDate(d.getDate() + 1);
+            const wd = d.getDay();
+            if (wd !== 0 && wd !== 6) added++;
+          }
+          return d.toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "long" });
+        };
+        return (
+          <div
+            className={`pm-shipc pm-shipc--${style}`}
+            style={style === "box" ? { background: `color-mix(in srgb,${ac} 8%,transparent)`, borderColor: `color-mix(in srgb,${ac} 30%,transparent)` } : undefined}
+          >
+            <div className="pm-shipc-line">
+              <span className="pm-shipc-ic" style={{ color: ac }}><Ic d={ICON.truck} s={15} /></span>
+              <span className="pm-shipc-txt">
+                {bt(type, "before", "")} <b style={{ color: ac }}>3 Std 12 Min 08 Sek</b> {bt(type, "after", "")}
+              </span>
+            </div>
+            <div className="pm-shipc-eta">{bt(type, "eta_label", "")} <b>{businessDate(etaMin)} – {businessDate(etaMax)}</b></div>
+          </div>
+        );
+      }
+      case "return_promise": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "line");
+        return (
+          <div
+            className={`pm-retp pm-retp--${style}`}
+            style={
+              style === "check"
+                ? { background: `color-mix(in srgb,${ac} 8%,transparent)`, borderColor: `color-mix(in srgb,${ac} 30%,transparent)` }
+                : style === "box" ? { borderColor: `color-mix(in srgb,${ac} 30%,transparent)` } : undefined
+            }
+          >
+            <span className="pm-retp-ic" style={{ color: ac }}>
+              {style === "check" ? <Ic d="M20 6L9 17l-5-5" s={16} /> : <Ic d="M9 14L4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11" s={16} />}
+            </span>
+            <span className="pm-retp-txt">
+              <strong>{bt(type, "title", "")}</strong>
+              <em>{bt(type, "subtitle", "")}</em>
+            </span>
+          </div>
+        );
+      }
+      case "fit_check": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "card");
+        const yesRows = [1, 2, 3].map((n) => bt(type, `yes_${n}`, "")).filter(Boolean);
+        const no1 = bt(type, "no_1", "");
+        const heading = bt(type, "heading", "");
+        const closing = bt(type, "closing", "");
+        return (
+          <div className={`pm-fit pm-fit--${style}`}>
+            {heading && <strong className="pm-fit-h">{heading}</strong>}
+            <div className="pm-fit-cols">
+              <div className="pm-fit-block pm-fit-yes">
+                <em className="pm-fit-title">{bt(type, "yes_title", "")}</em>
+                {yesRows.map((t2, i) => (
+                  <div key={i} className="pm-fit-row">
+                    <span className="pm-fit-ic" style={{ color: "#1d9e55" }}><Ic d="M20 6L9 17l-5-5" s={12} /></span>
+                    <span>{t2}</span>
+                  </div>
+                ))}
+              </div>
+              {no1 && (
+                <div className="pm-fit-block pm-fit-no">
+                  <em className="pm-fit-title">{bt(type, "no_title", "")}</em>
+                  <div className="pm-fit-row">
+                    <span className="pm-fit-ic" style={{ color: "#b0b0b0" }}><Ic d="M18 6L6 18 M6 6l12 12" s={12} /></span>
+                    <span>{no1}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            {closing && <div className="pm-fit-close" style={{ color: ac }}>{closing}</div>}
+          </div>
+        );
+      }
+      case "mini_compare": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "card");
+        const rows = [1, 2, 3, 4].map((n) => bt(type, `row_${n}`, "")).filter(Boolean);
+        const title = bt(type, "title", "");
+        return (
+          <div className={`pm-mcmp pm-mcmp--${style}`}>
+            {title && <strong className="pm-mcmp-h">{title}</strong>}
+            <div className="pm-mcmp-row pm-mcmp-head" style={style === "card" ? { background: `color-mix(in srgb,${ac} 12%,transparent)` } : undefined}>
+              <span className="pm-mcmp-crit" />
+              <span className={`pm-mcmp-col ${style === "pills" ? "pm-mcmp-pill" : ""}`} style={style === "pills" ? { background: ac } : { color: ac }}>{bt(type, "us_label", "Wir")}</span>
+              <span className={`pm-mcmp-col ${style === "pills" ? "pm-mcmp-pill pm-mcmp-pill--dim" : ""}`}>{bt(type, "them_label", "Andere")}</span>
+            </div>
+            {rows.map((t2, i) => (
+              <div key={i} className="pm-mcmp-row">
+                <span className="pm-mcmp-crit">{t2}</span>
+                <span className="pm-mcmp-col"><span style={{ color: "#1d9e55", display: "inline-flex" }}><Ic d="M20 6L9 17l-5-5" s={13} /></span></span>
+                <span className="pm-mcmp-col"><span className="pm-mcmp-no"><Ic d="M18 6L6 18 M6 6l12 12" s={13} /></span></span>
+              </div>
+            ))}
+          </div>
+        );
+      }
+      case "coupon_code": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "coupon");
+        const title = bt(type, "title", "");
+        const note = bt(type, "note", "");
+        return (
+          <div
+            className={`pm-coup pm-coup--${style}`}
+            style={{ borderColor: `color-mix(in srgb,${ac} 45%,transparent)`, ...(style === "strip" ? { background: `color-mix(in srgb,${ac} 7%,transparent)` } : {}) }}
+          >
+            {title && <strong className="pm-coup-h">{title}</strong>}
+            <div className="pm-coup-row">
+              <span className="pm-coup-code" style={{ color: ac, borderColor: `color-mix(in srgb,${ac} 40%,transparent)` }}>{bt(type, "code", "")}</span>
+              <button type="button" className="pm-coup-btn" style={{ background: ac }} onClick={(e) => e.stopPropagation()}>{bt(type, "button", "Kopieren")}</button>
+            </div>
+            {note && <em className="pm-coup-note">{note}</em>}
+          </div>
+        );
+      }
+      case "price_per_day": {
+        const ac = str(s.accent, colors.accent);
+        const style = str(s.style, "line");
+        const days = Math.max(1, Math.round(Number(bt(type, "days", "90").replace(/\D/g, "")) || 90));
+        // Preis aus dem Vorschau-String ("39,90 €") parsen → Betrag pro Tag.
+        const priceNum = Number((data?.price || "").replace(/[^\d,.]/g, "").replace(/\.(?=\d{3})/g, "").replace(",", "."));
+        const per = Number.isFinite(priceNum) && priceNum > 0
+          ? `${(Math.ceil((priceNum / days) * 100) / 100).toFixed(2).replace(".", ",")} €`
+          : "0,55 €";
+        const tpl = bt(type, "text", "Nur {betrag} pro Tag");
+        const parts = tpl.split("{betrag}");
+        return (
+          <div
+            className={`pm-ppd pm-ppd--${style}`}
+            style={style === "badge" ? { background: `color-mix(in srgb,${ac} 12%,transparent)`, color: ac } : undefined}
+          >
+            {style === "math"
+              ? <>{data?.price || ""} ÷ {days} Tage = <b style={{ color: ac }}>{per}/Tag</b></>
+              : <>{parts[0]}<b style={style !== "badge" ? { color: ac } : undefined}>{per}</b>{parts.slice(1).join("{betrag}")}</>}
+          </div>
+        );
+      }
       default:
         return null;
     }
@@ -1189,6 +1394,94 @@ const CSS = `
 .pm-spec-row:last-child{border-bottom:none}
 .pm-spec-l{font-weight:500;opacity:.6}
 .pm-spec-v{font-weight:700;text-align:right}
+
+.pm-vstack{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;font-size:13px}
+.pm-vstack--receipt,.pm-vstack--accent{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),14px);padding:13px 15px}
+.pm-vstack--receipt{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
+.pm-vstack-h{font-size:13.5px;font-weight:800;margin-bottom:2px}
+.pm-vstack-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pm-vstack-item{display:inline-flex;align-items:center;gap:7px;min-width:0}
+.pm-vstack-ic{flex:0 0 auto;display:inline-flex}
+.pm-vstack-free{flex:0 0 auto;color:#fff;font-size:9.5px;font-weight:800;letter-spacing:.06em;padding:2px 7px;border-radius:99px}
+.pm-vstack-val{flex:0 0 auto;opacity:.5;font-weight:600}
+.pm-vstack-foot{display:flex;flex-direction:column;gap:2px;border-top:1px dashed color-mix(in srgb,var(--pv-text) 18%,transparent);padding-top:8px;margin-top:2px}
+.pm-vstack-total{opacity:.5;font-weight:600}
+.pm-vstack-today{font-size:16px;font-weight:800}
+.pm-vstack-save{font-size:12px;font-weight:700;color:#1d9e55}
+
+.pm-rq{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;font-size:13px}
+.pm-rq--bubble{background:color-mix(in srgb,var(--pv-text) 3.5%,var(--pv-bg));border-radius:min(var(--pv-r),16px);padding:13px 15px}
+.pm-rq--card{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),16px);padding:13px 15px;position:relative}
+.pm-rq--card::before{content:"\\201E";position:absolute;top:-4px;right:14px;font-size:52px;font-weight:800;opacity:.1;font-family:var(--pv-h)}
+.pm-rq-stars{color:#f5a623;font-size:14px;letter-spacing:2px}
+.pm-rq-text{margin:0;line-height:1.5}
+.pm-rq--plain .pm-rq-text{font-style:italic}
+.pm-rq-meta{display:flex;align-items:center;gap:9px}
+.pm-rq-av{flex:0 0 auto;width:28px;height:28px;border-radius:50%;color:#fff;font-size:10.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center}
+.pm-rq-who{display:flex;flex-direction:column;line-height:1.25}
+.pm-rq-who strong{font-size:12px;font-weight:700}
+.pm-rq-ver{font-style:normal;font-size:10.5px;font-weight:600;color:#1d9e55}
+
+.pm-shipc{display:flex;flex-direction:column;gap:4px;margin-bottom:16px;font-size:12.5px}
+.pm-shipc--box{border:var(--pv-bd) solid;border-radius:min(var(--pv-r),14px);padding:11px 13px}
+.pm-shipc--stack{text-align:center;align-items:center}
+.pm-shipc-line{display:flex;align-items:center;gap:8px}
+.pm-shipc--stack .pm-shipc-line{justify-content:center}
+.pm-shipc-ic{flex:0 0 auto;display:inline-flex}
+.pm-shipc-txt{font-weight:600}
+.pm-shipc-txt b{font-variant-numeric:tabular-nums;font-weight:800}
+.pm-shipc-eta{font-size:11.5px;opacity:.7}
+.pm-shipc--box .pm-shipc-eta{opacity:.85;font-weight:600}
+.pm-shipc--stack .pm-shipc-eta b{font-size:12.5px}
+
+.pm-retp{display:flex;align-items:center;gap:11px;margin-bottom:16px;font-size:12.5px}
+.pm-retp--box,.pm-retp--check{border:var(--pv-bd) solid;border-radius:min(var(--pv-r),14px);padding:11px 13px}
+.pm-retp-ic{flex:0 0 auto;display:inline-flex}
+.pm-retp-txt{display:flex;flex-direction:column;line-height:1.35;min-width:0}
+.pm-retp-txt strong{font-weight:800}
+.pm-retp-txt em{font-style:normal;font-size:11.5px;opacity:.65}
+
+.pm-fit{display:flex;flex-direction:column;gap:9px;margin-bottom:16px;font-size:12.5px}
+.pm-fit--card{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),16px);padding:13px 15px}
+.pm-fit-h{font-size:13.5px;font-weight:800}
+.pm-fit-cols{display:flex;flex-direction:column;gap:9px}
+.pm-fit--cols .pm-fit-cols{flex-direction:row;gap:12px}
+.pm-fit--cols .pm-fit-block{flex:1;min-width:0}
+.pm-fit-block{display:flex;flex-direction:column;gap:5px}
+.pm-fit-title{font-style:normal;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.08em;opacity:.55}
+.pm-fit-row{display:flex;align-items:flex-start;gap:7px;line-height:1.4}
+.pm-fit-ic{flex:0 0 auto;display:inline-flex;margin-top:2px}
+.pm-fit-no{opacity:.72}
+.pm-fit-close{font-weight:800;font-size:13px}
+
+.pm-mcmp{display:flex;flex-direction:column;margin-bottom:16px;font-size:12.5px}
+.pm-mcmp--card{border:var(--pv-bd) solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:min(var(--pv-r),14px);overflow:hidden}
+.pm-mcmp-h{font-size:13.5px;font-weight:800;padding:0 0 7px}
+.pm-mcmp--card .pm-mcmp-h{padding:11px 13px 4px}
+.pm-mcmp-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid color-mix(in srgb,var(--pv-text) 8%,transparent)}
+.pm-mcmp--card .pm-mcmp-row{padding:7px 13px}
+.pm-mcmp-row:last-child{border-bottom:none}
+.pm-mcmp-head{font-weight:800;font-size:11.5px}
+.pm-mcmp-crit{flex:1;min-width:0;font-weight:600}
+.pm-mcmp-col{flex:0 0 58px;text-align:center;display:inline-flex;align-items:center;justify-content:center}
+.pm-mcmp-no{color:#c8c8c8;display:inline-flex}
+.pm-mcmp-pill{color:#fff;border-radius:99px;padding:2.5px 0;font-size:10.5px}
+.pm-mcmp-pill--dim{background:#b8b8b8}
+
+.pm-coup{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;font-size:12.5px;border:2px dashed;border-radius:min(var(--pv-r),14px);padding:12px 14px}
+.pm-coup--button{border-style:solid;border-width:var(--pv-bd)}
+.pm-coup--strip{border-style:solid;border-width:1px;padding:9px 12px}
+.pm-coup-h{font-weight:800;font-size:13px}
+.pm-coup-row{display:flex;align-items:stretch;gap:8px}
+.pm-coup-code{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;border:1.5px dashed;border-radius:9px;font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:14px;letter-spacing:.1em;padding:8px 10px;background:color-mix(in srgb,var(--pv-text) 2%,transparent)}
+.pm-coup-btn{flex:0 0 auto;border:none;color:#fff;font-weight:800;font-size:12px;border-radius:9px;padding:9px 14px;cursor:pointer;font-family:inherit}
+.pm-coup-note{font-style:normal;font-size:10.5px;opacity:.55}
+
+.pm-ppd{margin-bottom:16px;font-size:12.5px;font-weight:600}
+.pm-ppd b{font-weight:800}
+.pm-ppd--line{opacity:.85}
+.pm-ppd--badge{display:inline-block;border-radius:99px;padding:6px 13px;font-weight:700}
+.pm-ppd--math{font-variant-numeric:tabular-nums}
 .pm-gift2{display:flex;align-items:center;gap:13px;margin-bottom:16px;border:var(--pv-bd) solid;border-radius:min(var(--pv-r),16px);padding:13px 15px;background:color-mix(in srgb,var(--pv-text) 2%,var(--pv-bg))}
 .pm-gift2-ic{flex:0 0 auto;width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center}
 .pm-gift2-txt{min-width:0}

@@ -735,6 +735,295 @@
         });
         return wrap;
       },
+      value_stack: function (b) {
+        var ac = b.s.accent || v.accent;
+        var wrap = el("div", "bspx-vstack bspx-vstack--" + (b.s.style || "list"));
+        if (b.s.style === "accent") wrap.style.background = "color-mix(in srgb," + ac + " 8%,transparent)";
+        if (b.t.heading) wrap.appendChild(el("strong", "bspx-vstack-h", b.t.heading));
+        [1, 2, 3, 4].forEach(function (n) {
+          var it = b.t["item_" + n];
+          if (!it) return;
+          var val = (b.t["value_" + n] || "").trim();
+          var row = el("div", "bspx-vstack-row");
+          var left = el("span", "bspx-vstack-item");
+          var icw = el("span", "bspx-vstack-ic");
+          icw.style.color = ac;
+          icw.appendChild(svg(["M20 6L9 17l-5-5"], 13));
+          left.appendChild(icw);
+          left.appendChild(document.createTextNode(it));
+          row.appendChild(left);
+          if (/^(gratis|free)$/i.test(val)) {
+            var badge = el("span", "bspx-vstack-free", val.toUpperCase());
+            badge.style.background = ac;
+            row.appendChild(badge);
+          } else if (val) {
+            row.appendChild(el("s", "bspx-vstack-val", val));
+          }
+          wrap.appendChild(row);
+        });
+        var foot = el("div", "bspx-vstack-foot");
+        if (b.t.total_label) foot.appendChild(el("s", "bspx-vstack-total", b.t.total_label));
+        if (b.t.today_label) {
+          var td = el("strong", "bspx-vstack-today", b.t.today_label);
+          td.style.color = ac;
+          foot.appendChild(td);
+        }
+        if (b.t.save_text) foot.appendChild(el("span", "bspx-vstack-save", b.t.save_text));
+        if (foot.childNodes.length) wrap.appendChild(foot);
+        return wrap;
+      },
+      review_quote: function (b) {
+        var ac = b.s.accent || v.accent;
+        var wrap = el("div", "bspx-rq bspx-rq--" + (b.s.style || "bubble"));
+        var stars = el("div", "bspx-rq-stars", "★★★★★");
+        wrap.appendChild(stars);
+        wrap.appendChild(el("p", "bspx-rq-text", b.t.text || ""));
+        var meta = el("div", "bspx-rq-meta");
+        if (b.t.initials) {
+          var av = el("span", "bspx-rq-av", b.t.initials);
+          av.style.background = ac;
+          meta.appendChild(av);
+        }
+        var who = el("span", "bspx-rq-who");
+        who.appendChild(el("strong", "", b.t.name || ""));
+        if (b.t.verified) who.appendChild(el("em", "bspx-rq-ver", "✓ " + b.t.verified));
+        meta.appendChild(who);
+        wrap.appendChild(meta);
+        return wrap;
+      },
+      ship_countdown: function (b) {
+        var ac = b.s.accent || v.accent;
+        var cutoff = Math.max(0, Math.min(23, Number(b.s.cutoff) || 16));
+        var etaMin = Math.max(0, Number(b.s.eta_min) || 2);
+        var etaMax = Math.max(etaMin, Number(b.s.eta_max) || 4);
+        var wrap = el("div", "bspx-shipc bspx-shipc--" + (b.s.style || "inline"));
+        if (b.s.style === "box") {
+          wrap.style.background = "color-mix(in srgb," + ac + " 8%,transparent)";
+          wrap.style.borderColor = "color-mix(in srgb," + ac + " 30%,transparent)";
+        }
+        var row1 = el("div", "bspx-shipc-line");
+        var icw = el("span", "bspx-shipc-ic");
+        icw.style.color = ac;
+        icw.appendChild(svg(["M1 3h15v13H1z", "M16 8h4l3 3v5h-7", "M5.5 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z", "M18.5 18.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"], 15));
+        row1.appendChild(icw);
+        var txt = el("span", "bspx-shipc-txt");
+        row1.appendChild(txt);
+        wrap.appendChild(row1);
+        var eta = el("div", "bspx-shipc-eta");
+        wrap.appendChild(eta);
+        function businessDate(days) {
+          var d = new Date();
+          var added = 0;
+          while (added < days) {
+            d.setDate(d.getDate() + 1);
+            var wd = d.getDay();
+            if (wd !== 0 && wd !== 6) added++;
+          }
+          return d;
+        }
+        function fmt(d) {
+          try {
+            return d.toLocaleDateString(document.documentElement.lang || "de-DE", { weekday: "short", day: "numeric", month: "long" });
+          } catch (e) {
+            return d.getDate() + "." + (d.getMonth() + 1) + ".";
+          }
+        }
+        function pad(n) { return n < 10 ? "0" + n : "" + n; }
+        function tick() {
+          var now = new Date();
+          var end = new Date(now);
+          end.setHours(cutoff, 0, 0, 0);
+          var late = now >= end;
+          txt.textContent = "";
+          if (late) {
+            txt.appendChild(document.createTextNode(b.t.late || ""));
+          } else {
+            var d = Math.floor((end - now) / 1000);
+            var hh = Math.floor(d / 3600), mm = Math.floor((d % 3600) / 60), ss = d % 60;
+            var timeStr = (hh > 0 ? hh + " Std " : "") + pad(mm) + " Min " + pad(ss) + " Sek";
+            txt.appendChild(document.createTextNode((b.t.before || "") + " "));
+            var bn = el("b", "", timeStr);
+            bn.style.color = ac;
+            txt.appendChild(bn);
+            txt.appendChild(document.createTextNode(" " + (b.t.after || "")));
+          }
+          var extra = late ? 1 : 0;
+          eta.textContent = "";
+          if (b.t.eta_label) {
+            eta.appendChild(document.createTextNode(b.t.eta_label + " "));
+            eta.appendChild(el("b", "", fmt(businessDate(etaMin + extra)) + " – " + fmt(businessDate(etaMax + extra))));
+          }
+        }
+        tick();
+        var iv = setInterval(function () {
+          if (!document.body.contains(wrap)) { clearInterval(iv); return; }
+          tick();
+        }, 1000);
+        return wrap;
+      },
+      return_promise: function (b) {
+        var ac = b.s.accent || v.accent;
+        var st = b.s.style || "line";
+        var wrap = el("div", "bspx-retp bspx-retp--" + st);
+        if (st === "box" || st === "check") wrap.style.borderColor = "color-mix(in srgb," + ac + " 30%,transparent)";
+        if (st === "check") wrap.style.background = "color-mix(in srgb," + ac + " 8%,transparent)";
+        var icw = el("span", "bspx-retp-ic");
+        icw.style.color = ac;
+        icw.appendChild(st === "check" ? svg(["M20 6L9 17l-5-5"], 16) : svg(["M9 14L4 9l5-5", "M4 9h10.5a5.5 5.5 0 0 1 0 11H11"], 16));
+        wrap.appendChild(icw);
+        var txt = el("span", "bspx-retp-txt");
+        txt.appendChild(el("strong", "", b.t.title || ""));
+        if (b.t.subtitle) txt.appendChild(el("em", "", b.t.subtitle));
+        wrap.appendChild(txt);
+        return wrap;
+      },
+      fit_check: function (b) {
+        var ac = b.s.accent || v.accent;
+        var st = b.s.style || "card";
+        var wrap = el("div", "bspx-fit bspx-fit--" + st);
+        if (b.t.heading) wrap.appendChild(el("strong", "bspx-fit-h", b.t.heading));
+        var cols = el("div", "bspx-fit-cols");
+        var yes = el("div", "bspx-fit-block bspx-fit-yes");
+        if (b.t.yes_title) yes.appendChild(el("em", "bspx-fit-title", b.t.yes_title));
+        [1, 2, 3].forEach(function (n) {
+          var t = b.t["yes_" + n];
+          if (!t) return;
+          var row = el("div", "bspx-fit-row");
+          var ic = el("span", "bspx-fit-ic");
+          ic.style.color = "#1d9e55";
+          ic.appendChild(svg(["M20 6L9 17l-5-5"], 12));
+          row.appendChild(ic);
+          row.appendChild(el("span", "", t));
+          yes.appendChild(row);
+        });
+        cols.appendChild(yes);
+        if (b.t.no_1) {
+          var no = el("div", "bspx-fit-block bspx-fit-no");
+          if (b.t.no_title) no.appendChild(el("em", "bspx-fit-title", b.t.no_title));
+          var nrow = el("div", "bspx-fit-row");
+          var nic = el("span", "bspx-fit-ic");
+          nic.style.color = "#b0b0b0";
+          nic.appendChild(svg(["M18 6L6 18", "M6 6l12 12"], 12));
+          nrow.appendChild(nic);
+          nrow.appendChild(el("span", "", b.t.no_1));
+          no.appendChild(nrow);
+          cols.appendChild(no);
+        }
+        wrap.appendChild(cols);
+        if (b.t.closing) {
+          var cl = el("div", "bspx-fit-close", b.t.closing);
+          cl.style.color = ac;
+          wrap.appendChild(cl);
+        }
+        return wrap;
+      },
+      mini_compare: function (b) {
+        var ac = b.s.accent || v.accent;
+        var st = b.s.style || "card";
+        var wrap = el("div", "bspx-mcmp bspx-mcmp--" + st);
+        if (b.t.title) wrap.appendChild(el("strong", "bspx-mcmp-h", b.t.title));
+        var head = el("div", "bspx-mcmp-row bspx-mcmp-head");
+        if (st === "card") head.style.background = "color-mix(in srgb," + ac + " 12%,transparent)";
+        head.appendChild(el("span", "bspx-mcmp-crit", ""));
+        var us = el("span", "bspx-mcmp-col", b.t.us_label || "Wir");
+        var them = el("span", "bspx-mcmp-col", b.t.them_label || "Andere");
+        if (st === "pills") {
+          us.className += " bspx-mcmp-pill";
+          us.style.background = ac;
+          them.className += " bspx-mcmp-pill bspx-mcmp-pill--dim";
+        } else {
+          us.style.color = ac;
+        }
+        head.appendChild(us);
+        head.appendChild(them);
+        wrap.appendChild(head);
+        [1, 2, 3, 4].forEach(function (n) {
+          var t = b.t["row_" + n];
+          if (!t) return;
+          var row = el("div", "bspx-mcmp-row");
+          row.appendChild(el("span", "bspx-mcmp-crit", t));
+          var y = el("span", "bspx-mcmp-col");
+          var yi = el("span", "bspx-mcmp-yes");
+          yi.style.color = "#1d9e55";
+          yi.appendChild(svg(["M20 6L9 17l-5-5"], 13));
+          y.appendChild(yi);
+          row.appendChild(y);
+          var x = el("span", "bspx-mcmp-col");
+          var xi = el("span", "bspx-mcmp-no");
+          xi.appendChild(svg(["M18 6L6 18", "M6 6l12 12"], 13));
+          x.appendChild(xi);
+          row.appendChild(x);
+          wrap.appendChild(row);
+        });
+        return wrap;
+      },
+      coupon_code: function (b) {
+        var ac = b.s.accent || v.accent;
+        var st = b.s.style || "coupon";
+        var wrap = el("div", "bspx-coup bspx-coup--" + st);
+        wrap.style.borderColor = "color-mix(in srgb," + ac + " 45%,transparent)";
+        if (st === "strip") wrap.style.background = "color-mix(in srgb," + ac + " 7%,transparent)";
+        if (b.t.title) wrap.appendChild(el("strong", "bspx-coup-h", b.t.title));
+        var row = el("div", "bspx-coup-row");
+        var code = el("span", "bspx-coup-code", b.t.code || "");
+        code.style.color = ac;
+        code.style.borderColor = "color-mix(in srgb," + ac + " 40%,transparent)";
+        row.appendChild(code);
+        var btn = el("button", "bspx-coup-btn", b.t.button || "Kopieren");
+        btn.type = "button";
+        btn.style.background = ac;
+        btn.addEventListener("click", function () {
+          var val = b.t.code || "";
+          function done() {
+            btn.textContent = "✓ " + (b.t.copied || "Kopiert!");
+            btn.disabled = true;
+            setTimeout(function () {
+              btn.textContent = b.t.button || "Kopieren";
+              btn.disabled = false;
+            }, 2500);
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(val).then(done, done);
+          } else {
+            done();
+          }
+        });
+        row.appendChild(btn);
+        wrap.appendChild(row);
+        if (b.t.note) wrap.appendChild(el("em", "bspx-coup-note", b.t.note));
+        return wrap;
+      },
+      price_per_day: function (b) {
+        var ac = b.s.accent || v.accent;
+        var st = b.s.style || "line";
+        var days = Math.max(1, Math.round(Number(String(b.t.days || "").replace(/\D/g, "")) || 90));
+        var wrap = el("div", "bspx-ppd bspx-ppd--" + st);
+        if (st === "badge") {
+          wrap.style.background = "color-mix(in srgb," + ac + " 12%,transparent)";
+          wrap.style.color = ac;
+        }
+        function render() {
+          var per = money(Math.max(1, Math.ceil(unit() / days)));
+          wrap.textContent = "";
+          if (st === "math") {
+            wrap.appendChild(document.createTextNode(money(unit()) + " ÷ " + days + " Tage = "));
+            var bm = el("b", "", per + "/Tag");
+            bm.style.color = ac;
+            wrap.appendChild(bm);
+          } else {
+            var tpl = b.t.text || "Nur {betrag} pro Tag";
+            var parts = tpl.split("{betrag}");
+            wrap.appendChild(document.createTextNode(parts[0] || ""));
+            var bb = el("b", "", per);
+            if (st !== "badge") bb.style.color = ac;
+            wrap.appendChild(bb);
+            wrap.appendChild(document.createTextNode(parts.slice(1).join("{betrag}") || ""));
+          }
+        }
+        render();
+        state.priceEls.push(render);
+        return wrap;
+      },
       free_gift: function (b) {
         // Angebots-/Geschenk-Box (Text). Das eigentliche Gratis-Produkt legt
         // der Kunde in Shopify fest; hier zeigen wir den Reiz-Hinweis.

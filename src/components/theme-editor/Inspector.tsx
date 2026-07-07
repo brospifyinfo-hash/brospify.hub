@@ -15,6 +15,7 @@ import {
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
   ChevronsDownUp, PanelBottomOpen, PackagePlus, Pilcrow, Minus, Share2, Square,
   LayoutPanelTop, Clock, Award, Table,
+  Boxes, Quote, Timer, RotateCcw, UserCheck, Scale, Ticket, Calculator,
   type LucideIcon,
 } from "lucide-react";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
@@ -33,6 +34,7 @@ const BLOCK_ICONS: Record<string, LucideIcon> = {
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
   ChevronsDownUp, PanelBottomOpen, PackagePlus, Pilcrow, Minus, Share2, Square,
   Clock, Award, Table,
+  Boxes, Quote, Timer, RotateCcw, UserCheck, Scale, Ticket, Calculator,
 };
 function BlockIcon({ name, className }: { name: string; className?: string }) {
   const C = BLOCK_ICONS[name] || Square;

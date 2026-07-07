@@ -492,6 +492,184 @@ export default function SectionReplica({ instance, ctx }: { instance: SectionIns
       );
     }
 
+    // ─── Conversion-Pack (CRO-Sections) ───
+    case "bro-compare": {
+      const layout = str(s.layout, "table");
+      const dark = s.dark === true;
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const rows = [1, 2, 3, 4, 5, 6].map((n) => t[`row_${n}`]).filter(Boolean);
+      return (
+        <div className={`te-cmp te-cmp--${layout} ${dark ? "te-cmp--dark" : ""}`} style={{ borderRadius: num(s.radius, 16) }}>
+          <h2 className="te-h" style={dark ? { color: "#fff" } : undefined}>{t.heading}</h2>
+          <p className="te-sub" style={dark ? { color: "rgba(255,255,255,.65)" } : undefined}>{t.subheading}</p>
+          <div className="te-cmp-table" style={{ borderRadius: num(s.radius, 16) }}>
+            <div className="te-cmp-row te-cmp-head">
+              <span className="te-cmp-crit" />
+              <span className="te-cmp-col te-cmp-us" style={{ background: `color-mix(in srgb,${ac} ${layout === "cards" ? 16 : 12}%,transparent)`, color: ac }}>
+                {t.ribbon && <em className="te-cmp-ribbon" style={{ background: ac }}>{t.ribbon}</em>}
+                {t.us_label}
+              </span>
+              <span className="te-cmp-col">{t.them_label}</span>
+            </div>
+            {rows.map((r, i) => (
+              <div key={i} className="te-cmp-row">
+                <span className="te-cmp-crit">{r}</span>
+                <span className="te-cmp-col te-cmp-us" style={{ background: `color-mix(in srgb,${ac} 8%,transparent)` }}><b style={{ color: "#1d9e55" }}>✓</b></span>
+                <span className="te-cmp-col te-cmp-x">✕</span>
+              </div>
+            ))}
+          </div>
+          {t.cta_label && <div style={{ textAlign: "center" }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
+        </div>
+      );
+    }
+
+    case "bro-guarantee": {
+      const layout = str(s.layout, "center");
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const onAccent = layout === "accent";
+      const bullets = [1, 2, 3].map((n) => t[`bullet_${n}`]).filter(Boolean);
+      return (
+        <div
+          className={`te-guar2 te-guar2--${layout}`}
+          style={{ borderRadius: num(s.radius, 20), background: onAccent ? ac : undefined, color: onAccent ? "#fff" : undefined }}
+        >
+          <div className="te-guar2-main">
+            <span className="te-guar2-seal" style={{ background: onAccent ? "#fff" : ac, color: onAccent ? ac : "#fff" }}>
+              <b>{t.seal_text}</b>
+              <em>✓ Garantie</em>
+            </span>
+            <h2 className="te-h" style={{ color: "inherit" }}>{t.heading}</h2>
+            <p className="te-guar2-txt">{t.text}</p>
+            <div className="te-guar2-bullets">
+              {bullets.map((b, i) => (
+                <span key={i} className="te-guar2-b"><b style={{ color: onAccent ? "#fff" : "#1d9e55" }}>✓</b> {b}</span>
+              ))}
+            </div>
+            {t.cta_label && <span className="te-btn" style={{ background: onAccent ? "#fff" : ac, color: onAccent ? ac : "#fff" }}>{t.cta_label}</span>}
+            {t.note && <span className="te-guar2-note">{t.note}</span>}
+          </div>
+          {layout === "split" && img(0) && <div className="te-guar2-img"><img src={img(0)} alt="" /></div>}
+        </div>
+      );
+    }
+
+    case "bro-steps": {
+      const layout = str(s.layout, "row");
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const steps = [1, 2, 3].map((n) => ({ title: t[`s${n}_title`], text: t[`s${n}_text`] }));
+      return (
+        <div className="te-sec">
+          <h2 className="te-h">{t.heading}</h2>
+          <p className="te-sub">{t.subheading}</p>
+          <div className={`te-steps te-steps--${layout}`}>
+            {steps.map((st, i) => (
+              <div key={i} className="te-steps-item" style={layout === "cards" ? { borderRadius: num(s.radius, 16) } : undefined}>
+                <span className="te-steps-n" style={{ background: ac }}>{i + 1}</span>
+                <div className="te-steps-txt">
+                  <strong>{st.title}</strong>
+                  <span>{st.text}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {t.cta_label && <div style={{ textAlign: "center" }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
+        </div>
+      );
+    }
+
+    case "bro-stats": {
+      const layout = str(s.layout, "band");
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const stats = [1, 2, 3, 4].map((n) => ({ n: t[`n${n}`], l: t[`l${n}`] })).filter((x) => x.n);
+      return (
+        <div
+          className={`te-stats te-stats--${layout}`}
+          style={layout === "band" ? { background: ac, color: "#fff" } : undefined}
+        >
+          {t.heading && <h2 className="te-h" style={{ color: "inherit" }}>{t.heading}</h2>}
+          <div className="te-stats-grid" style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 4)},1fr)` }}>
+            {stats.map((x, i) => (
+              <div key={i} className="te-stats-cell" style={layout === "cards" ? { border: "1px solid color-mix(in srgb,var(--pv-text) 12%,transparent)", borderRadius: 14, padding: "14px 8px" } : undefined}>
+                <b style={layout !== "band" ? { color: ac } : undefined}>{x.n}</b>
+                <span>{x.l}</span>
+              </div>
+            ))}
+          </div>
+          {t.note && <span className="te-stats-note">{t.note}</span>}
+        </div>
+      );
+    }
+
+    case "bro-problem-solution": {
+      const layout = str(s.layout, "stack");
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const probs = [1, 2, 3].map((n) => t[`p_${n}`]).filter(Boolean);
+      const sols = [1, 2, 3].map((n) => t[`s_${n}`]).filter(Boolean);
+      const darkProb = layout === "contrast";
+      return (
+        <div className="te-sec">
+          <div className={`te-pas te-pas--${layout}`}>
+            <div
+              className="te-pas-block te-pas-prob"
+              style={{ borderRadius: num(s.radius, 20), ...(darkProb ? { background: "#151515", color: "#fff" } : {}) }}
+            >
+              <strong className="te-pas-h">{t.p_heading}</strong>
+              {probs.map((x, i) => (
+                <span key={i} className="te-pas-row"><b style={{ color: "#e0332f" }}>✕</b> {x}</span>
+              ))}
+            </div>
+            {layout === "stack" && <div className="te-pas-bridge">{t.bridge}</div>}
+            <div
+              className="te-pas-block te-pas-sol"
+              style={{ borderRadius: num(s.radius, 20), borderColor: `color-mix(in srgb,${ac} 35%,transparent)`, background: `color-mix(in srgb,${ac} 6%,var(--pv-bg))` }}
+            >
+              <strong className="te-pas-h" style={{ color: ac }}>{t.s_heading}</strong>
+              {sols.map((x, i) => (
+                <span key={i} className="te-pas-row"><b style={{ color: "#1d9e55" }}>✓</b> {x}</span>
+              ))}
+            </div>
+          </div>
+          {t.cta_label && <div style={{ textAlign: "center", marginTop: 14 }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
+        </div>
+      );
+    }
+
+    case "bro-chat-reviews": {
+      const look = str(s.look, "whatsapp");
+      const ac = str(s.accent_color, ctx.palette.accent);
+      const chats = [1, 2, 3]
+        .map((n) => ({ name: t[`c${n}_name`], m1: t[`c${n}_m1`], m2: t[`c${n}_m2`], time: t[`c${n}_time`] }))
+        .filter((c) => c.name);
+      const chatBg = look === "whatsapp" ? "#e5ddd5" : look === "imessage" ? "#fff" : `color-mix(in srgb,${ac} 5%,var(--pv-bg))`;
+      const bubbleBg = look === "whatsapp" ? "#fff" : look === "imessage" ? "#e9e9eb" : `color-mix(in srgb,${ac} 10%,#fff)`;
+      return (
+        <div className="te-sec">
+          <h2 className="te-h">{t.heading}</h2>
+          <div className="te-chat-grid">
+            {chats.map((c, i) => (
+              <div key={i} className="te-chat-card">
+                <div className="te-chat-head">
+                  <span className="te-chat-av" style={{ background: ac }}>{(c.name || "?").slice(0, 1).toUpperCase()}</span>
+                  <span className="te-chat-name">{c.name}</span>
+                  <span className="te-chat-dot" />
+                </div>
+                <div className="te-chat-body" style={{ background: chatBg }}>
+                  {[c.m1, c.m2].filter(Boolean).map((m, j) => (
+                    <div key={j} className="te-chat-bubble" style={{ background: bubbleBg }}>
+                      {m}
+                      <em>{c.time} <b style={{ color: look === "whatsapp" ? "#4fc3f7" : "#9a9a9f" }}>✓✓</b></em>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          {t.note && <p className="te-chat-note">{t.note}</p>}
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -655,9 +833,88 @@ export const REPLICA_CSS = `
 .pm-mobile .te-collage{flex-direction:column}
 .pm-mobile .te-count{justify-content:center;text-align:center}
 .pm-mobile .te-scroll-txt strong{font-size:24px}
+.te-cmp{padding:26px 12px}
+.te-cmp--dark{background:#111;padding:26px 16px}
+.te-cmp-table{border:1px solid color-mix(in srgb,var(--pv-text) 12%,transparent);overflow:hidden;margin-bottom:16px}
+.te-cmp--dark .te-cmp-table{border-color:rgba(255,255,255,.14);color:#fff}
+.te-cmp-row{display:flex;align-items:stretch;border-bottom:1px solid color-mix(in srgb,var(--pv-text) 8%,transparent)}
+.te-cmp--dark .te-cmp-row{border-color:rgba(255,255,255,.08)}
+.te-cmp-row:last-child{border-bottom:none}
+.te-cmp-crit{flex:1;min-width:0;padding:10px 12px;font-size:13px;font-weight:600;display:flex;align-items:center}
+.te-cmp-col{flex:0 0 92px;display:flex;align-items:center;justify-content:center;font-size:13px;padding:10px 6px;position:relative;flex-direction:column;gap:2px}
+.te-cmp-head .te-cmp-col{font-weight:800;font-size:12.5px}
+.te-cmp-ribbon{font-style:normal;color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:99px}
+.te-cmp-x{color:#c8c8c8;font-weight:700}
+.te-cmp--cards .te-cmp-us{box-shadow:0 6px 18px -8px rgba(0,0,0,.3)}
+
+.te-guar2{display:flex;gap:22px;align-items:center;margin:26px 0;padding:30px 24px;border:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent)}
+.te-guar2--accent{border:none}
+.te-guar2-main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+.te-guar2--split .te-guar2-main{align-items:flex-start;text-align:left}
+.te-guar2--split .te-guar2-main .te-h{text-align:left}
+.te-guar2-seal{width:92px;height:92px;border-radius:50%;display:inline-flex;flex-direction:column;align-items:center;justify-content:center;box-shadow:0 8px 22px -8px rgba(0,0,0,.35);outline:3px dashed color-mix(in srgb,currentColor 0%,transparent)}
+.te-guar2-seal b{font-family:var(--pv-h);font-weight:800;font-size:17px;line-height:1.1}
+.te-guar2-seal em{font-style:normal;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;opacity:.85}
+.te-guar2-txt{font-size:13px;line-height:1.55;opacity:.8;margin:0;max-width:52ch}
+.te-guar2-bullets{display:flex;flex-wrap:wrap;gap:8px 18px;justify-content:center;font-size:12.5px;font-weight:600}
+.te-guar2--split .te-guar2-bullets{justify-content:flex-start}
+.te-guar2-note{font-size:11px;opacity:.6}
+.te-guar2-img{flex:0 0 34%;border-radius:min(var(--pv-r),16px);overflow:hidden}
+.te-guar2-img img{width:100%;height:100%;object-fit:cover;display:block}
+
+.te-steps{display:flex;flex-direction:column;gap:14px;margin-bottom:6px}
+.te-steps--row{flex-direction:row;gap:12px}
+.te-steps--row .te-steps-item{flex:1;flex-direction:column;text-align:center;align-items:center}
+.te-steps-item{display:flex;gap:12px;align-items:flex-start}
+.te-steps--cards .te-steps-item{border:1px solid color-mix(in srgb,var(--pv-text) 12%,transparent);padding:16px 14px;flex:1}
+.te-steps--cards{flex-direction:row;gap:12px}
+.te-steps-n{flex:0 0 auto;width:34px;height:34px;border-radius:50%;color:#fff;font-weight:800;font-size:15px;display:inline-flex;align-items:center;justify-content:center}
+.te-steps-txt{display:flex;flex-direction:column;gap:3px;min-width:0}
+.te-steps-txt strong{font-family:var(--pv-h);font-weight:800;font-size:14.5px}
+.te-steps-txt span{font-size:12.5px;opacity:.7;line-height:1.45}
+
+.te-stats{margin:26px 0;padding:26px 18px;border-radius:min(var(--pv-r),18px);text-align:center}
+.te-stats--light{border:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent)}
+.te-stats--cards{padding:26px 0;border:none}
+.te-stats-grid{display:grid;gap:14px}
+.te-stats-cell{display:flex;flex-direction:column;gap:3px}
+.te-stats-cell b{font-family:var(--pv-h);font-weight:800;font-size:26px;letter-spacing:-.02em}
+.te-stats-cell span{font-size:11.5px;opacity:.75;font-weight:600}
+.te-stats--light .te-stats-cell:not(:first-child){border-left:1px solid color-mix(in srgb,var(--pv-text) 10%,transparent)}
+.te-stats-note{display:block;margin-top:12px;font-size:10.5px;opacity:.55}
+
+.te-pas{display:flex;flex-direction:column;gap:12px}
+.te-pas--split{flex-direction:row;align-items:stretch}
+.te-pas--split .te-pas-block,.te-pas--contrast .te-pas-block{flex:1;min-width:0}
+.te-pas--contrast{flex-direction:row}
+.te-pas-block{display:flex;flex-direction:column;gap:8px;padding:20px 18px;border:1.5px solid transparent}
+.te-pas-prob{background:rgba(224,51,47,.06);border-color:rgba(224,51,47,.22)}
+.te-pas-h{font-family:var(--pv-h);font-weight:800;font-size:16.5px}
+.te-pas-row{display:flex;gap:8px;font-size:13px;line-height:1.45;align-items:flex-start}
+.te-pas-row b{flex:0 0 auto;font-weight:800}
+.te-pas-bridge{text-align:center;font-family:var(--pv-h);font-weight:800;font-size:16px;padding:2px 0}
+
+.te-chat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.te-chat-card{border:1px solid color-mix(in srgb,var(--pv-text) 12%,transparent);border-radius:16px;overflow:hidden}
+.te-chat-head{display:flex;align-items:center;gap:8px;padding:9px 11px;background:color-mix(in srgb,var(--pv-text) 4%,var(--pv-bg))}
+.te-chat-av{width:24px;height:24px;border-radius:50%;color:#fff;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.te-chat-name{font-size:12px;font-weight:700;flex:1;min-width:0}
+.te-chat-dot{width:7px;height:7px;border-radius:50%;background:#22c55e;flex:0 0 auto}
+.te-chat-body{display:flex;flex-direction:column;gap:7px;padding:11px}
+.te-chat-bubble{background:#fff;color:#1a1a1a;border-radius:11px;border-top-left-radius:4px;padding:8px 10px;font-size:12px;line-height:1.4;box-shadow:0 1px 2px rgba(0,0,0,.08);max-width:94%}
+.te-chat-bubble em{display:block;font-style:normal;font-size:9px;opacity:.55;text-align:right;margin-top:3px}
+.te-chat-note{text-align:center;font-size:10.5px;opacity:.55;margin:10px 0 0}
+
 .pm-mobile .te-cta-h{font-size:26px!important}
 .pm-mobile .te-benefits2{grid-template-columns:1fr}
 .pm-mobile .te-photo{flex-direction:column}
 .pm-mobile .te-map{flex-direction:column!important}
 .pm-mobile .te-hero-txt strong{font-size:24px}
+.pm-mobile .te-cmp-col{flex-basis:64px}
+.pm-mobile .te-guar2{flex-direction:column}
+.pm-mobile .te-steps--row,.pm-mobile .te-steps--cards{flex-direction:column}
+.pm-mobile .te-steps--row .te-steps-item{flex-direction:row;text-align:left;align-items:flex-start}
+.pm-mobile .te-stats-grid{grid-template-columns:repeat(2,1fr)!important}
+.pm-mobile .te-pas--split,.pm-mobile .te-pas--contrast{flex-direction:column}
+.pm-mobile .te-chat-grid{grid-template-columns:1fr}
 `;

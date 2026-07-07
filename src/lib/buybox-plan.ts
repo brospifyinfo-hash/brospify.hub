@@ -31,6 +31,8 @@ export const DYNAMIC_SUPPORTED = new Set([
   // NEU (nur Runtime): rein designbasiert, keine Shop-Daten nötig.
   "trust_badges", "stock_bar", "guarantee", "highlights", "social_proof",
   "countdown_timer", "press_bar", "spec_list",
+  "value_stack", "review_quote", "ship_countdown", "return_promise",
+  "fit_check", "mini_compare", "coupon_code", "price_per_day",
   // free_gift = Angebots-Box (Text); complementary = Shopify-Empfehlungen
   // (Runtime holt /recommendations/products.json live im Shop).
   "free_gift", "complementary",

@@ -14,6 +14,7 @@ import {
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
   ChevronsDownUp, PanelBottomOpen, PackagePlus, Pilcrow, Minus, Share2, Square,
   Clock, Award, Table,
+  Boxes, Quote, Timer, RotateCcw, UserCheck, Scale, Ticket, Calculator,
   type LucideIcon,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -33,6 +34,7 @@ const ICONS: Record<string, LucideIcon> = {
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
   ChevronsDownUp, PanelBottomOpen, PackagePlus, Pilcrow, Minus, Share2, Square,
   Clock, Award, Table,
+  Boxes, Quote, Timer, RotateCcw, UserCheck, Scale, Ticket, Calculator,
 };
 function Ic({ name, className }: { name: string; className?: string }) {
   const C = ICONS[name] || Square;
