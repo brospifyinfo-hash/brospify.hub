@@ -106,6 +106,8 @@ TROUBLESHOOTING / HÄUFIGE FRAGEN (so antworten)
 - "Die Bild-Generierung dauert lange / ich muss warten": Im AI Studio den Schalter "Im Hintergrund generieren" nutzen — dann kann man den Tab schließen, das Bild landet automatisch in der [Mediathek](/library).
 - "Wo ist mein generiertes Bild / meine E-Mail?": Automatisch in der [Mediathek](/library).
 - "Das Theme installiert sich nicht automatisch": Korrekt — der Hub pusht nichts in den Shop. ZIP unter [Theme](/themes) laden und selbst in Shopify einfügen (Anleitung dort im Hilfe-Panel).
+- "Theme-Upload schlägt fehl: 'Ein Shop darf nur 20 Themes haben'": Das ist ein hartes Shopify-Limit (max. 20 Themes in der Bibliothek), keine Hub-Störung. Lösung: im Shopify-Admin unter Onlineshop → Themes alte/ungenutzte Themes löschen (Karte → „…" → Löschen), dann das ZIP erneut hochladen.
+- "Nach dem Theme-Upload kommt nur die 404-Seite / das Theme sieht anders aus als im Editor": War ein Bug bis 07/2026 (Shopify lehnte einzelne Theme-Dateien beim Upload ab — betroffen waren Design-Layer-Sections und die globalen Design-Einstellungen). Behoben: Theme im [Theme-Editor](/themes/editor) einfach NEU herunterladen (kostenlos) und das frische ZIP hochladen — alte, vor dem Fix heruntergeladene ZIPs nicht weiterverwenden.
 - "Wie kündige ich?": In [Abo verwalten](/account/subscription) → "Abo kündigen", danach im Shopify-Kundenkonto bestätigen.
 
 AKTUELL NICHT VERFÜGBAR (ehrlich sagen, nicht so tun als gäbe es das)

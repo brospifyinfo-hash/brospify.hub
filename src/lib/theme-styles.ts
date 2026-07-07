@@ -38,21 +38,31 @@ export interface StyleDesign {
 }
 export const DEFAULT_DESIGN: StyleDesign = { shadow: 1, border: 1, iconStyle: "dark" };
 
+// Shopify validiert range-Settings beim Theme-Upload strikt gegen min/max/
+// step aus settings_schema.json — EIN Wert daneben und die komplette
+// settings_data.json wird abgelehnt (Farben/Schriften kommen dann nie im
+// Shop an). Deshalb werden alle Werte hier auf das Raster gerundet.
+function snapRange(v: number, min: number, max: number, step: number): number {
+  const snapped = min + Math.round((v - min) / step) * step;
+  return Math.max(min, Math.min(max, snapped));
+}
+
 // Baut die settings_data-Overrides eines Stils konsistent aus einem Radius +
 // optionalen Extras (card_style, Abstände, Skalierung …).
 type SO = Record<string, number | string>;
 function so(radius: number, opts: { card?: string; spacing?: number; pageWidth?: number; headingScale?: number; extra?: SO } = {}): SO {
+  const r = snapRange(radius, 0, 40, 2); // *_radius: step 2
   return {
-    buttons_radius: radius,
-    card_corner_radius: radius > 0 ? radius + 2 : 0,
-    media_radius: radius,
-    inputs_radius: Math.min(radius, 12),
-    badge_corner_radius: radius,
-    variant_pills_radius: radius > 0 ? 40 : 0,
+    buttons_radius: r,
+    card_corner_radius: r > 0 ? Math.min(40, r + 2) : 0,
+    media_radius: r,
+    inputs_radius: Math.min(r, 12),
+    badge_corner_radius: r,
+    variant_pills_radius: r > 0 ? 40 : 0,
     card_style: opts.card ?? "standard",
-    spacing_sections: opts.spacing ?? 16,
-    page_width: opts.pageWidth ?? 1200,
-    heading_scale: opts.headingScale ?? 115,
+    spacing_sections: snapRange(opts.spacing ?? 16, 0, 100, 4),
+    page_width: snapRange(opts.pageWidth ?? 1200, 1000, 1600, 100),
+    heading_scale: snapRange(opts.headingScale ?? 115, 100, 150, 5),
     ...(opts.extra || {}),
   };
 }
@@ -303,12 +313,15 @@ export const RADIUS_OPTIONS = [
   { id: "round", label: "Rund", value: 28 },
 ];
 
-/** Baut die Radius-bezogenen settings_data-Overrides aus einem Px-Wert. */
+/** Baut die Radius-bezogenen settings_data-Overrides aus einem Px-Wert.
+ *  Snappt auf das step-2-Raster der *_radius-Settings und deckelt bei 40 —
+ *  ungerade Slider-Werte oder v+2 > 40 würden die settings_data sonst bei
+ *  Shopifys Upload-Validierung komplett kippen. */
 export function radiusOverrides(r: number): Record<string, number> {
-  const v = Math.max(0, Math.min(40, Math.round(Number.isFinite(r) ? r : 8)));
+  const v = snapRange(Number.isFinite(r) ? r : 8, 0, 40, 2);
   return {
     buttons_radius: v,
-    card_corner_radius: v > 0 ? v + 2 : 0,
+    card_corner_radius: v > 0 ? Math.min(40, v + 2) : 0,
     media_radius: v,
     inputs_radius: Math.min(v, 12),
     badge_corner_radius: v,

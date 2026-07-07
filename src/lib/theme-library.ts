@@ -264,7 +264,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "cta", label: "Button-Text", labelEn: "Button label", kind: "text", target: { key: "btn_primary_text_label" }, def: "JETZT SICHERN" },
     ],
     presets: [
-      { id: "vollbild", label: "Vollbild-Hero", labelEn: "Full-bleed hero", hint: "Hoch, zentriert, dramatisch", settings: { align: "center", min_height_desktop: 560, h_size_desktop: 64, overlay_opacity: 55, radius: 0, max_width: 860, padding_y: 110, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
+      { id: "vollbild", label: "Vollbild-Hero", labelEn: "Full-bleed hero", hint: "Hoch, zentriert, dramatisch", settings: { align: "center", min_height_desktop: 560, h_size_desktop: 64, overlay_opacity: 55, radius: 0, max_width: 860, padding_y: 112, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
       { id: "karte", label: "Karten-Banner", labelEn: "Card banner", hint: "Abgerundet, kompakt, edel", settings: { align: "center", min_height_desktop: 340, h_size_desktop: 40, radius: 28, max_width: 720, padding_y: 64, overlay_opacity: 35, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
       { id: "editorial", label: "Editorial links", labelEn: "Editorial left", hint: "Linksbündig, ruhig, hochwertig", settings: { align: "left", min_height_desktop: 460, h_size_desktop: 52, radius: 0, max_width: 640, overlay_opacity: 50, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
       { id: "streifen", label: "Kompakt-Streifen", labelEn: "Compact strip", hint: "Flacher, breiter Abschluss-Streifen", settings: { align: "center", min_height_desktop: 240, h_size_desktop: 34, radius: 16, max_width: 940, padding_y: 44, overlay_opacity: 40, accent_color: "@accent", btn_primary_bg: "@button", btn_primary_text: "@buttonText" } },
@@ -354,7 +354,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
     presets: [
       { id: "fade", label: "Sanft animiert", labelEn: "Soft fade", hint: "Fade-up beim Scrollen", settings: { animation_type: "fade-up", heading_size: 40, star_color: "@accent" } },
       { id: "gross", label: "Groß & plakativ", labelEn: "Big & bold", hint: "Große Headline, große Sterne", settings: { heading_size: 56, star_size: 26, animation_type: "fade-scale", star_color: "@accent" } },
-      { id: "ruhig", label: "Ruhig", labelEn: "Calm", hint: "Ohne Animation, schmal", settings: { animation_type: "none", heading_size: 32, max_width: 760, star_color: "@accent" } },
+      { id: "ruhig", label: "Ruhig", labelEn: "Calm", hint: "Ohne Animation, schmal", settings: { animation_type: "none", heading_size: 32, max_width: 750, star_color: "@accent" } },
     ],
   },
   {
@@ -367,9 +367,9 @@ export const SECTION_LIBRARY: SectionDef[] = [
     fields: [],
     presets: [
       { id: "flow", label: "Schneller Flow", labelEn: "Fast flow", hint: "Kleine Karten, flotter Lauf", settings: { scroll_speed: 45, card_padding: 10, text_size: 13 }, blocks: trustBlocks() },
-      { id: "gross", label: "Groß & ruhig", labelEn: "Large & calm", hint: "Große Karten, langsamer Lauf", settings: { scroll_speed: 22, card_padding: 20, review_image_size: 150, text_size: 15 }, blocks: trustBlocks() },
+      { id: "gross", label: "Groß & ruhig", labelEn: "Large & calm", hint: "Große Karten, langsamer Lauf", settings: { scroll_speed: 20, card_padding: 20, review_image_size: 150, text_size: 15 }, blocks: trustBlocks() },
       { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Dichte, kleine Karten", settings: { scroll_speed: 35, card_padding: 8, review_image_size: 80, text_size: 12 }, blocks: trustBlocks() },
-      { id: "premium", label: "Premium ruhig", labelEn: "Premium calm", hint: "Große Karten, sehr langsamer Lauf", settings: { scroll_speed: 14, card_padding: 22, review_image_size: 120, text_size: 15 }, blocks: trustBlocks() },
+      { id: "premium", label: "Premium ruhig", labelEn: "Premium calm", hint: "Große Karten, sehr langsamer Lauf", settings: { scroll_speed: 15, card_padding: 22, review_image_size: 120, text_size: 15 }, blocks: trustBlocks() },
     ],
   },
   {
@@ -400,9 +400,9 @@ export const SECTION_LIBRARY: SectionDef[] = [
     fields: [{ id: "heading", label: "Überschrift", labelEn: "Heading", kind: "text", target: { key: "heading" }, def: "Folge uns gerne ❤️" }],
     presets: [
       { id: "mittig", label: "Zentriert", labelEn: "Centered", hint: "Klassisch mittig", settings: { icon_alignment: "center", heading_alignment: "center" } },
-      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Kleine Icons, wenig Abstand", settings: { icon_size: 30, section_padding_top: 24, section_padding_bottom: 24, icon_alignment: "center", heading_alignment: "center" } },
-      { id: "gross", label: "Groß", labelEn: "Large", hint: "Große Icons mit Hover-Zoom", settings: { icon_size: 56, hover_scale: 1.3, icon_alignment: "center", heading_alignment: "center" } },
-      { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Icons links, kompakt", settings: { icon_alignment: "flex-start", heading_alignment: "left", icon_size: 34 } },
+      { id: "kompakt", label: "Kompakt", labelEn: "Compact", hint: "Kleine Icons, wenig Abstand", settings: { icon_size: 30, section_padding_top: 25, section_padding_bottom: 25, icon_alignment: "center", heading_alignment: "center" } },
+      { id: "gross", label: "Groß", labelEn: "Large", hint: "Große Icons mit Hover-Zoom", settings: { icon_size: 55, hover_scale: 1.3, icon_alignment: "center", heading_alignment: "center" } },
+      { id: "links", label: "Linksbündig", labelEn: "Left", hint: "Icons links, kompakt", settings: { icon_alignment: "flex-start", heading_alignment: "left", icon_size: 35 } },
     ],
   },
 
@@ -496,7 +496,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "vollbild", label: "Vollbild", labelEn: "Full screen", hint: "Bild füllt den Viewport", settings: { size_mode: "viewport", desktop_height: 90, overlay_style: "bottom", corner_radius: 0, side_margin: 0 } },
       { id: "kino", label: "Kino 21:9", labelEn: "Cinema 21:9", hint: "Breites Kinoformat", settings: { size_mode: "ratio", aspect_desktop: "21 / 9", corner_radius: 0, side_margin: 0, overlay_style: "full", overlay_opacity: 45 } },
       { id: "karte", label: "Karten-Bild", labelEn: "Card image", hint: "Abgerundet mit Rand", settings: { size_mode: "ratio", aspect_desktop: "16 / 9", corner_radius: 28, side_margin: 48, overlay_style: "radial" } },
-      { id: "panorama", label: "Panorama", labelEn: "Panorama", hint: "Sehr breiter, flacher Streifen", settings: { size_mode: "ratio", aspect_desktop: "3 / 1", corner_radius: 0, side_margin: 0, overlay_style: "bottom" } },
+      { id: "panorama", label: "Panorama", labelEn: "Panorama", hint: "Sehr breiter, flacher Streifen", settings: { size_mode: "ratio", aspect_desktop: "21 / 9", corner_radius: 0, side_margin: 0, overlay_style: "bottom" } },
     ],
   },
   {
@@ -641,8 +641,8 @@ export const SECTION_LIBRARY: SectionDef[] = [
     ],
     presets: [
       { id: "standard", label: "Standard", labelEn: "Standard", hint: "Kompakte Leiste", settings: { padding_vertical: 20 } },
-      { id: "luftig", label: "Luftig", labelEn: "Airy", hint: "Mehr Abstand", settings: { padding_vertical: 48 } },
-      { id: "schmal", label: "Sehr kompakt", labelEn: "Very compact", hint: "Schmale, dichte Leiste", settings: { padding_vertical: 12 } },
+      { id: "luftig", label: "Luftig", labelEn: "Airy", hint: "Mehr Abstand", settings: { padding_vertical: 50 } },
+      { id: "schmal", label: "Sehr kompakt", labelEn: "Very compact", hint: "Schmale, dichte Leiste", settings: { padding_vertical: 10 } },
     ],
   },
   {

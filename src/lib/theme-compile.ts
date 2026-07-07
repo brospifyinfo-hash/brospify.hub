@@ -29,6 +29,7 @@ import {
   recolorByRoleDeep,
   findEntry,
 } from "@/lib/theme-inject";
+import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
 
 // ─────────────────────────────────────────────────────────────────
 // Compile-Engine v2: ThemeDocument → fertiges Shopify-Theme-ZIP.
@@ -710,12 +711,17 @@ export function compileDocumentZip(
   const style = getThemeStyle(doc.global.styleId);
   const palette = doc.global.colors;
 
+  // 0) Schemas der Basis reparieren (leere Defaults → Shopify lehnt die
+  // Section-Datei sonst beim Upload ab und die Templates kippen mit → 404).
+  sanitizeSectionSchemas(zip);
+
   // 1) templates/product.json — Struktur + Presets + Texte + Kaufbox.
   const productEntry = findEntry(zip, "templates/product.json");
   if (!productEntry) throw new Error("Theme-Basis hat keine templates/product.json.");
   const productData = JSON.parse(productEntry.getData().toString("utf8")) as TemplateData;
   compileProductTemplate(productData, doc, zip, cacheKey, values, palette, dyn);
   sanitizeTemplateBlocks(productData);
+  sanitizeTemplateData(productData, zip);
   validateProductTemplate(productData);
   zip.updateFile(productEntry.entryName, Buffer.from(JSON.stringify(productData, null, 2), "utf8"));
 
@@ -746,6 +752,7 @@ export function compileDocumentZip(
         }
       }
       sanitizeTemplateBlocks(indexData);
+      sanitizeTemplateData(indexData, zip);
       validateTemplateStructure(indexData, "index.json");
       zip.updateFile(indexEntry.entryName, Buffer.from(JSON.stringify(indexData, null, 2), "utf8"));
     } catch (e) {
@@ -763,10 +770,13 @@ export function compileDocumentZip(
         ...style.settingOverrides,
         ...radiusOverrides(doc.global.radius),
         card_style: d.shadow >= 1 ? "card" : "standard",
-        card_shadow_opacity: [0, 8, 18][Math.max(0, Math.min(2, d.shadow))],
+        // card_shadow_opacity ist eine range mit step 5 — Werte daneben (8/18)
+        // lassen Shopify die komplette settings_data.json beim Upload ablehnen.
+        card_shadow_opacity: [0, 10, 20][Math.max(0, Math.min(2, d.shadow))],
         card_border_thickness: d.border,
         buttons_border_thickness: d.border,
       });
+      sanitizeSettingsData(settingsData, zip);
       zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(settingsData, null, 2), "utf8"));
     } catch (e) {
       console.warn("[theme-compile] settings_data.json übersprungen:", e);

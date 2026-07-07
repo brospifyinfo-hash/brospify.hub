@@ -9,6 +9,7 @@ import {
 import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIcon } from "@/lib/theme-icons";
 import { COPY_BINDINGS } from "@/lib/theme-copy-bindings";
+import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
 
 const BUYBOX_TYPES = new Set(BUYBOX_BLOCKS.map((b) => b.type));
 
@@ -67,6 +68,10 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
   const values = getPlaceholderValues(opts.themeCopy);
   const hidden = new Set(opts.hiddenTypes || []);
 
+  // Schemas der Basis reparieren (leere Defaults) — sonst lehnt Shopify die
+  // Section-Dateien beim Upload ab und die Templates kippen mit (→ 404).
+  sanitizeSectionSchemas(zip);
+
   // Texte + Palette injizieren; vom Style ausgeblendete Sections disablen.
   // Pro Template defensiv — ein kaputtes/fremdes Template darf den Build nicht
   // abbrechen (Ziel: läuft auf JEDEM hochgeladenen Theme).
@@ -84,6 +89,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
         applyBuyboxLayout(data, opts.buyboxOrder, opts.hiddenBlocks);
         applyBenefitIcons(data, opts.benefitIcons);
       }
+      sanitizeTemplateData(data, zip);
       zip.updateFile(entry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
     } catch (e) {
       console.warn(`[theme-inject] Template übersprungen (${tplPath}):`, e);
@@ -96,6 +102,7 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
     try {
       const data = JSON.parse(settingsEntry.getData().toString("utf8"));
       injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font, opts.settingOverrides);
+      sanitizeSettingsData(data, zip);
       zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
     } catch (e) {
       console.warn("[theme-inject] settings_data.json übersprungen:", e);
