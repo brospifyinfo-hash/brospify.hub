@@ -47,7 +47,9 @@ type Phase = "idle" | "planning" | "plan" | "applying" | "done";
 // Standard = Claude Sonnet (günstig, Alltag) · Expert = Claude Opus (stärker,
 // mehr Credits). Wahl bleibt über localStorage erhalten.
 type AiMode = "standard" | "expert";
-const AI_MODE_LS = "bspx:aiMode";
+// Key bewusst neu (…2): alte gespeicherte „expert"-Werte werden ignoriert →
+// alle starten wieder auf STANDARD (Default), bis sie bewusst Expert wählen.
+const AI_MODE_LS = "bspx:aiMode2";
 function loadAiMode(): AiMode {
   try {
     return localStorage.getItem(AI_MODE_LS) === "expert" ? "expert" : "standard";
@@ -490,61 +492,62 @@ export default function AiCopilot({
                 </div>
         </div>
               ) : (
-                /* ── Gemini-artige Command-Leiste: viel Luft, Enter löst aus.
-                    flex-wrap, damit Modus-Dropdown + Fokus-Icon in der schmalen
-                    Mittelspalte umbrechen statt zu überlaufen. ── */
-                <div className="flex flex-wrap items-center gap-3 gap-y-2 px-3 py-2.5">
-                  {/* „+" — Datei/Bild anhängen (auch per Drag & Drop in die Leiste) */}
+                /* ── Command-Leiste im Chat-Stil: Eingabe OBEN, Steuer-Zeile
+                    DARUNTER — viel Luft, Enter löst aus. ── */
+                <div className="p-3.5">
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={images.length >= 3 || phase === "planning"}
-                    title={t.themes.aiUploadHint}
-                    aria-label={t.themes.aiUploadHint}
-                    className="shrink-0 w-9 h-9 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
 
-                  {/* Bild-Vorschauen inline */}
-                  {images.map((img, i) => (
-                    <span key={i} className="relative shrink-0">
-                      <img src={img.dataUrl} alt={img.name} className="w-9 h-9 rounded-lg object-cover border border-white/15" />
-                      <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
-                    </span>
-                  ))}
-
-                  {/* Eingabe — Enter löst aus (Standard: direkt · Expert: Plan) */}
+                  {/* Eingabe (volle Breite) — Enter löst aus (Standard: direkt · Expert: Plan) */}
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
                     onPaste={onPaste}
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); requestPlan(); } }}
                     placeholder={phase === "planning" ? t.themes.aiPlanning : t.themes.aiPlaceholder}
-                    rows={1}
+                    rows={2}
                     disabled={phase === "planning"}
-                    className="flex-1 min-w-[120px] resize-none bg-transparent px-1 py-2 text-[13.5px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
-                    style={{ scrollbarWidth: "thin", maxHeight: 96 }}
+                    className="w-full resize-none bg-transparent px-1 text-[14px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
+                    style={{ scrollbarWidth: "thin", maxHeight: 140 }}
                   />
 
-                  {/* Läuft gerade (Enter ausgelöst) */}
-                  {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
+                  {/* Bild-Vorschauen (eigene Zeile) */}
+                  {images.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {images.map((img, i) => (
+                        <span key={i} className="relative shrink-0">
+                          <img src={img.dataUrl} alt={img.name} className="w-11 h-11 rounded-lg object-cover border border-white/15" />
+                          <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
 
-                  {/* Modus-Auswahl im „Pro ⌄"-Stil (Standard/Expert) */}
-                  <ModeSelect mode={mode} onPick={pickMode} disabled={phase === "planning"} />
-
-                  {/* Fokus-Icon (Hover erklärt es) */}
-                  <button
-                    onClick={() => onToggleFocusPick?.()}
-                    aria-pressed={focusPick}
-                    title={t.themes.aiFocusTooltip}
-                    aria-label={t.themes.aiFocusTooltip}
-                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition ${
-                      focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
-                    }`}
-                  >
-                    <Target className="w-5 h-5" />
-                  </button>
+                  {/* Steuer-Zeile: „+" links · Modus-Dropdown + Fokus rechts */}
+                  <div className="flex items-center gap-2 mt-3.5">
+                    <button
+                      onClick={() => fileRef.current?.click()}
+                      disabled={images.length >= 3 || phase === "planning"}
+                      title={t.themes.aiUploadHint}
+                      aria-label={t.themes.aiUploadHint}
+                      className="shrink-0 w-9 h-9 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
+                    >
+                      <Plus className="w-5 h-5" />
+                    </button>
+                    <span className="flex-1" />
+                    {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
+                    <ModeSelect mode={mode} onPick={pickMode} disabled={phase === "planning"} />
+                    <button
+                      onClick={() => onToggleFocusPick?.()}
+                      aria-pressed={focusPick}
+                      title={t.themes.aiFocusTooltip}
+                      aria-label={t.themes.aiFocusTooltip}
+                      className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition ${
+                        focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
+                      }`}
+                    >
+                      <Target className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
               )}
     </div>

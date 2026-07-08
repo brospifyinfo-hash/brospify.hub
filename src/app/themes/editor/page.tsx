@@ -84,7 +84,7 @@ function RailSectionRow({
       dragControls={controls}
       whileDrag={{ scale: 1.02, zIndex: 30, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
       transition={{ duration: 0.16 }}
-      className={`list-none flex items-center gap-1 rounded-md border px-1 py-2 lg:py-1 ${
+      className={`list-none flex items-center gap-1.5 rounded-lg border px-1.5 py-2 lg:py-1.5 ${
         on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : focused ? "border-amber-400/40 bg-amber-400/[0.06]" : "border-transparent hover:bg-white/[0.05]"
       }`}
     >
@@ -129,7 +129,7 @@ function BuyboxNavRow({
       dragControls={controls}
       whileDrag={{ scale: 1.02, zIndex: 30, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
       transition={{ duration: 0.16 }}
-      className={`list-none flex items-center gap-1 rounded-md border px-1 py-1.5 lg:py-1 ${
+      className={`list-none flex items-center gap-1.5 rounded-lg border px-1.5 py-2 lg:py-1.5 ${
         on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
       }`}
     >
@@ -1021,34 +1021,34 @@ export default function ThemeEditorPage() {
                   AI-Umsetzung gesperrt. Der AI Co-Pilot sitzt jetzt als Leiste
                   MITTIG unter der Vorschau (nicht mehr hier). */}
               <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
-                <div className={`glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
+                <div className={`glass-strong rounded-xl border border-white/[0.08] p-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Allgemeines Design (global) — kein „Sektion", aber zentral
                       erreichbar; ohne Auswahl bleibt links alles leer. */}
                   <button
                     onClick={() => setSelected(selected === "__global" ? null : "__global")}
-                    className={`w-full flex items-center gap-1.5 rounded-md border px-2 py-2 lg:py-1.5 mb-2 transition ${
+                    className={`w-full flex items-center gap-2 rounded-lg border px-3 py-2.5 mb-3 transition ${
                       selected === "__global"
                         ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
                         : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
                     }`}
                   >
-                    <Palette className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
-                    <span className="text-[12.5px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorGlobalEntry}</span>
+                    <Palette className="w-4 h-4 shrink-0" style={{ color: ACCENT }} />
+                    <span className="text-[12.5px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorGlobalEntry}</span>
                   </button>
 
-                  {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
-                  <div className="flex rounded-md border border-white/10 bg-black/25 p-0.5 mb-2">
+                  {/* Seiten-Umschalter: Produktseite ↔ Startseite */}
+                  <div className="flex rounded-lg border border-white/10 bg-black/25 p-0.5 mb-4">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
                       <button
                         key={p}
                         onClick={() => { setPage(p); setSelected(null); }}
-                        className={`flex-1 px-2 py-2 lg:py-1 rounded text-[12px] lg:text-[11px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
+                        className={`flex-1 px-2 py-2 lg:py-1.5 rounded-md text-[12px] font-semibold transition ${page === p ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
                       >
                         {l}
                       </button>
                     ))}
                   </div>
-                  <div className="flex items-center gap-1.5 mb-1.5 px-0.5">
+                  <div className="flex items-center gap-1.5 mb-2.5 px-0.5">
                     <span className="h-2.5 w-[3px] rounded-full" style={{ background: ACCENT }} />
                     <span className="text-[9.5px] uppercase tracking-[0.14em] font-bold text-zinc-400">{t.themes.editorStructure}</span>
                   </div>
@@ -1058,9 +1058,9 @@ export default function ThemeEditorPage() {
                   {page === "product" && (() => {
                     const bbOpen = buyboxOpen || selected === "__buybox" || (selected?.startsWith("blk:") ?? false);
                     return (
-                    <div className="mb-1">
+                    <div className="mb-3">
                       <div
-                        className={`w-full flex items-center gap-1 rounded-md border px-2 py-2.5 lg:py-1.5 transition ${
+                        className={`w-full flex items-center gap-1.5 rounded-lg border px-2.5 py-2.5 lg:py-2 transition ${
                           selected === "__buybox" || selected?.startsWith("blk:")
                             ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
                             : aiFocus.includes("__buybox")
@@ -1095,12 +1095,12 @@ export default function ThemeEditorPage() {
                         </button>
                       </div>
                       {bbOpen && (
-                        <div className="mt-1 ml-2 pl-2 border-l border-white/10">
+                        <div className="mt-2 ml-2.5 pl-3 border-l border-white/10">
                           <Reorder.Group
                             axis="y"
                             values={doc.buybox.order}
                             onReorder={(order) => dispatch({ type: "reorderBuybox", order })}
-                            className="space-y-1"
+                            className="space-y-1.5"
                           >
                             {doc.buybox.order.map((bt) => {
                               const meta = getBuyboxMeta(bt);
@@ -1119,17 +1119,17 @@ export default function ThemeEditorPage() {
                               );
                             })}
                           </Reorder.Group>
-                          <div className="grid grid-cols-2 gap-1 mt-1">
+                          <div className="grid grid-cols-2 gap-1.5 mt-2.5">
                             <button
                               onClick={() => setBuyboxGalleryOpen(true)}
-                              className="flex items-center justify-center gap-1 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/[0.08] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.16] text-[11px] font-semibold px-1.5 py-1.5 transition"
+                              className="flex items-center justify-center gap-1 rounded-lg border border-[#95BF47]/40 bg-[#95BF47]/[0.08] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.16] text-[11px] font-semibold px-1.5 py-2 transition"
                             >
                               <Plus className="w-3 h-3" /> {t.themes.editorBuyboxAdd}
                             </button>
                             <button
                               onClick={() => dispatch({ type: "arrangeBuybox", canonical: BUYBOX_CANONICAL_ORDER })}
                               title={t.themes.editorBuyboxArrangeHint}
-                              className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.08] text-[11px] font-semibold px-1.5 py-1.5 transition"
+                              className="flex items-center justify-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.08] text-[11px] font-semibold px-1.5 py-2 transition"
                             >
                               <ArrowDownUp className="w-3 h-3" /> {t.themes.editorBuyboxArrange}
                             </button>
@@ -1145,7 +1145,7 @@ export default function ThemeEditorPage() {
                     axis="y"
                     values={currentSections.map((s) => s.uid)}
                     onReorder={(order) => dispatch({ type: "reorderSections", page, order })}
-                    className="space-y-1"
+                    className="space-y-1.5"
                   >
                     {currentSections.map((s) => {
                       const Ico = sectionIcon(s.type);
@@ -1172,7 +1172,7 @@ export default function ThemeEditorPage() {
                   )}
                   <button
                     onClick={() => setLibraryAt(currentSections.length)}
-                    className="w-full mt-1.5 flex items-center justify-center gap-1.5 rounded-md border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[12.5px] lg:text-[11.5px] font-semibold px-3 py-2.5 lg:py-1.5 transition"
+                    className="w-full mt-3 flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-[#95BF47]/40 bg-[#95BF47]/[0.06] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.14] text-[12px] font-semibold px-3 py-2.5 lg:py-2 transition"
                   >
                     <Plus className="w-3.5 h-3.5" /> {t.themes.editorAddSection}
                   </button>
@@ -1319,7 +1319,7 @@ export default function ThemeEditorPage() {
 
               {/* Inspector/Einstellungen (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
               <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-3 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}
