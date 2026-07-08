@@ -175,6 +175,40 @@ function mixHex(a: string, b: string, t: number): string {
   return `#${c(0)}${c(2)}${c(4)}`;
 }
 
+/** WCAG-relative Luminanz (0 = schwarz, 1 = weiß). Ungültig → 1 (hell). */
+export function relLuminance(hex: string): number {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return 1;
+  const chan = (o: number) => {
+    let c = parseInt(m[1].slice(o, o + 2), 16) / 255;
+    c = c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    return c;
+  };
+  return 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
+}
+
+/** True, wenn auf der Farbe HELLER Text besser lesbar ist als dunkler. */
+export function isDarkColor(hex: string): boolean {
+  return relLuminance(hex) < 0.4;
+}
+
+// Mindest-Luminanz eines Section-Hintergrunds, damit der von den Sections
+// hart gesetzte DUNKLE Text (#111) immer klar lesbar bleibt (≥ ~6:1). So kann
+// KEIN Ton je „dunkler Text auf dunklem Grund" erzeugen — egal welche Palette.
+const MIN_BG_LUM = 0.34;
+
+/** Hebt einen zu dunklen Hintergrund Richtung Weiß an, bis dunkler Text sicher
+ *  lesbar ist. Helle Farben bleiben unverändert. Deterministisch. */
+export function ensureReadableBg(hex: string): string {
+  if (!/^#([0-9a-f]{6})$/i.test(hex)) return hex;
+  if (relLuminance(hex) >= MIN_BG_LUM) return hex;
+  for (let t = 0.12; t <= 1; t += 0.08) {
+    const lifted = mixHex(hex, "#ffffff", t);
+    if (relLuminance(lifted) >= MIN_BG_LUM) return lifted;
+  }
+  return "#f3f2ef";
+}
+
 /**
  * Übersetzt einen benannten Hintergrund-Ton in konkrete Design-Settings —
  * deterministisch aus der Palette (Vorschau = Download; auch die AI nutzt
@@ -182,7 +216,11 @@ function mixHex(a: string, b: string, t: number): string {
  * Kontraste bewusst kräftig: mehrfarbige Seiten mit DIREKTEN Kanten bzw.
  * Formen-Übergängen (kein Fade — Design-Entscheidung 2026-07).
  *   tint  = deutlicher Akzent-Hauch (≈14 %)   soft = kräftiger Akzent-Verlauf
- *   wash  = ruhiger Grauton (≈10 %)           deep = dunkles Panel (heller Text)
+ *   wash  = ruhiger Grauton (≈10 %)           deep = sattes Akzent-Panel
+ * KONTRAST-GARANTIE: Die Sections setzen ihren Text hart dunkel (#111) — jeder
+ * hier erzeugte Hintergrund wird deshalb per ensureReadableBg auf eine sichere
+ * Mindest-Helligkeit angehoben. „deep" ist ein SATTES, aber lesbares Panel
+ * (kein Fast-Schwarz mehr) → nie wieder dunkler Text auf dunklem Grund.
  */
 export function sectionToneSettings(
   tone: SectionTone,
@@ -203,27 +241,28 @@ export function sectionToneSettings(
     sec_divider: opts.divider ?? "none",
     sec_divider_top: opts.dividerTop ?? "none",
   };
+  let bg1 = "";
+  let bg2 = "";
   switch (tone) {
     case "tint":
-      out.sec_bg = mixHex(bg, palette.accent, 0.14);
-      out.sec_bg2 = "";
+      bg1 = mixHex(bg, palette.accent, 0.14);
       break;
     case "soft":
-      out.sec_bg = mixHex(bg, palette.accent, 0.18);
-      out.sec_bg2 = mixHex(bg, palette.accent, 0.36);
+      bg1 = mixHex(bg, palette.accent, 0.18);
+      bg2 = mixHex(bg, palette.accent, 0.36);
       break;
     case "wash":
-      out.sec_bg = mixHex(bg, palette.text, 0.1);
-      out.sec_bg2 = "";
+      bg1 = mixHex(bg, palette.text, 0.1);
       break;
     case "deep":
-      out.sec_bg = mixHex(palette.text, palette.button, 0.35);
-      out.sec_bg2 = mixHex(mixHex(palette.text, palette.button, 0.35), palette.accent, 0.22);
+      // Sattes Akzent-Panel als Höhepunkt — kräftig, aber garantiert lesbar.
+      bg1 = mixHex(bg, palette.accent, 0.5);
+      bg2 = mixHex(bg, palette.accent, 0.7);
       break;
-    default:
-      out.sec_bg = "";
-      out.sec_bg2 = "";
   }
+  // Kontrast-Klammer: hebt zu dunkle Ergebnisse an (palette-unabhängig).
+  out.sec_bg = bg1 ? ensureReadableBg(bg1) : "";
+  out.sec_bg2 = bg2 ? ensureReadableBg(bg2) : "";
   return out;
 }
 
@@ -253,7 +292,16 @@ const FEATURES: { title: string; text: string }[] = [
 
 const faqBlocks = (): BlockRecipe[] => FAQ_ROWS.map((r) => ({ type: "faq", settings: { question: r.q, answer: r.a } }));
 const trustBlocks = (): BlockRecipe[] => TRUST_REVIEWS.map((r) => ({ type: "review", settings: { review_text: r.text, mobile_review_text: r.text, reviewer_name: r.name, rating: r.rating } }));
-const featureBlocks = (n: number): BlockRecipe[] => FEATURES.slice(0, n).map((f) => ({ type: "feature", settings: { title: f.title, text: f.text } }));
+/** Icon-Presets, mit denen die Feature-Karten IMMER echte Icons zeigen
+ *  (Werte des icon_preset-Selects im bro-feature-grid-Liquid). Die Replica
+ *  rendert dieselben Icons (Parität). */
+export const FEATURE_ICON_PRESETS = ["sparkle", "shield", "bolt", "star", "leaf", "truck"];
+
+const featureBlocks = (n: number): BlockRecipe[] =>
+  FEATURES.slice(0, n).map((f, i) => ({
+    type: "feature",
+    settings: { title: f.title, text: f.text, icon_preset: FEATURE_ICON_PRESETS[i % FEATURE_ICON_PRESETS.length] },
+  }));
 
 // ─── Die Bibliothek ────────────────────────────────────────────────
 

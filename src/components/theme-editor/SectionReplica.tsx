@@ -10,8 +10,8 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { SectionInstance } from "@/lib/theme-doc";
 import type { ColorPalette } from "@/lib/theme-placeholders";
-import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef, sectionSupportsDesign } from "@/lib/theme-library";
-import { getIconAny } from "@/lib/theme-icon-resolver";
+import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef, sectionSupportsDesign, isDarkColor } from "@/lib/theme-library";
+import { getIconAny, resolveIconId } from "@/lib/theme-icon-resolver";
 import { DIVIDER_PATHS, DIVIDER_TOP_PATHS } from "@/lib/theme-frame";
 
 /** SVG-Line-Icon aus der Icon-Bibliothek inkl. Lucide-Katalog
@@ -43,7 +43,12 @@ const REVIEWS = [
   { q: "Schnell geliefert, top verpackt — fünf Sterne.", a: "Julia S.", l: "Frankfurt" },
 ];
 const RATING_CATS = ["Qualität", "Haltbarkeit", "Design", "Preis-Leistung"];
-const FEATURE_ICONS = ["✦", "◆", "●", "▲"];
+// icon_preset-Wert → Bibliotheks-Icon-ID (identische Icons wie im Liquid-Snippet).
+function presetIcon(preset: unknown, fallback: string): string {
+  const p = typeof preset === "string" ? preset : "";
+  if (!p || p === "none") return fallback;
+  return resolveIconId(p) || fallback;
+}
 const PILLS = ["Bestseller", "Neuheiten", "Angebote", "Alle Produkte"];
 const SOCIALS = ["TikTok", "Instagram", "YouTube", "WhatsApp"];
 
@@ -303,7 +308,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           <div className="te-fgrid" style={{ gridTemplateColumns: `repeat(${cols},1fr)` }}>
             {(feats.length ? feats : [0, 1, 2].map(() => null)).map((f, i) => (
               <div key={i} className="te-fcard" style={{ padding: cardPad, textAlign: alignLeft ? "left" : "center", borderRadius: num(s.card_radius, 14) }}>
-                <span className="te-ficon" style={{ width: num(s.icon_size, 28), height: num(s.icon_size, 28) }}>{FEATURE_ICONS[i % 4]}</span>
+                <span className="te-ficon" style={{ width: num(s.icon_size, 28), height: num(s.icon_size, 28) }}>
+                  <RIcon id={presetIcon(f?.settings.icon_preset, ["sparkle", "shield", "bolt", "star"][i % 4])} size={Math.round(num(s.icon_size, 28) * 0.62)} />
+                </span>
                 <strong style={{ fontSize: num(s.title_size, 17) * 0.9 }}>{f ? String(f.settings.title) : "Vorteil"}</strong>
                 <p style={{ fontSize: num(s.text_size, 14) * 0.92 }}>{f ? String(f.settings.text) : "Beschreibung"}</p>
               </div>
@@ -506,7 +513,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
         <div className="te-benefits2" style={{ paddingTop: pad, paddingBottom: pad }}>
           {[{ ti: t.title1, tx: t.text1 }, { ti: t.title2, tx: t.text2 }].map((b, i) => (
             <div key={i} className="te-benefit2">
-              <span className="te-ficon">{i === 0 ? "✦" : "◆"}</span>
+              <span className="te-ficon"><RIcon id={i === 0 ? "sparkle" : "check"} size={16} /></span>
               <span><strong>{b.ti}</strong><p>{b.tx}</p></span>
             </div>
           ))}
@@ -738,7 +745,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
     case "bro-icon-benefits": {
       const ac = str(s.accent_color, ctx.palette.accent);
       const look = str(s.layout, "band");
-      const onDark = !!s.sec_bg && look === "dunkel";
+      // Heller Text nur, wenn der Hintergrund WIRKLICH dunkel ist (Luminanz) —
+      // nie mehr weiß auf hell (Kontrast-Garantie greift auch hier).
+      const onDark = look === "dunkel" && isDarkColor(str(s.sec_bg, ""));
       const items = [1, 2, 3, 4]
         .map((i) => ({ icon: str(s[`icon_${i}`], ["truck", "shield", "rotate", "star"][i - 1]), title: t[`t${i}`], sub: t[`d${i}`] }))
         .filter((x) => x.title);
