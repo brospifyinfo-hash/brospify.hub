@@ -2,7 +2,7 @@
 
 // ─── /themes/editor — Theme-Editor v2 ───────────────────────────────
 // Produkt-zuerst-Flow: (1) Produkt aus Bilder-Grid wählen → (2) Split-Pane-
-// Editor (Aufbau links · Live-Vorschau Mitte · Inspector rechts). Alles lebt
+// Editor (Einstellungen links · Live-Vorschau Mitte · Aufbau/Navigation rechts). Alles lebt
 // in EINEM ThemeDocument (Undo/Redo), das die Compile-Engine 1:1 in das
 // Shopify-Theme übersetzt. Desktop nutzt die volle Breite; mobil gestapelt.
 
@@ -15,13 +15,14 @@ import {
   Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
   SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, Trash2, UploadCloud, X,
-  Pencil, Target,
+  Pencil, Target, ChevronDown, ArrowDownUp,
   type LucideIcon,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
-import Inspector from "@/components/theme-editor/Inspector";
+import Inspector, { BlockIcon } from "@/components/theme-editor/Inspector";
+import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER } from "@/lib/theme-sections";
 import SectionLibraryOverlay from "@/components/theme-editor/SectionLibraryOverlay";
 import StyleGalleryOverlay from "@/components/theme-editor/StyleGalleryOverlay";
 import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
@@ -111,6 +112,50 @@ function RailSectionRow({
   );
 }
 
+// Eine Kaufbox-Baustein-Zeile im Kaufbox-Dropdown der Aufbau-Leiste (rechts).
+// Klick wählt den Baustein aus (Einstellungen erscheinen links), Ziehen am
+// Greif-Symbol sortiert, Papierkorb entfernt.
+function BuyboxNavRow({
+  type, name, iconName, on, onClick, onRemove, dragTitle, removeLabel,
+}: {
+  type: string; name: string; iconName: string; on: boolean; onClick: () => void; onRemove: () => void; dragTitle: string; removeLabel: string;
+}) {
+  const controls = useDragControls();
+  return (
+    <Reorder.Item
+      value={type}
+      dragListener={false}
+      dragControls={controls}
+      whileDrag={{ scale: 1.02, zIndex: 30, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
+      transition={{ duration: 0.16 }}
+      className={`list-none flex items-center gap-1 rounded-md border px-1 py-1.5 lg:py-1 ${
+        on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
+      }`}
+    >
+      <span
+        onPointerDown={(e) => controls.start(e)}
+        title={dragTitle}
+        style={{ touchAction: "none" }}
+        className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0 p-1 -m-1 lg:p-0 lg:m-0"
+      >
+        <GripVertical className="w-3.5 h-3.5 lg:w-3 lg:h-3" />
+      </span>
+      <BlockIcon name={iconName} className={`w-3.5 h-3.5 shrink-0 ${on ? "text-[#95BF47]" : "text-zinc-500"}`} />
+      <button onClick={onClick} className="min-w-0 flex-1 text-left">
+        <span className="block text-[12.5px] lg:text-[11.5px] font-medium text-white truncate leading-tight">{name}</span>
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); onRemove(); }}
+        title={removeLabel}
+        aria-label={removeLabel}
+        className="shrink-0 p-1 rounded text-zinc-600 hover:text-red-300 transition"
+      >
+        <Trash2 className="w-3 h-3" />
+      </button>
+    </Reorder.Item>
+  );
+}
+
 export default function ThemeEditorPage() {
   const router = useRouter();
   const { t, lang } = useI18n();
@@ -133,6 +178,9 @@ export default function ThemeEditorPage() {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [page, setPage] = useState<EditorPage>("product");
   const [selected, setSelected] = useState<string | null>(null);
+  // Kaufbox-Dropdown in der Aufbau-Leiste auf/zu (manuell); ist automatisch
+  // offen, wenn die Kaufbox oder ein Baustein ausgewählt ist.
+  const [buyboxOpen, setBuyboxOpen] = useState(false);
   // Inline-Text-Bearbeitung in der Vorschau (Klick → Text direkt bearbeiten).
   const [editTexts, setEditTexts] = useState(true);
   // Für die AI fokussierte uids: Section-uid ODER "__buybox" (Kaufbox).
@@ -937,10 +985,11 @@ export default function ThemeEditorPage() {
                 </div>
               </div>
 
-              {/* Aufbau (links) — Desktop: volle Höhe bis ganz unten, scrollt intern.
+              {/* Aufbau/Navigation (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern.
                   Oben sitzt der einklappbare AI Co-Pilot; die Aufbau-Leiste
-                  darunter ist während der AI-Umsetzung gesperrt. */}
-              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+                  darunter (Sektionsliste + Kaufbox-Dropdown) ist während der
+                  AI-Umsetzung gesperrt. */}
+              <aside className={`order-3 lg:order-3 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
                 <AiCopilot
                   doc={doc}
                   dispatch={dispatch}
@@ -959,6 +1008,20 @@ export default function ThemeEditorPage() {
                   onClearFocus={() => setAiFocus([])}
                 />
                 <div className={`glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
+                  {/* Allgemeines Design (global) — kein „Sektion", aber zentral
+                      erreichbar; ohne Auswahl bleibt links alles leer. */}
+                  <button
+                    onClick={() => setSelected(selected === "__global" ? null : "__global")}
+                    className={`w-full flex items-center gap-1.5 rounded-md border px-2 py-2 lg:py-1.5 mb-2 transition ${
+                      selected === "__global"
+                        ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
+                        : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
+                    }`}
+                  >
+                    <Palette className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
+                    <span className="text-[12.5px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorGlobalEntry}</span>
+                  </button>
+
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
                   <div className="flex rounded-md border border-white/10 bg-black/25 p-0.5 mb-2">
                     {([["product", t.themes.builderPageProduct], ["home", t.themes.builderPageHome]] as const).map(([p, l]) => (
@@ -975,34 +1038,95 @@ export default function ThemeEditorPage() {
                     <span className="h-2.5 w-[3px] rounded-full" style={{ background: ACCENT }} />
                     <span className="text-[9.5px] uppercase tracking-[0.14em] font-bold text-zinc-400">{t.themes.editorStructure}</span>
                   </div>
-                  {page === "product" && (
-                  <div
-                    className={`w-full flex items-center gap-1 rounded-md border px-2 py-2.5 lg:py-1.5 mb-1 transition ${
-                      selected === "__buybox" || selected?.startsWith("blk:")
-                        ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
-                        : aiFocus.includes("__buybox")
-                          ? "border-amber-400/40 bg-amber-400/[0.06]"
-                          : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
-                    }`}
-                  >
-                    <ShoppingCart className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
-                    <button
-                      onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
-                      className="text-[13px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate"
-                    >
-                      {t.themes.editorBuybox}
-                    </button>
-                    <span className="text-[9.5px] text-zinc-500 shrink-0">{doc.buybox.order.length}</span>
-                    <button
-                      onClick={() => toggleFocus("__buybox")}
-                      title={t.themes.editorFocusHint}
-                      aria-pressed={aiFocus.includes("__buybox")}
-                      className={`shrink-0 p-1 rounded transition ${aiFocus.includes("__buybox") ? "text-amber-400" : "text-zinc-600 hover:text-amber-300"}`}
-                    >
-                      <Target className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  )}
+
+                  {/* Kaufbox als DROPDOWN: Kopf wählt die Kaufbox (Panel links),
+                      Chevron klappt die Bausteinliste auf/zu. */}
+                  {page === "product" && (() => {
+                    const bbOpen = buyboxOpen || selected === "__buybox" || (selected?.startsWith("blk:") ?? false);
+                    return (
+                    <div className="mb-1">
+                      <div
+                        className={`w-full flex items-center gap-1 rounded-md border px-2 py-2.5 lg:py-1.5 transition ${
+                          selected === "__buybox" || selected?.startsWith("blk:")
+                            ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
+                            : aiFocus.includes("__buybox")
+                              ? "border-amber-400/40 bg-amber-400/[0.06]"
+                              : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
+                        }`}
+                      >
+                        <button
+                          onClick={() => setBuyboxOpen(!bbOpen)}
+                          className="shrink-0 p-0.5 -m-0.5 text-zinc-400 hover:text-white"
+                          title={t.themes.editorBuyboxToggle}
+                          aria-label={t.themes.editorBuyboxToggle}
+                          aria-expanded={bbOpen}
+                        >
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform ${bbOpen ? "" : "-rotate-90"}`} />
+                        </button>
+                        <ShoppingCart className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
+                        <button
+                          onClick={() => { setSelected("__buybox"); setBuyboxOpen(true); }}
+                          className="text-[13px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate"
+                        >
+                          {t.themes.editorBuybox}
+                        </button>
+                        <span className="text-[9.5px] text-zinc-500 shrink-0">{doc.buybox.order.length}</span>
+                        <button
+                          onClick={() => toggleFocus("__buybox")}
+                          title={t.themes.editorFocusHint}
+                          aria-pressed={aiFocus.includes("__buybox")}
+                          className={`shrink-0 p-1 rounded transition ${aiFocus.includes("__buybox") ? "text-amber-400" : "text-zinc-600 hover:text-amber-300"}`}
+                        >
+                          <Target className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      {bbOpen && (
+                        <div className="mt-1 ml-2 pl-2 border-l border-white/10">
+                          <Reorder.Group
+                            axis="y"
+                            values={doc.buybox.order}
+                            onReorder={(order) => dispatch({ type: "reorderBuybox", order })}
+                            className="space-y-0.5"
+                          >
+                            {doc.buybox.order.map((bt) => {
+                              const meta = getBuyboxMeta(bt);
+                              return (
+                                <BuyboxNavRow
+                                  key={bt}
+                                  type={bt}
+                                  name={lang === "en" ? meta.labelEn : meta.label}
+                                  iconName={meta.icon}
+                                  on={selected === `blk:${bt}`}
+                                  onClick={() => setSelected(selected === `blk:${bt}` ? "__buybox" : `blk:${bt}`)}
+                                  onRemove={() => { dispatch({ type: "removeBuyboxBlock", blockType: bt }); if (selected === `blk:${bt}`) setSelected("__buybox"); }}
+                                  dragTitle={t.themes.editorBuyboxDragHint}
+                                  removeLabel={t.themes.editorBuyboxRemove}
+                                />
+                              );
+                            })}
+                          </Reorder.Group>
+                          <div className="grid grid-cols-2 gap-1 mt-1">
+                            <button
+                              onClick={() => setBuyboxGalleryOpen(true)}
+                              className="flex items-center justify-center gap-1 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/[0.08] text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/[0.16] text-[11px] font-semibold px-1.5 py-1.5 transition"
+                            >
+                              <Plus className="w-3 h-3" /> {t.themes.editorBuyboxAdd}
+                            </button>
+                            <button
+                              onClick={() => dispatch({ type: "arrangeBuybox", canonical: BUYBOX_CANONICAL_ORDER })}
+                              title={t.themes.editorBuyboxArrangeHint}
+                              className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white hover:bg-white/[0.08] text-[11px] font-semibold px-1.5 py-1.5 transition"
+                            >
+                              <ArrowDownUp className="w-3 h-3" /> {t.themes.editorBuyboxArrange}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    );
+                  })()}
+
+                  {/* Sektionsliste (Produkt- oder Startseite) */}
                   <Reorder.Group
                     axis="y"
                     values={currentSections.map((s) => s.uid)}
@@ -1159,17 +1283,15 @@ export default function ThemeEditorPage() {
                 </div>
               </div>
 
-              {/* Inspector (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
-              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
+              {/* Inspector/Einstellungen (links) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
+              <aside ref={inspectorRef} className={`order-4 lg:order-1 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                 <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}
                     selected={selected}
                     onClearSelect={() => setSelected(null)}
-                    onSelectBlock={setSelected}
                     onOpenStyles={() => setStyleOpen(true)}
-                    onOpenBuyboxGallery={() => setBuyboxGalleryOpen(true)}
                     onRandomize={randomize}
                     previewData={previewData}
                   />

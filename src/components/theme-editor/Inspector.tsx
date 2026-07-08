@@ -6,10 +6,9 @@
 // globale Theme-Design (Stil, Farben, Schriften/Ecken, Design).
 
 import { useState, type ReactNode } from "react";
-import { Reorder, useDragControls } from "framer-motion";
 import {
   ChevronDown, ChevronUp, Trash2, Shuffle, MousePointerClick, Palette as PaletteIcon,
-  Plus, ArrowDownUp, GripVertical, Copy, Paintbrush, Info,
+  Copy, Paintbrush, Pencil, Image as ImageIcon,
   Type, Tag, SlidersHorizontal, Hash, ShoppingCart, Layers, Megaphone, Flame,
   PackageCheck, BatteryLow, Gift, Users, Star, ListChecks, ShieldCheck,
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
@@ -25,7 +24,7 @@ import {
   sectionSupportsDesign, sectionToneSettings, CATEGORY_LABELS, type SectionTone,
 } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
-import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
+import { getBuyboxMeta } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
 import { getIconAny, searchIcons } from "@/lib/theme-icon-resolver";
 import { DIVIDER_PATHS, DIVIDER_TOP_PATHS, DIVIDER_SHAPES, DIVIDER_LABELS } from "@/lib/theme-frame";
@@ -42,7 +41,7 @@ const BLOCK_ICONS: Record<string, LucideIcon> = {
   Clock, Award, Table,
   Boxes, Quote, Timer, RotateCcw, UserCheck, Scale, Ticket, Calculator,
 };
-function BlockIcon({ name, className }: { name: string; className?: string }) {
+export function BlockIcon({ name, className }: { name: string; className?: string }) {
   const C = BLOCK_ICONS[name] || Square;
   return <C className={className} />;
 }
@@ -85,60 +84,6 @@ function DividerPicker({ value, onChange, lang, top }: { value: string; onChange
         </button>
       ))}
     </div>
-  );
-}
-
-// Eine Baustein-Zeile in der sortierbaren Liste. Drag startet NUR am
-// Greif-Symbol (dragListener=false + eigene DragControls) — so bleiben
-// Aufklappen/Entfernen klickbar. Framer animiert das Einrasten zwischen
-// den Zeilen automatisch.
-function BuyboxRow({
-  type, expanded, iconName, label, isNew, hasConfig, onToggle, onRemove, dragTitle, removeLabel, children,
-}: {
-  type: string; expanded: boolean; iconName: string; label: string; isNew: boolean; hasConfig: boolean;
-  onToggle: () => void; onRemove: () => void; dragTitle: string; removeLabel: string; children?: ReactNode;
-}) {
-  const controls = useDragControls();
-  return (
-    <Reorder.Item
-      value={type}
-      dragListener={false}
-      dragControls={controls}
-      whileDrag={{ scale: 1.015, zIndex: 40, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
-      transition={{ duration: 0.16 }}
-      className={`list-none rounded-lg border ${
-        expanded ? "border-[#95BF47]/50 bg-[#95BF47]/[0.06]" : "border-white/10 bg-white/[0.03]"
-      }`}
-    >
-      <div className="flex items-center gap-1 px-1.5 py-[3px]">
-        <span
-          onPointerDown={(e) => controls.start(e)}
-          title={dragTitle}
-          style={{ touchAction: "none" }}
-          className="cursor-grab active:cursor-grabbing text-zinc-600 hover:text-zinc-300 shrink-0"
-        >
-          <GripVertical className="w-3 h-3" />
-        </span>
-        <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 ${expanded ? "bg-[#95BF47]/20 text-[#cfe9a3]" : "bg-white/[0.05] text-zinc-400"}`}>
-          <BlockIcon name={iconName} className="w-3 h-3" />
-        </span>
-        <button onClick={onToggle} className="flex-1 min-w-0 text-left">
-          <span className="block text-[11px] font-semibold text-white truncate">
-            {label}
-            {isNew && <span className="ml-1 text-[8px] font-bold uppercase tracking-wider text-[#95BF47]/80 align-middle">Neu</span>}
-          </span>
-        </button>
-        {hasConfig && (
-          <button onClick={onToggle} aria-label="Einstellungen" className="text-zinc-400 hover:text-white shrink-0 p-0.5">
-            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? "rotate-180" : ""}`} />
-          </button>
-        )}
-        <button onClick={onRemove} aria-label={removeLabel} title={removeLabel} className="text-zinc-500 hover:text-red-300 shrink-0 p-0.5">
-          <Trash2 className="w-3 h-3" />
-        </button>
-      </div>
-      {expanded && hasConfig && <div className="px-2 pb-2">{children}</div>}
-    </Reorder.Item>
   );
 }
 
@@ -231,19 +176,15 @@ function BenefitIconsEditor({ icons, labels, onPick }: { icons: string[]; labels
 }
 
 export default function Inspector({
-  doc, dispatch, selected, onClearSelect, onSelectBlock, onOpenStyles, onRandomize, onOpenBuyboxGallery, previewData,
+  doc, dispatch, selected, onClearSelect, onOpenStyles, onRandomize, previewData,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
   selected: string | null;
   onClearSelect: () => void;
-  /** Auswahl umschalten: "__buybox" (Panel) oder "blk:<typ>" (Baustein offen). */
-  onSelectBlock: (sel: string) => void;
   /** Öffnet die Stil-Galerie (Stil-Wechsel läuft nur noch darüber). */
   onOpenStyles: () => void;
   onRandomize: () => void;
-  /** Öffnet die Kaufbox-Baustein-Galerie (Baustein hinzufügen). */
-  onOpenBuyboxGallery: () => void;
   previewData: PreviewData | null;
 }) {
   const { t, lang } = useI18n();
@@ -364,39 +305,13 @@ export default function Inspector({
           </SecGroup>
         )}
 
-        {/* Kuratierte Texte — mit Zurücksetzen je Feld + Vorschau-Tipp */}
+        {/* Texte werden NICHT mehr hier bearbeitet — nur noch direkt in der
+            Vorschau anklicken (klarer Schnitt: Einstellungen = Look/Design). */}
         {def && def.fields.length > 0 && (
-          <SecGroup icon={<Type className="w-3 h-3" />} title={t.themes.editorTexts} help={t.themes.editorTextsHelp}>
-            <div className="space-y-1.5">
-              {def.fields.map((f) => {
-                const cur = section.texts[f.id] ?? "";
-                return (
-                  <label key={f.id} className="block">
-                    <FieldLabel
-                      right={cur.trim() ? (
-                        <button
-                          onClick={(e) => { e.preventDefault(); dispatch({ type: "setText", uid: section.uid, field: f.id, value: "" }); }}
-                          title={t.themes.editorFieldReset}
-                          aria-label={t.themes.editorFieldReset}
-                          className="text-zinc-500 hover:text-white transition"
-                        >
-                          <RotateCcw className="w-2.5 h-2.5" />
-                        </button>
-                      ) : undefined}
-                    >
-                      {lang === "en" ? f.labelEn : f.label}
-                    </FieldLabel>
-                    <TextField
-                      value={cur}
-                      placeholder={f.def}
-                      textarea={f.kind === "textarea"}
-                      onChange={(v) => dispatch({ type: "setText", uid: section.uid, field: f.id, value: v })}
-                    />
-                  </label>
-                );
-              })}
-            </div>
-          </SecGroup>
+          <div className="flex items-start gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.015] px-2 py-1.5">
+            <Pencil className="w-3 h-3 shrink-0 mt-[1px] text-[#95BF47]/70" />
+            <p className="text-[9.5px] leading-snug text-zinc-500">{t.themes.editorTextInlineTip}</p>
+          </div>
         )}
       </div>
     );
@@ -405,13 +320,15 @@ export default function Inspector({
   // ── Kaufbox ausgewählt (Panel oder einzelner Baustein via "blk:<typ>") ──
   const blkSelected = selected && selected.startsWith("blk:") ? selected.slice(4) : null;
   if (selected === "__buybox" || blkSelected) {
-    const expandedType = blkSelected;
-
-    // Konfiguration EINES Bausteins: Style-Arten + Texte + Feineinstellungen.
+    // Konfiguration EINES Bausteins: Style-Arten + Feineinstellungen (KEINE
+    // Texte mehr — die bearbeitet man direkt in der Vorschau).
     const blockConfig = (type: string) => {
       const lib = getBuyboxLib(type);
       const controls = getBuyboxControls(type);
-      if (!lib || (!lib.presets.length && !lib.fields.length && !controls.length)) return null;
+      // Texte werden NICHT mehr hier bearbeitet (nur inline in der Vorschau) —
+      // ein Baustein hat nur dann ein Panel, wenn er Style-Arten/Regler oder die
+      // Vorteile-Icons hat.
+      if (!lib || (!lib.presets.length && !controls.length && type !== "benefits_list")) return null;
       const cfg = doc.buybox.blocks[type];
       const eff = resolveBlockSettings(type, cfg, doc.global.colors, doc.global.design);
       const val = (k: string) => cfg?.settings?.[k] ?? eff[k];
@@ -447,10 +364,9 @@ export default function Inspector({
         </div>
       );
       return (
-        <div className="mt-1 pt-1.5 border-t border-white/[0.06] space-y-1">
+        <div className="space-y-1.5">
           {lib.presets.length > 0 && (
-            <div>
-              <FieldLabel>{t.themes.editorPreset}</FieldLabel>
+            <SecGroup icon={<LayoutGrid className="w-3 h-3" />} title={t.themes.editorPreset} help={t.themes.editorPresetHelp}>
               <div className="flex flex-wrap gap-1">
                 {lib.presets.map((p) => (
                   <PresetPill
@@ -462,41 +378,17 @@ export default function Inspector({
                   />
                 ))}
               </div>
-            </div>
+            </SecGroup>
           )}
-          {lib.fields.map((f) =>
-            f.kind === "textarea" ? (
-              <label key={f.id} className="block">
-                <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
-                <TextField
-                  value={cfg?.texts?.[f.id] ?? ""}
-                  placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
-                  textarea
-                  onChange={(v) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: v })}
-                />
-              </label>
-            ) : (
-              // Kurzes Feld: Label links, Eingabe rechts (platzsparend bei Listen)
-              <label key={f.id} className="flex items-center gap-2">
-                <span className="text-[10px] font-medium text-zinc-400 w-14 shrink-0 truncate" title={lang === "en" ? f.labelEn : f.label}>{lang === "en" ? f.labelEn : f.label}</span>
-                <span className="flex-1 min-w-0">
-                  <TextField
-                    value={cfg?.texts?.[f.id] ?? ""}
-                    placeholder={f.def || (lang === "en" ? f.labelEn : f.label)}
-                    onChange={(v) => dispatch({ type: "setBlockText", blockType: type, field: f.id, value: v })}
-                  />
-                </span>
-              </label>
-            )
+          {(otherCtrls.length > 0 || colorCtrls.length > 0) && (
+            <SecGroup icon={<SlidersHorizontal className="w-3 h-3" />} title={t.themes.editorFineTune}>
+              {controls.some((c) => c.kind === "image") && <HelpText>{t.themes.editorBlockPhotoHelp}</HelpText>}
+              {otherCtrls.length > 0 && <div className="space-y-1.5">{otherCtrls.map(renderCtrl)}</div>}
+              {colorCtrls.length > 0 && <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 mt-1.5">{colorCtrls.map(renderCtrl)}</div>}
+            </SecGroup>
           )}
-          {controls.some((c) => c.kind === "image") && <HelpText>{t.themes.editorBlockPhotoHelp}</HelpText>}
-          {otherCtrls.length > 0 && <div className="space-y-1.5">{otherCtrls.map(renderCtrl)}</div>}
-          {colorCtrls.length > 0 && <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">{colorCtrls.map(renderCtrl)}</div>}
-          {/* Vorteile-Icons wohnen jetzt KONTEXTUELL im Vorteile-Baustein */}
           {type === "benefits_list" && (
-            <div className="pt-1.5 mt-1 border-t border-white/[0.06]">
-              <FieldLabel>{t.themes.builderBenefitIcons}</FieldLabel>
-              <HelpText>{t.themes.builderBenefitIconsHelp}</HelpText>
+            <SecGroup icon={<Sparkles className="w-3 h-3" />} title={t.themes.builderBenefitIcons} help={t.themes.builderBenefitIconsHelp}>
               <BenefitIconsEditor
                 icons={doc.buybox.benefitIcons}
                 labels={[0, 1, 2, 3].map((i) => previewData?.benefits?.[i]?.text || "")}
@@ -507,26 +399,55 @@ export default function Inspector({
                   dispatch({ type: "setBuybox", patch: { benefitIcons: arr } });
                 }}
               />
-            </div>
+            </SecGroup>
           )}
         </div>
       );
     };
 
+    // Einzelner Baustein ausgewählt → NUR seine Einstellungen (die Baustein-
+    // Liste selbst lebt jetzt rechts in der Aufbau-Leiste als Kaufbox-Dropdown).
+    if (blkSelected) {
+      const meta = getBuyboxMeta(blkSelected);
+      const cfgJsx = blockConfig(blkSelected);
+      return (
+        <div className="space-y-1.5">
+          <div className="flex items-center gap-2 rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.12] to-transparent px-2 py-2">
+            <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
+              <BlockIcon name={meta.icon} className="w-4 h-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-bold text-white truncate leading-tight">{lang === "en" ? meta.labelEn : meta.label}</div>
+              <div className="text-[9.5px] text-zinc-400 truncate leading-tight">{t.themes.editorBuybox}</div>
+            </div>
+            <button
+              onClick={() => { dispatch({ type: "removeBuyboxBlock", blockType: blkSelected }); onClearSelect(); }}
+              title={t.themes.editorBuyboxRemove}
+              aria-label={t.themes.editorBuyboxRemove}
+              className="w-6 h-6 shrink-0 rounded border border-red-400/25 bg-red-500/[0.08] text-red-300 hover:bg-red-500/[0.16] flex items-center justify-center"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          </div>
+          {cfgJsx || (
+            <div className="flex items-start gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.015] px-2 py-1.5">
+              <Pencil className="w-3 h-3 shrink-0 mt-[1px] text-[#95BF47]/70" />
+              <p className="text-[9.5px] leading-snug text-zinc-500">{t.themes.editorTextInlineTip}</p>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Kaufbox-Panel (__buybox) → nur kaufbox-WEITE Einstellungen.
     return (
       <div className="space-y-1.5">
         <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.1] to-transparent px-2.5 py-2">
           <div className="text-[12px] font-bold text-white leading-tight">{t.themes.editorBuybox}</div>
-          <div className="text-[10px] text-zinc-500">{t.themes.builderBlocks}</div>
-          <p className="mt-1 flex items-start gap-1 text-[9.5px] leading-snug text-zinc-500">
-            <Info className="w-3 h-3 shrink-0 mt-[1px] text-[#95BF47]/70" />
-            {t.themes.editorBuyboxHelp}
-          </p>
+          <p className="mt-0.5 text-[9.5px] leading-snug text-zinc-500">{t.themes.editorBuyboxPanelHelp}</p>
         </div>
 
-        {/* Produktgalerie: Style-Art + Bild-Badge */}
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
-          <div className="text-[11px] font-semibold text-white mb-1">{t.themes.editorGallery}</div>
+        <SecGroup icon={<ImageIcon className="w-3 h-3" />} title={t.themes.editorGallery}>
           <div className="flex flex-wrap gap-1">
             {GALLERY_PRESETS.map((p) => {
               const on = (doc.buybox.gallery?.presetId || GALLERY_PRESETS[0].id) === p.id;
@@ -552,11 +473,13 @@ export default function Inspector({
               onChange={(v) => dispatch({ type: "setGallery", patch: { badge: v } })}
             />
           </label>
-        </div>
+        </SecGroup>
 
-        {/* Abstand zwischen den Bausteinen */}
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
-          <FieldLabel right={`${doc.buybox.spacing ?? 15}px`}>{t.themes.editorBuyboxSpacing}</FieldLabel>
+        <SecGroup
+          icon={<SlidersHorizontal className="w-3 h-3" />}
+          title={t.themes.editorBuyboxSpacing}
+          right={<span className="text-[9px] font-mono text-zinc-500">{doc.buybox.spacing ?? 15}px</span>}
+        >
           <SliderField
             value={doc.buybox.spacing ?? 15}
             min={4}
@@ -564,63 +487,23 @@ export default function Inspector({
             suffix="px"
             onChange={(v) => dispatch({ type: "setBuybox", patch: { spacing: v } })}
           />
-        </div>
-
-        {/* Aktionsleiste: Baustein hinzufügen + automatisch anordnen */}
-        <div className="grid grid-cols-2 gap-1.5">
-          <button
-            onClick={onOpenBuyboxGallery}
-            className="flex items-center justify-center gap-1.5 rounded-md text-[11.5px] font-bold px-2 py-2 text-white hover:brightness-110 transition"
-            style={{ background: "#95BF47" }}
-          >
-            <Plus className="w-3.5 h-3.5" /> {t.themes.editorBuyboxAdd}
-          </button>
-          <button
-            onClick={() => dispatch({ type: "arrangeBuybox", canonical: BUYBOX_CANONICAL_ORDER })}
-            title={t.themes.editorBuyboxArrangeHint}
-            className="flex items-center justify-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition"
-          >
-            <ArrowDownUp className="w-3.5 h-3.5" /> {t.themes.editorBuyboxArrange}
-          </button>
-        </div>
-        <p className="text-[10px] text-zinc-500 -mt-0.5">{t.themes.editorBuyboxDragHint}</p>
-
-        {/* Baustein-Liste: Ziehen am Greif-Symbol rastet zwischen den Zeilen ein */}
-        <Reorder.Group
-          axis="y"
-          values={doc.buybox.order}
-          onReorder={(order) => dispatch({ type: "reorderBuybox", order })}
-          className="space-y-[3px]"
-        >
-          {doc.buybox.order.map((type) => {
-            const expanded = expandedType === type;
-            const lib = getBuyboxLib(type);
-            const hasConfig = (!!lib && ((lib.presets.length || 0) > 0 || (lib.fields.length || 0) > 0)) || getBuyboxControls(type).length > 0;
-            const meta = getBuyboxMeta(type);
-            return (
-              <BuyboxRow
-                key={type}
-                type={type}
-                expanded={expanded}
-                iconName={meta.icon}
-                label={lang === "en" ? meta.labelEn : meta.label}
-                isNew={BUYBOX_RUNTIME_ONLY.has(type)}
-                hasConfig={hasConfig}
-                onToggle={() => onSelectBlock(expanded ? "__buybox" : `blk:${type}`)}
-                onRemove={() => { dispatch({ type: "removeBuyboxBlock", blockType: type }); if (expanded) onSelectBlock("__buybox"); }}
-                dragTitle={t.themes.editorBuyboxDragHint}
-                removeLabel={t.themes.editorBuyboxRemove}
-              >
-                {expanded && hasConfig ? blockConfig(type) : null}
-              </BuyboxRow>
-            );
-          })}
-        </Reorder.Group>
+        </SecGroup>
       </div>
     );
   }
 
-  // ── Nichts ausgewählt: globales Theme-Design ──
+  // ── Nichts ausgewählt → KEINE Einstellungen (nur ein Hinweis) ──
+  if (selected !== "__global") {
+    return (
+      <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-5 flex flex-col items-center text-center gap-2">
+        <MousePointerClick className="w-5 h-5 text-[#95BF47]/70" />
+        <div className="text-[11.5px] font-semibold text-white">{t.themes.editorNothingSelected}</div>
+        <div className="text-[10px] text-zinc-500 leading-snug">{t.themes.editorNothingSelectedSub}</div>
+      </div>
+    );
+  }
+
+  // ── "Allgemeines Design" (__global) → globales Theme-Design ──
   const g = doc.global;
   const COLOR_FIELDS: { key: keyof typeof g.colors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
@@ -632,11 +515,11 @@ export default function Inspector({
 
   return (
     <div className="space-y-1.5">
-      <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-2 flex items-start gap-2">
-        <MousePointerClick className="w-3.5 h-3.5 text-[#95BF47] shrink-0 mt-0.5" />
+      <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.1] to-transparent px-2.5 py-2 flex items-start gap-2">
+        <PaletteIcon className="w-4 h-4 text-[#95BF47] shrink-0 mt-0.5" />
         <div>
-          <div className="text-[11.5px] font-semibold text-white">{t.themes.editorInspectorEmpty}</div>
-          <div className="text-[10px] text-zinc-500 leading-snug mt-0.5">{t.themes.editorInspectorEmptySub}</div>
+          <div className="text-[12.5px] font-bold text-white leading-tight">{t.themes.editorGlobalTitle}</div>
+          <div className="text-[9.5px] text-zinc-500 leading-snug mt-0.5">{t.themes.editorGlobalSub}</div>
         </div>
       </div>
 
