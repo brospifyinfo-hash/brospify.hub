@@ -161,6 +161,16 @@ export default function ThemeEditorPage() {
   const router = useRouter();
   const { t, lang } = useI18n();
   const credits = useCredits();
+  // Admin-Konten haben KEIN Credit-Konto (/api/profile 401 → credits.loading
+  // bleibt dauerhaft true). Damit der Editor-Chip nicht ewig „…" zeigt, holen
+  // wir isAdmin und zeigen dann „∞" — genau wie das globale Credits-Pill.
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    fetch("/api/auth/session", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setIsAdmin(!!d?.isAdmin))
+      .catch(() => {});
+  }, []);
 
   const [state, dispatch] = useReducer(editorReducer, undefined, () => initialEditorState());
   const doc = state.present;
@@ -624,11 +634,11 @@ export default function ThemeEditorPage() {
                 {/* Credits — im Editor sichtbar, da das globale Menü aus ist */}
                 <a
                   href="/credits"
-                  title={`${credits.loading ? "…" : credits.balance} Credits`}
+                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
                   className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/15 transition"
                 >
                   <span className="text-[12px] leading-none">{credits.creditIcon}</span>
-                  <span className="tabular-nums">{credits.loading ? "…" : credits.balance}</span>
+                  <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
                 </a>
                 {/* Gesamt-Stil jederzeit änderbar */}
                 {doc.productId && (
@@ -726,11 +736,11 @@ export default function ThemeEditorPage() {
                 )}
                 <a
                   href="/credits"
-                  title={`${credits.loading ? "…" : credits.balance} Credits`}
+                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
                   className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3]"
                 >
                   <span className="leading-none">{credits.creditIcon}</span>
-                  <span className="tabular-nums">{credits.loading ? "…" : credits.balance}</span>
+                  <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
                 </a>
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
