@@ -590,8 +590,8 @@ export default function ThemeEditorPage() {
             Höhe, nichts scrollt außen — Leisten & Vorschau scrollen INTERN und
             reichen dadurch immer bis ganz unten. Mobil: normaler Fluss + Platz
             für die untere Navigations-Leiste. */}
-        <div className={`mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 pb-24 md:pb-6 max-w-5xl lg:max-w-none xl:max-w-[1840px] ${
-          showPicker ? "" : "lg:h-screen lg:flex lg:flex-col lg:overflow-hidden lg:py-2"
+        <div className={`mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 max-w-5xl lg:max-w-none xl:max-w-[1840px] ${
+          showPicker ? "pb-24 md:pb-6" : "pb-6 lg:h-screen lg:flex lg:flex-col lg:overflow-hidden lg:py-2"
         }`}>
 
           {/* ── Top-Bar (edle Glas-Toolbar) ──
@@ -998,7 +998,7 @@ export default function ThemeEditorPage() {
               {/* Mobil: sticky 3-Tab-Leiste (Vorschau · Aufbau · Einstellungen) —
                   klebt unter der App-Navigation, damit man jederzeit umschalten
                   kann, ohne nach oben zu scrollen. */}
-              <div className="order-1 lg:hidden sticky top-12 md:top-14 z-30 pt-1.5 pb-2.5 mb-1">
+              <div className="order-1 lg:hidden sticky top-0 z-30 pt-1.5 pb-2.5 mb-1">
                 <div className="grid grid-cols-3 gap-1 rounded-xl border border-white/10 glass-strong p-1 shadow-[0_10px_30px_-12px_rgba(0,0,0,0.7)]">
                   {([
                     ["vorschau", t.themes.editorTabPreview, Eye],
