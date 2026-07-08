@@ -119,7 +119,7 @@ function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMo
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute bottom-full right-0 mb-2 z-50 w-64 rounded-2xl border border-white/12 glass-strong p-1.5 shadow-[0_20px_50px_-14px_rgba(0,0,0,0.75)]" role="listbox">
+          <div className="absolute bottom-full right-0 mb-2 z-50 w-64 rounded-2xl border border-white/15 bg-[#17171d] p-1.5 shadow-[0_20px_50px_-14px_rgba(0,0,0,0.85)]" role="listbox">
             {(["standard", "expert"] as const).map((m) => (
               <button
                 key={m}
@@ -128,14 +128,14 @@ function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMo
                 aria-selected={mode === m}
                 onClick={() => { onPick(m); setOpen(false); }}
                 className={`w-full text-left rounded-xl px-3 py-2.5 transition border ${
-                  mode === m ? "bg-[#95BF47]/15 border-[#95BF47]/30" : "border-transparent hover:bg-white/[0.06]"
+                  mode === m ? "bg-[#95BF47]/15 border-[#95BF47]/40" : "border-transparent hover:bg-white/[0.07]"
                 }`}
               >
                 <span className="flex items-center gap-2">
                   <span className="text-[13px] font-bold text-white">{m === "expert" ? t.themes.aiModeExpert : t.themes.aiModeStandard}</span>
                   {mode === m && <Check className="w-4 h-4 ml-auto" style={{ color: ACCENT }} />}
                 </span>
-                <span className="block text-[11px] text-zinc-400 leading-snug mt-1">{m === "expert" ? t.themes.aiModeExpertHint : t.themes.aiModeStandardHint}</span>
+                <span className="block text-[11px] text-zinc-300 leading-snug mt-1">{m === "expert" ? t.themes.aiModeExpertHint : t.themes.aiModeStandardHint}</span>
               </button>
             ))}
           </div>
