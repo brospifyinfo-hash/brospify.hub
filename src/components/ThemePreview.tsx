@@ -5,11 +5,10 @@ import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
 import { getIconAny } from "@/lib/theme-icon-resolver";
 import type { SectionInstance, BlockConfig, GalleryConfig } from "@/lib/theme-doc";
-import { resolveBlockSettings, getBuyboxLib, getGalleryPreset } from "@/lib/theme-library";
+import { resolveBlockSettings, getBuyboxLib, getGalleryPreset, getSectionDef } from "@/lib/theme-library";
 import { fontStack, GOOGLE_FONTS_ALL } from "@/lib/theme-fonts";
 import SectionReplica, { REPLICA_CSS } from "@/components/theme-editor/SectionReplica";
 import { useInlineTextEdit, type InlineEditTarget } from "@/components/theme-editor/useInlineTextEdit";
-import { matchSectionField, matchBlockField } from "@/components/theme-editor/inlineTextMatch";
 
 // Rendert ein Bibliotheks-Icon als SVG (currentColor).
 function BIcon({ id }: { id: string }) {
@@ -181,43 +180,30 @@ export default function ThemePreview({
     return () => ro.disconnect();
   }, [targetW, zoomClamped, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
 
-  // Inline-Text-Bearbeitung: ordnet einen angeklickten Text seinem Feld zu —
-  // Doc-Section (setText) ODER Kaufbox-Baustein (setBlockText).
+  // Inline-Text-Bearbeitung: das angeklickte Element trägt data-ef (Feld-ID);
+  // der Kontext (Doc-Section vs. Kaufbox-Baustein) kommt aus dem Vorfahren.
   const resolveEdit = useCallback(
     (leaf: HTMLElement): InlineEditTarget | null => {
+      const field = leaf.getAttribute("data-ef");
+      if (!field) return null;
       const secEl = leaf.closest<HTMLElement>("[data-section-uid]");
       if (secEl) {
         const uid = secEl.getAttribute("data-section-uid") || "";
         const inst = docSections?.find((s) => s.uid === uid);
         if (!inst || !onEditText) return null;
-        const hit = matchSectionField(inst, leaf.innerText);
-        return hit ? { multiline: hit.multiline, commit: (v) => onEditText(uid, hit.field, v) } : null;
+        const kind = getSectionDef(inst.type)?.fields.find((f) => f.id === field)?.kind;
+        return { multiline: kind === "textarea", commit: (v) => onEditText(uid, field, v) };
       }
       const blkEl = leaf.closest<HTMLElement>("[data-blk-type]");
       if (blkEl) {
         const type = blkEl.getAttribute("data-blk-type") || "";
         if (!onEditBlockText) return null;
-        // Produkt-abgeleitete Renderer-Fallbacks (dieselben, die bt() einspeist),
-        // damit auch Default-Texte gematcht werden, nicht nur gesetzte/Feld-Defs.
-        const fb: Record<string, Record<string, string>> = data
-          ? {
-              custom_rating: { rating_text: data.ratingText },
-              bundle_selector: { heading: data.bundleHeading },
-              buy_buttons: { add_to_cart_text: data.cta },
-              payment_icons: { heading: data.payHeading },
-              free_gift: { title: data.giftTitle, subtitle: data.giftSubtitle },
-              stock_indicator: { text: data.stock },
-              press_bar: { heading: "Bekannt aus" },
-              social_proof: { text: "sehen sich das gerade an" },
-              countdown_timer: { text: "Angebot endet in" },
-            }
-          : {};
-        const hit = matchBlockField(type, buyboxCfg[type], leaf.innerText, fb[type]);
-        return hit ? { multiline: hit.multiline, commit: (v) => onEditBlockText(type, hit.field, v) } : null;
+        const kind = getBuyboxLib(type)?.fields.find((f) => f.id === field)?.kind;
+        return { multiline: kind === "textarea", commit: (v) => onEditBlockText(type, field, v) };
       }
       return null;
     },
-    [docSections, buyboxCfg, onEditText, onEditBlockText, data],
+    [docSections, onEditText, onEditBlockText],
   );
   useInlineTextEdit(canvasRef, editTexts && !focusPick && (!!onEditText || !!onEditBlockText), resolveEdit);
 
@@ -299,7 +285,7 @@ export default function ThemePreview({
               border: num(s.b_width, 0) > 0 ? `${num(s.b_width, 0)}px solid ${str(s.b_color, colors.accent)}` : "none",
             }}
           >
-            {emoji} {txt} {emoji}
+            <span data-ef="emoji">{emoji}</span> <span data-ef="text">{txt}</span> <span data-ef="emoji">{emoji}</span>
           </div>
         );
       }
@@ -346,9 +332,9 @@ export default function ThemePreview({
         );
         const inner =
           layout === "number_first" ? (
-            <><strong>{data.ratingValue}</strong>{stars}<span>· {bt(type, "rating_text", data.ratingText)}</span></>
+            <><strong>{data.ratingValue}</strong>{stars}<span>· <span data-ef="rating_text">{bt(type, "rating_text", data.ratingText)}</span></span></>
           ) : (
-            <>{stars}<strong>{data.ratingValue}</strong><span>· {bt(type, "rating_text", data.ratingText)}</span></>
+            <>{stars}<strong>{data.ratingValue}</strong><span>· <span data-ef="rating_text">{bt(type, "rating_text", data.ratingText)}</span></span></>
           );
         return (
           <div
@@ -387,7 +373,7 @@ export default function ThemePreview({
             {data.benefits.slice(0, 4).map((b, i) => (
               <div key={i} className="pm-benefit" style={{ fontSize: num(s.font_size, 13.5), ...(textColor ? { color: textColor } : {}) }}>
                 <span className="pm-bic" style={icStyle}><BIcon id={benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check"} /></span>
-                {bt(type, `text_${i + 1}`, b.text)}
+                <span data-ef={`text_${i + 1}`}>{bt(type, `text_${i + 1}`, b.text)}</span>
               </div>
             ))}
           </div>
@@ -404,7 +390,7 @@ export default function ThemePreview({
             }}
           >
             <span className="pm-dot" />
-            {bt(type, "text", data.stock)}
+            <span data-ef="text">{bt(type, "text", data.stock)}</span>
           </div>
         );
       case "variant_picker":
@@ -426,6 +412,7 @@ export default function ThemePreview({
           <p
             className="pm-freetext"
             style={style === "uppercase" ? { textTransform: "uppercase", letterSpacing: ".06em", fontSize: 11.5, fontWeight: 700, opacity: 0.8 } : style === "subtitle" ? { fontSize: 14.5, opacity: 0.85 } : undefined}
+            data-ef="text"
           >
             {bt(type, "text", "")}
           </p>
@@ -437,11 +424,11 @@ export default function ThemePreview({
             <button className="pm-acc-head" onClick={() => setFaqOpen((o) => !o)}>
               <span className="pm-acc-lead">
                 {str(s.icon, "none") !== "none" && <span className="pm-acc-dot">i</span>}
-                {bt(type, "heading", "")}
+                <span data-ef="heading">{bt(type, "heading", "")}</span>
               </span>
               <span className="pm-faq-plus">{faqOpen ? "−" : "+"}</span>
             </button>
-            {faqOpen && <div className="pm-acc-body">{bt(type, "content", "")}</div>}
+            {faqOpen && <div className="pm-acc-body" data-ef="content">{bt(type, "content", "")}</div>}
           </div>
         );
       case "custom_price": {
@@ -470,7 +457,7 @@ export default function ThemePreview({
         const cardRadius = typeof s.card_radius === "number" ? Math.min(28, s.card_radius as number) : undefined;
         return (
           <>
-            <div className="pm-bundle-head">{bt(type, "heading", data.bundleHeading)}</div>
+            <div className="pm-bundle-head" data-ef="heading">{bt(type, "heading", data.bundleHeading)}</div>
             <div className="pm-bundles">
               {data.bundles.map((b, i) => (
                 <button
@@ -515,7 +502,7 @@ export default function ThemePreview({
           <>
             <button className="pm-cta" style={{ padding: pad, fontSize: fs, background: str(s.primary_bg, colors.button), color: str(s.primary_fg, colors.buttonText), ...radiusStyle }}>
               {iconSvg}
-              {bt(type, "add_to_cart_text", data.cta)}
+              <span data-ef="add_to_cart_text">{bt(type, "add_to_cart_text", data.cta)}</span>
             </button>
             {combo && (
               <div className="pm-combo">
@@ -526,7 +513,7 @@ export default function ThemePreview({
             {subtext && (
               <div className="pm-cta-sub">
                 <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 11h14v9H5z" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>
-                {subtext}
+                <span data-ef="subtext">{subtext}</span>
               </div>
             )}
           </>
@@ -536,7 +523,7 @@ export default function ThemePreview({
         const w = num(s.icon_width, 44);
         return (
           <>
-            <div className="pm-pay-head">{bt(type, "heading", data.payHeading)}</div>
+            <div className="pm-pay-head" data-ef="heading">{bt(type, "heading", data.payHeading)}</div>
             <div className="pm-pay" style={{ justifyContent: str(s.alignment, "center") as CSSProperties["justifyContent"], gap: num(s.icon_gap, 7) }}>
               {PAY_ORDER.map((p) => (
                 <span key={p} className="pm-pay-box" style={{ minWidth: w, height: Math.round(w * 0.64) }}><PayMark name={p} /></span>
@@ -556,8 +543,8 @@ export default function ThemePreview({
               <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12h16v8H4z" /><path d="M3 8h18v4H3z" /><path d="M12 8v12" /><path d="M12 8C10 8 8 6.5 9 5.2s3 2.8 3 2.8" /><path d="M12 8c2 0 4-1.5 3-2.8s-3 2.8-3 2.8" /></svg>
             </span>
             <span className="pm-gift2-txt">
-              <strong>{bt(type, "title", data.giftTitle)}</strong>
-              <em>{bt(type, "subtitle", data.giftSubtitle)}</em>
+              <strong data-ef="title">{bt(type, "title", data.giftTitle)}</strong>
+              <em data-ef="subtitle">{bt(type, "subtitle", data.giftSubtitle)}</em>
             </span>
           </div>
         );
@@ -577,7 +564,7 @@ export default function ThemePreview({
               {data.timeline.map((st, i) => (
                 <div key={i} className="pm-step">
                   <span className="pm-step-ic" style={circleStyle}><Ic d={ICON[st.icon] || ICON.bag} s={17} /></span>
-                  <span className="pm-step-label">{bt(type, `label_${i + 1}`, st.label)}</span>
+                  <span className="pm-step-label" data-ef={`label_${i + 1}`}>{bt(type, `label_${i + 1}`, st.label)}</span>
                   <span className="pm-step-date">{st.date}</span>
                 </div>
               ))}
@@ -606,8 +593,8 @@ export default function ThemePreview({
             {items.map((it, i) => (
               <div key={i} className="pm-fbx-card" style={cardStyle === "outlined" ? { borderColor: str(s.card_border, colors.accent) } : undefined}>
                 <span className="pm-fbx-ic" style={{ background: `color-mix(in srgb, ${str(s.accent_color, colors.accent)} 14%, transparent)`, color: str(s.accent_color, colors.accent) }}>✦</span>
-                <strong>{it.title}</strong>
-                <em>{it.text}</em>
+                <strong data-ef={`title_${i + 1}`}>{it.title}</strong>
+                <em data-ef={`text_${i + 1}`}>{it.text}</em>
               </div>
             ))}
           </div>
@@ -628,7 +615,7 @@ export default function ThemePreview({
             {items.map((it, i) => (
               <span key={i} className="pm-iwt-item">
                 <span className="pm-iwt-ic"><BIcon id={it.icon} /></span>
-                {it.heading}
+                <span data-ef={`heading_${i + 1}`}>{it.heading}</span>
               </span>
             ))}
           </div>
@@ -638,7 +625,7 @@ export default function ThemePreview({
         return (
           <div className="pm-acc">
             <button className="pm-acc-head">
-              <span className="pm-acc-lead"><span className="pm-acc-dot">i</span>{bt(type, "heading", "")}</span>
+              <span className="pm-acc-lead"><span className="pm-acc-dot">i</span><span data-ef="heading">{bt(type, "heading", "")}</span></span>
               <span className="pm-faq-plus">+</span>
             </button>
           </div>
@@ -647,7 +634,7 @@ export default function ThemePreview({
         const items = (data.images.length ? data.images : [""]).slice(0, 2);
         return (
           <div className="pm-comp">
-            <div className="pm-comp-head">{bt(type, "block_heading", "")}</div>
+            <div className="pm-comp-head" data-ef="block_heading">{bt(type, "block_heading", "")}</div>
             <div className="pm-comp-row">
               {items.map((u, i) => (
                 <div key={i} className="pm-comp-card">
@@ -674,7 +661,7 @@ export default function ThemePreview({
         return (
           <span className="pm-share">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" /><path d="M16 6l-4-4-4 4" /><path d="M12 2v13" /></svg>
-            {bt(type, "share_label", "")}
+            <span data-ef="share_label">{bt(type, "share_label", "")}</span>
           </span>
         );
 
@@ -688,7 +675,7 @@ export default function ThemePreview({
             {items.map((label, i) => (
               <div key={i} className="pm-tb-item">
                 <span className="pm-tb-ic" style={{ color: str(s.accent, colors.accent) }}><BIcon id={ic[i] || "check"} /></span>
-                <span className="pm-tb-lbl">{label}</span>
+                <span className="pm-tb-lbl" data-ef={`label_${i + 1}`}>{label}</span>
               </div>
             ))}
           </div>
@@ -700,8 +687,8 @@ export default function ThemePreview({
         return (
           <div className="pm-sbar">
             <div className="pm-sbar-top">
-              <span>🔥 {bt(type, "text", "")}</span>
-              <strong style={{ color: col }}>{bt(type, "left", "8")}</strong>
+              <span>🔥 <span data-ef="text">{bt(type, "text", "")}</span></span>
+              <strong style={{ color: col }} data-ef="left">{bt(type, "left", "8")}</strong>
             </div>
             <div className="pm-sbar-track"><span className="pm-sbar-fill" style={{ width: `${level}%`, background: col }} /></div>
           </div>
@@ -716,8 +703,8 @@ export default function ThemePreview({
               <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z" /><path d="M9 12l2 2 4-4" /></svg>
             </span>
             <span className="pm-guar-txt">
-              <strong>{bt(type, "title", "")}</strong>
-              <em>{bt(type, "subtitle", "")}</em>
+              <strong data-ef="title">{bt(type, "title", "")}</strong>
+              <em data-ef="subtitle">{bt(type, "subtitle", "")}</em>
             </span>
           </div>
         );
@@ -733,7 +720,7 @@ export default function ThemePreview({
                 <span className="pm-hl-check" style={{ color: style === "circle" ? "#fff" : ac, background: style === "circle" ? ac : "transparent" }}>
                   {style === "arrow" ? "›" : <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>}
                 </span>
-                {it}
+                <span data-ef={`item_${i + 1}`}>{it}</span>
               </div>
             ))}
           </div>
@@ -746,7 +733,7 @@ export default function ThemePreview({
         return (
           <div className="pm-sp">
             <span className="pm-sp-ic" style={{ background: `color-mix(in srgb,${ac} 14%,transparent)` }}>{icon}</span>
-            <span className="pm-sp-txt"><strong>{bt(type, "count", "17")}</strong> {style === "sold" ? "heute verkauft" : bt(type, "text", "sehen sich das gerade an")}</span>
+            <span className="pm-sp-txt"><strong data-ef="count">{bt(type, "count", "17")}</strong> {style === "sold" ? "heute verkauft" : <span data-ef="text">{bt(type, "text", "sehen sich das gerade an")}</span>}</span>
             <span className="pm-sp-dot" />
           </div>
         );
@@ -756,7 +743,7 @@ export default function ThemePreview({
         const cells: [string, string][] = [["05", "Std"], ["23", "Min"], ["14", "Sek"]];
         return (
           <div className="pm-cdt">
-            <span className="pm-cdt-label">⏰ {bt(type, "text", "Angebot endet in")}</span>
+            <span className="pm-cdt-label">⏰ <span data-ef="text">{bt(type, "text", "Angebot endet in")}</span></span>
             <div className="pm-cdt-boxes">
               {cells.map(([d, l], i) => (
                 <span key={i} className="pm-cdt-cell" style={{ background: col }}><b>{d}</b><em>{l}</em></span>
@@ -770,9 +757,9 @@ export default function ThemePreview({
         const labels = [1, 2, 3, 4].map((n) => bt(type, `label_${n}`, "")).filter(Boolean);
         return (
           <div className={`pm-press pm-press--${style}`}>
-            <span className="pm-press-h">{bt(type, "heading", "Bekannt aus")}</span>
+            <span className="pm-press-h" data-ef="heading">{bt(type, "heading", "Bekannt aus")}</span>
             <div className="pm-press-row">
-              {labels.map((l, i) => <span key={i} className="pm-press-item">{l}</span>)}
+              {labels.map((l, i) => <span key={i} className="pm-press-item" data-ef={`label_${i + 1}`}>{l}</span>)}
             </div>
           </div>
         );
@@ -785,7 +772,7 @@ export default function ThemePreview({
         return (
           <div className={`pm-spec pm-spec--${style}`}>
             {rows.map((r, i) => (
-              <div key={i} className="pm-spec-row"><span className="pm-spec-l">{r.l}</span><span className="pm-spec-v">{r.v}</span></div>
+              <div key={i} className="pm-spec-row"><span className="pm-spec-l" data-ef={`label_${i + 1}`}>{r.l}</span><span className="pm-spec-v" data-ef={`value_${i + 1}`}>{r.v}</span></div>
             ))}
           </div>
         );
@@ -804,23 +791,23 @@ export default function ThemePreview({
         const save = bt(type, "save_text", "");
         return (
           <div className={`pm-vstack pm-vstack--${style}`} style={style === "accent" ? { background: `color-mix(in srgb,${ac} 8%,transparent)` } : undefined}>
-            {heading && <strong className="pm-vstack-h">{heading}</strong>}
+            {heading && <strong className="pm-vstack-h" data-ef="heading">{heading}</strong>}
             {rows.map((r, i) => (
               <div key={i} className="pm-vstack-row">
                 <span className="pm-vstack-item">
                   <span className="pm-vstack-ic" style={{ color: ac }}><Ic d="M20 6L9 17l-5-5" s={13} /></span>
-                  {r.item}
+                  <span data-ef={`item_${i + 1}`}>{r.item}</span>
                 </span>
                 {/^(gratis|free)$/i.test(r.val)
                   ? <span className="pm-vstack-free" style={{ background: ac }}>{r.val.toUpperCase()}</span>
-                  : r.val ? <s className="pm-vstack-val">{r.val}</s> : null}
+                  : r.val ? <s className="pm-vstack-val" data-ef={`value_${i + 1}`}>{r.val}</s> : null}
               </div>
             ))}
             {(total || today || save) && (
               <div className="pm-vstack-foot">
-                {total && <s className="pm-vstack-total">{total}</s>}
-                {today && <strong className="pm-vstack-today" style={{ color: ac }}>{today}</strong>}
-                {save && <span className="pm-vstack-save">{save}</span>}
+                {total && <s className="pm-vstack-total" data-ef="total_label">{total}</s>}
+                {today && <strong className="pm-vstack-today" style={{ color: ac }} data-ef="today_label">{today}</strong>}
+                {save && <span className="pm-vstack-save" data-ef="save_text">{save}</span>}
               </div>
             )}
           </div>
@@ -834,12 +821,12 @@ export default function ThemePreview({
         return (
           <div className={`pm-rq pm-rq--${style}`}>
             <div className="pm-rq-stars">★★★★★</div>
-            <p className="pm-rq-text">{bt(type, "text", "")}</p>
+            <p className="pm-rq-text" data-ef="text">{bt(type, "text", "")}</p>
             <div className="pm-rq-meta">
-              {initials && <span className="pm-rq-av" style={{ background: ac }}>{initials}</span>}
+              {initials && <span className="pm-rq-av" style={{ background: ac }} data-ef="initials">{initials}</span>}
               <span className="pm-rq-who">
-                <strong>{bt(type, "name", "")}</strong>
-                {verified && <em className="pm-rq-ver">✓ {verified}</em>}
+                <strong data-ef="name">{bt(type, "name", "")}</strong>
+                {verified && <em className="pm-rq-ver">✓ <span data-ef="verified">{verified}</span></em>}
               </span>
             </div>
           </div>
@@ -857,9 +844,9 @@ export default function ThemePreview({
           <div className={`pm-bcards pm-bcards--${style}`}>
             {[1, 2].map((n, i) => (
               <div key={n} className="pm-bcards-card" style={{ background: bgs[i] }}>
-                <span className="pm-bcards-emoji">{bt(type, `e${n}`, "")}</span>
-                <strong className="pm-bcards-title">{bt(type, `t${n}`, "")}</strong>
-                <span className="pm-bcards-text">{bt(type, `d${n}`, "")}</span>
+                <span className="pm-bcards-emoji" data-ef={`e${n}`}>{bt(type, `e${n}`, "")}</span>
+                <strong className="pm-bcards-title" data-ef={`t${n}`}>{bt(type, `t${n}`, "")}</strong>
+                <span className="pm-bcards-text" data-ef={`d${n}`}>{bt(type, `d${n}`, "")}</span>
               </div>
             ))}
           </div>
@@ -874,10 +861,10 @@ export default function ThemePreview({
           <div className={`pm-uspg pm-uspg--${style}`}>
             {items.map((it, i) => (
               <div key={i} className="pm-uspg-cell">
-                <span className="pm-uspg-emoji">{it.e}</span>
+                <span className="pm-uspg-emoji" data-ef={`e${i + 1}`}>{it.e}</span>
                 <span className="pm-uspg-txt">
-                  <strong>{it.t}</strong>
-                  {style !== "compact" && it.sub ? <em>{it.sub}</em> : null}
+                  <strong data-ef={`t${i + 1}`}>{it.t}</strong>
+                  {style !== "compact" && it.sub ? <em data-ef={`s${i + 1}`}>{it.sub}</em> : null}
                 </span>
               </div>
             ))}
@@ -899,8 +886,8 @@ export default function ThemePreview({
               ))}
             </span>
             <span className="pm-avp-txt">
-              <strong>{bt(type, "name", "")}</strong>
-              <span className="pm-avp-check">✓</span> {bt(type, "join", "und")} <strong>{bt(type, "count", "")}</strong> {bt(type, "text", "")}
+              <strong data-ef="name">{bt(type, "name", "")}</strong>
+              <span className="pm-avp-check">✓</span> <span data-ef="join">{bt(type, "join", "und")}</span> <strong data-ef="count">{bt(type, "count", "")}</strong> <span data-ef="text">{bt(type, "text", "")}</span>
             </span>
           </div>
         );
@@ -928,10 +915,10 @@ export default function ThemePreview({
             <div className="pm-shipc-line">
               <span className="pm-shipc-ic" style={{ color: ac }}><Ic d={ICON.truck} s={15} /></span>
               <span className="pm-shipc-txt">
-                {bt(type, "before", "")} <b style={{ color: ac }}>3 Std 12 Min 08 Sek</b> {bt(type, "after", "")}
+                <span data-ef="before">{bt(type, "before", "")}</span> <b style={{ color: ac }}>3 Std 12 Min 08 Sek</b> <span data-ef="after">{bt(type, "after", "")}</span>
               </span>
             </div>
-            <div className="pm-shipc-eta">{bt(type, "eta_label", "")} <b>{businessDate(etaMin)} – {businessDate(etaMax)}</b></div>
+            <div className="pm-shipc-eta"><span data-ef="eta_label">{bt(type, "eta_label", "")}</span> <b>{businessDate(etaMin)} – {businessDate(etaMax)}</b></div>
           </div>
         );
       }
@@ -951,8 +938,8 @@ export default function ThemePreview({
               {style === "check" ? <Ic d="M20 6L9 17l-5-5" s={16} /> : <Ic d="M9 14L4 9l5-5 M4 9h10.5a5.5 5.5 0 0 1 0 11H11" s={16} />}
             </span>
             <span className="pm-retp-txt">
-              <strong>{bt(type, "title", "")}</strong>
-              <em>{bt(type, "subtitle", "")}</em>
+              <strong data-ef="title">{bt(type, "title", "")}</strong>
+              <em data-ef="subtitle">{bt(type, "subtitle", "")}</em>
             </span>
           </div>
         );
@@ -966,28 +953,28 @@ export default function ThemePreview({
         const closing = bt(type, "closing", "");
         return (
           <div className={`pm-fit pm-fit--${style}`}>
-            {heading && <strong className="pm-fit-h">{heading}</strong>}
+            {heading && <strong className="pm-fit-h" data-ef="heading">{heading}</strong>}
             <div className="pm-fit-cols">
               <div className="pm-fit-block pm-fit-yes">
-                <em className="pm-fit-title">{bt(type, "yes_title", "")}</em>
+                <em className="pm-fit-title" data-ef="yes_title">{bt(type, "yes_title", "")}</em>
                 {yesRows.map((t2, i) => (
                   <div key={i} className="pm-fit-row">
                     <span className="pm-fit-ic" style={{ color: "#1d9e55" }}><Ic d="M20 6L9 17l-5-5" s={12} /></span>
-                    <span>{t2}</span>
+                    <span data-ef={`yes_${i + 1}`}>{t2}</span>
                   </div>
                 ))}
               </div>
               {no1 && (
                 <div className="pm-fit-block pm-fit-no">
-                  <em className="pm-fit-title">{bt(type, "no_title", "")}</em>
+                  <em className="pm-fit-title" data-ef="no_title">{bt(type, "no_title", "")}</em>
                   <div className="pm-fit-row">
                     <span className="pm-fit-ic" style={{ color: "#b0b0b0" }}><Ic d="M18 6L6 18 M6 6l12 12" s={12} /></span>
-                    <span>{no1}</span>
+                    <span data-ef="no_1">{no1}</span>
                   </div>
                 </div>
               )}
             </div>
-            {closing && <div className="pm-fit-close" style={{ color: ac }}>{closing}</div>}
+            {closing && <div className="pm-fit-close" style={{ color: ac }} data-ef="closing">{closing}</div>}
           </div>
         );
       }
@@ -998,15 +985,15 @@ export default function ThemePreview({
         const title = bt(type, "title", "");
         return (
           <div className={`pm-mcmp pm-mcmp--${style}`}>
-            {title && <strong className="pm-mcmp-h">{title}</strong>}
+            {title && <strong className="pm-mcmp-h" data-ef="title">{title}</strong>}
             <div className="pm-mcmp-row pm-mcmp-head" style={style === "card" ? { background: `color-mix(in srgb,${ac} 12%,transparent)` } : undefined}>
               <span className="pm-mcmp-crit" />
-              <span className={`pm-mcmp-col ${style === "pills" ? "pm-mcmp-pill" : ""}`} style={style === "pills" ? { background: ac } : { color: ac }}>{bt(type, "us_label", "Wir")}</span>
-              <span className={`pm-mcmp-col ${style === "pills" ? "pm-mcmp-pill pm-mcmp-pill--dim" : ""}`}>{bt(type, "them_label", "Andere")}</span>
+              <span className={`pm-mcmp-col ${style === "pills" ? "pm-mcmp-pill" : ""}`} style={style === "pills" ? { background: ac } : { color: ac }} data-ef="us_label">{bt(type, "us_label", "Wir")}</span>
+              <span className={`pm-mcmp-col ${style === "pills" ? "pm-mcmp-pill pm-mcmp-pill--dim" : ""}`} data-ef="them_label">{bt(type, "them_label", "Andere")}</span>
             </div>
             {rows.map((t2, i) => (
               <div key={i} className="pm-mcmp-row">
-                <span className="pm-mcmp-crit">{t2}</span>
+                <span className="pm-mcmp-crit" data-ef={`row_${i + 1}`}>{t2}</span>
                 <span className="pm-mcmp-col"><span style={{ color: "#1d9e55", display: "inline-flex" }}><Ic d="M20 6L9 17l-5-5" s={13} /></span></span>
                 <span className="pm-mcmp-col"><span className="pm-mcmp-no"><Ic d="M18 6L6 18 M6 6l12 12" s={13} /></span></span>
               </div>
@@ -1024,12 +1011,12 @@ export default function ThemePreview({
             className={`pm-coup pm-coup--${style}`}
             style={{ borderColor: `color-mix(in srgb,${ac} 45%,transparent)`, ...(style === "strip" ? { background: `color-mix(in srgb,${ac} 7%,transparent)` } : {}) }}
           >
-            {title && <strong className="pm-coup-h">{title}</strong>}
+            {title && <strong className="pm-coup-h" data-ef="title">{title}</strong>}
             <div className="pm-coup-row">
-              <span className="pm-coup-code" style={{ color: ac, borderColor: `color-mix(in srgb,${ac} 40%,transparent)` }}>{bt(type, "code", "")}</span>
-              <button type="button" className="pm-coup-btn" style={{ background: ac }} onClick={(e) => e.stopPropagation()}>{bt(type, "button", "")}</button>
+              <span className="pm-coup-code" style={{ color: ac, borderColor: `color-mix(in srgb,${ac} 40%,transparent)` }} data-ef="code">{bt(type, "code", "")}</span>
+              <button type="button" className="pm-coup-btn" style={{ background: ac }} onClick={(e) => e.stopPropagation()} data-ef="button">{bt(type, "button", "")}</button>
             </div>
-            {note && <em className="pm-coup-note">{note}</em>}
+            {note && <em className="pm-coup-note" data-ef="note">{note}</em>}
           </div>
         );
       }
@@ -1668,10 +1655,10 @@ const CSS = `
 .pm-pick{cursor:pointer;outline:2px dashed transparent;outline-offset:4px;border-radius:10px;transition:outline-color .15s}
 .pm-pick:hover{outline-color:color-mix(in srgb,#f59e0b 70%,transparent)}
 .pm-docsec{position:relative}
-/* ── Inline-Text-Bearbeitung ── */
-.pm-edit-on :is(h1,h2,h3,h4,p,span,strong,em,li,blockquote){cursor:text}
-.pm-edit-on :is(h1,h2,h3,h4,p,span,strong,em,li,blockquote):hover:not(:has(*)):not(.pm-editing){text-decoration:underline;text-decoration-style:dotted;text-decoration-color:color-mix(in srgb,#95BF47 75%,transparent);text-underline-offset:3px}
-.pm-editing{outline:2px solid #95BF47;outline-offset:2px;border-radius:4px;background:color-mix(in srgb,#95BF47 8%,transparent);cursor:text;min-width:12px}
+/* ── Inline-Text-Bearbeitung: nur data-ef-Elemente sind editierbar ── */
+.pm-edit-on [data-ef]{cursor:text;transition:background .12s}
+.pm-edit-on [data-ef]:hover:not(.pm-editing){text-decoration:underline;text-decoration-style:dotted;text-decoration-color:color-mix(in srgb,#95BF47 75%,transparent);text-underline-offset:3px;background:color-mix(in srgb,#95BF47 8%,transparent);border-radius:3px}
+.pm-editing{outline:2px solid #95BF47;outline-offset:2px;border-radius:4px;background:color-mix(in srgb,#95BF47 8%,transparent)!important;cursor:text;min-width:12px}
 .pm-insert{display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;opacity:.28;transition:opacity .15s}
 .pm-insert:hover{opacity:1}
 .pm-insert-line{flex:1;height:2px;border-radius:2px;background:#95BF47}

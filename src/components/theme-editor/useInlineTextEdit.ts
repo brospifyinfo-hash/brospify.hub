@@ -18,11 +18,28 @@
 
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
-import { normSingle, normMulti } from "@/components/theme-editor/inlineTextMatch";
 
 export interface InlineEditTarget {
   multiline: boolean;
   commit: (value: string) => void;
+}
+
+/** Einzeilig: NBSP/Whitespace → ein Space, trimmen. */
+function normSingle(s: string): string {
+  return s.replace(/ /g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Mehrzeilig: Zeilenumbrüche BEHALTEN, je Zeile horizontale Whitespaces
+ *  kollabieren, Leerzeilen-Ketten begrenzen. */
+function normMulti(s: string): string {
+  return s
+    .replace(/ /g, " ")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").trim())
+    .join("\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 export function useInlineTextEdit(
@@ -103,16 +120,11 @@ export function useInlineTextEdit(
       if (active && (target === active.el || active.el.contains(target))) return;
       if (active) finish(true);
 
-      // Blatt-Element bestimmen (nur reiner Text, keine Kind-Elemente).
-      let leaf: HTMLElement | null = target;
-      if (leaf.childElementCount > 0) {
-        if (leaf.childElementCount === 1 && (leaf.firstElementChild as HTMLElement).childElementCount === 0) {
-          leaf = leaf.firstElementChild as HTMLElement;
-        } else {
-          return;
-        }
-      }
-      if (leaf.tagName === "BUTTON" || leaf.tagName === "A" || leaf.isContentEditable) return;
+      // PRÄZISE: das editierbare Textelement ist mit data-ef markiert (Feld-ID).
+      const leaf = target.closest<HTMLElement>("[data-ef]");
+      if (!leaf || !root.contains(leaf) || leaf.isContentEditable) return;
+      // data-ef-Elemente tragen nur reinen Text — Kind-Elemente wären ein Bug.
+      if (leaf.childElementCount > 0) return;
 
       const tgt = resolveRef.current(leaf);
       if (!tgt) return; // kein editierbares Feld an dieser Stelle

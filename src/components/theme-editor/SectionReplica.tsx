@@ -131,10 +131,10 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           {img(0) && <img className="te-cta-bg" src={img(0)} alt="" />}
           <span className="te-cta-overlay" style={{ opacity: num(s.overlay_opacity, 45) / 100 }} />
           <div className="te-cta-inner" style={{ maxWidth: num(s.max_width, 720) * 0.8 }}>
-            <span className="te-eyebrow" style={{ color: "#fff" }}>{t.eyebrow}</span>
-            <h2 className="te-cta-h" style={{ fontSize: Math.round(num(s.h_size_desktop, 44) * 0.8) }}>{t.heading}</h2>
-            <p className="te-cta-sub">{t.subheading}</p>
-            <span className="te-cta-btn" style={{ background: str(s.btn_primary_bg, ctx.palette.button), color: str(s.btn_primary_text, ctx.palette.buttonText) }}>{t.cta} →</span>
+            <span className="te-eyebrow" style={{ color: "#fff" }} data-ef="eyebrow">{t.eyebrow}</span>
+            <h2 className="te-cta-h" style={{ fontSize: Math.round(num(s.h_size_desktop, 44) * 0.8) }} data-ef="heading">{t.heading}</h2>
+            <p className="te-cta-sub" data-ef="subheading">{t.subheading}</p>
+            <span className="te-cta-btn" style={{ background: str(s.btn_primary_bg, ctx.palette.button), color: str(s.btn_primary_text, ctx.palette.buttonText) }}><span data-ef="cta">{t.cta}</span> →</span>
           </div>
         </div>
       );
@@ -147,8 +147,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       return (
         <div className="te-count" style={{ background: bg, color: fg }}>
           <div>
-            <strong className="te-count-h">{t.heading}</strong>
-            <span className="te-count-sub">{t.subheading}</span>
+            <strong className="te-count-h" data-ef="heading">{t.heading}</strong>
+            <span className="te-count-sub" data-ef="subheading">{t.subheading}</span>
           </div>
           <div className="te-count-timer">
             {["02", "14", "36", "52"].map((d, i) => (
@@ -169,7 +169,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const arch = str(s.image_shape, "default") === "arch";
       return (
         <div className="te-sec">
-          <h2 className="te-h">{t.title}</h2>
+          <h2 className="te-h" data-ef="title">{t.title}</h2>
           <div className="te-featgrid" style={{ gridTemplateColumns: `repeat(${Math.min(cols, count)},1fr)` }}>
             {Array.from({ length: count }).map((_, i) => (
               <div key={i} className="te-featcard">
@@ -207,9 +207,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const ac = str(s.color_accent, ctx.palette.accent);
       return (
         <div className="te-fullpad" style={{ background: bg, color: text }}>
-          <span className="te-eyebrow" style={{ color: ac }}>{t.eyebrow}</span>
-          <h2 className="te-h" style={{ marginBottom: 4 }}>{t.headline} <em style={{ color: ac, fontStyle: "normal" }}>{t.headlineEm}</em></h2>
-          <p className="te-sub">{t.subline}</p>
+          <span className="te-eyebrow" style={{ color: ac }} data-ef="eyebrow">{t.eyebrow}</span>
+          <h2 className="te-h" style={{ marginBottom: 4 }}><span data-ef="headline">{t.headline}</span> <em style={{ color: ac, fontStyle: "normal" }} data-ef="headlineEm">{t.headlineEm}</em></h2>
+          <p className="te-sub" data-ef="subline">{t.subline}</p>
           <div className="te-revgrid">
             {REVIEWS.slice(0, 3).map((r, i) => (
               <div key={i} className="te-revcard" style={{ background: card }}>
@@ -227,8 +227,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const hs = num(s.heading_size, 40) * 0.72;
       return (
         <div className="te-sec" style={{ maxWidth: num(s.max_width, 900), margin: "0 auto" }}>
-          <h2 className="te-h" style={{ fontSize: hs }}>{t.heading}</h2>
-          <p className="te-sub">{t.subheading}</p>
+          <h2 className="te-h" style={{ fontSize: hs }} data-ef="heading">{t.heading}</h2>
+          <p className="te-sub" data-ef="subheading">{t.subheading}</p>
           <div className="te-ratingrows">
             {RATING_CATS.map((c, i) => (
               <div key={c} className="te-ratingrow">
@@ -266,8 +266,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const dark = bg.startsWith("#1") || bg.startsWith("#0");
       return (
         <div className="te-fullpad" style={{ background: bg, color: dark ? "#f5f5f7" : undefined }}>
-          <h2 className="te-h">{t.title}</h2>
-          <p className="te-sub">{t.subtitle}</p>
+          <h2 className="te-h" data-ef="title">{t.title}</h2>
+          <p className="te-sub" data-ef="subtitle">{t.subtitle}</p>
           <div className="te-vids">
             {[0, 1, 2].map((i) => (
               <div key={i} className="te-vid">
@@ -284,7 +284,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const size = num(s.icon_size, 40) * 0.8;
       return (
         <div className="te-sec" style={{ textAlign: "center" }}>
-          <h2 className="te-h" style={{ fontSize: 20 }}>{t.heading}</h2>
+          <h2 className="te-h" style={{ fontSize: 20 }} data-ef="heading">{t.heading}</h2>
           <div className="te-socials">
             {SOCIALS.map((n) => (
               <span key={n} className="te-social" style={{ width: size, height: size }} title={n}>{n[0]}</span>
@@ -302,9 +302,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const feats = (preset2?.blocks || []).filter((b) => b.type === "feature");
       return (
         <div className="te-sec" style={{ textAlign: str(s.heading_align, "center") as CSSProperties["textAlign"] }}>
-          <span className="te-eyebrow">{t.eyebrow}</span>
-          <h2 className="te-h" style={{ textAlign: "inherit" }}>{t.heading}</h2>
-          <p className="te-sub" style={{ textAlign: "inherit" }}>{t.subheading}</p>
+          <span className="te-eyebrow" data-ef="eyebrow">{t.eyebrow}</span>
+          <h2 className="te-h" style={{ textAlign: "inherit" }} data-ef="heading">{t.heading}</h2>
+          <p className="te-sub" style={{ textAlign: "inherit" }} data-ef="subheading">{t.subheading}</p>
           <div className="te-fgrid" style={{ gridTemplateColumns: `repeat(${cols},1fr)` }}>
             {(feats.length ? feats : [0, 1, 2].map(() => null)).map((f, i) => (
               <div key={i} className="te-fcard" style={{ padding: cardPad, textAlign: alignLeft ? "left" : "center", borderRadius: num(s.card_radius, 14) }}>
@@ -332,9 +332,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
             {img(1) ? <img src={img(1)} alt="" /> : <span className="te-noimg" />}
           </div>
           <div className="te-iwt-txt" style={{ textAlign: centered ? "center" : "left" }}>
-            <h2 className="te-h" style={{ textAlign: "inherit" }}>{t.heading}</h2>
-            <p>{t.text}</p>
-            {t.cta && <span className="te-btn">{t.cta}</span>}
+            <h2 className="te-h" style={{ textAlign: "inherit" }} data-ef="heading">{t.heading}</h2>
+            <p data-ef="text">{t.text}</p>
+            {t.cta && <span className="te-btn" data-ef="cta">{t.cta}</span>}
           </div>
         </div>
       );
@@ -347,7 +347,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const colBlocks = (preset2?.blocks || []).filter((b) => b.type === "column");
       return (
         <div className="te-sec">
-          <h2 className="te-h">{t.title}</h2>
+          <h2 className="te-h" data-ef="title">{t.title}</h2>
           <div className="te-fgrid" style={{ gridTemplateColumns: `repeat(${cols},1fr)` }}>
             {colBlocks.slice(0, cols === 4 ? 4 : 3).map((c, i) => (
               <div key={i} className={cards ? "te-fcard" : "te-col"} style={{ textAlign: str(s.column_alignment, "center") as CSSProperties["textAlign"] }}>
@@ -364,8 +364,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const align = str(s.content_alignment, "center");
       return (
         <div className="te-sec" style={{ textAlign: align as CSSProperties["textAlign"], maxWidth: s.full_width ? "none" : 720, margin: "0 auto" }}>
-          <h2 className="te-h" style={{ textAlign: "inherit", fontSize: 30 }}>{t.heading}</h2>
-          <p className="te-richtext">{t.text}</p>
+          <h2 className="te-h" style={{ textAlign: "inherit", fontSize: 30 }} data-ef="heading">{t.heading}</h2>
+          <p className="te-richtext" data-ef="text">{t.text}</p>
         </div>
       );
     }
@@ -378,9 +378,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           {img(2) ? <img src={img(2)} alt="" /> : <span className="te-noimg" />}
           <span className="te-scroll-ov" style={{ opacity: num(s.overlay_opacity, 60) / 100 }} />
           <div className="te-scroll-txt">
-            <span className="te-eyebrow" style={{ color: "#fff" }}>{t.eyebrow}</span>
-            <strong>{t.line1}</strong>
-            <strong style={{ color: ctx.palette.accent }}>{t.line2}</strong>
+            <span className="te-eyebrow" style={{ color: "#fff" }} data-ef="eyebrow">{t.eyebrow}</span>
+            <strong data-ef="line1">{t.line1}</strong>
+            <strong style={{ color: ctx.palette.accent }} data-ef="line2">{t.line2}</strong>
           </div>
         </div>
       );
@@ -391,7 +391,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const carded = str(s.card_styles, "none") !== "none";
       return (
         <div className="te-sec">
-          <h2 className="te-h">{t.heading}</h2>
+          <h2 className="te-h" data-ef="heading">{t.heading}</h2>
           <div className="te-collage" style={{ flexDirection: right ? "row-reverse" : "row" }}>
             <div className={`te-colbig ${carded ? "card" : ""}`}>{img(0) ? <img src={img(0)} alt="" /> : <span className="te-noimg" />}</div>
             <div className="te-colsmall">
@@ -407,7 +407,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const full = !!s.full_width;
       return (
         <div className="te-sec" style={{ maxWidth: full ? "none" : 860, margin: "0 auto" }}>
-          <h2 className="te-h">{t.heading}</h2>
+          <h2 className="te-h" data-ef="heading">{t.heading}</h2>
           <div className="te-video" style={{ borderRadius: full ? 0 : "min(var(--pv-r),18px)" }}>
             {img(0) ? <img src={img(0)} alt="" /> : <span className="te-noimg" />}
             <span className="te-play te-play-lg">▶</span>
@@ -421,8 +421,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const row = `${icon} ${t.text} `;
       return (
         <div className="te-sec te-clip" style={{ textAlign: "center" }}>
-          <span className="te-eyebrow">{t.subtitle}</span>
-          <h2 className="te-h" style={{ marginBottom: 10 }}>{t.title}</h2>
+          <span className="te-eyebrow" data-ef="subtitle">{t.subtitle}</span>
+          <h2 className="te-h" style={{ marginBottom: 10 }} data-ef="title">{t.title}</h2>
           <div className="te-marqueetxt">
             <span style={{ color: ctx.palette.accent }}>{row.repeat(4)}</span>
           </div>
@@ -440,13 +440,13 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const firstOpen = s.auto_close !== false;
       return (
         <div className="te-sec" style={{ maxWidth: 680, margin: "0 auto", textAlign: "center" }}>
-          <h2 className="te-h">{t.title}</h2>
-          <p className="te-sub">{t.subtitle}</p>
+          <h2 className="te-h" data-ef="title">{t.title}</h2>
+          <p className="te-sub" data-ef="subtitle">{t.subtitle}</p>
           <div className="te-faq">
             {rows.map((r, i) => (
               <div key={i} className="te-faqitem">
-                <div className="te-faqq"><span>{r.q}</span><span className="te-faqplus" style={{ color: ctx.palette.accent }}>{firstOpen && i === 0 ? "−" : "+"}</span></div>
-                {firstOpen && i === 0 && <div className="te-faqa">{r.a}</div>}
+                <div className="te-faqq"><span data-ef={`q${i + 1}`}>{r.q}</span><span className="te-faqplus" style={{ color: ctx.palette.accent }}>{firstOpen && i === 0 ? "−" : "+"}</span></div>
+                {firstOpen && i === 0 && <div className="te-faqa" data-ef={`a${i + 1}`}>{r.a}</div>}
               </div>
             ))}
           </div>
@@ -460,7 +460,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const rows = (preset2?.blocks || []).filter((b) => b.type === "collapsible_row").slice(0, 4);
       return (
         <div className="te-sec" style={{ maxWidth: 680, margin: "0 auto" }}>
-          <h2 className="te-h" style={{ textAlign: str(s.heading_alignment, "center") as CSSProperties["textAlign"] }}>{t.heading}</h2>
+          <h2 className="te-h" style={{ textAlign: str(s.heading_alignment, "center") as CSSProperties["textAlign"] }} data-ef="heading">{t.heading}</h2>
           <div className={`te-faq ${sectionStyle ? "te-faqjoined" : ""}`}>
             {rows.map((r, i) => (
               <div key={i} className="te-faqitem">
@@ -476,7 +476,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const alignSel = str(s.heading_align, "center");
       return (
         <div className="te-sec" style={{ maxWidth: num(s.max_width, 900), margin: "0 auto" }}>
-          <h2 className="te-h" style={{ textAlign: alignSel as CSSProperties["textAlign"] }}>{t.heading}</h2>
+          <h2 className="te-h" style={{ textAlign: alignSel as CSSProperties["textAlign"] }} data-ef="heading">{t.heading}</h2>
           <div className="te-tabs" style={{ justifyContent: str(s.tab_align, "center") === "center" ? "center" : "flex-start" }}>
             {["Beschreibung", "Versand", "Garantie"].map((tab, i) => (
               <span key={tab} className={`te-tab ${i === 0 ? "on" : ""}`} style={i === 0 ? { borderColor: ctx.palette.accent, color: ctx.palette.accent } : undefined}>{tab}</span>
@@ -498,9 +498,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           {img(0) ? <img src={img(0)} alt="" /> : <span className="te-noimg" />}
           <span className="te-hero-ov" />
           <div className="te-hero-txt">
-            <strong>{t.heading}</strong>
-            <span>{t.subheading}</span>
-            <em className="te-hero-btn" style={{ background: ctx.palette.button, color: ctx.palette.buttonText }}>{t.cta}</em>
+            <strong data-ef="heading">{t.heading}</strong>
+            <span data-ef="subheading">{t.subheading}</span>
+            <em className="te-hero-btn" style={{ background: ctx.palette.button, color: ctx.palette.buttonText }} data-ef="cta">{t.cta}</em>
           </div>
           <div className="te-hero-dots"><span style={{ background: ctx.palette.accent }} /><span /><span /></div>
         </div>
@@ -514,7 +514,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           {[{ ti: t.title1, tx: t.text1 }, { ti: t.title2, tx: t.text2 }].map((b, i) => (
             <div key={i} className="te-benefit2">
               <span className="te-ficon"><RIcon id={i === 0 ? "sparkle" : "check"} size={16} /></span>
-              <span><strong>{b.ti}</strong><p>{b.tx}</p></span>
+              <span><strong data-ef={`title${i + 1}`}>{b.ti}</strong><p data-ef={`text${i + 1}`}>{b.tx}</p></span>
             </div>
           ))}
         </div>
@@ -532,10 +532,10 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
               ))}
             </div>
             <div className="te-photo-txt">
-              <span className="te-eyebrow">{t.subtitle}</span>
-              <h2 className="te-h" style={{ textAlign: "left" }}>{t.title}</h2>
-              <p>{t.description}</p>
-              <span className="te-btn" style={{ background: str(s.btn_bg_color, ctx.palette.button), color: str(s.btn_text_color, ctx.palette.buttonText) }}>{t.cta}</span>
+              <span className="te-eyebrow" data-ef="subtitle">{t.subtitle}</span>
+              <h2 className="te-h" style={{ textAlign: "left" }} data-ef="title">{t.title}</h2>
+              <p data-ef="description">{t.description}</p>
+              <span className="te-btn" style={{ background: str(s.btn_bg_color, ctx.palette.button), color: str(s.btn_text_color, ctx.palette.buttonText) }} data-ef="cta">{t.cta}</span>
             </div>
           </div>
         </div>
@@ -548,11 +548,11 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       return (
         <div className="te-map" style={{ flexDirection: mapLeft ? "row-reverse" : "row" }}>
           <div className="te-map-txt">
-            <span className="te-eyebrow">{t.subtitle}</span>
-            <h2 className="te-h" style={{ textAlign: "left" }}>{t.title}</h2>
-            <p>{t.text}</p>
-            <span className="te-map-addr">📍 {t.address}</span>
-            <span className="te-btn" style={{ background: str(s.btn_bg_color, ctx.palette.button), color: str(s.btn_text_color, ctx.palette.buttonText) }}>{t.cta}</span>
+            <span className="te-eyebrow" data-ef="subtitle">{t.subtitle}</span>
+            <h2 className="te-h" style={{ textAlign: "left" }} data-ef="title">{t.title}</h2>
+            <p data-ef="text">{t.text}</p>
+            <span className="te-map-addr">📍 <span data-ef="address">{t.address}</span></span>
+            <span className="te-btn" style={{ background: str(s.btn_bg_color, ctx.palette.button), color: str(s.btn_text_color, ctx.palette.buttonText) }} data-ef="cta">{t.cta}</span>
           </div>
           <div className={`te-map-canvas ${dark ? "dark" : ""}`}>
             <span className="te-map-pin" style={{ background: str(s.pin_color, ctx.palette.accent) }} />
@@ -569,26 +569,26 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const rows = [1, 2, 3, 4, 5, 6].map((n) => t[`row_${n}`]).filter(Boolean);
       return (
         <div className={`te-cmp te-cmp--${layout} ${dark ? "te-cmp--dark" : ""}`} style={{ borderRadius: num(s.radius, 16) }}>
-          <h2 className="te-h" style={dark ? { color: "#fff" } : undefined}>{t.heading}</h2>
-          <p className="te-sub" style={dark ? { color: "rgba(255,255,255,.65)" } : undefined}>{t.subheading}</p>
+          <h2 className="te-h" style={dark ? { color: "#fff" } : undefined} data-ef="heading">{t.heading}</h2>
+          <p className="te-sub" style={dark ? { color: "rgba(255,255,255,.65)" } : undefined} data-ef="subheading">{t.subheading}</p>
           <div className="te-cmp-table" style={{ borderRadius: num(s.radius, 16) }}>
             <div className="te-cmp-row te-cmp-head">
               <span className="te-cmp-crit" />
               <span className="te-cmp-col te-cmp-us" style={{ background: `color-mix(in srgb,${ac} ${layout === "cards" ? 16 : 12}%,transparent)`, color: ac }}>
-                {t.ribbon && <em className="te-cmp-ribbon" style={{ background: ac }}>{t.ribbon}</em>}
-                {t.us_label}
+                {t.ribbon && <em className="te-cmp-ribbon" style={{ background: ac }} data-ef="ribbon">{t.ribbon}</em>}
+                <span data-ef="us_label">{t.us_label}</span>
               </span>
-              <span className="te-cmp-col">{t.them_label}</span>
+              <span className="te-cmp-col" data-ef="them_label">{t.them_label}</span>
             </div>
             {rows.map((r, i) => (
               <div key={i} className="te-cmp-row">
-                <span className="te-cmp-crit">{r}</span>
+                <span className="te-cmp-crit" data-ef={`row_${i + 1}`}>{r}</span>
                 <span className="te-cmp-col te-cmp-us" style={{ background: `color-mix(in srgb,${ac} 8%,transparent)` }}><b style={{ color: "#1d9e55" }}>✓</b></span>
                 <span className="te-cmp-col te-cmp-x">✕</span>
               </div>
             ))}
           </div>
-          {t.cta_label && <div style={{ textAlign: "center" }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
+          {t.cta_label && <div style={{ textAlign: "center" }}><span className="te-btn" style={{ background: ac, color: "#fff" }} data-ef="cta_label">{t.cta_label}</span></div>}
         </div>
       );
     }
@@ -605,18 +605,18 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
         >
           <div className="te-guar2-main">
             <span className="te-guar2-seal" style={{ background: onAccent ? "#fff" : ac, color: onAccent ? ac : "#fff" }}>
-              <b>{t.seal_text}</b>
+              <b data-ef="seal_text">{t.seal_text}</b>
               <em>✓ Garantie</em>
             </span>
-            <h2 className="te-h" style={{ color: "inherit" }}>{t.heading}</h2>
-            <p className="te-guar2-txt">{t.text}</p>
+            <h2 className="te-h" style={{ color: "inherit" }} data-ef="heading">{t.heading}</h2>
+            <p className="te-guar2-txt" data-ef="text">{t.text}</p>
             <div className="te-guar2-bullets">
               {bullets.map((b, i) => (
-                <span key={i} className="te-guar2-b"><b style={{ color: onAccent ? "#fff" : "#1d9e55" }}>✓</b> {b}</span>
+                <span key={i} className="te-guar2-b"><b style={{ color: onAccent ? "#fff" : "#1d9e55" }}>✓</b> <span data-ef={`bullet_${i + 1}`}>{b}</span></span>
               ))}
             </div>
-            {t.cta_label && <span className="te-btn" style={{ background: onAccent ? "#fff" : ac, color: onAccent ? ac : "#fff" }}>{t.cta_label}</span>}
-            {t.note && <span className="te-guar2-note">{t.note}</span>}
+            {t.cta_label && <span className="te-btn" style={{ background: onAccent ? "#fff" : ac, color: onAccent ? ac : "#fff" }} data-ef="cta_label">{t.cta_label}</span>}
+            {t.note && <span className="te-guar2-note" data-ef="note">{t.note}</span>}
           </div>
           {layout === "split" && img(0) && <div className="te-guar2-img"><img src={img(0)} alt="" /></div>}
         </div>
@@ -629,20 +629,20 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const steps = [1, 2, 3].map((n) => ({ title: t[`s${n}_title`], text: t[`s${n}_text`] }));
       return (
         <div className="te-sec">
-          <h2 className="te-h">{t.heading}</h2>
-          <p className="te-sub">{t.subheading}</p>
+          <h2 className="te-h" data-ef="heading">{t.heading}</h2>
+          <p className="te-sub" data-ef="subheading">{t.subheading}</p>
           <div className={`te-steps te-steps--${layout}`}>
             {steps.map((st, i) => (
               <div key={i} className="te-steps-item" style={layout === "cards" ? { borderRadius: num(s.radius, 16) } : undefined}>
                 <span className="te-steps-n" style={{ background: ac }}>{i + 1}</span>
                 <div className="te-steps-txt">
-                  <strong>{st.title}</strong>
-                  <span>{st.text}</span>
+                  <strong data-ef={`s${i + 1}_title`}>{st.title}</strong>
+                  <span data-ef={`s${i + 1}_text`}>{st.text}</span>
                 </div>
               </div>
             ))}
           </div>
-          {t.cta_label && <div style={{ textAlign: "center" }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
+          {t.cta_label && <div style={{ textAlign: "center" }}><span className="te-btn" style={{ background: ac, color: "#fff" }} data-ef="cta_label">{t.cta_label}</span></div>}
         </div>
       );
     }
@@ -656,16 +656,16 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           className={`te-stats te-stats--${layout}`}
           style={layout === "band" ? { background: ac, color: "#fff" } : undefined}
         >
-          {t.heading && <h2 className="te-h" style={{ color: "inherit" }}>{t.heading}</h2>}
+          {t.heading && <h2 className="te-h" style={{ color: "inherit" }} data-ef="heading">{t.heading}</h2>}
           <div className="te-stats-grid" style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 4)},1fr)` }}>
             {stats.map((x, i) => (
               <div key={i} className="te-stats-cell" style={layout === "cards" ? { border: "1px solid color-mix(in srgb,var(--pv-text) 12%,transparent)", borderRadius: 14, padding: "14px 8px" } : undefined}>
-                <b style={layout !== "band" ? { color: ac } : undefined}>{x.n}</b>
-                <span>{x.l}</span>
+                <b style={layout !== "band" ? { color: ac } : undefined} data-ef={`n${i + 1}`}>{x.n}</b>
+                <span data-ef={`l${i + 1}`}>{x.l}</span>
               </div>
             ))}
           </div>
-          {t.note && <span className="te-stats-note">{t.note}</span>}
+          {t.note && <span className="te-stats-note" data-ef="note">{t.note}</span>}
         </div>
       );
     }
@@ -683,24 +683,24 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
               className="te-pas-block te-pas-prob"
               style={{ borderRadius: num(s.radius, 20), ...(darkProb ? { background: "#151515", color: "#fff" } : {}) }}
             >
-              <strong className="te-pas-h">{t.p_heading}</strong>
+              <strong className="te-pas-h" data-ef="p_heading">{t.p_heading}</strong>
               {probs.map((x, i) => (
-                <span key={i} className="te-pas-row"><b style={{ color: "#e0332f" }}>✕</b> {x}</span>
+                <span key={i} className="te-pas-row"><b style={{ color: "#e0332f" }}>✕</b> <span data-ef={`p_${i + 1}`}>{x}</span></span>
               ))}
             </div>
-            {layout === "stack" && <div className="te-pas-bridge">{t.bridge}</div>}
+            {layout === "stack" && <div className="te-pas-bridge" data-ef="bridge">{t.bridge}</div>}
             <div
               className="te-pas-block te-pas-sol"
               style={{ borderRadius: num(s.radius, 20), borderColor: `color-mix(in srgb,${ac} 35%,transparent)`, background: `color-mix(in srgb,${ac} 6%,var(--pv-bg))` }}
             >
-              <strong className="te-pas-h" style={{ color: ac }}>{t.s_heading}</strong>
+              <strong className="te-pas-h" style={{ color: ac }} data-ef="s_heading">{t.s_heading}</strong>
               {sols.map((x, i) => (
-                <span key={i} className="te-pas-row"><b style={{ color: "#1d9e55" }}>✓</b> {x}</span>
+                <span key={i} className="te-pas-row"><b style={{ color: "#1d9e55" }}>✓</b> <span data-ef={`s_${i + 1}`}>{x}</span></span>
               ))}
             </div>
           </div>
-          {layout !== "stack" && t.bridge && <div className="te-pas-bridge" style={{ marginTop: 12 }}>{t.bridge}</div>}
-          {t.cta_label && <div style={{ textAlign: "center", marginTop: 14 }}><span className="te-btn" style={{ background: ac, color: "#fff" }}>{t.cta_label}</span></div>}
+          {layout !== "stack" && t.bridge && <div className="te-pas-bridge" style={{ marginTop: 12 }} data-ef="bridge">{t.bridge}</div>}
+          {t.cta_label && <div style={{ textAlign: "center", marginTop: 14 }}><span className="te-btn" style={{ background: ac, color: "#fff" }} data-ef="cta_label">{t.cta_label}</span></div>}
         </div>
       );
     }
@@ -715,27 +715,27 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const bubbleBg = look === "whatsapp" ? "#fff" : look === "imessage" ? "#e9e9eb" : `color-mix(in srgb,${ac} 10%,#fff)`;
       return (
         <div className="te-sec">
-          <h2 className="te-h">{t.heading}</h2>
+          <h2 className="te-h" data-ef="heading">{t.heading}</h2>
           <div className="te-chat-grid">
             {chats.map((c, i) => (
               <div key={i} className="te-chat-card">
                 <div className="te-chat-head">
                   <span className="te-chat-av" style={{ background: ac }}>{(c.name || "?").slice(0, 1).toUpperCase()}</span>
-                  <span className="te-chat-name">{c.name}</span>
+                  <span className="te-chat-name" data-ef={`c${i + 1}_name`}>{c.name}</span>
                   <span className="te-chat-dot" />
                 </div>
                 <div className="te-chat-body" style={{ background: chatBg }}>
                   {[c.m1, c.m2].filter(Boolean).map((m, j) => (
                     <div key={j} className="te-chat-bubble" style={{ background: bubbleBg }}>
-                      {m}
-                      <em>{c.time} <b style={{ color: look === "whatsapp" ? "#4fc3f7" : "#9a9a9f" }}>✓✓</b></em>
+                      <span data-ef={`c${i + 1}_m${j + 1}`}>{m}</span>
+                      <em><span data-ef={`c${i + 1}_time`}>{c.time}</span> <b style={{ color: look === "whatsapp" ? "#4fc3f7" : "#9a9a9f" }}>✓✓</b></em>
                     </div>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-          {t.note && <p className="te-chat-note">{t.note}</p>}
+          {t.note && <p className="te-chat-note" data-ef="note">{t.note}</p>}
         </div>
       );
     }
@@ -753,7 +753,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
         .filter((x) => x.title);
       return (
         <div className={`te-ib te-ib-${look}`} style={onDark ? { color: "#fff" } : undefined}>
-          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }}>{t.heading}</h2>}
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }} data-ef="heading">{t.heading}</h2>}
           <div className="te-ib-grid" style={{ gridTemplateColumns: `repeat(${Math.max(items.length, 1)},1fr)` }}>
             {items.map((it, i) => (
               <div key={i} className="te-ib-item">
@@ -763,8 +763,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
                 >
                   <RIcon id={it.icon} size={look === "minimal" ? 18 : 22} />
                 </span>
-                <strong className="te-ib-title">{it.title}</strong>
-                {it.sub && look !== "minimal" && <span className="te-ib-sub">{it.sub}</span>}
+                <strong className="te-ib-title" data-ef={`t${i + 1}`}>{it.title}</strong>
+                {it.sub && look !== "minimal" && <span className="te-ib-sub" data-ef={`d${i + 1}`}>{it.sub}</span>}
               </div>
             ))}
           </div>
@@ -779,13 +779,13 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const inner = (
         <>
           <span className="te-spot-mark" style={{ color: ac }}>„</span>
-          <blockquote className="te-spot-quote">{t.quote}</blockquote>
+          <blockquote className="te-spot-quote" data-ef="quote">{t.quote}</blockquote>
           <div className="te-spot-stars" style={{ color: ac }}>{STARS}</div>
           <div className="te-spot-who">
             <span className="te-spot-avatar" style={{ background: `color-mix(in srgb, ${ac} 18%, transparent)`, color: ac }}>{initials}</span>
             <span>
-              <strong>{t.name}</strong>
-              <em>{t.role}</em>
+              <strong data-ef="name">{t.name}</strong>
+              <em data-ef="role">{t.role}</em>
             </span>
           </div>
         </>
@@ -811,20 +811,20 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           <span className="te-call-chip" style={{ background: `color-mix(in srgb, ${ac} 14%, transparent)`, color: ac }}>
             <RIcon id={it.icon} size={17} />
           </span>
-          <span className="te-call-text">{it.text}</span>
+          <span className="te-call-text" data-ef={`c${k + 1}`}>{it.text}</span>
           <span className="te-call-line" style={{ background: `color-mix(in srgb, ${ac} 45%, transparent)` }} />
         </div>
       );
       return (
         <div className="te-call">
-          {t.heading && <h2 className="te-h" style={{ marginBottom: 26 }}>{t.heading}</h2>}
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 26 }} data-ef="heading">{t.heading}</h2>}
           <div className="te-call-stage">
             <div className="te-call-col">{left.map((it, i) => callout(it, i, "l"))}</div>
             <div className="te-call-imgwrap">
               {glow && <span className="te-call-glow" style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${ac} 32%, transparent), transparent)` }} />}
               {img(0) ? <img className="te-call-img" src={img(0)} alt="" /> : <span className="te-call-img te-noimg" />}
             </div>
-            <div className="te-call-col">{right.map((it, i) => callout(it, i, "r"))}</div>
+            <div className="te-call-col">{right.map((it, i) => callout(it, left.length + i, "r"))}</div>
           </div>
         </div>
       );
@@ -842,18 +842,18 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
         <div className="te-gcta" style={{ background: grad, borderRadius: num(s.radius, 24) }}>
           <span className="te-gcta-shine" />
           <div className="te-gcta-inner">
-            {t.eyebrow && <span className="te-eyebrow" style={{ color: "rgba(255,255,255,.85)" }}>{t.eyebrow}</span>}
-            <h2 className="te-gcta-h">{t.heading}</h2>
-            {t.subheading && <p className="te-gcta-sub">{t.subheading}</p>}
+            {t.eyebrow && <span className="te-eyebrow" style={{ color: "rgba(255,255,255,.85)" }} data-ef="eyebrow">{t.eyebrow}</span>}
+            <h2 className="te-gcta-h" data-ef="heading">{t.heading}</h2>
+            {t.subheading && <p className="te-gcta-sub" data-ef="subheading">{t.subheading}</p>}
             {chips.length > 0 && (
               <div className="te-gcta-chips">
                 {chips.map((c, i) => (
-                  <span key={i} className="te-gcta-chip"><RIcon id="check" size={13} /> {c}</span>
+                  <span key={i} className="te-gcta-chip"><RIcon id="check" size={13} /> <span data-ef={`chip${i + 1}`}>{c}</span></span>
                 ))}
               </div>
             )}
-            <span className="te-gcta-btn">{t.cta} →</span>
-            {t.note && <span className="te-gcta-note">{t.note}</span>}
+            <span className="te-gcta-btn"><span data-ef="cta">{t.cta}</span> →</span>
+            {t.note && <span className="te-gcta-note" data-ef="note">{t.note}</span>}
           </div>
         </div>
       );
@@ -865,13 +865,13 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const row = (key: string) => (
         <div key={key} className="te-logos-row">
           {badges.map((b, i) => (
-            <span key={i} className="te-logos-item">{b}</span>
+            <span key={i} className="te-logos-item" data-ef={`b${i + 1}`}>{b}</span>
           ))}
         </div>
       );
       return (
         <div className="te-logos">
-          {t.heading && <span className="te-logos-head">{t.heading}</span>}
+          {t.heading && <span className="te-logos-head" data-ef="heading">{t.heading}</span>}
           {look === "marquee" ? (
             <div className="te-logos-track"><div className="te-logos-scroll">{row("a")}{row("b")}</div></div>
           ) : (
@@ -886,15 +886,15 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const cards = [1, 2, 3].map((i) => ({ title: t[`c${i}_t`], sub: t[`c${i}_d`], src: img(i - 1) })).filter((c) => c.title);
       return (
         <div className="te-imgc">
-          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }}>{t.heading}</h2>}
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }} data-ef="heading">{t.heading}</h2>}
           <div className={`te-imgc-grid te-imgc-${look}`}>
             {cards.map((c, i) => (
               <figure key={i} className="te-imgc-card" style={{ borderRadius: "min(var(--pv-r),20px)", marginTop: look === "versetzt" && i === 1 ? 26 : 0 }}>
                 {c.src ? <img src={c.src} alt="" /> : <span className="te-noimg" style={{ position: "absolute", inset: 0 }} />}
                 <span className="te-imgc-shade" />
                 <figcaption>
-                  <strong>{c.title}</strong>
-                  {c.sub && <span>{c.sub}</span>}
+                  <strong data-ef={`c${i + 1}_t`}>{c.title}</strong>
+                  {c.sub && <span data-ef={`c${i + 1}_d`}>{c.sub}</span>}
                 </figcaption>
               </figure>
             ))}
@@ -929,12 +929,12 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
             {t.trust_label && (
               <div className="te-bhlx-trust">
                 <span className="te-tstars">{[0, 1, 2, 3, 4].map((i) => <i key={i}>★</i>)}</span>
-                <span>{t.trust_label} {t.trust_score}</span>
+                <span><span data-ef="trust_label">{t.trust_label}</span> <span data-ef="trust_score">{t.trust_score}</span></span>
               </div>
             )}
-            <h2 className="te-bhlx-h" style={serif ? { fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic", fontWeight: 500 } : undefined}>{t.heading}</h2>
-            {t.text && <p className="te-bhlx-p">{t.text}</p>}
-            {t.cta && <span className="te-bhlx-btn" style={look === "light" ? { background: "#14161a", color: "#fff" } : undefined}>{t.cta}</span>}
+            <h2 className="te-bhlx-h" style={serif ? { fontFamily: "Georgia, 'Times New Roman', serif", fontStyle: "italic", fontWeight: 500 } : undefined} data-ef="heading">{t.heading}</h2>
+            {t.text && <p className="te-bhlx-p" data-ef="text">{t.text}</p>}
+            {t.cta && <span className="te-bhlx-btn" style={look === "light" ? { background: "#14161a", color: "#fff" } : undefined} data-ef="cta">{t.cta}</span>}
           </div>
         </div>
       );
@@ -953,16 +953,16 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
                   <span key={i} className="te-bhsp-av" style={{ background: `color-mix(in srgb, ${tc} ${65 - i * 14}%, ${bg})`, borderColor: bg }}>{x}</span>
                 ))}
               </span>
-              {t.customers && <b>{t.customers}</b>}
-              {t.rating && <span className="te-bhsp-rating"><span className="te-tstars">{[0, 1, 2, 3, 4].map((i) => <i key={i}>★</i>)}</span>{t.rating}</span>}
+              {t.customers && <b data-ef="customers">{t.customers}</b>}
+              {t.rating && <span className="te-bhsp-rating"><span className="te-tstars">{[0, 1, 2, 3, 4].map((i) => <i key={i}>★</i>)}</span><span data-ef="rating">{t.rating}</span></span>}
             </div>
             <h2 className="te-bhsp-h">
-              {t.heading_pre} {t.heading_mark && <u>{t.heading_mark}</u>} {t.heading_post}
+              <span data-ef="heading_pre">{t.heading_pre}</span> {t.heading_mark && <u data-ef="heading_mark">{t.heading_mark}</u>} <span data-ef="heading_post">{t.heading_post}</span>
             </h2>
-            {t.text && <p className="te-bhsp-p">{t.text}</p>}
+            {t.text && <p className="te-bhsp-p" data-ef="text">{t.text}</p>}
             <div className="te-bhsp-btns">
-              {t.cta1 && <span className="te-bhsp-btn te-bhsp-btn--fill">{t.cta1}</span>}
-              {t.cta2 && <span className="te-bhsp-btn te-bhsp-btn--line" style={{ borderColor: tc, color: tc }}>{t.cta2}</span>}
+              {t.cta1 && <span className="te-bhsp-btn te-bhsp-btn--fill" data-ef="cta1">{t.cta1}</span>}
+              {t.cta2 && <span className="te-bhsp-btn te-bhsp-btn--line" style={{ borderColor: tc, color: tc }} data-ef="cta2">{t.cta2}</span>}
             </div>
           </div>
           <div className="te-bhsp-imgwrap">
@@ -979,13 +979,13 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const cols = cards.length >= 4 ? 4 : cards.length === 3 ? 3 : 2;
       return (
         <div className="te-bbcs">
-          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }}>{t.heading}</h2>}
+          {t.heading && <h2 className="te-h" style={{ marginBottom: 22 }} data-ef="heading">{t.heading}</h2>}
           <div className="te-bbcs-grid" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
             {cards.map((c, i) => (
               <div key={i} className="te-bbcs-card" style={{ background: c.bg }}>
-                {c.emoji && <span className="te-bbcs-emoji">{c.emoji}</span>}
-                <strong className="te-bbcs-title">{c.title}</strong>
-                {c.text && <p className="te-bbcs-text">{c.text}</p>}
+                {c.emoji && <span className="te-bbcs-emoji" data-ef={`emoji_${i + 1}`}>{c.emoji}</span>}
+                <strong className="te-bbcs-title" data-ef={`title_${i + 1}`}>{c.title}</strong>
+                {c.text && <p className="te-bbcs-text" data-ef={`text_${i + 1}`}>{c.text}</p>}
               </div>
             ))}
           </div>
