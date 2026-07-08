@@ -15,6 +15,7 @@ import {
   Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
   SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, Trash2, UploadCloud, X,
+  Pencil, Target,
   type LucideIcon,
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
@@ -68,9 +69,10 @@ function randomAccent(): string {
 // Greif-Symbol (dragListener=false + DragControls) — Klick wählt aus.
 // Framer rastet die Zeile weich zwischen den anderen ein.
 function RailSectionRow({
-  uid, Ico, name, presetText, on, onClick, dragTitle,
+  uid, Ico, name, presetText, on, onClick, dragTitle, focused, onToggleFocus, focusTitle,
 }: {
   uid: string; Ico: LucideIcon; name: string; presetText: string; on: boolean; onClick: () => void; dragTitle: string;
+  focused: boolean; onToggleFocus: () => void; focusTitle: string;
 }) {
   const controls = useDragControls();
   return (
@@ -81,7 +83,7 @@ function RailSectionRow({
       whileDrag={{ scale: 1.02, zIndex: 30, boxShadow: "0 12px 26px -10px rgba(0,0,0,0.6)" }}
       transition={{ duration: 0.16 }}
       className={`list-none flex items-center gap-1 rounded-md border px-1 py-2 lg:py-1 ${
-        on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : "border-transparent hover:bg-white/[0.05]"
+        on ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]" : focused ? "border-amber-400/40 bg-amber-400/[0.06]" : "border-transparent hover:bg-white/[0.05]"
       }`}
     >
       <span
@@ -96,7 +98,15 @@ function RailSectionRow({
       <button onClick={onClick} className="min-w-0 flex-1 text-left">
         <span className="block text-[13px] lg:text-[12px] font-medium text-white truncate leading-tight">{name}</span>
       </button>
-      <span className="text-[10px] lg:text-[9px] text-zinc-600 shrink-0 truncate max-w-[80px] lg:max-w-[62px]">{presetText}</span>
+      <span className="text-[10px] lg:text-[9px] text-zinc-600 shrink-0 truncate max-w-[64px] lg:max-w-[48px]">{presetText}</span>
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleFocus(); }}
+        title={focusTitle}
+        aria-pressed={focused}
+        className={`shrink-0 p-1 rounded transition ${focused ? "text-amber-400" : "text-zinc-600 hover:text-amber-300"}`}
+      >
+        <Target className="w-3.5 h-3.5" />
+      </button>
     </Reorder.Item>
   );
 }
@@ -123,6 +133,26 @@ export default function ThemeEditorPage() {
   const [capabilities, setCapabilities] = useState<string[]>([]);
   const [page, setPage] = useState<EditorPage>("product");
   const [selected, setSelected] = useState<string | null>(null);
+  // Inline-Text-Bearbeitung in der Vorschau (Klick → Text direkt bearbeiten).
+  const [editTexts, setEditTexts] = useState(true);
+  // Für die AI fokussierte Section-uids ("die AI weiß, welche Section gemeint ist").
+  const [aiFocus, setAiFocus] = useState<string[]>([]);
+  const handleEditText = useCallback(
+    (uid: string, field: string, value: string) => dispatch({ type: "setText", uid, field, value }),
+    [dispatch],
+  );
+  const toggleFocus = useCallback(
+    (uid: string) => setAiFocus((f) => (f.includes(uid) ? f.filter((x) => x !== uid) : [...f, uid])),
+    [],
+  );
+  // Fokus entrümpeln, wenn Sections entfernt/ersetzt werden (z. B. Stilwechsel).
+  useEffect(() => {
+    setAiFocus((f) => {
+      const ids = new Set([...doc.sections, ...(doc.home || [])].map((s) => s.uid));
+      const next = f.filter((u) => ids.has(u));
+      return next.length === f.length ? f : next;
+    });
+  }, [doc.sections, doc.home]);
   // Mobil: genau EIN Bereich sichtbar (Vorschau ODER Aufbau ODER Einstellungen),
   // umgeschaltet über eine sticky 3-Tab-Leiste — Desktop zeigt alles nebeneinander.
   const [mobileTab, setMobileTab] = useState<"vorschau" | "aufbau" | "einstellungen">("vorschau");
@@ -298,8 +328,11 @@ export default function ThemeEditorPage() {
     const onKey = (e: KeyboardEvent) => {
       if (fullPreviewOpen || aiBusy) return;
       if (!(e.ctrlKey || e.metaKey)) return;
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      // Native Undo/Redo in Eingabefeldern UND während der Inline-Text-
+      // Bearbeitung (contentEditable) nicht durch Dokument-Undo verdrängen.
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable) return;
       if (e.key.toLowerCase() === "z") {
         e.preventDefault();
         dispatch({ type: e.shiftKey ? "redo" : "undo" });
@@ -460,6 +493,14 @@ export default function ThemeEditorPage() {
     const p = def?.presets.find((x) => x.id === presetId) || def?.presets[0];
     return p ? (lang === "en" ? p.labelEn : p.label) : "";
   };
+  // Fokus-Chips (nur noch existierende Sections) für den AI Co-Pilot + die
+  // aktuell ausgewählte, noch nicht fokussierte Section (Schnell-Fokus).
+  const secTypeByUid = new Map([...doc.sections, ...(doc.home || [])].map((s) => [s.uid, s.type]));
+  const focusChips = aiFocus.filter((u) => secTypeByUid.has(u)).map((u) => ({ uid: u, label: sectionLabel(secTypeByUid.get(u)!) }));
+  const selectedFocusable =
+    selected && secTypeByUid.has(selected) && !aiFocus.includes(selected)
+      ? { uid: selected, label: sectionLabel(secTypeByUid.get(selected)!) }
+      : null;
   // Icon je Section-Kategorie (für die Aufbau-Karten).
   const CAT_ICON: Record<string, LucideIcon> = {
     conversion: ShoppingCart, social: Star, content: AlignLeft, media: ImageIcon, info: Info,
@@ -898,6 +939,11 @@ export default function ThemeEditorPage() {
                   homeSections={homeSections}
                   productTitle={activeProduct?.titel}
                   onBusyChange={setAiBusy}
+                  focus={focusChips}
+                  onRemoveFocus={toggleFocus}
+                  onSelectFocus={(uid) => setSelected(uid)}
+                  selectedFocusable={selectedFocusable}
+                  onFocusSelected={() => selectedFocusable && toggleFocus(selectedFocusable.uid)}
                 />
                 <div className={`glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
@@ -949,6 +995,9 @@ export default function ThemeEditorPage() {
                           on={on}
                           onClick={() => setSelected(on ? null : s.uid)}
                           dragTitle={t.themes.editorBuyboxDragHint}
+                          focused={aiFocus.includes(s.uid)}
+                          onToggleFocus={() => toggleFocus(s.uid)}
+                          focusTitle={t.themes.editorFocusHint}
                         />
                       );
                     })}
@@ -994,6 +1043,20 @@ export default function ThemeEditorPage() {
                   >
                     <Maximize2 className="w-3 h-3" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorFullPreview}</span>
+                  </button>
+                  {/* Inline-Text-Bearbeitung an/aus */}
+                  <button
+                    onClick={() => setEditTexts((v) => !v)}
+                    title={t.themes.editorEditTextsHint}
+                    aria-pressed={editTexts}
+                    className={`shrink-0 flex items-center gap-1 rounded-md border px-2 py-1 text-[10.5px] font-semibold transition ${
+                      editTexts
+                        ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white"
+                        : "border-white/10 bg-white/[0.04] text-zinc-400 hover:text-white"
+                    }`}
+                  >
+                    <Pencil className="w-3 h-3" style={editTexts ? { color: ACCENT } : undefined} />
+                    <span className="hidden xl:inline">{t.themes.editorEditTexts}</span>
                   </button>
                   {/* Zoom-Regler — der Slider ist das EINZIGE flexible Element
                       der Zeile (flex-1 + min-w), damit die Toolbar auch in der
@@ -1059,6 +1122,9 @@ export default function ThemeEditorPage() {
                     selectedUid={selected}
                     onSelectSection={(uid) => setSelected(uid)}
                     onInsertAt={(i) => setLibraryAt(i)}
+                    editTexts={editTexts && !aiBusy}
+                    onEditText={handleEditText}
+                    focusUids={aiFocus}
                   />
                 </div>
               </div>

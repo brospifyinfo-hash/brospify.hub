@@ -85,6 +85,14 @@ interface Body {
   /** Section-Typen der Theme-Basis (Editor-Manifest) — hält Validierung/Kosten
    *  deckungsgleich mit dem, was der Client wirklich anwenden kann. */
   capabilities?: string[];
+  /** Vom Nutzer markierte Section-uids — die AI ändert primär diese. */
+  focus?: string[];
+}
+
+function cleanFocus(v: unknown): string[] {
+  return Array.isArray(v)
+    ? v.filter((f): f is string => typeof f === "string" && f.length <= 64).slice(0, 12)
+    : [];
 }
 
 function cleanCapabilities(v: unknown): string[] {
@@ -125,6 +133,7 @@ export async function POST(req: NextRequest) {
     ? body.paletteHints.filter((h): h is string => typeof h === "string" && /^#[0-9a-fA-F]{6}$/.test(h)).slice(0, 8)
     : [];
   const productTitle = typeof body.productTitle === "string" ? body.productTitle.slice(0, 200) : "";
+  const focus = cleanFocus(body.focus);
 
   // Mindest-Guthaben: wer die kleinste Stufe (des gewählten Modus) nicht
   // zahlen könnte, bekommt auch keinen (für uns kostenpflichtigen) Plan.
@@ -151,7 +160,7 @@ export async function POST(req: NextRequest) {
   const cacheKey = images.length
     ? null
     : hashStr(
-        [user, mode, body.lang || "de", prompt, productTitle, paletteHints.join(","), learnHints || "", JSON.stringify(doc)].join("\u001f"),
+        [user, mode, body.lang || "de", prompt, productTitle, paletteHints.join(","), focus.join(","), learnHints || "", JSON.stringify(doc)].join("\u001f"),
       );
   let raw = cacheKey ? planCacheGet(cacheKey) : null;
   const fromCache = !!raw;
@@ -170,6 +179,7 @@ export async function POST(req: NextRequest) {
         lang: body.lang === "en" ? "en" : "de",
         mode,
         learnHints: learnHints || undefined,
+        focus,
       });
     } catch (err) {
       console.error("[theme-ai] plan failed:", err);

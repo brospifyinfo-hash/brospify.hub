@@ -63,6 +63,8 @@ export interface ThemeAiInput {
   mode: ThemeAiMode;
   /** Kompakter Wissens-Block aus früheren erfolgreichen Läufen (theme-ai-learn). */
   learnHints?: string;
+  /** Vom Nutzer für die AI markierte Section-uids — die AI ändert primär diese. */
+  focus?: string[];
 }
 
 export interface ThemeAiRawPlan {
@@ -285,6 +287,26 @@ export function varietyHints(productId: string): string {
   return `VIELFALTS-EMPFEHLUNG für dieses Produkt (bevorzuge diese Alternativen, weiche nur ab wenn die Nische klar dagegen spricht): hero=${hero}, benefits=${benefits}, proof=${proof}, story=${story}, objections=${objections}, kaufbox-trust=${trustBlock}.`;
 }
 
+/** Baut den FOKUS-Block: der Nutzer hat bestimmte Sections markiert — die AI
+ *  soll ihre Änderungen primär auf genau diese uids beziehen. */
+function focusNote(input: ThemeAiInput): string {
+  const uids = (input.focus || []).filter((u) => typeof u === "string");
+  if (!uids.length) return "";
+  const all = [...input.doc.sections, ...(input.doc.home || [])];
+  const lines: string[] = [];
+  for (const uid of uids.slice(0, 12)) {
+    const s = all.find((x) => x.uid === uid);
+    if (!s) continue;
+    const firstText = Object.values(s.texts || {}).find((v) => typeof v === "string" && v.trim());
+    lines.push(`- uid "${uid}" · Typ ${s.type}${firstText ? ` · aktueller Text: „${String(firstText).slice(0, 60)}"` : ""}`);
+  }
+  if (!lines.length) return "";
+  return (
+    `FOKUS DES NUTZERS — er hat GENAU diese Section(s) markiert; deine Änderungen sollen sich PRIMÄR darauf beziehen (nutze ihre uids in den Ops):\n${lines.join("\n")}\n` +
+    `Ändere andere Sections nur, wenn es der Wunsch ausdrücklich verlangt oder die Stimmigkeit es erzwingt. Baue KEINE komplette neue Seite, wenn der Wunsch sich auf die markierten Sections bezieht.`
+  );
+}
+
 function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
   const blocks: Anthropic.ContentBlockParam[] = [];
   for (const img of input.images.slice(0, 3)) {
@@ -300,6 +322,7 @@ function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
   const parts = [
     `AKTUELLES THEME-DOKUMENT (JSON, lange Texte gekürzt):\n${JSON.stringify(compactDocForAi(input.doc))}`,
     input.productTitle ? `PRODUKT: ${input.productTitle}` : "",
+    focusNote(input),
     varietyHints(input.doc.productId || input.productTitle),
     input.learnHints ? `GELERNTES WISSEN (bewährte Muster aus früheren erfolgreichen Generierungen dieser Nische — nutze es als Ausgangspunkt):\n${input.learnHints}` : "",
     input.paletteHints.length ? `AUTOMATISCH AUS DEN BILDERN EXTRAHIERTE FARBTÖNE (Hinweis): ${input.paletteHints.join(", ")}` : "",

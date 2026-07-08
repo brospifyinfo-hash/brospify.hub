@@ -8,6 +8,7 @@ import type { SectionInstance, BlockConfig, GalleryConfig } from "@/lib/theme-do
 import { resolveBlockSettings, getBuyboxLib, getGalleryPreset } from "@/lib/theme-library";
 import { fontStack, GOOGLE_FONTS_ALL } from "@/lib/theme-fonts";
 import SectionReplica, { REPLICA_CSS } from "@/components/theme-editor/SectionReplica";
+import { useInlineTextEdit } from "@/components/theme-editor/useInlineTextEdit";
 
 // Rendert ein Bibliotheks-Icon als SVG (currentColor).
 function BIcon({ id }: { id: string }) {
@@ -107,6 +108,7 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
+  editTexts = false, onEditText, focusUids = [],
   buyboxCfg = {}, gallery, page = "product", previewBlock, spacing = 15, zoom = 1,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
@@ -121,6 +123,11 @@ export default function ThemePreview({
   selectedUid?: string | null;
   onSelectSection?: (uid: string | null) => void;
   onInsertAt?: (index: number) => void;
+  /** Inline-Text-Bearbeitung: Klick auf einen Text macht ihn direkt editierbar. */
+  editTexts?: boolean;
+  onEditText?: (uid: string, field: string, value: string) => void;
+  /** Für die AI fokussierte Section-uids (Ring in der Vorschau). */
+  focusUids?: string[];
   /** Kaufbox v2: Style-Art + Texte je Baustein-Typ, Galerie-Preset. */
   buyboxCfg?: Record<string, BlockConfig>;
   gallery?: GalleryConfig;
@@ -167,6 +174,9 @@ export default function ThemePreview({
     ro.observe(canvas);
     return () => ro.disconnect();
   }, [targetW, zoomClamped, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
+
+  // Inline-Text-Bearbeitung: Klick auf einen Text in der Vorschau editiert ihn.
+  useInlineTextEdit(canvasRef, editTexts && !!onEditText, docSections, onEditText || (() => {}));
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -1081,7 +1091,7 @@ export default function ThemePreview({
                   <Fragment key={inst.uid}>
                     <div
                       data-section-uid={inst.uid}
-                      className={`pm-docsec ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === inst.uid ? "pm-selected" : ""}`}
+                      className={`pm-docsec ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === inst.uid ? "pm-selected" : ""} ${focusUids.includes(inst.uid) ? "pm-focus" : ""} ${editTexts ? "pm-edit-on" : ""}`}
                       onClick={onSelectSection ? (e) => { e.stopPropagation(); onSelectSection(inst.uid); } : undefined}
                     >
                       <SectionReplica
@@ -1593,7 +1603,12 @@ const CSS = `
 .pm-selectable{cursor:pointer;border-radius:10px;outline:2px solid transparent;outline-offset:4px;transition:outline-color .15s}
 .pm-selectable:hover{outline-color:color-mix(in srgb,#95BF47 55%,transparent)}
 .pm-selected{outline-color:#95BF47!important}
+.pm-focus{outline:2px dashed #f59e0b!important;outline-offset:4px}
 .pm-docsec{position:relative}
+/* ── Inline-Text-Bearbeitung ── */
+.pm-edit-on :is(h1,h2,h3,h4,p,span,strong,em,li,blockquote){cursor:text}
+.pm-edit-on :is(h1,h2,h3,h4,p,span,strong,em,li,blockquote):hover:not(:has(*)):not(.pm-editing){text-decoration:underline;text-decoration-style:dotted;text-decoration-color:color-mix(in srgb,#95BF47 75%,transparent);text-underline-offset:3px}
+.pm-editing{outline:2px solid #95BF47;outline-offset:2px;border-radius:4px;background:color-mix(in srgb,#95BF47 8%,transparent);cursor:text;min-width:12px}
 .pm-insert{display:flex;align-items:center;gap:10px;padding:7px 0;cursor:pointer;opacity:.28;transition:opacity .15s}
 .pm-insert:hover{opacity:1}
 .pm-insert-line{flex:1;height:2px;border-radius:2px;background:#95BF47}

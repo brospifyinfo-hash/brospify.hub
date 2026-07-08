@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
 import { motion } from "framer-motion";
 import {
-  Sparkles, ImagePlus, X, Check, CircleDashed, Coins, Undo2, ChevronDown,
+  Sparkles, ImagePlus, X, Check, CircleDashed, Coins, Undo2, ChevronDown, Target, Plus,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
@@ -98,6 +98,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange,
+  focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -108,6 +109,13 @@ export default function AiCopilot({
   /** true, solange die AI Ops anwendet — der Editor sperrt dann Undo/Edits,
    *  damit nichts vom nächsten Animations-Schritt überschrieben wird. */
   onBusyChange?: (busy: boolean) => void;
+  /** Für die AI fokussierte Sections — die AI ändert dann primär diese. */
+  focus?: { uid: string; label: string }[];
+  onRemoveFocus?: (uid: string) => void;
+  onSelectFocus?: (uid: string) => void;
+  /** Aktuell ausgewählte, noch nicht fokussierte Section (Schnell-Fokus). */
+  selectedFocusable?: { uid: string; label: string } | null;
+  onFocusSelected?: () => void;
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
@@ -190,6 +198,7 @@ export default function AiCopilot({
           lang,
           mode,
           capabilities,
+          focus: focus.map((f) => f.uid),
         }),
       });
       const d = await res.json().catch(() => ({}));
@@ -433,6 +442,35 @@ export default function AiCopilot({
               ) : (
                 /* ── Eingabe: Text + Bilder ── */
                 <>
+                  {/* Fokus: welche Sections die AI ändern soll (optional). Ist
+                      etwas fokussiert, konzentriert sich der Plan darauf. */}
+                  {(focus.length > 0 || selectedFocusable) && (
+                    <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.05] px-2 py-1.5 space-y-1.5">
+                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
+                        <Target className="w-3 h-3" /> {t.themes.aiFocusLabel}
+                      </div>
+                      {focus.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {focus.map((f) => (
+                            <span key={f.uid} className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 pl-2 pr-1 py-0.5 text-[10.5px] font-semibold text-amber-100">
+                              <button onClick={() => onSelectFocus?.(f.uid)} className="max-w-[110px] truncate hover:underline" title={f.label}>{f.label}</button>
+                              <button onClick={() => onRemoveFocus?.(f.uid)} aria-label={t.themes.aiFocusRemove} className="w-3.5 h-3.5 rounded-full hover:bg-black/30 flex items-center justify-center">
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      {selectedFocusable && (
+                        <button
+                          onClick={() => onFocusSelected?.()}
+                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/[0.08] px-2 py-1 text-[10.5px] font-semibold text-amber-100 hover:bg-amber-400/[0.16] transition"
+                        >
+                          <Plus className="w-3 h-3" /> {t.themes.aiFocusAddSelected.replace("{name}", selectedFocusable.label)}
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {/* Modus: Standard (Sonnet, günstig) vs. Expert (Opus, mehr Credits) */}
                   <div className="flex items-center gap-1" role="radiogroup" aria-label={t.themes.aiModeLabel}>
                     {(["standard", "expert"] as const).map((m) => (
