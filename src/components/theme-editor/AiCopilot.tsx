@@ -490,8 +490,10 @@ export default function AiCopilot({
                 </div>
         </div>
               ) : (
-                /* ── Gemini-artige Command-Leiste: viel Luft, EINE Zeile, Enter löst aus ── */
-                <div className="flex items-center gap-3 px-3 py-2.5">
+                /* ── Gemini-artige Command-Leiste: viel Luft, Enter löst aus.
+                    flex-wrap, damit Modus-Dropdown + Fokus-Icon in der schmalen
+                    Mittelspalte umbrechen statt zu überlaufen. ── */
+                <div className="flex flex-wrap items-center gap-3 gap-y-2 px-3 py-2.5">
                   {/* „+" — Datei/Bild anhängen (auch per Drag & Drop in die Leiste) */}
                   <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
                   <button
