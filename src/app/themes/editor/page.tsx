@@ -135,10 +135,16 @@ export default function ThemeEditorPage() {
   const [selected, setSelected] = useState<string | null>(null);
   // Inline-Text-Bearbeitung in der Vorschau (Klick → Text direkt bearbeiten).
   const [editTexts, setEditTexts] = useState(true);
-  // Für die AI fokussierte Section-uids ("die AI weiß, welche Section gemeint ist").
+  // Für die AI fokussierte uids: Section-uid ODER "__buybox" (Kaufbox).
   const [aiFocus, setAiFocus] = useState<string[]>([]);
+  // Fokus-Auswahl-Modus: Klick auf Sections/Kaufbox in der Vorschau fokussiert.
+  const [focusPick, setFocusPick] = useState(false);
   const handleEditText = useCallback(
     (uid: string, field: string, value: string) => dispatch({ type: "setText", uid, field, value }),
+    [dispatch],
+  );
+  const handleEditBlockText = useCallback(
+    (blockType: string, field: string, value: string) => dispatch({ type: "setBlockText", blockType, field, value }),
     [dispatch],
   );
   const toggleFocus = useCallback(
@@ -146,10 +152,11 @@ export default function ThemeEditorPage() {
     [],
   );
   // Fokus entrümpeln, wenn Sections entfernt/ersetzt werden (z. B. Stilwechsel).
+  // "__buybox" ist keine Section und bleibt immer erhalten.
   useEffect(() => {
     setAiFocus((f) => {
       const ids = new Set([...doc.sections, ...(doc.home || [])].map((s) => s.uid));
-      const next = f.filter((u) => ids.has(u));
+      const next = f.filter((u) => u === "__buybox" || ids.has(u));
       return next.length === f.length ? f : next;
     });
   }, [doc.sections, doc.home]);
@@ -493,13 +500,16 @@ export default function ThemeEditorPage() {
     const p = def?.presets.find((x) => x.id === presetId) || def?.presets[0];
     return p ? (lang === "en" ? p.labelEn : p.label) : "";
   };
-  // Fokus-Chips (nur noch existierende Sections) für den AI Co-Pilot + die
-  // aktuell ausgewählte, noch nicht fokussierte Section (Schnell-Fokus).
+  // Fokus-Chips (Sections ODER Kaufbox) für den AI Co-Pilot + die aktuell
+  // ausgewählte, noch nicht fokussierte Section/Kaufbox (Schnell-Fokus).
   const secTypeByUid = new Map([...doc.sections, ...(doc.home || [])].map((s) => [s.uid, s.type]));
-  const focusChips = aiFocus.filter((u) => secTypeByUid.has(u)).map((u) => ({ uid: u, label: sectionLabel(secTypeByUid.get(u)!) }));
+  const focusLabel = (uid: string): string | null =>
+    uid === "__buybox" ? t.themes.editorBuybox : secTypeByUid.has(uid) ? sectionLabel(secTypeByUid.get(uid)!) : null;
+  const focusChips = aiFocus.map((u) => ({ uid: u, label: focusLabel(u) })).filter((c): c is { uid: string; label: string } => c.label !== null);
+  const selectedFocusUid = selected && (selected === "__buybox" || secTypeByUid.has(selected)) ? selected : null;
   const selectedFocusable =
-    selected && secTypeByUid.has(selected) && !aiFocus.includes(selected)
-      ? { uid: selected, label: sectionLabel(secTypeByUid.get(selected)!) }
+    selectedFocusUid && !aiFocus.includes(selectedFocusUid)
+      ? { uid: selectedFocusUid, label: focusLabel(selectedFocusUid)! }
       : null;
   // Icon je Section-Kategorie (für die Aufbau-Karten).
   const CAT_ICON: Record<string, LucideIcon> = {
@@ -944,6 +954,9 @@ export default function ThemeEditorPage() {
                   onSelectFocus={(uid) => setSelected(uid)}
                   selectedFocusable={selectedFocusable}
                   onFocusSelected={() => selectedFocusable && toggleFocus(selectedFocusable.uid)}
+                  focusPick={focusPick}
+                  onToggleFocusPick={() => setFocusPick((v) => !v)}
+                  onClearFocus={() => setAiFocus([])}
                 />
                 <div className={`glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Seiten-Umschalter: Produktseite ↔ Startseite (kompakt) */}
@@ -963,18 +976,32 @@ export default function ThemeEditorPage() {
                     <span className="text-[9.5px] uppercase tracking-[0.14em] font-bold text-zinc-400">{t.themes.editorStructure}</span>
                   </div>
                   {page === "product" && (
-                  <button
-                    onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
-                    className={`w-full flex items-center gap-2 rounded-md border px-2 py-2.5 lg:py-1.5 mb-1 transition ${
+                  <div
+                    className={`w-full flex items-center gap-1 rounded-md border px-2 py-2.5 lg:py-1.5 mb-1 transition ${
                       selected === "__buybox" || selected?.startsWith("blk:")
                         ? "border-[#95BF47]/50 bg-[#95BF47]/[0.12]"
-                        : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
+                        : aiFocus.includes("__buybox")
+                          ? "border-amber-400/40 bg-amber-400/[0.06]"
+                          : "border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]"
                     }`}
                   >
                     <ShoppingCart className="w-3.5 h-3.5 shrink-0" style={{ color: ACCENT }} />
-                    <span className="text-[13px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate">{t.themes.editorBuybox}</span>
+                    <button
+                      onClick={() => setSelected(selected === "__buybox" ? null : "__buybox")}
+                      className="text-[13px] lg:text-[12px] font-semibold text-white flex-1 text-left truncate"
+                    >
+                      {t.themes.editorBuybox}
+                    </button>
                     <span className="text-[9.5px] text-zinc-500 shrink-0">{doc.buybox.order.length}</span>
-                  </button>
+                    <button
+                      onClick={() => toggleFocus("__buybox")}
+                      title={t.themes.editorFocusHint}
+                      aria-pressed={aiFocus.includes("__buybox")}
+                      className={`shrink-0 p-1 rounded transition ${aiFocus.includes("__buybox") ? "text-amber-400" : "text-zinc-600 hover:text-amber-300"}`}
+                    >
+                      <Target className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                   )}
                   <Reorder.Group
                     axis="y"
@@ -1124,7 +1151,10 @@ export default function ThemeEditorPage() {
                     onInsertAt={(i) => setLibraryAt(i)}
                     editTexts={editTexts && !aiBusy}
                     onEditText={handleEditText}
+                    onEditBlockText={handleEditBlockText}
                     focusUids={aiFocus}
+                    focusPick={focusPick && !aiBusy}
+                    onToggleFocus={toggleFocus}
                   />
                 </div>
               </div>

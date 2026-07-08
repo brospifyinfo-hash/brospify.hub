@@ -1,94 +1,45 @@
 "use client";
 
-// ─── Inline-Text-Bearbeitung in der Live-Vorschau ───────────────────────────
-// Klick auf einen Text in der Vorschau → das Element wird direkt editierbar
-// (contentEditable), Bestätigen mit Blur/Enter schreibt den neuen Text ins
-// Dokument (dispatch setText, Undo-koalesziert). Es wird NICHTS in der
-// Section-Replica annotiert: beim Klick wird der Text-Inhalt des angeklickten
-// Blatt-Elements gegen die aufgelösten Feld-Werte der Section gematcht
-// (resolveTexts) → so kennen wir uid + Feld. Nur einfache Text-/Textarea-
-// Felder (kein HTML, keine dekorierten/zusammengesetzten Texte).
+// ─── Inline-Text-Bearbeitung in der Live-Vorschau (reine DOM-Mechanik) ──────
+// Klick auf einen Text → das Blatt-Element wird editierbar (contentEditable),
+// Bestätigen mit Blur/Enter ruft commit(neuerText). WELCHES Feld ein Text ist,
+// entscheidet der übergebene resolve()-Callback (matcht gegen Section- ODER
+// Kaufbox-Felder). Dieser Hook kümmert sich nur um Auswahl, contentEditable,
+// Commit und React-Sicherheit.
 //
-// ROBUSTHEIT (wichtig, da wir React-verwaltete Textknoten anfassen):
-//  - Der editierte Knoten ist in SectionReplica als EIN reiner Text-Kind
-//    gerendert (<h2>{t.heading}</h2>). Er darf NIE Kind-Elemente bekommen,
-//    sonst zerschießt das Reacts Reconciliation (removeChild/stale nodeValue).
-//    Deshalb: contenteditable="plaintext-only", Enter COMMITTET immer (fügt
-//    nie einen Umbruch/Block ein), und Paste wird auf reinen Text reduziert.
-//  - Restore beim Abbruch passiert IN-PLACE über nodeValue des bestehenden
-//    Textknotens (React-Referenz bleibt gültig) — kein textContent-Replace.
-//  - Der Listener wird EINMAL angehängt und liest den Zustand über Refs, damit
-//    ein fremder Re-Render eine laufende Bearbeitung nicht abbricht.
-// Mehrzeilige Felder bleiben editierbar; neue Umbrüche fügt man über die rechte
-// Leiste ein (bestehende \n bleiben beim Inline-Editieren erhalten).
+// ROBUSTHEIT (wir fassen React-verwaltete Textknoten an):
+//  - Der editierte Knoten ist als EIN reiner Text-Kind gerendert
+//    (<h2>{t.heading}</h2>). Er darf NIE Kind-Elemente bekommen, sonst
+//    zerschießt das Reacts Reconciliation. Deshalb: contenteditable=
+//    "plaintext-only", Enter COMMITTET immer (kein Umbruch/Block), Paste →
+//    reiner Text. Restore beim Abbruch IN-PLACE über nodeValue (React-Referenz
+//    bleibt gültig). Der Listener wird EINMAL angehängt (Zustand via Refs),
+//    damit ein fremder Re-Render eine laufende Bearbeitung nicht abbricht.
 
 import { useEffect, useRef } from "react";
 import type { RefObject } from "react";
-import { getSectionDef, resolveTexts } from "@/lib/theme-library";
-import type { SectionInstance } from "@/lib/theme-doc";
+import { normSingle, normMulti } from "@/components/theme-editor/inlineTextMatch";
 
-interface FieldHit {
-  field: string;
+export interface InlineEditTarget {
   multiline: boolean;
-}
-
-/** Einzeilige Normalisierung: NBSP/Whitespace → ein Space, trimmen. */
-function normSingle(s: string): string {
-  return s.replace(/ /g, " ").replace(/\s+/g, " ").trim();
-}
-
-/** Mehrzeilige Normalisierung: Zeilenumbrüche BEHALTEN, nur je Zeile die
- *  horizontalen Whitespaces kollabieren; Leerzeilen-Ketten begrenzen. */
-function normMulti(s: string): string {
-  return s
-    .replace(/ /g, " ")
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((l) => l.replace(/[ \t]+/g, " ").trim())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
-/** Baut die Karte sichtbarer-Text → Feld für eine Section-Instanz. */
-function buildFieldMap(inst: SectionInstance): Map<string, FieldHit> {
-  const def = getSectionDef(inst.type);
-  const map = new Map<string, FieldHit>();
-  if (!def) return map;
-  const texts = resolveTexts(inst);
-  for (const f of def.fields) {
-    // Nur echte Freitext-Felder inline bearbeitbar; HTML/Bild/Sonstiges nicht.
-    if (f.kind !== "text" && f.kind !== "textarea") continue;
-    if (f.html) continue;
-    const val = texts[f.id];
-    if (typeof val !== "string" || !val.trim() || val.includes("<")) continue;
-    const multiline = f.kind === "textarea";
-    // Matchen gegen die passende Normalisierung des sichtbaren Textes.
-    const key = multiline ? normMulti(val) : normSingle(val);
-    if (!map.has(key)) map.set(key, { field: f.id, multiline });
-  }
-  return map;
+  commit: (value: string) => void;
 }
 
 export function useInlineTextEdit(
   rootRef: RefObject<HTMLElement | null>,
   enabled: boolean,
-  sections: SectionInstance[] | undefined,
-  onCommit: (uid: string, field: string, value: string) => void,
+  resolve: (leaf: HTMLElement) => InlineEditTarget | null,
 ) {
-  // Aktueller Zustand über Refs — der Listener bleibt stabil angehängt.
   const enabledRef = useRef(enabled);
-  const sectionsRef = useRef(sections);
-  const commitRef = useRef(onCommit);
+  const resolveRef = useRef(resolve);
   enabledRef.current = enabled;
-  sectionsRef.current = sections;
-  commitRef.current = onCommit;
+  resolveRef.current = resolve;
 
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
-    let active: { el: HTMLElement; uid: string; field: string; original: string; multiline: boolean } | null = null;
+    let active: { el: HTMLElement; original: string; multiline: boolean; commit: (v: string) => void } | null = null;
     let cancel = false;
 
     /** Text eines Blatt-Knotens IN-PLACE setzen (React-Textreferenz behalten). */
@@ -111,11 +62,11 @@ export function useInlineTextEdit(
       a.el.classList.remove("pm-editing");
       const norm = a.multiline ? normMulti : normSingle;
       const next = norm(a.el.innerText);
-      // DOM immer auf den Originalwert zurücksetzen — React rendert die Section
-      // beim Commit ohnehin mit dem neuen Wert neu (konsistente Reconciliation).
+      // DOM immer auf den Originalwert zurücksetzen — React rendert beim Commit
+      // ohnehin mit dem neuen Wert neu (konsistente Reconciliation).
       setLeafText(a.el, a.original);
       if (commit && !cancel && next && next !== norm(a.original)) {
-        commitRef.current(a.uid, a.field, next);
+        a.commit(next);
       }
       cancel = false;
     };
@@ -127,12 +78,10 @@ export function useInlineTextEdit(
         cancel = true;
         active?.el.blur();
       } else if (e.key === "Enter") {
-        // Enter committet IMMER — nie einen Umbruch/Block-Knoten einfügen.
-        e.preventDefault();
+        e.preventDefault(); // Enter committet IMMER — nie einen Block einfügen.
         active?.el.blur();
       }
     };
-    // Paste auf reinen Text reduzieren (falls plaintext-only nicht greift).
     const onPaste = (e: ClipboardEvent) => {
       const text = e.clipboardData?.getData("text/plain");
       if (text == null) return;
@@ -149,19 +98,10 @@ export function useInlineTextEdit(
 
     const onClick = (e: MouseEvent) => {
       if (!enabledRef.current) return;
-      const secs = sectionsRef.current;
-      if (!secs?.length) return;
       const target = e.target as HTMLElement | null;
-      if (!target) return;
-      // Klick auf das gerade editierte Element → Caret setzen lassen.
+      if (!target || !root.contains(target)) return;
       if (active && (target === active.el || active.el.contains(target))) return;
-      if (active) finish(true); // offenen Editor sauber schließen
-
-      const sectionEl = target.closest<HTMLElement>("[data-section-uid]");
-      if (!sectionEl || !root.contains(sectionEl)) return;
-      const uid = sectionEl.getAttribute("data-section-uid") || "";
-      const inst = secs.find((s) => s.uid === uid);
-      if (!inst) return;
+      if (active) finish(true);
 
       // Blatt-Element bestimmen (nur reiner Text, keine Kind-Elemente).
       let leaf: HTMLElement | null = target;
@@ -174,17 +114,15 @@ export function useInlineTextEdit(
       }
       if (leaf.tagName === "BUTTON" || leaf.tagName === "A" || leaf.isContentEditable) return;
 
-      const map = buildFieldMap(inst);
-      const shown = leaf.innerText;
-      const hit = map.get(normSingle(shown)) || map.get(normMulti(shown));
-      if (!hit) return; // dekorierter/zusammengesetzter Text → nicht inline editierbar
+      const tgt = resolveRef.current(leaf);
+      if (!tgt) return; // kein editierbares Feld an dieser Stelle
 
-      // Section-Auswahl NICHT auslösen (kein Re-Render, das den Editor wegwirft).
+      // Section-/Baustein-Auswahl NICHT auslösen (kein Re-Render, der den
+      // Editor wegwirft).
       e.stopPropagation();
       e.preventDefault();
 
-      active = { el: leaf, uid, field: hit.field, original: leaf.innerText, multiline: hit.multiline };
-      // plaintext-only verhindert Rich-Content/Block-Knoten; Fallback "true".
+      active = { el: leaf, original: leaf.innerText, multiline: tgt.multiline, commit: tgt.commit };
       leaf.setAttribute("contenteditable", "plaintext-only");
       if (leaf.contentEditable !== "plaintext-only") leaf.setAttribute("contenteditable", "true");
       leaf.classList.add("pm-editing");
@@ -201,12 +139,10 @@ export function useInlineTextEdit(
       }
     };
 
-    // Capture-Phase: läuft VOR den React-Bubble-Handlern (Section-Select),
-    // sodass ein Text-Klick die Auswahl nicht umschaltet.
     root.addEventListener("click", onClick, true);
     return () => {
       root.removeEventListener("click", onClick, true);
-      if (active) finish(true); // laufende Bearbeitung beim echten Unmount sichern
+      if (active) finish(true);
     };
   }, [rootRef]);
 }

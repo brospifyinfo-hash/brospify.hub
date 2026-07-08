@@ -99,6 +99,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
+  focusPick = false, onToggleFocusPick, onClearFocus,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -109,13 +110,17 @@ export default function AiCopilot({
   /** true, solange die AI Ops anwendet — der Editor sperrt dann Undo/Edits,
    *  damit nichts vom nächsten Animations-Schritt überschrieben wird. */
   onBusyChange?: (busy: boolean) => void;
-  /** Für die AI fokussierte Sections — die AI ändert dann primär diese. */
+  /** Für die AI fokussierte Sections/Kaufbox — die AI ändert dann primär diese. */
   focus?: { uid: string; label: string }[];
   onRemoveFocus?: (uid: string) => void;
   onSelectFocus?: (uid: string) => void;
-  /** Aktuell ausgewählte, noch nicht fokussierte Section (Schnell-Fokus). */
+  /** Aktuell ausgewählte, noch nicht fokussierte Section/Kaufbox (Schnell-Fokus). */
   selectedFocusable?: { uid: string; label: string } | null;
   onFocusSelected?: () => void;
+  /** Fokus-Auswahl-Modus: in der Vorschau Sections/Kaufbox anklicken zum Fokussieren. */
+  focusPick?: boolean;
+  onToggleFocusPick?: () => void;
+  onClearFocus?: () => void;
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
@@ -442,35 +447,55 @@ export default function AiCopilot({
               ) : (
                 /* ── Eingabe: Text + Bilder ── */
                 <>
-                  {/* Fokus: welche Sections die AI ändern soll (optional). Ist
-                      etwas fokussiert, konzentriert sich der Plan darauf. */}
-                  {(focus.length > 0 || selectedFocusable) && (
-                    <div className="rounded-lg border border-amber-400/25 bg-amber-400/[0.05] px-2 py-1.5 space-y-1.5">
-                      <div className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-200/90">
+                  {/* Fokus: welche Sections/Kaufbox die AI ändern soll (optional).
+                      Der Fokus-Button aktiviert den Auswahl-Modus (in der Vorschau
+                      anklicken); fokussiert konzentriert sich der Plan darauf. */}
+                  <div className={`rounded-lg border px-2 py-1.5 space-y-1.5 transition ${focusPick ? "border-amber-400/60 bg-amber-400/[0.09]" : "border-white/[0.1] bg-white/[0.02]"}`}>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-amber-200/90 flex-1">
                         <Target className="w-3 h-3" /> {t.themes.aiFocusLabel}
-                      </div>
+                      </span>
+                      <button
+                        onClick={() => onToggleFocusPick?.()}
+                        aria-pressed={focusPick}
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[10.5px] font-bold transition ${
+                          focusPick
+                            ? "border-amber-400/60 bg-amber-400/20 text-amber-100"
+                            : "border-amber-400/30 bg-amber-400/[0.08] text-amber-100 hover:bg-amber-400/[0.16]"
+                        }`}
+                      >
+                        <Target className="w-3 h-3" /> {focusPick ? t.themes.aiFocusDone : t.themes.aiFocusPick}
+                      </button>
                       {focus.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {focus.map((f) => (
-                            <span key={f.uid} className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 pl-2 pr-1 py-0.5 text-[10.5px] font-semibold text-amber-100">
-                              <button onClick={() => onSelectFocus?.(f.uid)} className="max-w-[110px] truncate hover:underline" title={f.label}>{f.label}</button>
-                              <button onClick={() => onRemoveFocus?.(f.uid)} aria-label={t.themes.aiFocusRemove} className="w-3.5 h-3.5 rounded-full hover:bg-black/30 flex items-center justify-center">
-                                <X className="w-2.5 h-2.5" />
-                              </button>
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {selectedFocusable && (
-                        <button
-                          onClick={() => onFocusSelected?.()}
-                          className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/[0.08] px-2 py-1 text-[10.5px] font-semibold text-amber-100 hover:bg-amber-400/[0.16] transition"
-                        >
-                          <Plus className="w-3 h-3" /> {t.themes.aiFocusAddSelected.replace("{name}", selectedFocusable.label)}
+                        <button onClick={() => onClearFocus?.()} title={t.themes.aiFocusClear} className="text-[10px] font-semibold text-zinc-400 hover:text-white px-1">
+                          {t.themes.aiFocusClear}
                         </button>
                       )}
                     </div>
-                  )}
+                    {focusPick && <p className="text-[10px] text-amber-200/80 leading-snug">{t.themes.aiFocusPickHint}</p>}
+                    {focus.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {focus.map((f) => (
+                          <span key={f.uid} className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 pl-2 pr-1 py-0.5 text-[10.5px] font-semibold text-amber-100">
+                            <button onClick={() => onSelectFocus?.(f.uid)} className="max-w-[110px] truncate hover:underline" title={f.label}>{f.label}</button>
+                            <button onClick={() => onRemoveFocus?.(f.uid)} aria-label={t.themes.aiFocusRemove} className="w-3.5 h-3.5 rounded-full hover:bg-black/30 flex items-center justify-center">
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      !focusPick && <p className="text-[10px] text-zinc-500 leading-snug">{t.themes.aiFocusEmpty}</p>
+                    )}
+                    {selectedFocusable && (
+                      <button
+                        onClick={() => onFocusSelected?.()}
+                        className="inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/[0.08] px-2 py-1 text-[10.5px] font-semibold text-amber-100 hover:bg-amber-400/[0.16] transition"
+                      >
+                        <Plus className="w-3 h-3" /> {t.themes.aiFocusAddSelected.replace("{name}", selectedFocusable.label)}
+                      </button>
+                    )}
+                  </div>
                   {/* Modus: Standard (Sonnet, günstig) vs. Expert (Opus, mehr Credits) */}
                   <div className="flex items-center gap-1" role="radiogroup" aria-label={t.themes.aiModeLabel}>
                     {(["standard", "expert"] as const).map((m) => (

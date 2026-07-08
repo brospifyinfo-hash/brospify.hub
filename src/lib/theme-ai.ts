@@ -295,6 +295,10 @@ function focusNote(input: ThemeAiInput): string {
   const all = [...input.doc.sections, ...(input.doc.home || [])];
   const lines: string[] = [];
   for (const uid of uids.slice(0, 12)) {
+    if (uid === "__buybox") {
+      lines.push(`- die KAUFBOX (Produktinfo-Spalte neben dem Bild): Bausteine, Reihenfolge (add_buybox_block/remove_buybox_block/reorder_buybox) und deren Texte (set_block_text) sowie Galerie/Icons.`);
+      continue;
+    }
     const s = all.find((x) => x.uid === uid);
     if (!s) continue;
     const firstText = Object.values(s.texts || {}).find((v) => typeof v === "string" && v.trim());

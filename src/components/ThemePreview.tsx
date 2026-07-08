@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { PRODUCT_SECTIONS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
 import { getIconAny } from "@/lib/theme-icon-resolver";
@@ -8,7 +8,8 @@ import type { SectionInstance, BlockConfig, GalleryConfig } from "@/lib/theme-do
 import { resolveBlockSettings, getBuyboxLib, getGalleryPreset } from "@/lib/theme-library";
 import { fontStack, GOOGLE_FONTS_ALL } from "@/lib/theme-fonts";
 import SectionReplica, { REPLICA_CSS } from "@/components/theme-editor/SectionReplica";
-import { useInlineTextEdit } from "@/components/theme-editor/useInlineTextEdit";
+import { useInlineTextEdit, type InlineEditTarget } from "@/components/theme-editor/useInlineTextEdit";
+import { matchSectionField, matchBlockField } from "@/components/theme-editor/inlineTextMatch";
 
 // Rendert ein Bibliotheks-Icon als SVG (currentColor).
 function BIcon({ id }: { id: string }) {
@@ -108,7 +109,7 @@ export default function ThemePreview({
   hiddenSections = [], sectionHeadings = {}, buyboxOrder = [], hiddenBlocks = [],
   shadow = 1, border = 1, iconStyle = "dark", benefitIcons = [],
   docSections, selectedUid, onSelectSection, onInsertAt,
-  editTexts = false, onEditText, focusUids = [],
+  editTexts = false, onEditText, onEditBlockText, focusUids = [], focusPick = false, onToggleFocus,
   buyboxCfg = {}, gallery, page = "product", previewBlock, spacing = 15, zoom = 1,
 }: {
   data: PreviewData | null; colors: ThemeColors; headingFont: string; bodyFont: string;
@@ -126,8 +127,13 @@ export default function ThemePreview({
   /** Inline-Text-Bearbeitung: Klick auf einen Text macht ihn direkt editierbar. */
   editTexts?: boolean;
   onEditText?: (uid: string, field: string, value: string) => void;
-  /** Für die AI fokussierte Section-uids (Ring in der Vorschau). */
+  /** Inline-Bearbeitung von Kaufbox-Baustein-Texten. */
+  onEditBlockText?: (blockType: string, field: string, value: string) => void;
+  /** Für die AI fokussierte uids (Section-uid oder "__buybox") — Ring in der Vorschau. */
   focusUids?: string[];
+  /** Fokus-Auswahl-Modus: Klick auf Section/Kaufbox toggelt den AI-Fokus. */
+  focusPick?: boolean;
+  onToggleFocus?: (uid: string) => void;
   /** Kaufbox v2: Style-Art + Texte je Baustein-Typ, Galerie-Preset. */
   buyboxCfg?: Record<string, BlockConfig>;
   gallery?: GalleryConfig;
@@ -175,8 +181,45 @@ export default function ThemePreview({
     return () => ro.disconnect();
   }, [targetW, zoomClamped, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
 
-  // Inline-Text-Bearbeitung: Klick auf einen Text in der Vorschau editiert ihn.
-  useInlineTextEdit(canvasRef, editTexts && !!onEditText, docSections, onEditText || (() => {}));
+  // Inline-Text-Bearbeitung: ordnet einen angeklickten Text seinem Feld zu —
+  // Doc-Section (setText) ODER Kaufbox-Baustein (setBlockText).
+  const resolveEdit = useCallback(
+    (leaf: HTMLElement): InlineEditTarget | null => {
+      const secEl = leaf.closest<HTMLElement>("[data-section-uid]");
+      if (secEl) {
+        const uid = secEl.getAttribute("data-section-uid") || "";
+        const inst = docSections?.find((s) => s.uid === uid);
+        if (!inst || !onEditText) return null;
+        const hit = matchSectionField(inst, leaf.innerText);
+        return hit ? { multiline: hit.multiline, commit: (v) => onEditText(uid, hit.field, v) } : null;
+      }
+      const blkEl = leaf.closest<HTMLElement>("[data-blk-type]");
+      if (blkEl) {
+        const type = blkEl.getAttribute("data-blk-type") || "";
+        if (!onEditBlockText) return null;
+        // Produkt-abgeleitete Renderer-Fallbacks (dieselben, die bt() einspeist),
+        // damit auch Default-Texte gematcht werden, nicht nur gesetzte/Feld-Defs.
+        const fb: Record<string, Record<string, string>> = data
+          ? {
+              custom_rating: { rating_text: data.ratingText },
+              bundle_selector: { heading: data.bundleHeading },
+              buy_buttons: { add_to_cart_text: data.cta },
+              payment_icons: { heading: data.payHeading },
+              free_gift: { title: data.giftTitle, subtitle: data.giftSubtitle },
+              stock_indicator: { text: data.stock },
+              press_bar: { heading: "Bekannt aus" },
+              social_proof: { text: "sehen sich das gerade an" },
+              countdown_timer: { text: "Angebot endet in" },
+            }
+          : {};
+        const hit = matchBlockField(type, buyboxCfg[type], leaf.innerText, fb[type]);
+        return hit ? { multiline: hit.multiline, commit: (v) => onEditBlockText(type, hit.field, v) } : null;
+      }
+      return null;
+    },
+    [docSections, buyboxCfg, onEditText, onEditBlockText, data],
+  );
+  useInlineTextEdit(canvasRef, editTexts && !focusPick && (!!onEditText || !!onEditBlockText), resolveEdit);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -223,8 +266,13 @@ export default function ThemePreview({
     return (
       <div
         key={type}
+        data-blk-type={type}
         className={`pm-blk ${on ? "pm-blk-on" : ""}`}
-        onClick={(e) => { e.stopPropagation(); onSelectSection(`blk:${type}`); }}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (focusPick && onToggleFocus) onToggleFocus("__buybox");
+          else onSelectSection(`blk:${type}`);
+        }}
       >
         {node}
       </div>
@@ -1074,8 +1122,14 @@ export default function ThemePreview({
 
             {/* Infospalte — konfigurationsgesteuert (Reihenfolge + Sichtbarkeit) */}
             <div
-              className={`pm-info ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === "__buybox" ? "pm-selected" : ""}`}
-              onClick={onSelectSection ? (e) => { e.stopPropagation(); onSelectSection("__buybox"); } : undefined}
+              className={`pm-info ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === "__buybox" ? "pm-selected" : ""} ${focusUids.includes("__buybox") ? "pm-focus" : ""} ${focusPick ? "pm-pick" : editTexts ? "pm-edit-on" : ""}`}
+              onClick={
+                focusPick && onToggleFocus
+                  ? (e) => { e.stopPropagation(); onToggleFocus("__buybox"); }
+                  : onSelectSection
+                    ? (e) => { e.stopPropagation(); onSelectSection("__buybox"); }
+                    : undefined
+              }
             >
               {order.filter((t) => !hiddenBlk.has(t)).map((t) => blkWrap(t, renderBlock(t)))}
             </div>
@@ -1086,20 +1140,26 @@ export default function ThemePreview({
           {docSections
             ? (
               <>
-                {onInsertAt && <InsertBar onClick={() => onInsertAt(0)} />}
+                {onInsertAt && !focusPick && <InsertBar onClick={() => onInsertAt(0)} />}
                 {docSections.map((inst, i) => (
                   <Fragment key={inst.uid}>
                     <div
                       data-section-uid={inst.uid}
-                      className={`pm-docsec ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === inst.uid ? "pm-selected" : ""} ${focusUids.includes(inst.uid) ? "pm-focus" : ""} ${editTexts ? "pm-edit-on" : ""}`}
-                      onClick={onSelectSection ? (e) => { e.stopPropagation(); onSelectSection(inst.uid); } : undefined}
+                      className={`pm-docsec ${onSelectSection ? "pm-selectable" : ""} ${selectedUid === inst.uid ? "pm-selected" : ""} ${focusUids.includes(inst.uid) ? "pm-focus" : ""} ${focusPick ? "pm-pick" : editTexts ? "pm-edit-on" : ""}`}
+                      onClick={
+                        focusPick && onToggleFocus
+                          ? (e) => { e.stopPropagation(); onToggleFocus(inst.uid); }
+                          : onSelectSection
+                            ? (e) => { e.stopPropagation(); onSelectSection(inst.uid); }
+                            : undefined
+                      }
                     >
                       <SectionReplica
                         instance={inst}
                         ctx={{ images: data.images, title: data.title, price: data.price, palette: colors }}
                       />
                     </div>
-                    {onInsertAt && <InsertBar onClick={() => onInsertAt(i + 1)} />}
+                    {onInsertAt && !focusPick && <InsertBar onClick={() => onInsertAt(i + 1)} />}
                   </Fragment>
                 ))}
               </>
@@ -1604,6 +1664,9 @@ const CSS = `
 .pm-selectable:hover{outline-color:color-mix(in srgb,#95BF47 55%,transparent)}
 .pm-selected{outline-color:#95BF47!important}
 .pm-focus{outline:2px dashed #f59e0b!important;outline-offset:4px}
+/* Fokus-Auswahl-Modus: Sections/Kaufbox anklicken zum Fokussieren */
+.pm-pick{cursor:pointer;outline:2px dashed transparent;outline-offset:4px;border-radius:10px;transition:outline-color .15s}
+.pm-pick:hover{outline-color:color-mix(in srgb,#f59e0b 70%,transparent)}
 .pm-docsec{position:relative}
 /* ── Inline-Text-Bearbeitung ── */
 .pm-edit-on :is(h1,h2,h3,h4,p,span,strong,em,li,blockquote){cursor:text}
