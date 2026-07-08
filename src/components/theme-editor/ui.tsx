@@ -62,7 +62,7 @@ export function PresetPill({ label, hint, active, onClick }: { label: string; hi
 /** Feld-Label (klein, dicht). */
 export function FieldLabel({ children, right }: { children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="flex items-center justify-between mb-0.5 leading-none">
+    <div className="flex items-center justify-between mb-1 leading-none">
       <span className="text-[9px] font-medium text-zinc-400 truncate">{children}</span>
       {right && <span className="text-[9px] font-mono text-zinc-500 shrink-0 ml-1">{right}</span>}
     </div>

@@ -2,7 +2,7 @@
 
 // ─── /themes/editor — Theme-Editor v2 ───────────────────────────────
 // Produkt-zuerst-Flow: (1) Produkt aus Bilder-Grid wählen → (2) Split-Pane-
-// Editor (Einstellungen links · Live-Vorschau Mitte · Aufbau/Navigation rechts). Alles lebt
+// Editor (Aufbau/Navigation links · Live-Vorschau + AI-Leiste Mitte · Einstellungen rechts). Alles lebt
 // in EINEM ThemeDocument (Undo/Redo), das die Compile-Engine 1:1 in das
 // Shopify-Theme übersetzt. Desktop nutzt die volle Breite; mobil gestapelt.
 
@@ -1016,12 +1016,12 @@ export default function ThemeEditorPage() {
                 </div>
               </div>
 
-              {/* Aufbau/Navigation (rechts) — Desktop: volle Höhe bis ganz unten,
+              {/* Aufbau/Navigation (links) — Desktop: volle Höhe bis ganz unten,
                   scrollt intern. Sektionsliste + Kaufbox-Dropdown; während der
                   AI-Umsetzung gesperrt. Der AI Co-Pilot sitzt jetzt als Leiste
                   MITTIG unter der Vorschau (nicht mehr hier). */}
-              <aside className={`order-3 lg:order-3 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
-                <div className={`glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
+              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+                <div className={`glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Allgemeines Design (global) — kein „Sektion", aber zentral
                       erreichbar; ohne Auswahl bleibt links alles leer. */}
                   <button
@@ -1100,7 +1100,7 @@ export default function ThemeEditorPage() {
                             axis="y"
                             values={doc.buybox.order}
                             onReorder={(order) => dispatch({ type: "reorderBuybox", order })}
-                            className="space-y-0.5"
+                            className="space-y-1"
                           >
                             {doc.buybox.order.map((bt) => {
                               const meta = getBuyboxMeta(bt);
@@ -1145,7 +1145,7 @@ export default function ThemeEditorPage() {
                     axis="y"
                     values={currentSections.map((s) => s.uid)}
                     onReorder={(order) => dispatch({ type: "reorderSections", page, order })}
-                    className="space-y-0.5"
+                    className="space-y-1"
                   >
                     {currentSections.map((s) => {
                       const Ico = sectionIcon(s.type);
@@ -1317,9 +1317,9 @@ export default function ThemeEditorPage() {
                 </div>
               </div>
 
-              {/* Inspector/Einstellungen (links) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
-              <aside ref={inspectorRef} className={`order-4 lg:order-1 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
-                <div className="glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
+              {/* Inspector/Einstellungen (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
+              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
+                <div className="glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
                     dispatch={dispatch}

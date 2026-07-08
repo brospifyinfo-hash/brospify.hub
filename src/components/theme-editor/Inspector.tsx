@@ -101,15 +101,15 @@ function Group({ id, title, open, onToggle, children }: { id: string; title: str
 
 /** Kleiner Hilfetext — erklärt in einem Satz, was ein Bereich tut. */
 function HelpText({ children }: { children: ReactNode }) {
-  return <p className="text-[9.5px] leading-snug text-zinc-500 mb-1.5">{children}</p>;
+  return <p className="text-[9.5px] leading-relaxed text-zinc-500 mb-2">{children}</p>;
 }
 
 /** Klar abgegrenzte Editor-Gruppe mit Icon, Titel und optionalem Hilfetext.
  *  Macht den Inspector verständlicher — jeder Bereich sagt, wofür er da ist. */
 function SecGroup({ icon, title, help, right, children }: { icon: ReactNode; title: string; help?: string; right?: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-white/[0.015] p-2">
-      <div className="flex items-center gap-1.5 mb-1">
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.015] p-3">
+      <div className="flex items-center gap-1.5 mb-1.5">
         <span className="text-[#95BF47] shrink-0 flex">{icon}</span>
         <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-white flex-1">{title}</span>
         {right}
@@ -205,7 +205,7 @@ export default function Inspector({
     const cat = def ? CATEGORY_LABELS[def.category] : null;
     const toneVal = String(section.settings?.sec_tone || (section.settings?.sec_bg ? "custom" : "none"));
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2.5">
         {/* Kopf: Icon + Name + Beschreibung + Kategorie, dazu Verschieben */}
         <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.12] to-transparent px-2 py-2">
           <div className="flex items-start gap-2">
@@ -260,7 +260,7 @@ export default function Inspector({
         {/* Hintergrund & Übergang (Design-Layer) mit Live-Vorschau */}
         {sectionSupportsDesign(section.type) && (
           <SecGroup icon={<Paintbrush className="w-3 h-3" />} title={t.themes.editorSecDesign} help={t.themes.editorSecDesignHelp}>
-            <div className="space-y-1.5">
+            <div className="space-y-2.5">
               <div>
                 <FieldLabel>{t.themes.editorSecTone}</FieldLabel>
                 <Segmented
@@ -364,7 +364,7 @@ export default function Inspector({
         </div>
       );
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2.5">
           {lib.presets.length > 0 && (
             <SecGroup icon={<LayoutGrid className="w-3 h-3" />} title={t.themes.editorPreset} help={t.themes.editorPresetHelp}>
               <div className="flex flex-wrap gap-1">
@@ -383,7 +383,7 @@ export default function Inspector({
           {(otherCtrls.length > 0 || colorCtrls.length > 0) && (
             <SecGroup icon={<SlidersHorizontal className="w-3 h-3" />} title={t.themes.editorFineTune}>
               {controls.some((c) => c.kind === "image") && <HelpText>{t.themes.editorBlockPhotoHelp}</HelpText>}
-              {otherCtrls.length > 0 && <div className="space-y-1.5">{otherCtrls.map(renderCtrl)}</div>}
+              {otherCtrls.length > 0 && <div className="space-y-2.5">{otherCtrls.map(renderCtrl)}</div>}
               {colorCtrls.length > 0 && <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 mt-1.5">{colorCtrls.map(renderCtrl)}</div>}
             </SecGroup>
           )}
@@ -411,7 +411,7 @@ export default function Inspector({
       const meta = getBuyboxMeta(blkSelected);
       const cfgJsx = blockConfig(blkSelected);
       return (
-        <div className="space-y-1.5">
+        <div className="space-y-2.5">
           <div className="flex items-center gap-2 rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.12] to-transparent px-2 py-2">
             <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
               <BlockIcon name={meta.icon} className="w-4 h-4" />
@@ -441,7 +441,7 @@ export default function Inspector({
 
     // Kaufbox-Panel (__buybox) → nur kaufbox-WEITE Einstellungen.
     return (
-      <div className="space-y-1.5">
+      <div className="space-y-2.5">
         <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.1] to-transparent px-2.5 py-2">
           <div className="text-[12px] font-bold text-white leading-tight">{t.themes.editorBuybox}</div>
           <p className="mt-0.5 text-[9.5px] leading-snug text-zinc-500">{t.themes.editorBuyboxPanelHelp}</p>
@@ -514,7 +514,7 @@ export default function Inspector({
   ];
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2.5">
       <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.1] to-transparent px-2.5 py-2 flex items-start gap-2">
         <PaletteIcon className="w-4 h-4 text-[#95BF47] shrink-0 mt-0.5" />
         <div>

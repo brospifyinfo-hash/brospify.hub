@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
 import { motion } from "framer-motion";
 import {
-  Sparkles, ImagePlus, X, Check, CircleDashed, Coins, Undo2, Target, Plus,
+  Sparkles, X, Check, CircleDashed, Coins, Undo2, Target, Plus, ChevronDown,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
@@ -95,6 +95,53 @@ async function extractPalette(dataUrl: string): Promise<string[]> {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Modus-Auswahl im „Pro ⌄"-Stil (öffnet nach OBEN, da die Leiste unten sitzt).
+ *  Standard = schnell, wendet direkt an · Expert = zeigt erst einen Plan. */
+function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMode) => void; disabled?: boolean }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/[0.05] px-3.5 py-2 text-[12.5px] font-semibold text-zinc-100 hover:text-white hover:bg-white/[0.09] transition disabled:opacity-40"
+      >
+        {mode === "expert" ? t.themes.aiModeExpert : t.themes.aiModeStandard}
+        <ChevronDown className={`w-4 h-4 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
+          <div className="absolute bottom-full right-0 mb-2 z-50 w-64 rounded-2xl border border-white/12 glass-strong p-1.5 shadow-[0_20px_50px_-14px_rgba(0,0,0,0.75)]" role="listbox">
+            {(["standard", "expert"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                role="option"
+                aria-selected={mode === m}
+                onClick={() => { onPick(m); setOpen(false); }}
+                className={`w-full text-left rounded-xl px-3 py-2.5 transition border ${
+                  mode === m ? "bg-[#95BF47]/15 border-[#95BF47]/30" : "border-transparent hover:bg-white/[0.06]"
+                }`}
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-[13px] font-bold text-white">{m === "expert" ? t.themes.aiModeExpert : t.themes.aiModeStandard}</span>
+                  {mode === m && <Check className="w-4 h-4 ml-auto" style={{ color: ACCENT }} />}
+                </span>
+                <span className="block text-[11px] text-zinc-400 leading-snug mt-1">{m === "expert" ? t.themes.aiModeExpertHint : t.themes.aiModeStandardHint}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange,
@@ -212,15 +259,22 @@ export default function AiCopilot({
         return;
       }
       setPlan(d as PlanResponse);
-      setPhase("plan");
+      // STANDARD = kein Plan-Review: direkt umsetzen (Enter wendet sofort an).
+      // EXPERT = Plan zur Freigabe anzeigen, erst „Umsetzen" wendet an.
+      if (mode === "standard") {
+        await confirmPlan(d as PlanResponse);
+      } else {
+        setPhase("plan");
+      }
     } catch {
       setError(t.themes.aiErr);
       setPhase("idle");
     }
   }
 
-  async function confirmPlan() {
-    if (!plan || phase === "applying") return;
+  async function confirmPlan(explicitPlan?: PlanResponse) {
+    const p = explicitPlan || plan;
+    if (!p || phase === "applying") return;
     clearDoneTimer();
     setPhase("applying");
     onBusyChange?.(true);
@@ -233,8 +287,8 @@ export default function AiCopilot({
         cache: "no-store",
         body: JSON.stringify({
           document: docRef.current,
-          ops: plan.ops,
-          planToken: plan.planToken,
+          ops: p.ops,
+          planToken: p.planToken,
           productTitle,
           capabilities,
         }),
@@ -261,9 +315,9 @@ export default function AiCopilot({
       dispatch({ type: "aiBoundary" });
       const ctx = newAiApplyCtx(baseSections, capabilities, homeSections);
       let cur = docRef.current;
-      const delay = Math.min(450, Math.max(170, Math.round(5500 / plan.ops.length)));
-      for (let i = 0; i < plan.ops.length; i++) {
-        cur = applyAiOpToDoc(cur, plan.ops[i], ctx);
+      const delay = Math.min(450, Math.max(170, Math.round(5500 / p.ops.length)));
+      for (let i = 0; i < p.ops.length; i++) {
+        cur = applyAiOpToDoc(cur, p.ops[i], ctx);
         dispatch({ type: "aiApply", doc: cur });
         setProgress(i + 1);
         // eslint-disable-next-line no-await-in-loop
@@ -305,17 +359,43 @@ export default function AiCopilot({
       onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
       onDragLeave={() => setDrag(false)}
       onDrop={onDrop}
-      className={`shrink-0 rounded-xl border overflow-hidden transition ${
-        drag ? "border-[#95BF47] bg-[#95BF47]/[0.06]" : "border-white/[0.1] glass-strong"
+      className={`shrink-0 rounded-2xl border transition ${
+        drag
+          ? "border-[#95BF47] bg-[#95BF47]/[0.07]"
+          : focusPick
+            ? "border-amber-400/50 bg-amber-400/[0.04]"
+            : "border-white/[0.1] glass-strong"
       }`}
     >
-      {error && <p className="px-3 pt-2 text-[11px] text-amber-300/90 leading-snug">{error}</p>}
+      {error && <p className="px-4 pt-3 text-[11.5px] text-amber-300/90 leading-snug">{error}</p>}
+      {focusPick && !showPlanCard && (
+        <p className="flex items-center gap-1.5 px-4 pt-3 text-[11px] font-medium text-amber-200/85 leading-snug">
+          <Target className="w-3.5 h-3.5 shrink-0" /> {t.themes.aiFocusPickHint}
+        </p>
+      )}
+      {(focus.length > 0 || selectedFocusable) && !showPlanCard && (
+        <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+          {focus.map((f) => (
+            <span key={f.uid} className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 pl-3 pr-1.5 py-1 text-[11px] font-semibold text-amber-100">
+              <button onClick={() => onSelectFocus?.(f.uid)} className="max-w-[150px] truncate hover:underline" title={f.label}>{f.label}</button>
+              <button onClick={() => onRemoveFocus?.(f.uid)} aria-label={t.themes.aiFocusRemove} className="w-4 h-4 rounded-full hover:bg-black/30 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
+            </span>
+          ))}
+          {selectedFocusable && (
+            <button onClick={() => onFocusSelected?.()} className="inline-flex items-center gap-1 rounded-full border border-dashed border-amber-400/40 bg-amber-400/[0.06] px-3 py-1 text-[11px] font-semibold text-amber-100 hover:bg-amber-400/[0.14] transition">
+              <Plus className="w-3 h-3" /> <span className="max-w-[130px] truncate">{selectedFocusable.label}</span>
+            </button>
+          )}
+          {focus.length > 0 && (
+            <button onClick={() => onClearFocus?.()} className="text-[11px] font-semibold text-zinc-400 hover:text-white px-1">{t.themes.aiFocusClear}</button>
+          )}
+        </div>
+      )}
 
-      <div className="max-h-[42vh] overflow-y-auto">
-              {showPlanCard && plan ? (
-                /* ── Plan-Karte / Umsetzungs-Animation (volle Breite unter der Vorschau) ── */
+      {showPlanCard && plan ? (
+        <div className="max-h-[42vh] overflow-y-auto p-2.5">
                 <div
-                  className={`relative m-2 rounded-lg border p-2.5 ${
+                  className={`relative rounded-xl border p-3 ${
                     phase === "applying"
                       ? "border-[#95BF47]/60 bg-[#95BF47]/[0.06]"
                       : phase === "done"
@@ -393,7 +473,7 @@ export default function AiCopilot({
                   {phase === "plan" && (
                     <div className="flex gap-1.5 mt-2.5">
                       <button
-                        onClick={confirmPlan}
+                        onClick={() => confirmPlan()}
                         className="flex-1 flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-[12px] font-bold text-white hover:brightness-110 transition"
                         style={{ background: ACCENT }}
                       >
@@ -408,74 +488,31 @@ export default function AiCopilot({
                     </div>
                   )}
                 </div>
+        </div>
               ) : (
-                /* ── Eingabe: horizontale Command-Leiste ── */
-                <div className="flex items-center gap-2 p-2 flex-wrap">
-                  {/* Marke */}
-                  <span className="flex items-center gap-1.5 shrink-0">
-                    <span className="w-7 h-7 rounded-lg flex items-center justify-center border border-[#95BF47]/30 bg-gradient-to-br from-[#95BF47]/35 to-[#95BF47]/5">
-                      <Sparkles className={`w-4 h-4 ${phase === "planning" ? "animate-pulse" : ""}`} style={{ color: ACCENT }} />
-                    </span>
-                    <span className="hidden 2xl:flex flex-col leading-none">
-                      <span className="text-[11.5px] font-bold text-white">{t.themes.aiTitle}</span>
-                      <span className="text-[8px] uppercase tracking-[0.14em] font-semibold text-zinc-500">{t.themes.aiTagline}</span>
-                    </span>
-                  </span>
-
-                  {/* Fokus (kompakt): Button + Chips inline */}
+                /* ── Gemini-artige Command-Leiste: viel Luft, EINE Zeile, Enter löst aus ── */
+                <div className="flex items-center gap-3 px-3 py-2.5">
+                  {/* „+" — Datei/Bild anhängen (auch per Drag & Drop in die Leiste) */}
+                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
                   <button
-                    onClick={() => onToggleFocusPick?.()}
-                    aria-pressed={focusPick}
-                    title={t.themes.aiFocusPickHint}
-                    className={`shrink-0 inline-flex items-center gap-1 rounded-md border px-2 py-1.5 text-[10.5px] font-bold transition ${
-                      focusPick ? "border-amber-400/60 bg-amber-400/20 text-amber-100" : "border-amber-400/30 bg-amber-400/[0.08] text-amber-100 hover:bg-amber-400/[0.16]"
-                    }`}
+                    onClick={() => fileRef.current?.click()}
+                    disabled={images.length >= 3 || phase === "planning"}
+                    title={t.themes.aiUploadHint}
+                    aria-label={t.themes.aiUploadHint}
+                    className="shrink-0 w-9 h-9 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
                   >
-                    <Target className="w-3 h-3" /> {focusPick ? t.themes.aiFocusDone : t.themes.aiFocusLabel}
-                    {focus.length > 0 && <span className="ml-0.5 rounded-full bg-amber-400/30 px-1 text-[9px] tabular-nums">{focus.length}</span>}
+                    <Plus className="w-5 h-5" />
                   </button>
-                  {focus.map((f) => (
-                    <span key={f.uid} className="shrink-0 inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 pl-2 pr-1 py-0.5 text-[10px] font-semibold text-amber-100">
-                      <button onClick={() => onSelectFocus?.(f.uid)} className="max-w-[90px] truncate hover:underline" title={f.label}>{f.label}</button>
-                      <button onClick={() => onRemoveFocus?.(f.uid)} aria-label={t.themes.aiFocusRemove} className="w-3.5 h-3.5 rounded-full hover:bg-black/30 flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
-                    </span>
-                  ))}
-                  {focus.length > 0 && (
-                    <button onClick={() => onClearFocus?.()} title={t.themes.aiFocusClear} className="shrink-0 text-[10px] font-semibold text-zinc-400 hover:text-white px-0.5">{t.themes.aiFocusClear}</button>
-                  )}
-                  {selectedFocusable && (
-                    <button onClick={() => onFocusSelected?.()} title={t.themes.aiFocusAddSelected.replace("{name}", selectedFocusable.label)} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-amber-400/30 bg-amber-400/[0.08] px-2 py-1.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-400/[0.16] transition">
-                      <Plus className="w-3 h-3" /> <span className="max-w-[90px] truncate">{selectedFocusable.label}</span>
-                    </button>
-                  )}
-
-                  {/* Modus: Standard (Sonnet) vs. Expert (Opus) */}
-                  <div className="shrink-0 inline-flex rounded-md border border-white/10 bg-black/25 p-0.5" role="radiogroup" aria-label={t.themes.aiModeLabel}>
-                    {(["standard", "expert"] as const).map((m) => (
-                      <button
-                        key={m}
-                        role="radio"
-                        aria-checked={mode === m}
-                        onClick={() => pickMode(m)}
-                        disabled={phase === "planning"}
-                        title={m === "expert" ? t.themes.aiModeExpertHint : t.themes.aiModeStandardHint}
-                        className={`px-2 py-1 rounded text-[10px] font-semibold transition ${mode === m ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-400 hover:text-white"}`}
-                      >
-                        {m === "expert" ? t.themes.aiModeExpert : t.themes.aiModeStandard}
-                      </button>
-                    ))}
-                  </div>
 
                   {/* Bild-Vorschauen inline */}
                   {images.map((img, i) => (
                     <span key={i} className="relative shrink-0">
-                      <img src={img.dataUrl} alt={img.name} className="w-8 h-8 rounded-md object-cover border border-white/15" />
+                      <img src={img.dataUrl} alt={img.name} className="w-9 h-9 rounded-lg object-cover border border-white/15" />
                       <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
                     </span>
                   ))}
 
-                  {/* Eingabe + Aktionen */}
-                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+                  {/* Eingabe — Enter löst aus (Standard: direkt · Expert: Plan) */}
                   <textarea
                     value={prompt}
                     onChange={(e) => setPrompt(e.target.value)}
@@ -484,30 +521,30 @@ export default function AiCopilot({
                     placeholder={phase === "planning" ? t.themes.aiPlanning : t.themes.aiPlaceholder}
                     rows={1}
                     disabled={phase === "planning"}
-                    className="flex-1 min-w-[180px] resize-none rounded-lg border border-white/10 bg-black/25 px-2.5 py-2 text-[12px] text-white placeholder:text-zinc-500 outline-none focus:border-[#95BF47]/60 transition disabled:opacity-60 leading-tight"
-                    style={{ scrollbarWidth: "thin", maxHeight: 76 }}
+                    className="flex-1 min-w-[120px] resize-none bg-transparent px-1 py-2 text-[13.5px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
+                    style={{ scrollbarWidth: "thin", maxHeight: 96 }}
                   />
+
+                  {/* Läuft gerade (Enter ausgelöst) */}
+                  {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
+
+                  {/* Modus-Auswahl im „Pro ⌄"-Stil (Standard/Expert) */}
+                  <ModeSelect mode={mode} onPick={pickMode} disabled={phase === "planning"} />
+
+                  {/* Fokus-Icon (Hover erklärt es) */}
                   <button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={images.length >= 3 || phase === "planning"}
-                    title={t.themes.aiImageHint}
-                    className="shrink-0 w-9 h-9 rounded-lg border border-dashed border-white/15 bg-white/[0.03] text-zinc-400 hover:text-white hover:border-[#95BF47]/50 disabled:opacity-30 flex items-center justify-center transition"
+                    onClick={() => onToggleFocusPick?.()}
+                    aria-pressed={focusPick}
+                    title={t.themes.aiFocusTooltip}
+                    aria-label={t.themes.aiFocusTooltip}
+                    className={`shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition ${
+                      focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
+                    }`}
                   >
-                    <ImagePlus className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={requestPlan}
-                    disabled={phase === "planning" || (!prompt.trim() && !images.length)}
-                    className="shrink-0 h-9 px-4 flex items-center justify-center gap-1.5 rounded-lg text-[12px] font-bold text-white disabled:opacity-35 transition hover:brightness-110"
-                    style={{ background: ACCENT }}
-                  >
-                    {phase === "planning"
-                      ? <><CircleDashed className="w-4 h-4 animate-spin" /> {t.themes.aiPlanning}</>
-                      : <><Sparkles className="w-4 h-4" /> {t.themes.aiSend}</>}
+                    <Target className="w-5 h-5" />
                   </button>
                 </div>
               )}
-      </div>
     </div>
   );
 }
