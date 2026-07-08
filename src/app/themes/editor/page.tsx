@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
+import { useCredits } from "@/lib/credits";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
 import Inspector, { BlockIcon } from "@/components/theme-editor/Inspector";
 import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER } from "@/lib/theme-sections";
@@ -159,6 +160,7 @@ function BuyboxNavRow({
 export default function ThemeEditorPage() {
   const router = useRouter();
   const { t, lang } = useI18n();
+  const credits = useCredits();
 
   const [state, dispatch] = useReducer(editorReducer, undefined, () => initialEditorState());
   const doc = state.present;
@@ -570,14 +572,16 @@ export default function ThemeEditorPage() {
 
   return (
     <>
-      <Navigation />
+      {/* Globales Menü NUR beim Produkt-Picker (noch kein Produkt). Im Editor
+          ist es ausgeblendet — die dünne Editor-Toolbar sitzt ganz oben. */}
+      {!doc.productId && <Navigation />}
       <main className={`min-h-screen bg-mesh font-sf ${showPicker ? "" : "lg:min-h-0"}`}>
         {/* Im Editor-Modus (Desktop) wird die Seite zur App-Shell: exakt Viewport-
             Höhe, nichts scrollt außen — Leisten & Vorschau scrollen INTERN und
             reichen dadurch immer bis ganz unten. Mobil: normaler Fluss + Platz
             für die untere Navigations-Leiste. */}
         <div className={`mx-auto px-3 sm:px-5 lg:px-7 py-4 sm:py-6 pb-24 md:pb-6 max-w-5xl lg:max-w-none xl:max-w-[1840px] ${
-          showPicker ? "" : "lg:h-[calc(100vh-56px)] lg:flex lg:flex-col lg:overflow-hidden lg:py-3"
+          showPicker ? "" : "lg:h-screen lg:flex lg:flex-col lg:overflow-hidden lg:py-2"
         }`}>
 
           {/* ── Top-Bar (edle Glas-Toolbar) ──
@@ -585,15 +589,15 @@ export default function ThemeEditorPage() {
               aus, Produkt-Chip schrumpft). Mobil: zwei feste, aufgeräumte
               Reihen — Reihe 1 Navigation/Undo, Reihe 2 Aktionen (scrollt
               horizontal statt untereinander zu stapeln). */}
-          <div className="glass-strong rounded-xl border border-white/[0.08] px-2 py-1.5 lg:py-1 mb-3 lg:mb-2 shrink-0">
+          <div className="glass-strong rounded-xl border border-white/[0.08] px-2 py-1.5 lg:py-[3px] mb-2 lg:mb-1.5 shrink-0">
 
-            {/* Desktop-Zeile — bewusst KOMPAKT (schmale Paddings/Fonts), damit
-                die Leiste möglichst wenig Höhe frisst. */}
+            {/* Desktop-Zeile — bewusst SEHR DÜNN (schmale Paddings/Fonts), damit
+                die Leiste ganz oben nur eine feine Zeile bildet. */}
             <div className="hidden lg:flex items-center gap-1.5 flex-nowrap min-w-0">
               <button
                 onClick={() => router.push("/themes")}
                 title={t.themes.editorBack}
-                className="shrink-0 flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white transition"
+                className="shrink-0 flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11.5px] font-semibold text-zinc-300 hover:text-white transition"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
               </button>
@@ -617,13 +621,22 @@ export default function ThemeEditorPage() {
               )}
 
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                {/* Credits — im Editor sichtbar, da das globale Menü aus ist */}
+                <a
+                  href="/credits"
+                  title={`${credits.loading ? "…" : credits.balance} Credits`}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/15 transition"
+                >
+                  <span className="text-[12px] leading-none">{credits.creditIcon}</span>
+                  <span className="tabular-nums">{credits.loading ? "…" : credits.balance}</span>
+                </a>
                 {/* Gesamt-Stil jederzeit änderbar */}
                 {doc.productId && (
                   <button
                     onClick={() => setStyleOpen(true)}
                     disabled={aiBusy}
                     title={t.themes.editorStyleGallery}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
+                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
                   >
                     <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorStyleGallery}</span>
@@ -635,7 +648,7 @@ export default function ThemeEditorPage() {
                     onClick={() => setDesignsOpen(true)}
                     disabled={aiBusy}
                     title={t.themes.editorDesigns}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1.5 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
+                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
                   >
                     <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorDesigns}</span>
@@ -665,7 +678,7 @@ export default function ThemeEditorPage() {
                   onClick={handleDownload}
                   disabled={building || !doc.productId || aiBusy}
                   title={cost !== null && cost > 0 ? t.themes.editorFreeNote.replace("{n}", String(cost)) : undefined}
-                  className="btn-deploy flex items-center gap-1.5 px-3 py-1.5 text-[12px] disabled:opacity-50 whitespace-nowrap"
+                  className="btn-deploy flex items-center gap-1.5 px-3 py-1 text-[12px] disabled:opacity-50 whitespace-nowrap"
                 >
                   {building ? <Sparkles className="w-3.5 h-3.5 animate-pulse" /> : <Download className="w-3.5 h-3.5" />}
                   <span>{building ? t.themes.builderBuilding : "Download"}</span>
@@ -675,7 +688,7 @@ export default function ThemeEditorPage() {
                   onClick={handleSyncUpdate}
                   disabled={syncing || !doc.productId || aiBusy}
                   title={t.themes.editorSyncHint}
-                  className="flex items-center gap-1.5 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/10 px-2.5 py-1.5 text-[11.5px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition whitespace-nowrap"
+                  className="flex items-center gap-1.5 rounded-md border border-[#95BF47]/40 bg-[#95BF47]/10 px-2.5 py-1 text-[11.5px] font-semibold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/20 disabled:opacity-50 transition whitespace-nowrap"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
                   <span className="hidden xl:inline">{t.themes.editorSyncUpdate}</span>
@@ -711,6 +724,14 @@ export default function ThemeEditorPage() {
                     <span className="truncate">{t.themes.editorTitle}</span>
                   </div>
                 )}
+                <a
+                  href="/credits"
+                  title={`${credits.loading ? "…" : credits.balance} Credits`}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3]"
+                >
+                  <span className="leading-none">{credits.creditIcon}</span>
+                  <span className="tabular-nums">{credits.loading ? "…" : credits.balance}</span>
+                </a>
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
@@ -985,28 +1006,11 @@ export default function ThemeEditorPage() {
                 </div>
               </div>
 
-              {/* Aufbau/Navigation (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern.
-                  Oben sitzt der einklappbare AI Co-Pilot; die Aufbau-Leiste
-                  darunter (Sektionsliste + Kaufbox-Dropdown) ist während der
-                  AI-Umsetzung gesperrt. */}
+              {/* Aufbau/Navigation (rechts) — Desktop: volle Höhe bis ganz unten,
+                  scrollt intern. Sektionsliste + Kaufbox-Dropdown; während der
+                  AI-Umsetzung gesperrt. Der AI Co-Pilot sitzt jetzt als Leiste
+                  MITTIG unter der Vorschau (nicht mehr hier). */}
               <aside className={`order-3 lg:order-3 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
-                <AiCopilot
-                  doc={doc}
-                  dispatch={dispatch}
-                  baseSections={baseSections}
-                  capabilities={capabilities}
-                  homeSections={homeSections}
-                  productTitle={activeProduct?.titel}
-                  onBusyChange={setAiBusy}
-                  focus={focusChips}
-                  onRemoveFocus={toggleFocus}
-                  onSelectFocus={(uid) => setSelected(uid)}
-                  selectedFocusable={selectedFocusable}
-                  onFocusSelected={() => selectedFocusable && toggleFocus(selectedFocusable.uid)}
-                  focusPick={focusPick}
-                  onToggleFocusPick={() => setFocusPick((v) => !v)}
-                  onClearFocus={() => setAiFocus([])}
-                />
                 <div className={`glass-strong rounded-xl border border-white/[0.08] p-2 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Allgemeines Design (global) — kein „Sektion", aber zentral
                       erreichbar; ohne Auswahl bleibt links alles leer. */}
@@ -1279,6 +1283,26 @@ export default function ThemeEditorPage() {
                     focusUids={aiFocus}
                     focusPick={focusPick && !aiBusy}
                     onToggleFocus={toggleFocus}
+                  />
+                </div>
+                {/* AI Co-Pilot — längliche Command-Leiste MITTIG unter der Vorschau */}
+                <div className="mt-2 shrink-0">
+                  <AiCopilot
+                    doc={doc}
+                    dispatch={dispatch}
+                    baseSections={baseSections}
+                    capabilities={capabilities}
+                    homeSections={homeSections}
+                    productTitle={activeProduct?.titel}
+                    onBusyChange={setAiBusy}
+                    focus={focusChips}
+                    onRemoveFocus={toggleFocus}
+                    onSelectFocus={(uid) => setSelected(uid)}
+                    selectedFocusable={selectedFocusable}
+                    onFocusSelected={() => selectedFocusable && toggleFocus(selectedFocusable.uid)}
+                    focusPick={focusPick}
+                    onToggleFocusPick={() => setFocusPick((v) => !v)}
+                    onClearFocus={() => setAiFocus([])}
                   />
                 </div>
               </div>
