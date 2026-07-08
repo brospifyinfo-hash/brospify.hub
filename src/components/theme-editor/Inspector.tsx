@@ -9,7 +9,7 @@ import { useState, type ReactNode } from "react";
 import { Reorder, useDragControls } from "framer-motion";
 import {
   ChevronDown, ChevronUp, Trash2, Shuffle, MousePointerClick, Palette as PaletteIcon,
-  Plus, ArrowDownUp, GripVertical,
+  Plus, ArrowDownUp, GripVertical, Copy, Paintbrush, Info,
   Type, Tag, SlidersHorizontal, Hash, ShoppingCart, Layers, Megaphone, Flame,
   PackageCheck, BatteryLow, Gift, Users, Star, ListChecks, ShieldCheck,
   BadgeCheck, CheckCheck, CreditCard, Truck, LayoutGrid, Sparkles, AlignLeft,
@@ -22,7 +22,7 @@ import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
 import type { PreviewData } from "@/components/ThemePreview";
 import {
   getSectionDef, getBuyboxLib, GALLERY_PRESETS, getBuyboxControls, resolveBlockSettings,
-  sectionSupportsDesign, sectionToneSettings, type SectionTone,
+  sectionSupportsDesign, sectionToneSettings, CATEGORY_LABELS, type SectionTone,
 } from "@/lib/theme-library";
 import { THEME_STYLES } from "@/lib/theme-styles";
 import { getBuyboxMeta, BUYBOX_CANONICAL_ORDER, BUYBOX_RUNTIME_ONLY } from "@/lib/theme-sections";
@@ -31,7 +31,8 @@ import { getIconAny, searchIcons } from "@/lib/theme-icon-resolver";
 import { DIVIDER_PATHS, DIVIDER_TOP_PATHS, DIVIDER_SHAPES, DIVIDER_LABELS } from "@/lib/theme-frame";
 import { useI18n } from "@/lib/i18n";
 import { EDITOR_FONTS, segCls, ACCENT } from "@/components/theme-editor/editor-ui";
-import { GroupTitle, PresetPill, FieldLabel, TextField, Segmented, ColorField, SliderField } from "@/components/theme-editor/ui";
+import { PresetPill, FieldLabel, TextField, Segmented, ColorField, SliderField } from "@/components/theme-editor/ui";
+import { ImageUploadField } from "@/components/theme-editor/ImageUploadField";
 
 const BLOCK_ICONS: Record<string, LucideIcon> = {
   Type, Tag, SlidersHorizontal, Hash, ShoppingCart, Layers, Megaphone, Flame,
@@ -153,6 +154,82 @@ function Group({ id, title, open, onToggle, children }: { id: string; title: str
   );
 }
 
+/** Kleiner Hilfetext — erklärt in einem Satz, was ein Bereich tut. */
+function HelpText({ children }: { children: ReactNode }) {
+  return <p className="text-[9.5px] leading-snug text-zinc-500 mb-1.5">{children}</p>;
+}
+
+/** Klar abgegrenzte Editor-Gruppe mit Icon, Titel und optionalem Hilfetext.
+ *  Macht den Inspector verständlicher — jeder Bereich sagt, wofür er da ist. */
+function SecGroup({ icon, title, help, right, children }: { icon: ReactNode; title: string; help?: string; right?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="rounded-lg border border-white/[0.07] bg-white/[0.015] p-2">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="text-[#95BF47] shrink-0 flex">{icon}</span>
+        <span className="text-[9.5px] font-bold uppercase tracking-[0.11em] text-white flex-1">{title}</span>
+        {right}
+      </div>
+      {help && <HelpText>{help}</HelpText>}
+      {children}
+    </div>
+  );
+}
+
+/** Vorteile-Icons je Kaufbox-Vorteil (1.700+ durchsuchbar). Wohnt jetzt
+ *  KONTEXTUELL im „Vorteile-Liste"-Baustein statt lose unter der Bausteinliste. */
+function BenefitIconsEditor({ icons, labels, onPick }: { icons: string[]; labels: string[]; onPick: (i: number, id: string) => void }) {
+  const { lang } = useI18n();
+  const [openFor, setOpenFor] = useState<number | null>(null);
+  const [q, setQ] = useState("");
+  return (
+    <div className="space-y-1">
+      {[0, 1, 2, 3].map((i) => {
+        const cur = icons[i] || DEFAULT_BENEFIT_ICONS[i] || "check";
+        const label = labels[i] || `${lang === "en" ? "Benefit" : "Vorteil"} ${i + 1}`;
+        return (
+          <div key={i} className="rounded-md border border-white/10 bg-white/[0.03] p-1.5">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setOpenFor(openFor === i ? null : i)}
+                className="w-7 h-7 shrink-0 rounded-md border border-white/15 bg-white/[0.05] text-white flex items-center justify-center hover:border-[#95BF47]/50 transition"
+                aria-label={label}
+              >
+                <IconSvg id={cur} size={15} />
+              </button>
+              <span className="text-[11px] text-zinc-300 flex-1 min-w-0 truncate">{label}</span>
+            </div>
+            {openFor === i && (
+              <div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                <input
+                  type="text"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder={lang === "en" ? "Search 1,700+ icons…" : "1.700+ Icons durchsuchen…"}
+                  className="w-full mb-1.5 rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] text-white placeholder:text-zinc-500 focus:border-[#95BF47]/50 focus:outline-none"
+                />
+                <div className="grid grid-cols-7 gap-1 max-h-44 overflow-y-auto">
+                  {searchIcons(q, 63).map((ic) => (
+                    <button
+                      key={ic.id}
+                      title={ic.label}
+                      onClick={() => { onPick(i, ic.id); setOpenFor(null); }}
+                      className={`aspect-square rounded-md border flex items-center justify-center transition ${
+                        cur === ic.id ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]"
+                      }`}
+                    >
+                      <IconSvg id={ic.id} size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function Inspector({
   doc, dispatch, selected, onClearSelect, onSelectBlock, onOpenStyles, onRandomize, onOpenBuyboxGallery, previewData,
 }: {
@@ -172,8 +249,6 @@ export default function Inspector({
   const { t, lang } = useI18n();
   const [openG, setOpenG] = useState<Record<string, boolean>>({ stil: true });
   const toggleG = (id: string) => setOpenG((o) => ({ ...o, [id]: !o[id] }));
-  const [iconPickerFor, setIconPickerFor] = useState<number | null>(null);
-  const [iconQuery, setIconQuery] = useState("");
 
   // ── Section ausgewählt (Produktseite ODER Startseite — uids sind global) ──
   const sectionList =
@@ -186,28 +261,47 @@ export default function Inspector({
   if (section && sectionList) {
     const def = getSectionDef(section.type);
     const idx = sectionList.findIndex((s) => s.uid === section.uid);
+    const cat = def ? CATEGORY_LABELS[def.category] : null;
+    const toneVal = String(section.settings?.sec_tone || (section.settings?.sec_bg ? "custom" : "none"));
     return (
       <div className="space-y-1.5">
-        {/* Kompakter Kopf: Icon + Name + Verschieben (eine Zeile) */}
-        <div className="flex items-center gap-2 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.08] px-2 py-1.5">
-          <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
-            <LayoutPanelTop className="w-4 h-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="text-[12.5px] font-bold text-white truncate leading-tight">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
-            <div className="text-[9.5px] text-zinc-400 truncate leading-tight">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
+        {/* Kopf: Icon + Name + Beschreibung + Kategorie, dazu Verschieben */}
+        <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.12] to-transparent px-2 py-2">
+          <div className="flex items-start gap-2">
+            <span className="w-7 h-7 shrink-0 rounded-md flex items-center justify-center" style={{ background: "rgba(149,191,71,0.14)", color: ACCENT }}>
+              <LayoutPanelTop className="w-4 h-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-bold text-white truncate leading-tight">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
+              <div className="text-[9.5px] text-zinc-400 leading-snug mt-0.5">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
+              {cat && (
+                <span className="inline-block mt-1 rounded-full border border-white/10 bg-white/[0.05] px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-wider text-zinc-400">
+                  {lang === "en" ? cat.en : cat.de}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-0.5 shrink-0">
+              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-6 h-6 rounded border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label={lang === "en" ? "Up" : "Hoch"}><ChevronUp className="w-3.5 h-3.5" /></button>
+              <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-6 h-6 rounded border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label={lang === "en" ? "Down" : "Runter"}><ChevronDown className="w-3.5 h-3.5" /></button>
+            </div>
           </div>
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: -1 })} disabled={idx <= 0} className="w-6 h-6 rounded border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="hoch"><ChevronUp className="w-3.5 h-3.5" /></button>
-            <button onClick={() => dispatch({ type: "moveSection", uid: section.uid, dir: 1 })} disabled={idx >= sectionList.length - 1} className="w-6 h-6 rounded border border-white/10 bg-white/[0.05] text-zinc-300 hover:text-white disabled:opacity-25 flex items-center justify-center" aria-label="runter"><ChevronDown className="w-3.5 h-3.5" /></button>
-            <button onClick={() => { dispatch({ type: "removeSection", uid: section.uid }); onClearSelect(); }} className="w-6 h-6 rounded border border-red-400/25 bg-red-500/[0.08] text-red-300 hover:bg-red-500/[0.16] flex items-center justify-center" aria-label={t.themes.editorRemove}><Trash2 className="w-3 h-3" /></button>
+          {/* Schnell-Aktionen: Duplizieren · Zurücksetzen · Entfernen */}
+          <div className="grid grid-cols-3 gap-1 mt-1.5">
+            <button onClick={() => dispatch({ type: "duplicateSection", uid: section.uid })} title={t.themes.editorSecDuplicateHint} className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-1 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition">
+              <Copy className="w-3 h-3" /> {t.themes.editorSecDuplicate}
+            </button>
+            <button onClick={() => dispatch({ type: "resetSection", uid: section.uid })} title={t.themes.editorSecResetHint} className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-1 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition">
+              <RotateCcw className="w-3 h-3" /> {t.themes.editorSecReset}
+            </button>
+            <button onClick={() => { dispatch({ type: "removeSection", uid: section.uid }); onClearSelect(); }} title={t.themes.editorRemove} className="flex items-center justify-center gap-1 rounded-md border border-red-400/25 bg-red-500/[0.08] px-1 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/[0.16] transition">
+              <Trash2 className="w-3 h-3" /> {t.themes.editorRemove}
+            </button>
           </div>
         </div>
 
-        {/* Style-Arten als kompakte Pillen (mehrere pro Zeile) */}
+        {/* Look / Style-Art */}
         {def && def.presets.length > 0 && (
-          <div>
-            <GroupTitle>{t.themes.editorPreset}</GroupTitle>
+          <SecGroup icon={<LayoutGrid className="w-3 h-3" />} title={t.themes.editorPreset} help={t.themes.editorPresetHelp}>
             <div className="flex flex-wrap gap-1">
               {def.presets.map((p) => (
                 <PresetPill
@@ -219,19 +313,18 @@ export default function Inspector({
                 />
               ))}
             </div>
-          </div>
+          </SecGroup>
         )}
 
-        {/* Hintergrund-Ton + Übergänge (Design-Layer) */}
+        {/* Hintergrund & Übergang (Design-Layer) mit Live-Vorschau */}
         {sectionSupportsDesign(section.type) && (
-          <div>
-            <GroupTitle>{t.themes.editorSecDesign}</GroupTitle>
+          <SecGroup icon={<Paintbrush className="w-3 h-3" />} title={t.themes.editorSecDesign} help={t.themes.editorSecDesignHelp}>
             <div className="space-y-1.5">
               <div>
                 <FieldLabel>{t.themes.editorSecTone}</FieldLabel>
                 <Segmented
                   options={[["none", lang === "en" ? "Off" : "Aus"], ["tint", "Tint"], ["soft", "Soft"], ["wash", lang === "en" ? "Gray" : "Grau"], ["deep", lang === "en" ? "Dark" : "Dunkel"]]}
-                  value={String(section.settings?.sec_tone || (section.settings?.sec_bg ? "custom" : "none"))}
+                  value={toneVal}
                   onChange={(tone) =>
                     dispatch({
                       type: "mergeSectionSettings",
@@ -243,6 +336,12 @@ export default function Inspector({
                     })
                   }
                 />
+                {(() => {
+                  const bg1 = String(section.settings?.sec_bg || "");
+                  const bg2 = String(section.settings?.sec_bg2 || "");
+                  const base = bg1 ? (bg2 ? `linear-gradient(150deg, ${bg1}, ${bg2})` : bg1) : doc.global.colors.background;
+                  return <div className="mt-1 h-4 rounded border border-white/10" style={{ background: base }} title={t.themes.editorSecTonePreview} />;
+                })()}
               </div>
               <div>
                 <FieldLabel>{t.themes.editorSecDividerTop}</FieldLabel>
@@ -262,27 +361,42 @@ export default function Inspector({
                 />
               </div>
             </div>
-          </div>
+          </SecGroup>
         )}
 
-        {/* Kuratierte Texte */}
+        {/* Kuratierte Texte — mit Zurücksetzen je Feld + Vorschau-Tipp */}
         {def && def.fields.length > 0 && (
-          <div>
-            <GroupTitle>{t.themes.editorTexts}</GroupTitle>
+          <SecGroup icon={<Type className="w-3 h-3" />} title={t.themes.editorTexts} help={t.themes.editorTextsHelp}>
             <div className="space-y-1.5">
-              {def.fields.map((f) => (
-                <label key={f.id} className="block">
-                  <FieldLabel>{lang === "en" ? f.labelEn : f.label}</FieldLabel>
-                  <TextField
-                    value={section.texts[f.id] ?? ""}
-                    placeholder={f.def}
-                    textarea={f.kind === "textarea"}
-                    onChange={(v) => dispatch({ type: "setText", uid: section.uid, field: f.id, value: v })}
-                  />
-                </label>
-              ))}
+              {def.fields.map((f) => {
+                const cur = section.texts[f.id] ?? "";
+                return (
+                  <label key={f.id} className="block">
+                    <FieldLabel
+                      right={cur.trim() ? (
+                        <button
+                          onClick={(e) => { e.preventDefault(); dispatch({ type: "setText", uid: section.uid, field: f.id, value: "" }); }}
+                          title={t.themes.editorFieldReset}
+                          aria-label={t.themes.editorFieldReset}
+                          className="text-zinc-500 hover:text-white transition"
+                        >
+                          <RotateCcw className="w-2.5 h-2.5" />
+                        </button>
+                      ) : undefined}
+                    >
+                      {lang === "en" ? f.labelEn : f.label}
+                    </FieldLabel>
+                    <TextField
+                      value={cur}
+                      placeholder={f.def}
+                      textarea={f.kind === "textarea"}
+                      onChange={(v) => dispatch({ type: "setText", uid: section.uid, field: f.id, value: v })}
+                    />
+                  </label>
+                );
+              })}
             </div>
-          </div>
+          </SecGroup>
         )}
       </div>
     );
@@ -320,6 +434,13 @@ export default function Inspector({
             <Segmented
               options={c.options.map((o) => [o.value, lang === "en" ? o.labelEn : o.label] as const)}
               value={String(val(c.key) ?? c.options[0].value)}
+              onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })}
+            />
+          )}
+          {c.kind === "image" && (
+            <ImageUploadField
+              value={String(val(c.key) ?? "")}
+              round={c.round}
               onChange={(v) => dispatch({ type: "setBlockSetting", blockType: type, key: c.key, value: v })}
             />
           )}
@@ -368,17 +489,39 @@ export default function Inspector({
               </label>
             )
           )}
+          {controls.some((c) => c.kind === "image") && <HelpText>{t.themes.editorBlockPhotoHelp}</HelpText>}
           {otherCtrls.length > 0 && <div className="space-y-1.5">{otherCtrls.map(renderCtrl)}</div>}
           {colorCtrls.length > 0 && <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">{colorCtrls.map(renderCtrl)}</div>}
+          {/* Vorteile-Icons wohnen jetzt KONTEXTUELL im Vorteile-Baustein */}
+          {type === "benefits_list" && (
+            <div className="pt-1.5 mt-1 border-t border-white/[0.06]">
+              <FieldLabel>{t.themes.builderBenefitIcons}</FieldLabel>
+              <HelpText>{t.themes.builderBenefitIconsHelp}</HelpText>
+              <BenefitIconsEditor
+                icons={doc.buybox.benefitIcons}
+                labels={[0, 1, 2, 3].map((i) => previewData?.benefits?.[i]?.text || "")}
+                onPick={(i, id) => {
+                  const arr = [...doc.buybox.benefitIcons];
+                  while (arr.length < 4) arr.push(DEFAULT_BENEFIT_ICONS[arr.length]);
+                  arr[i] = id;
+                  dispatch({ type: "setBuybox", patch: { benefitIcons: arr } });
+                }}
+              />
+            </div>
+          )}
         </div>
       );
     };
 
     return (
       <div className="space-y-1.5">
-        <div className="rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2.5 py-1.5">
+        <div className="rounded-lg border border-[#95BF47]/25 bg-gradient-to-b from-[#95BF47]/[0.1] to-transparent px-2.5 py-2">
           <div className="text-[12px] font-bold text-white leading-tight">{t.themes.editorBuybox}</div>
           <div className="text-[10px] text-zinc-500">{t.themes.builderBlocks}</div>
+          <p className="mt-1 flex items-start gap-1 text-[9.5px] leading-snug text-zinc-500">
+            <Info className="w-3 h-3 shrink-0 mt-[1px] text-[#95BF47]/70" />
+            {t.themes.editorBuyboxHelp}
+          </p>
         </div>
 
         {/* Produktgalerie: Style-Art + Bild-Badge */}
@@ -473,62 +616,6 @@ export default function Inspector({
             );
           })}
         </Reorder.Group>
-
-        {/* Vorteile-Icons */}
-        <div>
-          <GroupTitle>{t.themes.builderBenefitIcons}</GroupTitle>
-          <div className="space-y-1">
-            {[0, 1, 2, 3].map((i) => {
-              const bLabel = previewData?.benefits?.[i]?.text || `Vorteil ${i + 1}`;
-              const cur = doc.buybox.benefitIcons[i] || DEFAULT_BENEFIT_ICONS[i] || "check";
-              return (
-                <div key={i} className="rounded-lg border border-white/10 bg-white/[0.03] p-1.5">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIconPickerFor(iconPickerFor === i ? null : i)}
-                      className="w-7 h-7 shrink-0 rounded-md border border-white/15 bg-white/[0.05] text-white flex items-center justify-center hover:border-[#95BF47]/50 transition"
-                      aria-label={`Icon für ${bLabel}`}
-                    >
-                      <IconSvg id={cur} size={15} />
-                    </button>
-                    <span className="text-[11px] text-zinc-300 flex-1 min-w-0 truncate">{bLabel}</span>
-                  </div>
-                  {iconPickerFor === i && (
-                    <div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
-                      <input
-                        type="text"
-                        value={iconQuery}
-                        onChange={(e) => setIconQuery(e.target.value)}
-                        placeholder={lang === "en" ? "Search 1,700+ icons…" : "1.700+ Icons durchsuchen…"}
-                        className="w-full mb-1.5 rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] text-white placeholder:text-zinc-500 focus:border-[#95BF47]/50 focus:outline-none"
-                      />
-                      <div className="grid grid-cols-7 gap-1 max-h-44 overflow-y-auto">
-                        {searchIcons(iconQuery, 63).map((ic) => (
-                          <button
-                            key={ic.id}
-                            title={ic.label}
-                            onClick={() => {
-                              const icons = [...doc.buybox.benefitIcons];
-                              while (icons.length < 4) icons.push(DEFAULT_BENEFIT_ICONS[icons.length]);
-                              icons[i] = ic.id;
-                              dispatch({ type: "setBuybox", patch: { benefitIcons: icons } });
-                              setIconPickerFor(null);
-                            }}
-                            className={`aspect-square rounded-md border flex items-center justify-center transition ${
-                              cur === ic.id ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]"
-                            }`}
-                          >
-                            <IconSvg id={ic.id} size={16} />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </div>
     );
   }

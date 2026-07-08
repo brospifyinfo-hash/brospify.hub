@@ -818,12 +818,18 @@ export default function ThemePreview({
         const style = str(s.style, "bubble");
         const initials = bt(type, "initials", "");
         const verified = bt(type, "verified", "");
+        const photo = str(s.photo, "");
         return (
           <div className={`pm-rq pm-rq--${style}`}>
             <div className="pm-rq-stars">★★★★★</div>
             <p className="pm-rq-text" data-ef="text">{bt(type, "text", "")}</p>
             <div className="pm-rq-meta">
-              {initials && <span className="pm-rq-av" style={{ background: ac }} data-ef="initials">{initials}</span>}
+              {photo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="pm-rq-av" style={{ objectFit: "cover" }} src={photo} alt="" />
+              ) : initials ? (
+                <span className="pm-rq-av" style={{ background: ac }} data-ef="initials">{initials}</span>
+              ) : null}
               <span className="pm-rq-who">
                 <strong data-ef="name">{bt(type, "name", "")}</strong>
                 {verified && <em className="pm-rq-ver">✓ <span data-ef="verified">{verified}</span></em>}
@@ -874,16 +880,24 @@ export default function ThemePreview({
       case "avatar_proof": {
         const ac = str(s.accent, colors.accent);
         const style = str(s.style, "pill");
-        const initials = bt(type, "initials", "SM,TK,LB").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 3);
+        const inits = bt(type, "initials", "SM,TK,LB").split(",").map((x) => x.trim());
+        const photos = [str(s.av1, ""), str(s.av2, ""), str(s.av3, "")];
+        // 3 feste Slots: Foto (falls hochgeladen) sonst Initiale; leere überspringen.
+        const slots = [0, 1, 2].map((i) => ({ photo: photos[i], init: inits[i] || "" })).filter((sl) => sl.photo || sl.init);
         return (
           <div
             className={`pm-avp pm-avp--${style}`}
             style={style === "tint" ? { background: `color-mix(in srgb,${ac} 9%,var(--pv-bg))` } : undefined}
           >
             <span className="pm-avp-avs">
-              {initials.map((x, i) => (
-                <span key={i} className="pm-avp-av" style={{ background: `color-mix(in srgb,${ac} ${72 - i * 16}%,var(--pv-text))` }}>{x}</span>
-              ))}
+              {slots.map((sl, i) =>
+                sl.photo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} className="pm-avp-av" style={{ objectFit: "cover" }} src={sl.photo} alt="" />
+                ) : (
+                  <span key={i} className="pm-avp-av" style={{ background: `color-mix(in srgb,${ac} ${72 - i * 16}%,var(--pv-text))` }}>{sl.init}</span>
+                ),
+              )}
             </span>
             <span className="pm-avp-txt">
               <strong data-ef="name">{bt(type, "name", "")}</strong>

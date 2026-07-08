@@ -1677,9 +1677,11 @@ export function resolveBlockSettings(
 export interface BuyboxControl {
   key: string;
   label: string; labelEn: string;
-  kind: "color" | "slider" | "segment";
+  kind: "color" | "slider" | "segment" | "image";
   min?: number; max?: number; step?: number; suffix?: string;
   options?: { value: string; label: string; labelEn: string }[];
+  /** Bei kind:"image" — runde Vorschau (Avatare/Logos). */
+  round?: boolean;
 }
 
 const ALIGN3 = (keyLR = false) => [
@@ -1759,7 +1761,15 @@ export const BUYBOX_CONTROLS: Record<string, BuyboxControl[]> = {
     { key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" },
   ],
   usp_grid: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
-  avatar_proof: [{ key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" }],
+  avatar_proof: [
+    // Optionale echte Kundenfotos je Avatar — leer = Initialen (Fallback).
+    { key: "av1", label: "Avatar-Foto 1", labelEn: "Avatar photo 1", kind: "image", round: true },
+    { key: "av2", label: "Avatar-Foto 2", labelEn: "Avatar photo 2", kind: "image", round: true },
+    { key: "av3", label: "Avatar-Foto 3", labelEn: "Avatar photo 3", kind: "image", round: true },
+    { key: "accent", label: "Akzentfarbe", labelEn: "Accent color", kind: "color" },
+  ],
+  // Kunden-Zitat: optionales Foto statt Initialen-Avatar.
+  review_quote: [{ key: "photo", label: "Kundenfoto", labelEn: "Customer photo", kind: "image", round: true }],
 };
 
 export function getBuyboxControls(type: string): BuyboxControl[] {

@@ -132,6 +132,8 @@ export type EditorAction =
   | { type: "removeSection"; uid: string }
   | { type: "moveSection"; uid: string; dir: -1 | 1 }
   | { type: "reorderSections"; page: EditorPage; order: string[] }
+  | { type: "duplicateSection"; uid: string }
+  | { type: "resetSection"; uid: string }
   | { type: "setPreset"; uid: string; presetId: string }
   | { type: "setText"; uid: string; field: string; value: string }
   | { type: "setSectionSetting"; uid: string; key: string; value: string | number | boolean }
@@ -213,6 +215,33 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
     case "setPreset": {
       const mapList = (list: SectionInstance[]) =>
         list.map((s) => (s.uid === action.uid ? { ...s, presetId: action.presetId } : s));
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
+    case "duplicateSection": {
+      // Klont die Instanz (neue uid, tiefe Kopie von texts/settings) und setzt
+      // sie direkt unter das Original — seitenübergreifend (Produkt/Startseite).
+      for (const key of ["sections", "home"] as const) {
+        const list = doc[key] || [];
+        const i = list.findIndex((s) => s.uid === action.uid);
+        if (i < 0) continue;
+        const src = list[i];
+        const copy: SectionInstance = {
+          ...src,
+          uid: newSectionUid(),
+          texts: { ...src.texts },
+          settings: src.settings ? { ...src.settings } : undefined,
+        };
+        const next = [...list];
+        next.splice(i + 1, 0, copy);
+        return { ...doc, [key]: next };
+      }
+      return doc;
+    }
+    case "resetSection": {
+      // Zurück auf den Auslieferungszustand: keine Style-Art, keine eigenen
+      // Texte, kein Design-Layer (Feld-Defaults füllen die Vorschau/den Export).
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) => (s.uid === action.uid ? { ...s, presetId: "", texts: {}, settings: {} } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
     }
     case "setText": {

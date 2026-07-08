@@ -864,7 +864,13 @@
         wrap.appendChild(stars);
         wrap.appendChild(el("p", "bspx-rq-text", b.t.text || ""));
         var meta = el("div", "bspx-rq-meta");
-        if (b.t.initials) {
+        if (b.s.photo) {
+          var avImg = el("img", "bspx-rq-av");
+          avImg.src = b.s.photo;
+          avImg.alt = "";
+          avImg.style.objectFit = "cover";
+          meta.appendChild(avImg);
+        } else if (b.t.initials) {
           var av = el("span", "bspx-rq-av", b.t.initials);
           av.style.background = ac;
           meta.appendChild(av);
@@ -920,12 +926,23 @@
         if (style === "tint") wrap.style.background = "color-mix(in srgb," + ac + " 9%,transparent)";
         var avs = el("span", "bspx-avp-avs");
         var inits = (b.t.initials || "SM,TK,LB").split(",");
+        var photos = [b.s.av1, b.s.av2, b.s.av3];
         var n = 0;
-        for (var j = 0; j < inits.length && n < 3; j++) {
-          var x = inits[j].replace(/^\s+|\s+$/g, "");
-          if (!x) continue;
-          var av = el("span", "bspx-avp-av", x);
-          av.style.background = "color-mix(in srgb," + ac + " " + (72 - n * 16) + "%,currentColor)";
+        // 3 feste Slots: hochgeladenes Foto (falls vorhanden) sonst Initiale.
+        for (var j = 0; j < 3; j++) {
+          var photo = photos[j];
+          var x = (inits[j] || "").replace(/^\s+|\s+$/g, "");
+          if (!photo && !x) continue;
+          var av;
+          if (photo) {
+            av = el("img", "bspx-avp-av");
+            av.src = photo;
+            av.alt = "";
+            av.style.objectFit = "cover";
+          } else {
+            av = el("span", "bspx-avp-av", x);
+            av.style.background = "color-mix(in srgb," + ac + " " + (72 - n * 16) + "%,currentColor)";
+          }
           avs.appendChild(av);
           n++;
         }
