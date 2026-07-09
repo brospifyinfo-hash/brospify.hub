@@ -407,7 +407,7 @@ function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
  * Erstellt den Plan via Claude. Wirft bei fehlendem Key/Refusal/Parse-Fehler
  * (Route übersetzt in saubere HTTP-Fehler). Kosten → Provider-Ledger.
  */
-export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRawPlan> {
+export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: AbortSignal }): Promise<ThemeAiRawPlan> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY fehlt.");
   // maxRetries: transiente Fehler (429/529/5xx) werden intern nochmal versucht;
@@ -431,7 +431,7 @@ export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRaw
       output_config: { format: { type: "json_schema", schema: PLAN_SCHEMA } },
       system,
       messages: [{ role: "user", content }],
-    });
+    }, { signal: opts?.signal });
   } catch (err) {
     // Fallback ohne Structured Output NUR bei 400/invalid_request (Feature/
     // SDK-Feld auf der Plattform nicht verfügbar). Bei 429/529/5xx/Auth-
@@ -453,7 +453,7 @@ export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRaw
         },
       ],
       messages: [{ role: "user", content }],
-    });
+    }, { signal: opts?.signal });
   }
 
   try {

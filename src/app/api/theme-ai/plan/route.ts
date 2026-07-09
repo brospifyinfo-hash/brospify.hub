@@ -3,13 +3,13 @@
 // mode?} und liefert einen bestätigungspflichtigen Plan: Schritte +
 // validierte Operationen + Aufwands-Stufe + Credit-Kosten + signierten
 // planToken (bindet mode/imageCount an die apply-Route — Kosten-Integrität).
-// Der Plan selbst kostet KEINE Credits (Abzug erst bei /api/theme-ai/apply)
-// — gegen Dauerfeuer gibt es ein Rate-Limit + Mindest-Guthaben-Check.
+// KOSTEN: Der Plan wird JETZT hier abgerechnet (Abzug bei der Plan-Erstellung,
+// nicht mehr bei /apply — das ist prepaid/gratis). Die AI liefert IMMER: bei
+// Claude-Fehler/Timeout/Rate-Limit greift ein deterministischer Fallback-Plan.
 // KOSTEN-SPARER: identische Anfragen (gleicher Nutzer/Wunsch/Dokument/Modus,
-// ohne Bilder) werden 10 Minuten lang aus dem Plan-Cache bedient — ein
-// erneuter Klick auf „Plan erstellen" kostet dann keinen Claude-Call.
-// Gecacht wird NUR ein Plan, der die Validierung überstanden hat (sonst
-// würde ein 422 zehn Minuten lang festhängen).
+// ohne Bilder) werden 10 Minuten lang aus dem Plan-Cache bedient (kein neuer
+// Claude-Call UND kein erneuter Abzug). Gecacht wird NUR ein Plan, dessen
+// Credit-Abzug erfolgreich war — sonst wäre er per Retry gratis abrufbar.
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
@@ -220,13 +220,13 @@ export async function POST(req: NextRequest) {
       // Kein API-Call → schützt unser Budget wie das Rate-Limit, aber ohne Fehler.
       raw = buildFallbackPlan(input);
     } else {
+      // Hartes Zeit-Limit via AbortController (innerhalb des 60-s-Funktions-
+      // Limits): bricht den Claude-Call bei 45 s wirklich ab — kein weiter
+      // laufender, verworfener Call, der noch Anthropic-Kosten verursacht.
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 45000);
       try {
-        // Hartes Zeit-Limit: kommt Claude nicht rechtzeitig, schwenken wir auf
-        // den Fallback um (innerhalb des 60-s-Funktions-Limits).
-        raw = await Promise.race([
-          generateThemePlan(input),
-          new Promise<ThemeAiRawPlan>((_, reject) => setTimeout(() => reject(new Error("plan timeout")), 45000)),
-        ]);
+        raw = await generateThemePlan(input, { signal: ac.signal });
       } catch (err) {
         console.error("[theme-ai] plan failed → Fallback:", err);
         const status = (err as { status?: number } | null)?.status;
@@ -238,6 +238,8 @@ export async function POST(req: NextRequest) {
           details: { status: status ?? null, message: err instanceof Error ? err.message.slice(0, 300) : "" },
         });
         raw = buildFallbackPlan(input);
+      } finally {
+        clearTimeout(timer);
       }
     }
   }
@@ -255,8 +257,6 @@ export async function POST(req: NextRequest) {
     raw = { summary: raw.summary || "Design aufgefrischt.", steps: raw.steps || [], operations: [{ op: "set_style", styleId: doc.global?.styleId || "modern", mode: "design" }] };
     ops = validateAiOps(raw.operations, doc, caps);
   }
-  if (cacheKey && !fromCache) planCacheSet(cacheKey, raw);
-
   const points = aiEffortPoints(ops, images.length);
   const tier = aiEffortTier(points);
   const cost = session.isAdmin ? 0 : await getCreditCost(aiTierCreditKey(tier, mode));
@@ -286,6 +286,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: TRANSIENT_MSG }, { status: 503 });
     }
   }
+
+  // ERST NACH erfolgreichem Abzug cachen: ein fehlgeschlagener Abzug (402/503)
+  // hat oben schon returned, kann den Cache also NICHT mehr füllen — sonst würde
+  // ein Retry den (teuren) Plan gratis via fromCache ausliefern. Admin/kostenlos
+  // (cost 0) erreichen diese Stelle normal und cachen wie gehabt.
+  if (cacheKey && !fromCache) planCacheSet(cacheKey, raw);
 
   return NextResponse.json(
     {

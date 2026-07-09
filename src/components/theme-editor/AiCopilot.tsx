@@ -39,6 +39,9 @@ interface PlanResponse {
   cost: number;
   imageCount: number;
   mode?: AiMode;
+  /** Wurden bei DIESEM Request Credits abgebucht (nicht bei Cache-Treffern/Admin). */
+  charged?: boolean;
+  creditsRemaining?: number;
   /** Signiert mode/imageCount/ops — Pflicht beim Bestätigen (apply). */
   planToken?: string;
 }
@@ -285,33 +288,22 @@ export default function AiCopilot({
     onBusyChange?.(true);
     setError("");
     setProgress(0);
-    try {
-      const res = await fetch("/api/theme-ai/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        cache: "no-store",
-        body: JSON.stringify({
-          document: docRef.current,
-          ops: p.ops,
-          planToken: p.planToken,
-          productTitle,
-          capabilities,
-        }),
-      });
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setError(res.status === 402 ? d?.error || t.themes.aiNoCredits : d?.error || t.themes.aiErr);
-        setPhase("plan");
-        onBusyChange?.(false);
-        return;
-      }
-      if (typeof d?.creditsRemaining === "number") credits.setBalance(d.creditsRemaining);
-    } catch {
-      setError(t.themes.aiErr);
-      setPhase("plan");
-      onBusyChange?.(false);
-      return;
-    }
+    // Anwenden ist PREPAID (Credits fielen bei der Plan-Erstellung an) und passiert
+    // rein clientseitig. /apply autorisiert nur + füttert den Lernspeicher — es darf
+    // das Anwenden NIE blockieren (sonst „bezahlt, aber kein Ergebnis"). Deshalb
+    // fire-and-forget, ohne auf die Antwort zu warten.
+    fetch("/api/theme-ai/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        document: docRef.current,
+        ops: p.ops,
+        planToken: p.planToken,
+        productTitle,
+        capabilities,
+      }),
+    }).catch(() => {});
 
     // Ops Schritt für Schritt anwenden — die Preview folgt live; History
     // koalesziert zu EINEM Schritt (aiBoundary + aiApply). Der Editor ist
@@ -431,7 +423,7 @@ export default function AiCopilot({
                     <span className="text-[12.5px] font-bold text-white">
                       {phase === "done" ? t.themes.aiDone : phase === "applying" ? t.themes.aiApplying : t.themes.aiPlanTitle}
                     </span>
-                    {phase !== "done" && plan.cost > 0 && (
+                    {phase !== "done" && plan.charged && plan.cost > 0 && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-amber-300/30 bg-amber-300/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
                         <Coins className="w-3 h-3" /> {t.themes.aiPlanCost.replace("{n}", String(plan.cost))}
                       </span>
