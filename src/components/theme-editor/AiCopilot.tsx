@@ -42,6 +42,8 @@ interface PlanResponse {
   /** Wurden bei DIESEM Request Credits abgebucht (nicht bei Cache-Treffern/Admin). */
   charged?: boolean;
   creditsRemaining?: number;
+  /** true = nur schneller Ersatz-Entwurf (KI war ausgelastet) — Retry empfehlen. */
+  fallback?: boolean;
   /** Signiert mode/imageCount/ops — Pflicht beim Bestätigen (apply). */
   planToken?: string;
 }
@@ -193,6 +195,9 @@ export default function AiCopilot({
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState("");
+  // Hinweis (kein Fehler): z. B. „KI war ausgelastet, das war nur ein
+  // schneller Entwurf — nochmal senden für die volle Produkt-Anpassung".
+  const [notice, setNotice] = useState("");
   const [drag, setDrag] = useState(false);
   const docRef = useRef(doc);
   docRef.current = doc;
@@ -240,6 +245,7 @@ export default function AiCopilot({
     clearDoneTimer();
     setPhase("planning");
     setError("");
+    setNotice("");
     setPlan(null);
     try {
       const res = await fetch("/api/theme-ai/plan", {
@@ -266,6 +272,7 @@ export default function AiCopilot({
       }
       // Credits werden JETZT (bei der Plan-Erstellung) abgezogen — Kontostand live nachziehen.
       if (typeof d?.creditsRemaining === "number") credits.setBalance(d.creditsRemaining);
+      if ((d as PlanResponse)?.fallback) setNotice(t.themes.aiFallbackNote);
       setPlan(d as PlanResponse);
       // STANDARD = kein Plan-Review: direkt umsetzen (Enter wendet sofort an).
       // EXPERT = Plan zur Freigabe anzeigen, erst „Umsetzen" wendet an.
@@ -375,6 +382,7 @@ export default function AiCopilot({
         }`}
       >
       {error && <p className="px-4 pt-3 text-[11.5px] text-amber-300/90 leading-snug">{error}</p>}
+      {notice && !error && <p className="px-4 pt-3 text-[11.5px] text-sky-300/90 leading-snug">{notice}</p>}
       {focusPick && !showPlanCard && (
         <p className="flex items-center gap-1.5 px-4 pt-3 text-[11px] font-medium text-amber-200/85 leading-snug">
           <Target className="w-3.5 h-3.5 shrink-0" /> {t.themes.aiFocusPickHint}

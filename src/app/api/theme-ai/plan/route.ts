@@ -28,7 +28,11 @@ import type { ThemeDocument } from "@/lib/theme-doc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+// 120 s (Vercel Pro): ein volles „passe das Theme dem Produkt an" (10–12
+// Sektionen mit echten Texten) dauert in der Generierung oft 45–90 s. Mit dem
+// alten 60-s-Limit + 45-s-Abbruch wurde genau das gute Ergebnis abgewürgt und
+// durch den simplen Fallback ersetzt.
+export const maxDuration = 120;
 
 // Rate-Limit pro Nutzer (Lambda-lokal, bewusst pragmatisch): max. 10 Pläne
 // in 10 Minuten — jeder Plan kostet UNS einen Claude-Call.
@@ -215,16 +219,19 @@ export async function POST(req: NextRequest) {
 
   // Die AI liefert IMMER: klappt Claude nicht (Fehler/Timeout/Rate-Limit), gibt
   // es einen deterministischen Ersatz-Plan statt einer Fehlermeldung.
+  let usedFallback = false;
   if (!raw) {
     if (rateLimited(user)) {
       // Kein API-Call → schützt unser Budget wie das Rate-Limit, aber ohne Fehler.
       raw = buildFallbackPlan(input);
+      usedFallback = true;
     } else {
-      // Hartes Zeit-Limit via AbortController (innerhalb des 60-s-Funktions-
-      // Limits): bricht den Claude-Call bei 45 s wirklich ab — kein weiter
-      // laufender, verworfener Call, der noch Anthropic-Kosten verursacht.
+      // Zeit-Limit via AbortController KNAPP unter dem 120-s-Funktions-Limit:
+      // die KI hat massig Zeit (volle Produkt-Anpassung ~45–90 s). Der Fallback
+      // greift damit praktisch nur noch bei ECHTEN API-Fehlern, nicht mehr als
+      // Ersatz für ein langsames, aber gutes Ergebnis.
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 45000);
+      const timer = setTimeout(() => ac.abort(), 110000);
       try {
         raw = await generateThemePlan(input, { signal: ac.signal });
       } catch (err) {
@@ -238,6 +245,7 @@ export async function POST(req: NextRequest) {
           details: { status: status ?? null, message: err instanceof Error ? err.message.slice(0, 300) : "" },
         });
         raw = buildFallbackPlan(input);
+        usedFallback = true;
       } finally {
         clearTimeout(timer);
       }
@@ -251,11 +259,13 @@ export async function POST(req: NextRequest) {
   if (!ops.length) {
     raw = buildFallbackPlan(input);
     ops = validateAiOps(toRecordOps(raw.operations), doc, caps);
+    usedFallback = true;
   }
   if (!ops.length) {
     // Letzte Absicherung (praktisch nie): simpler Design-Refresh im aktuellen Stil.
     raw = { summary: raw.summary || "Design aufgefrischt.", steps: raw.steps || [], operations: [{ op: "set_style", styleId: doc.global?.styleId || "modern", mode: "design" }] };
     ops = validateAiOps(raw.operations, doc, caps);
+    usedFallback = true;
   }
   const points = aiEffortPoints(ops, images.length);
   const tier = aiEffortTier(points);
@@ -264,8 +274,11 @@ export async function POST(req: NextRequest) {
   // ── Credits SOFORT bei der Plan-Erstellung abziehen (nicht erst beim
   //    Umsetzen). Cache-Treffer (identischer Wunsch innerhalb 10 Min) werden
   //    NICHT erneut belastet — ein Doppelklick kostet nicht doppelt.
+  // Fallback = degradierter Notnagel (KI war aus) → GRATIS: dafür Credits zu
+  // ziehen und den Nutzer dann für den Retry nochmal zahlen zu lassen wäre
+  // unfair. Nur ECHTE KI-Pläne kosten (das war der Sinn von „immer abrechnen").
   let creditsRemaining: number | undefined;
-  if (!session.isAdmin && !fromCache && cost > 0 && session.lizenzschluessel) {
+  if (!session.isAdmin && !fromCache && !usedFallback && cost > 0 && session.lizenzschluessel) {
     try {
       // FRISCH nachladen unmittelbar vor dem Abzug: deductCredits überschreibt
       // die ganze Profilzeile (kein atomares Read-Modify-Write), sonst gingen
@@ -287,11 +300,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ERST NACH erfolgreichem Abzug cachen: ein fehlgeschlagener Abzug (402/503)
-  // hat oben schon returned, kann den Cache also NICHT mehr füllen — sonst würde
-  // ein Retry den (teuren) Plan gratis via fromCache ausliefern. Admin/kostenlos
-  // (cost 0) erreichen diese Stelle normal und cachen wie gehabt.
-  if (cacheKey && !fromCache) planCacheSet(cacheKey, raw);
+  // Cachen NUR bei echtem KI-Plan (kein Fallback!) UND erst NACH erfolgreichem
+  // Abzug. Grund 1: ein fehlgeschlagener Abzug (402/503) hat oben schon returned
+  // → füllt den Cache nicht → kein Gratis-Retry. Grund 2: einen Fallback NIE
+  // cachen, sonst liefert ein erneutes Senden 10 Min lang wieder den Fallback
+  // statt eines frischen KI-Versuchs (der beim Retry meist klappt).
+  if (cacheKey && !fromCache && !usedFallback) planCacheSet(cacheKey, raw);
 
   return NextResponse.json(
     {
@@ -308,6 +322,9 @@ export async function POST(req: NextRequest) {
       // ist gratis. creditsRemaining = neuer Kontostand (undefined bei Admin/Cache).
       creditsRemaining,
       charged: cost > 0 && creditsRemaining !== undefined,
+      // true = KI war ausgelastet, das ist nur ein schneller Ersatz-Entwurf
+      // (kein volles „ans Produkt anpassen"). Client bittet dann um Retry.
+      fallback: usedFallback,
       // Signiert (user, mode, imageCount, ops) — Pflicht für /apply.
       planToken: signPlanToken(user, mode, images.length, ops),
     },
