@@ -993,6 +993,158 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       );
     }
 
+    // ── Referenz-Pack v5 (Screenshot-Nachbauten) ─────────────────────
+
+    case "bro-google-reviews": {
+      const brand = str(s.brand, "google");
+      const star = str(s.star_color, "#f5a623");
+      const ac = str(s.accent_color, brand === "trustpilot" ? "#00b67a" : "#4285F4");
+      const cardBg = str(s.card_bg, "#fbfbfb");
+      const cards = [1, 2, 3, 4, 5, 6]
+        .map((i) => ({ tag: t[`tag_${i}`], quote: t[`quote_${i}`], name: t[`name_${i}`], rate: parseFloat((t[`rate_${i}`] || "5").replace(",", ".")) || 5 }))
+        .filter((c) => c.quote);
+      const bar = (rate: number) => (
+        <span className="te-bgr-cstars"><span className="te-bgr-cstars-bg">{STARS}</span><span className="te-bgr-cstars-fg" style={{ width: `${Math.max(0, Math.min(100, rate * 20))}%`, color: star }}>{STARS}</span></span>
+      );
+      const wordmark =
+        brand === "google" ? (
+          <span className="te-bgr-brand" aria-label="Google"><span style={{ color: "#4285F4" }}>G</span><span style={{ color: "#EA4335" }}>o</span><span style={{ color: "#FBBC05" }}>o</span><span style={{ color: "#4285F4" }}>g</span><span style={{ color: "#34A853" }}>l</span><span style={{ color: "#EA4335" }}>e</span></span>
+        ) : brand === "trustpilot" ? (
+          <span className="te-bgr-brand" style={{ color: "#00b67a" }}>★ <span data-ef="brand_word">{t.brand_word}</span></span>
+        ) : (
+          <span className="te-bgr-brand" style={{ color: ac }} data-ef="brand_word">{t.brand_word}</span>
+        );
+      return (
+        <div className="te-bgr" style={{ color: str(s.text_color, "#141414") }}>
+          <h2 className="te-bgr-h">
+            {t.heading_pre && <b data-ef="heading_pre">{t.heading_pre}</b>} {wordmark} {t.heading_post && <em data-ef="heading_post">{t.heading_post}</em>}
+          </h2>
+          {t.rating && <div className="te-bgr-rate"><span data-ef="rating">{t.rating}</span><span className="te-bgr-stars" style={{ color: star }}>{STARS}</span></div>}
+          <div className="te-bgr-scroller">
+            {cards.map((c, i) => (
+              <div key={i} className="te-bgr-card" style={{ background: cardBg }}>
+                {c.tag && <div className="te-bgr-tag" data-ef={`tag_${i + 1}`}>{c.tag}</div>}
+                <p className="te-bgr-quote" data-ef={`quote_${i + 1}`}>{c.quote}</p>
+                <div className="te-bgr-who">
+                  <span className="te-bgr-av" style={{ background: ac }}>{(c.name || "K").slice(0, 1).toUpperCase()}</span>
+                  <span>
+                    <span className="te-bgr-name" data-ef={`name_${i + 1}`}>{c.name}</span>
+                    {bar(c.rate)}
+                  </span>
+                </div>
+                <span className="te-bgr-mark">&rdquo;</span>
+              </div>
+            ))}
+          </div>
+          <div className="te-bgr-foot">
+            <span className="te-bgr-arrow">&#8249;</span>
+            <span className="te-bgr-track"><i /></span>
+            <span className="te-bgr-arrow">&#8250;</span>
+          </div>
+          {t.link_text && <span className="te-bgr-more" data-ef="link_text">{t.link_text}</span>}
+        </div>
+      );
+    }
+
+    case "bro-circle-gallery": {
+      const ring = str(s.ring, "verlauf");
+      const motion = str(s.motion, "static");
+      const ac = str(s.accent_color, "#7c3aed");
+      const g1 = str(s.ring_from, "#7c3aed");
+      const g2 = str(s.ring_to, "#f59e0b");
+      const size = num(s.circle_size, 108);
+      const ringBg = ring === "akzent" ? ac : ring === "weich" ? "rgba(0,0,0,.10)" : `conic-gradient(from 210deg, ${g1}, ${g2}, ${g1})`;
+      const n = Math.max(6, Math.min(8, ctx.images.length || 8));
+      const idx = Array.from({ length: n }, (_, i) => i);
+      const row = (dup: boolean) =>
+        idx.map((i) => (
+          <span key={(dup ? "d" : "") + i} className="te-circ-ring" style={{ width: size, height: size, background: ringBg, padding: ring === "weich" ? 2 : 3 }}>
+            <span className="te-circ-inner">{img(i) ? <img src={img(i)} alt="" /> : <span className="te-circ-ph" />}</span>
+          </span>
+        ));
+      return (
+        <div className="te-circ">
+          {t.heading && <h2 className="te-h" style={{ textAlign: "center", marginBottom: 22 }} data-ef="heading">{t.heading}</h2>}
+          <div className="te-circ-viewport">
+            <div className={`te-circ-track${motion === "marquee" ? " te-circ-track--marquee" : ""}`}>
+              {row(false)}
+              {motion === "marquee" && row(true)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-transformation": {
+      const bg = str(s.bg, "#f3ecdf");
+      const tc = str(s.text_color, "#2a2622");
+      const ac = str(s.accent_color, "#c79a5b");
+      const star = str(s.star_color, "#c79a5b");
+      const side = str(s.media_side, "links");
+      return (
+        <div className={`te-btr te-btr--${side}`} style={{ background: bg, color: tc }}>
+          <div className="te-btr-media">
+            <span className="te-btr-note te-btr-note--from" style={{ stroke: tc }}>
+              <svg viewBox="0 0 66 34" aria-hidden><path d="M2 8 C 20 2, 44 6, 60 22 M60 22 l-11 -3 M60 22 l-2 -11" /></svg>
+              <span data-ef="label_from">{t.label_from}</span>
+            </span>
+            <div className="te-btr-photo te-btr-photo--a">{img(0) ? <img src={img(0)} alt="" /> : <span className="te-noimg" />}</div>
+            <div className="te-btr-photo te-btr-photo--b">{img(1) ? <img src={img(1)} alt="" /> : <span className="te-noimg" />}</div>
+            <span className="te-btr-note te-btr-note--to" style={{ color: ac, stroke: ac }}>
+              <span data-ef="label_to">{t.label_to}</span>
+              <svg viewBox="0 0 66 34" aria-hidden><path d="M2 26 C 18 30, 40 28, 60 12 M60 12 l-12 0 M60 12 l-4 11" /></svg>
+            </span>
+          </div>
+          <div className="te-btr-copy">
+            <h2 className="te-btr-h" data-ef="heading">{t.heading}</h2>
+            <div className="te-btr-stars" style={{ color: star }}>{STARS}</div>
+            <p className="te-btr-txt" data-ef="text">{t.text}</p>
+            {t.pager && <div className="te-btr-pager"><span className="te-btr-parrow">&#8592;</span><b style={{ color: ac }} data-ef="pager">{t.pager}</b><span className="te-btr-parrow">&#8594;</span></div>}
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-compare-slider": {
+      const look = str(s.look, "hell");
+      const side = str(s.media_side, "links");
+      const chk = str(s.check_color, "#2563eb");
+      const mark = str(s.mark_color, "#2537d8");
+      const dark = look === "dunkel";
+      const bullets = [1, 2, 3, 4].map((i) => t[`bullet_${i}`]).filter(Boolean);
+      return (
+        <div className={`te-bcs te-bcs--${side}${dark ? " te-bcs--dark" : ""}`}>
+          <div className="te-bcs-media">
+            <div className="te-bcs-frame">
+              {img(0) ? <img className="te-bcs-before" src={img(0)} alt="" /> : <span className="te-noimg" style={{ position: "absolute", inset: 0 }} />}
+              {img(1) && <img className="te-bcs-after" src={img(1)} alt="" />}
+              <span className="te-bcs-line" />
+              <span className="te-bcs-knob">&#8249;&#8250;</span>
+              <span className="te-bcs-tag te-bcs-tag--b" data-ef="label_before">{t.label_before}</span>
+              <span className="te-bcs-tag te-bcs-tag--a" data-ef="label_after">{t.label_after}</span>
+            </div>
+          </div>
+          <div className="te-bcs-copy">
+            <h2 className="te-bcs-h"><span data-ef="heading_pre">{t.heading_pre}</span> {t.heading_mark && <u style={{ color: mark }} data-ef="heading_mark">{t.heading_mark}</u>} <span data-ef="heading_post">{t.heading_post}</span></h2>
+            <p className="te-bcs-txt" data-ef="text">{t.text}</p>
+            <ul className="te-bcs-list">
+              {bullets.map((b, i) => (
+                <li key={i}><span className="te-bcs-ck" style={{ background: chk }}><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" /></svg></span><span data-ef={`bullet_${i + 1}`}>{b}</span></li>
+              ))}
+            </ul>
+            {t.review_text && (
+              <div className="te-bcs-rev">
+                <span className="te-bcs-tp">{[0, 1, 2, 3, 4].map((k) => <i key={k}><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 16.9 5.9 20.4l1.5-6.8L2.2 9l6.9-.7z" /></svg></i>)}</span>
+                {t.review_title && <p className="te-bcs-rev-t" data-ef="review_title">{t.review_title}</p>}
+                <p className="te-bcs-rev-x" data-ef="review_text">{t.review_text}</p>
+                {t.review_name && <div className="te-bcs-rev-n" data-ef="review_name">{t.review_name}</div>}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -1349,6 +1501,90 @@ export const REPLICA_CSS = `
 .te-bbcs-title{font-size:14px;font-weight:800}
 .te-bbcs-text{margin:0;font-size:11.5px;opacity:.72}
 
+/* ── Google-Reviews ── */
+.te-bgr{padding:14px 4px;text-align:center}
+.te-bgr-h{margin:0 auto 12px;max-width:600px;font-size:26px;line-height:1.16;font-weight:800;letter-spacing:-.02em;font-family:var(--pv-h)}
+.te-bgr-h b{font-weight:900}
+.te-bgr-h em{font-style:italic}
+.te-bgr-brand{font-weight:700;white-space:nowrap}
+.te-bgr-rate{display:inline-flex;align-items:center;gap:8px;margin-bottom:20px;font-size:14px;font-weight:700}
+.te-bgr-stars{letter-spacing:2px;font-size:15px}
+.te-bgr-scroller{display:flex;gap:14px;overflow-x:auto;padding:4px 2px 14px;scrollbar-width:none}
+.te-bgr-scroller::-webkit-scrollbar{display:none}
+.te-bgr-card{flex:0 0 236px;max-width:236px;text-align:left;border-radius:16px;padding:18px 18px 16px;position:relative;box-shadow:0 14px 32px -24px rgba(0,0,0,.42);border:1px solid rgba(0,0,0,.05)}
+.te-bgr-tag{font-size:11px;font-weight:600;color:#b9b9b9;margin-bottom:10px}
+.te-bgr-quote{font-size:12.5px;line-height:1.5;color:#33373b;margin:0 0 16px}
+.te-bgr-mark{position:absolute;right:16px;bottom:10px;font-size:32px;line-height:1;font-weight:900;color:rgba(20,20,20,.8);font-family:Georgia,serif}
+.te-bgr-who{display:flex;align-items:center;gap:10px}
+.te-bgr-av{width:38px;height:38px;border-radius:50%;flex:0 0 38px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;color:#fff;object-fit:cover}
+.te-bgr-name{display:block;font-size:13px;font-weight:800;color:#141414}
+.te-bgr-cstars{position:relative;display:inline-block;font-size:11px;letter-spacing:1px;line-height:1}
+.te-bgr-cstars-bg{color:#dcdcdc}
+.te-bgr-cstars-fg{position:absolute;left:0;top:0;overflow:hidden;white-space:nowrap}
+.te-bgr-foot{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:4px}
+.te-bgr-track{width:130px;height:4px;border-radius:4px;background:rgba(0,0,0,.1);overflow:hidden}
+.te-bgr-track i{display:block;width:40%;height:100%;background:rgba(0,0,0,.32);border-radius:4px}
+.te-bgr-arrow{width:26px;height:26px;border-radius:50%;border:1px solid rgba(0,0,0,.15);display:inline-flex;align-items:center;justify-content:center;color:#7a7a7a;background:#fff;font-size:14px;flex:0 0 26px}
+.te-bgr-more{display:inline-block;margin-top:16px;font-size:13px;font-weight:600;color:#5f6368}
+
+/* ── Kreis-Galerie ── */
+.te-circ{padding:8px 0;overflow:hidden}
+.te-circ-viewport{display:flex;justify-content:center}
+.te-circ-track{display:flex;gap:18px;align-items:center;flex-wrap:wrap;justify-content:center;max-width:940px;padding:4px}
+.te-circ-track--marquee{flex-wrap:nowrap;width:max-content;animation:te-circ-scroll 34s linear infinite}
+.te-circ-track--marquee:hover{animation-play-state:paused}
+@keyframes te-circ-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.te-circ-ring{flex:0 0 auto;border-radius:50%;box-sizing:border-box}
+.te-circ-inner{width:100%;height:100%;border-radius:50%;background:#fff;padding:3px;box-sizing:border-box;display:block}
+.te-circ-inner img,.te-circ-ph{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:#eef0f2}
+
+/* ── Transformation ── */
+.te-btr{display:grid;grid-template-columns:1.05fr .95fr;gap:40px;align-items:center;padding:40px 30px}
+.te-btr--rechts .te-btr-media{order:2}
+.te-btr-media{position:relative;min-height:300px;padding:24px 6px}
+.te-btr-photo{position:relative;width:60%;border-radius:12px;overflow:hidden;box-shadow:0 22px 44px -24px rgba(0,0,0,.5);border:5px solid #fff}
+.te-btr-photo img,.te-btr-photo .te-noimg{width:100%;display:block;aspect-ratio:4/5;object-fit:cover}
+.te-btr-photo--a{transform:rotate(-5deg);margin-left:2%}
+.te-btr-photo--b{transform:rotate(4deg);margin-left:32%;margin-top:-24%}
+.te-btr-note{position:absolute;display:inline-flex;align-items:center;gap:6px;font-size:17px;font-weight:600;font-style:italic;font-family:'Segoe Script','Bradley Hand',cursive}
+.te-btr-note svg{width:58px;height:30px;overflow:visible;fill:none}
+.te-btr-note svg path{fill:none;stroke-width:2.4;stroke-linecap:round}
+.te-btr-note--from{top:0;left:38%}
+.te-btr-note--to{bottom:4px;left:2%}
+.te-btr-h{margin:0 0 16px;font-size:32px;line-height:1.06;font-weight:800;letter-spacing:-.02em;font-family:var(--pv-h)}
+.te-btr-stars{font-size:22px;letter-spacing:3px;margin-bottom:16px}
+.te-btr-txt{margin:0 0 22px;font-size:14px;line-height:1.6;opacity:.84;max-width:420px}
+.te-btr-pager{display:flex;align-items:center;gap:18px;font-size:14px;font-weight:700}
+.te-btr-parrow{font-size:20px;opacity:.55}
+
+/* ── Vorher-Nachher-Slider ── */
+.te-bcs{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;padding:34px 28px}
+.te-bcs--rechts .te-bcs-media{order:2}
+.te-bcs--dark{background:#14161c;color:#f4f5f7;border-radius:14px}
+.te-bcs-frame{position:relative;border-radius:6px;overflow:hidden;aspect-ratio:1/1;background:#ddd}
+.te-bcs-frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
+.te-bcs-after{clip-path:inset(0 0 0 50%)}
+.te-bcs-line{position:absolute;top:0;bottom:0;left:50%;width:2px;background:#fff;transform:translateX(-1px)}
+.te-bcs-knob{position:absolute;top:50%;left:50%;width:40px;height:40px;border-radius:50%;transform:translate(-50%,-50%);background:rgba(60,45,30,.55);border:2px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-size:13px;letter-spacing:-1px}
+.te-bcs-tag{position:absolute;bottom:10px;padding:3px 10px;font-size:11px;font-weight:600;color:#fff;background:rgba(0,0,0,.34);border-radius:4px}
+.te-bcs-tag--b{left:10px}
+.te-bcs-tag--a{right:10px}
+.te-bcs-h{margin:0 0 14px;font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.02em;font-family:var(--pv-h)}
+.te-bcs-h u{text-decoration:none}
+.te-bcs-txt{margin:0 0 18px;font-size:14px;line-height:1.6;opacity:.82;max-width:420px}
+.te-bcs-list{list-style:none;margin:0 0 22px;padding:0;display:grid;gap:10px}
+.te-bcs-list li{display:flex;align-items:center;gap:10px;font-size:14.5px;font-weight:700}
+.te-bcs-ck{flex:0 0 20px;width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;color:#fff}
+.te-bcs-ck svg{width:12px;height:12px;fill:none;stroke:#fff;stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.te-bcs-rev{background:color-mix(in srgb,var(--pv-text) 4%,var(--pv-bg));border:1px solid color-mix(in srgb,var(--pv-text) 9%,transparent);border-radius:12px;padding:16px 18px;max-width:420px}
+.te-bcs--dark .te-bcs-rev{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12)}
+.te-bcs-tp{display:inline-flex;gap:2px;margin-bottom:10px}
+.te-bcs-tp i{width:20px;height:20px;background:#00b67a;display:inline-flex;align-items:center;justify-content:center}
+.te-bcs-tp i svg{width:12px;height:12px;fill:#fff}
+.te-bcs-rev-t{font-size:14.5px;font-weight:800;margin:0 0 5px}
+.te-bcs-rev-x{font-size:13px;line-height:1.55;opacity:.82;margin:0 0 8px}
+.te-bcs-rev-n{font-size:12.5px;font-style:italic;opacity:.66}
+
 .pm-mobile .te-cta-h{font-size:26px!important}
 .pm-mobile .te-benefits2{grid-template-columns:1fr}
 .pm-mobile .te-photo{flex-direction:column}
@@ -1364,4 +1600,10 @@ export const REPLICA_CSS = `
 .pm-mobile .te-bhsp{grid-template-columns:1fr;padding:30px 20px}
 .pm-mobile .te-bhsp-h{font-size:26px}
 .pm-mobile .te-bbcs-grid{grid-template-columns:1fr 1fr!important}
+.pm-mobile .te-btr{grid-template-columns:1fr;padding:26px 18px}
+.pm-mobile .te-btr-h{font-size:26px}
+.pm-mobile .te-bcs{grid-template-columns:1fr;padding:24px 18px}
+.pm-mobile .te-bcs-h{font-size:26px}
+.pm-mobile .te-bgr-card{flex-basis:210px}
+.pm-mobile .te-circ-track{gap:12px}
 `;
