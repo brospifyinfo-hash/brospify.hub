@@ -410,10 +410,17 @@ function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
 export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: AbortSignal }): Promise<ThemeAiRawPlan> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY fehlt.");
-  // maxRetries: transiente Fehler (429/529/5xx) werden intern nochmal versucht;
-  // timeout je Versuch < Funktions-Limit, damit die Route notfalls noch auf den
-  // Fallback-Plan umschwenken kann (die AI „funktioniert immer").
-  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 42000 });
+  // WICHTIG: Der Abbruch-Zeitpunkt wird vom AbortController der Route gesteuert
+  // (110 s, knapp unter dem 120-s-Funktions-Limit) — NICHT vom SDK-Timeout.
+  // Früher stand hier timeout: 42000: das kappte JEDEN vollen „passe das Theme
+  // dem Produkt an"-Plan (Opus 4.8 Expert, 10+ Sektionen, Bilder → 45–90 s
+  // Generierung) schon nach 42 s und ersetzte das gute Ergebnis durch den simplen
+  // Fallback — die Haupt-Ursache für „AI ausgelastet" / „AI ist schlechter
+  // geworden". Jetzt 115 s (> 110-s-AbortController), damit der Signal-Abbruch der
+  // Route greift, nicht das SDK. maxRetries: transiente 429/529/5xx werden intern
+  // nochmal versucht — vom Signal der Route gedeckelt, kann das 120-s-Limit also
+  // nicht sprengen.
+  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 115000 });
   const model = THEME_AI_MODELS[input.mode] || THEME_AI_MODELS.standard;
   // System-Prompt als Block mit cache_control: der statische Teil (Regeln +
   // Katalog, ~6k Tokens) wird gecacht — Folge-Calls zahlen ~10 % dafür.
