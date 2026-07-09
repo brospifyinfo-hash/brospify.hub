@@ -34,9 +34,11 @@ export const dynamic = "force-dynamic";
 // durch den simplen Fallback ersetzt.
 export const maxDuration = 120;
 
-// Rate-Limit pro Nutzer (Lambda-lokal, bewusst pragmatisch): max. 10 Pläne
-// in 10 Minuten — jeder Plan kostet UNS einen Claude-Call.
-const RATE_MAX = 10;
+// Rate-Limit pro Nutzer (Lambda-lokal): max. 30 Pläne in 10 Minuten. Höher als
+// früher (10), weil ein rate-limitierter Request jetzt einen Fallback liefert,
+// dessen „gleich nochmal senden"-Hinweis den Nutzer bei aggressivem Iterieren
+// in eine Fallback-Schleife trieb. 30/10min lässt echtes Ausprobieren zu.
+const RATE_MAX = 30;
 const RATE_WINDOW_MS = 10 * 60 * 1000;
 const rateMap = new Map<string, number[]>();
 function rateLimited(user: string): boolean {
