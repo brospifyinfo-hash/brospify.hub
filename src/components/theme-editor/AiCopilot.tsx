@@ -257,10 +257,12 @@ export default function AiCopilot({
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(d?.error || t.themes.aiErr);
+        setError(res.status === 402 ? d?.error || t.themes.aiNoCredits : d?.error || t.themes.aiErr);
         setPhase("idle");
         return;
       }
+      // Credits werden JETZT (bei der Plan-Erstellung) abgezogen — Kontostand live nachziehen.
+      if (typeof d?.creditsRemaining === "number") credits.setBalance(d.creditsRemaining);
       setPlan(d as PlanResponse);
       // STANDARD = kein Plan-Review: direkt umsetzen (Enter wendet sofort an).
       // EXPERT = Plan zur Freigabe anzeigen, erst „Umsetzen" wendet an.

@@ -287,6 +287,73 @@ export function varietyHints(productId: string): string {
   return `VIELFALTS-EMPFEHLUNG für dieses Produkt (bevorzuge diese Alternativen, weiche nur ab wenn die Nische klar dagegen spricht): hero=${hero}, benefits=${benefits}, proof=${proof}, story=${story}, objections=${objections}, kaufbox-trust=${trustBlock}.`;
 }
 
+// ─── Deterministischer Fallback-Plan ─────────────────────────────────────────
+// Damit die AI IMMER liefert (nie eine Fehlermeldung): ist Claude nicht
+// erreichbar/zu langsam, leiten wir aus dem Wunsch einen passenden Stil ab und
+// übernehmen dessen DESIGN (Farben/Schriften/Ecken) — ohne die vorhandenen
+// Sections zu zerstören (mode "design", nicht "full"). Ergebnis ist ein echter,
+// kuratierter Entwurf, kein Platzhalter.
+const FALLBACK_STYLE_KEYWORDS: [RegExp, string][] = [
+  [/dunkel|dark|schwarz|nacht|noir/, "noir"],
+  [/edel|luxu|premium|nobel|exklusiv/, "luxe"],
+  [/elegan|serif|klassisch/, "elegant"],
+  [/sport|fitness|gym|athlet|power|workout/, "sport"],
+  [/baby|kinder|famil/, "family"],
+  [/verspielt|fröhlich|froehlich|playful|spass|spaß/, "playful"],
+  [/candy|süß|suess|pastell|sweet|bonbon/, "candy"],
+  [/minimal|schlicht|reduz|puristisch/, "minimal"],
+  [/tech|technik|gadget|elektro|digital|smart/, "tech"],
+  [/beauty|spa|kosmetik|wellness|haut|skin|serum/, "spa"],
+  [/pflege|gesund|medic|clinic|arzt|derma|apotheke/, "clinic"],
+  [/natur|öko|oeko|bio|nachhaltig|green|grün|gruen|pflanz/, "nature"],
+  [/street|urban|hype|sneaker|graffiti/, "street"],
+  [/sale|rabatt|deal|angebot|günstig|guenstig|discount/, "deal"],
+  [/ozean|meer|wasser|ocean|see|maritim/, "ocean"],
+  [/sunset|sommer|warm|sonne|beach|strand/, "sunset"],
+  [/bold|laut|kräftig|kraeftig|stark|kontrast/, "bold"],
+  [/royal|könig|koenig|gold|prunk|luxus/, "royal"],
+  [/cozy|gemütlich|gemuetlich|zuhause|wohn|home|decke/, "cozy"],
+  [/outdoor|camping|berg|abenteuer|wander|trekking/, "outdoor"],
+  [/retro|vintage|nostalg|80er|90er/, "retro"],
+  [/carbon|auto|car|motor|fahrzeug|tuning/, "carbon"],
+  [/fresh|food|essen|frisch|küche|kueche|kochen|snack/, "fresh"],
+  [/modern|clean|zeitgemäß|zeitgemaess/, "modern"],
+];
+
+/** Immer-verfügbarer Plan ohne Claude — leitet Stil + optional Akzentfarbe aus
+ *  dem Wunsch ab. Die Ops sind garantiert gültig (set_style ⊕ optional set_colors). */
+export function buildFallbackPlan(input: ThemeAiInput): ThemeAiRawPlan {
+  const valid = new Set(THEME_STYLES.map((s) => s.id));
+  let current = input.doc?.global?.styleId || "modern";
+  if (!valid.has(current)) current = "modern";
+  let style = current;
+  const p = (input.prompt || "").toLowerCase();
+  for (const [re, sid] of FALLBACK_STYLE_KEYWORDS) {
+    if (re.test(p) && valid.has(sid)) { style = sid; break; }
+  }
+  const ops: unknown[] = [{ op: "set_style", styleId: style, mode: "design" }];
+  const hint = (input.paletteHints || []).find((h) => /^#[0-9a-fA-F]{6}$/.test(h));
+  if (hint) ops.push({ op: "set_colors", colors: { accent: hint } });
+  const label = THEME_STYLES.find((s) => s.id === style)?.label || style;
+  const de = input.lang !== "en";
+  return {
+    summary: de
+      ? `Frisches Design im Stil „${label}" — der AI-Dienst war kurz sehr gefragt, du bekommst aber trotzdem sofort einen professionellen Entwurf, den du direkt weiter anpassen kannst.`
+      : `A fresh "${label}" design — the AI service was briefly busy, but you still get a professional draft right away that you can keep customising.`,
+    steps: [
+      de
+        ? { title: `Stil „${label}"`, detail: "Farben, Schriften und Ecken im gewählten Stil übernommen — deine Sections und Texte bleiben erhalten." }
+        : { title: `"${label}" style`, detail: "Applied the style's colours, fonts and corners — your sections and texts stay." },
+      ...(hint
+        ? [de
+            ? { title: "Farbe übernommen", detail: `Akzentfarbe ${hint} aus deinem Bild gesetzt.` }
+            : { title: "Colour applied", detail: `Accent ${hint} taken from your image.` }]
+        : []),
+    ],
+    operations: ops,
+  };
+}
+
 /** Baut den FOKUS-Block: der Nutzer hat bestimmte Sections markiert — die AI
  *  soll ihre Änderungen primär auf genau diese uids beziehen. */
 function focusNote(input: ThemeAiInput): string {
@@ -343,7 +410,10 @@ function buildUserContent(input: ThemeAiInput): Anthropic.ContentBlockParam[] {
 export async function generateThemePlan(input: ThemeAiInput): Promise<ThemeAiRawPlan> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY fehlt.");
-  const client = new Anthropic({ apiKey });
+  // maxRetries: transiente Fehler (429/529/5xx) werden intern nochmal versucht;
+  // timeout je Versuch < Funktions-Limit, damit die Route notfalls noch auf den
+  // Fallback-Plan umschwenken kann (die AI „funktioniert immer").
+  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 42000 });
   const model = THEME_AI_MODELS[input.mode] || THEME_AI_MODELS.standard;
   // System-Prompt als Block mit cache_control: der statische Teil (Regeln +
   // Katalog, ~6k Tokens) wird gecacht — Folge-Calls zahlen ~10 % dafür.

@@ -7,12 +7,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, deductCredits } from "@/lib/sheets";
-import { getCreditCost } from "@/lib/credit-config-server";
 import { isValidDocument } from "@/lib/theme-compile";
 import { learnFromApply } from "@/lib/theme-ai-learn";
 import { verifyPlanToken } from "@/lib/theme-ai-token";
-import { validateAiOps, aiEffortPoints, aiEffortTier, aiTierCreditKey } from "@/lib/theme-ai-ops";
+import { validateAiOps, aiEffortPoints, aiEffortTier } from "@/lib/theme-ai-ops";
 import type { ThemeDocument } from "@/lib/theme-doc";
 
 export const runtime = "nodejs";
@@ -63,34 +61,10 @@ export async function POST(req: NextRequest) {
   const tier = aiEffortTier(aiEffortPoints(ops, imageCount));
   const productTitle = typeof body.productTitle === "string" ? body.productTitle.slice(0, 200) : "";
 
-  // Lernspeicher füttern — nie fatal, blockiert die Antwort nicht spürbar.
-  const learn = () => learnFromApply(productTitle, ops).catch(() => {});
-
-  if (session.isAdmin) {
-    await learn();
-    return NextResponse.json({ ok: true, cost: 0, tier, mode });
-  }
-  if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
-  const kunde = await findKundeByKey(session.lizenzschluessel);
-  if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
-
-  const cost = await getCreditCost(aiTierCreditKey(tier, mode));
-  if (cost > 0) {
-    try {
-      const result = await deductCredits(kunde.rowIndex, kunde.profile, cost, mode === "expert" ? "theme-ai-expert" : "theme-ai");
-      if (!result.success) {
-        return NextResponse.json(
-          { error: `Nicht genug Credits — diese Umsetzung kostet ${cost}.`, creditsRemaining: result.remaining },
-          { status: 402 },
-        );
-      }
-      await learn();
-      return NextResponse.json({ ok: true, cost, tier, mode, creditsRemaining: result.remaining });
-    } catch (err) {
-      console.error("[theme-ai] deduct failed:", err);
-      return NextResponse.json({ error: "Credit-Abzug fehlgeschlagen." }, { status: 500 });
-    }
-  }
-  await learn();
-  return NextResponse.json({ ok: true, cost: 0, tier, mode });
+  // Die Credits wurden BEREITS bei der Plan-Erstellung abgezogen → das Umsetzen
+  // ist gratis. Hier nur noch den Lernspeicher füttern (nie fatal) — so kann das
+  // Anwenden nie an einem Credit-/Sheets-Fehler scheitern (die AI „funktioniert
+  // immer"). Die Ops liegen dem Client bereits vor und werden lokal angewendet.
+  learnFromApply(productTitle, ops).catch(() => {});
+  return NextResponse.json({ ok: true, cost: 0, tier, mode, prepaid: true });
 }

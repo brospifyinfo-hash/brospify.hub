@@ -13,14 +13,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, getCreditsState, logSystemEvent } from "@/lib/sheets";
+import { findKundeByKey, getCreditsState, logSystemEvent, deductCredits } from "@/lib/sheets";
 
 // Gemeinsame „gleich erneut"-Meldung für transiente Fehler (Überlastung,
 // Timeout, Sheets-Quota) — der Nutzer weiß dann, dass ein Retry hilft.
 const TRANSIENT_MSG = "Der AI-Dienst ist gerade überlastet oder langsam — bitte in ein paar Sekunden erneut versuchen.";
 import { getCreditCost } from "@/lib/credit-config-server";
 import { isValidDocument } from "@/lib/theme-compile";
-import { generateThemePlan, normalizeAiMode, type ThemeAiImage, type ThemeAiRawPlan } from "@/lib/theme-ai";
+import { generateThemePlan, buildFallbackPlan, normalizeAiMode, type ThemeAiImage, type ThemeAiRawPlan, type ThemeAiInput } from "@/lib/theme-ai";
 import { getLearnHints } from "@/lib/theme-ai-learn";
 import { signPlanToken } from "@/lib/theme-ai-token";
 import { validateAiOps, aiEffortPoints, aiEffortTier, aiTierCreditKey } from "@/lib/theme-ai-ops";
@@ -72,6 +72,20 @@ function planCacheSet(key: string, raw: ThemeAiRawPlan): void {
     const oldest = [...planCache.entries()].sort((a, b) => a[1].at - b[1].at)[0];
     if (oldest) planCache.delete(oldest[0]);
   }
+}
+
+/** LLM-Ops: texts-Array → Record umformen (die Validierung erwartet Record). */
+function toRecordOps(operations: unknown[]): unknown[] {
+  return operations.map((o) => {
+    if (o && typeof o === "object" && Array.isArray((o as { texts?: unknown }).texts)) {
+      const rec: Record<string, string> = {};
+      for (const t of (o as { texts: { field?: unknown; value?: unknown }[] }).texts) {
+        if (typeof t?.field === "string" && typeof t?.value === "string") rec[t.field] = t.value;
+      }
+      return { ...(o as Record<string, unknown>), texts: rec };
+    }
+    return o;
+  });
 }
 
 const DATA_URL_RE = /^data:(image\/(?:png|jpeg|webp|gif));base64,([A-Za-z0-9+/=]+)$/;
@@ -142,10 +156,13 @@ export async function POST(req: NextRequest) {
   // Mindest-Guthaben: wer die kleinste Stufe (des gewählten Modus) nicht
   // zahlen könnte, bekommt auch keinen (für uns kostenpflichtigen) Plan.
   const user = session.isAdmin ? "admin" : session.lizenzschluessel || "";
+  // Kunde EINMAL laden — für den Vorab-Check UND den Credit-Abzug bei der
+  // Plan-Erstellung (Kosten fallen jetzt beim Plan an, nicht erst beim Umsetzen).
+  let kunde: Awaited<ReturnType<typeof findKundeByKey>> = null;
   if (!session.isAdmin) {
     if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
     try {
-      const kunde = await findKundeByKey(session.lizenzschluessel);
+      kunde = await findKundeByKey(session.lizenzschluessel);
       if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
       const minCost = await getCreditCost(aiTierCreditKey("small", mode));
       const balance = getCreditsState(kunde.profile).balance;
@@ -173,6 +190,19 @@ export async function POST(req: NextRequest) {
     console.warn("[theme-ai] getLearnHints failed (ignoriert):", err);
   }
 
+  // Gemeinsame Eingabe für echten Plan UND deterministischen Fallback.
+  const input: ThemeAiInput = {
+    doc,
+    prompt,
+    images,
+    paletteHints,
+    productTitle,
+    lang: body.lang === "en" ? "en" : "de",
+    mode,
+    learnHints: learnHints || undefined,
+    focus,
+  };
+
   // Cache-Key über ALLE prompt-relevanten Eingaben (inkl. paletteHints);
   // Trenner = Unit Separator (U+001F), damit Feldgrenzen eindeutig bleiben.
   const cacheKey = images.length
@@ -183,68 +213,79 @@ export async function POST(req: NextRequest) {
   let raw = cacheKey ? planCacheGet(cacheKey) : null;
   const fromCache = !!raw;
 
+  // Die AI liefert IMMER: klappt Claude nicht (Fehler/Timeout/Rate-Limit), gibt
+  // es einen deterministischen Ersatz-Plan statt einer Fehlermeldung.
   if (!raw) {
     if (rateLimited(user)) {
-      return NextResponse.json({ error: "Zu viele Anfragen — warte kurz und versuch es erneut." }, { status: 429 });
-    }
-    try {
-      raw = await generateThemePlan({
-        doc,
-        prompt,
-        images,
-        paletteHints,
-        productTitle,
-        lang: body.lang === "en" ? "en" : "de",
-        mode,
-        learnHints: learnHints || undefined,
-        focus,
-      });
-    } catch (err) {
-      console.error("[theme-ai] plan failed:", err);
-      const status = (err as { status?: number } | null)?.status;
-      const msg = err instanceof Error ? err.message : "";
-      // Echte Config/Ablehnungs-Fehler (kein Status; „Key fehlt"/„abgelehnt")
-      // klar durchreichen; alles andere (429/529/5xx/Timeout/Netz/Parse) ist
-      // transient → „gleich erneut". Immer ins Admin-System-Log schreiben.
-      const configError = typeof status !== "number" && (msg.includes("ANTHROPIC_API_KEY") || msg.includes("abgelehnt"));
-      const transient = !configError;
-      await logSystemEvent({
-        level: "error",
-        actor: user,
-        action: "theme-ai.plan.generate_failed",
-        target: mode,
-        details: { status: status ?? null, transient, message: msg.slice(0, 300) },
-      });
-      if (transient) return NextResponse.json({ error: TRANSIENT_MSG }, { status: 503 });
-      return NextResponse.json({ error: msg || "Plan konnte nicht erstellt werden." }, { status: 502 });
+      // Kein API-Call → schützt unser Budget wie das Rate-Limit, aber ohne Fehler.
+      raw = buildFallbackPlan(input);
+    } else {
+      try {
+        // Hartes Zeit-Limit: kommt Claude nicht rechtzeitig, schwenken wir auf
+        // den Fallback um (innerhalb des 60-s-Funktions-Limits).
+        raw = await Promise.race([
+          generateThemePlan(input),
+          new Promise<ThemeAiRawPlan>((_, reject) => setTimeout(() => reject(new Error("plan timeout")), 45000)),
+        ]);
+      } catch (err) {
+        console.error("[theme-ai] plan failed → Fallback:", err);
+        const status = (err as { status?: number } | null)?.status;
+        await logSystemEvent({
+          level: "warn",
+          actor: user,
+          action: "theme-ai.plan.fallback",
+          target: mode,
+          details: { status: status ?? null, message: err instanceof Error ? err.message.slice(0, 300) : "" },
+        });
+        raw = buildFallbackPlan(input);
+      }
     }
   }
 
-  // LLM-Ops → texts-Array in Record umformen, dann STRIKT validieren.
-  const normalized = raw.operations.map((o) => {
-    if (o && typeof o === "object" && Array.isArray((o as { texts?: unknown }).texts)) {
-      const rec: Record<string, string> = {};
-      for (const t of (o as { texts: { field?: unknown; value?: unknown }[] }).texts) {
-        if (typeof t?.field === "string" && typeof t?.value === "string") rec[t.field] = t.value;
-      }
-      return { ...(o as Record<string, unknown>), texts: rec };
-    }
-    return o;
-  });
-  const ops = validateAiOps(normalized, doc, cleanCapabilities(body.capabilities));
+  // Ops validieren — findet die AI nichts Umsetzbares, greift der Fallback
+  // (nie ein 422-Fehler). Danach ist mindestens eine gültige Op garantiert.
+  const caps = cleanCapabilities(body.capabilities);
+  let ops = validateAiOps(toRecordOps(raw.operations), doc, caps);
   if (!ops.length) {
-    // Bewusst NICHT cachen: ein Retry soll einen frischen Claude-Versuch
-    // bekommen (LLM ist nichtdeterministisch — der nächste Plan kann klappen).
-    return NextResponse.json(
-      { error: "Dazu hat die AI keine umsetzbaren Änderungen gefunden — formuliere den Wunsch etwas konkreter.", summary: raw.summary },
-      { status: 422 },
-    );
+    raw = buildFallbackPlan(input);
+    ops = validateAiOps(toRecordOps(raw.operations), doc, caps);
+  }
+  if (!ops.length) {
+    // Letzte Absicherung (praktisch nie): simpler Design-Refresh im aktuellen Stil.
+    raw = { summary: raw.summary || "Design aufgefrischt.", steps: raw.steps || [], operations: [{ op: "set_style", styleId: doc.global?.styleId || "modern", mode: "design" }] };
+    ops = validateAiOps(raw.operations, doc, caps);
   }
   if (cacheKey && !fromCache) planCacheSet(cacheKey, raw);
 
   const points = aiEffortPoints(ops, images.length);
   const tier = aiEffortTier(points);
   const cost = session.isAdmin ? 0 : await getCreditCost(aiTierCreditKey(tier, mode));
+
+  // ── Credits SOFORT bei der Plan-Erstellung abziehen (nicht erst beim
+  //    Umsetzen). Cache-Treffer (identischer Wunsch innerhalb 10 Min) werden
+  //    NICHT erneut belastet — ein Doppelklick kostet nicht doppelt.
+  let creditsRemaining: number | undefined;
+  if (!session.isAdmin && !fromCache && cost > 0 && session.lizenzschluessel) {
+    try {
+      // FRISCH nachladen unmittelbar vor dem Abzug: deductCredits überschreibt
+      // die ganze Profilzeile (kein atomares Read-Modify-Write), sonst gingen
+      // parallele Guthaben-Änderungen während der Plan-Erstellung verloren.
+      const freshKunde = await findKundeByKey(session.lizenzschluessel);
+      if (!freshKunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
+      const result = await deductCredits(freshKunde.rowIndex, freshKunde.profile, cost, mode === "expert" ? "theme-ai-expert" : "theme-ai");
+      if (!result.success) {
+        return NextResponse.json(
+          { error: `Nicht genug Credits — dieser Plan kostet ${cost} Credits.`, creditsRemaining: result.remaining },
+          { status: 402 },
+        );
+      }
+      creditsRemaining = result.remaining;
+    } catch (err) {
+      console.error("[theme-ai] plan deduct failed:", err);
+      await logSystemEvent({ level: "error", actor: user, action: "theme-ai.plan.deduct_failed", target: mode, details: { cost, message: err instanceof Error ? err.message.slice(0, 300) : "" } });
+      return NextResponse.json({ error: TRANSIENT_MSG }, { status: 503 });
+    }
+  }
 
   return NextResponse.json(
     {
@@ -257,6 +298,10 @@ export async function POST(req: NextRequest) {
       imageCount: images.length,
       dropped: Math.max(0, raw.operations.length - ops.length),
       fromCache,
+      // Kosten wurden JETZT (bei der Plan-Erstellung) abgezogen; das Umsetzen
+      // ist gratis. creditsRemaining = neuer Kontostand (undefined bei Admin/Cache).
+      creditsRemaining,
+      charged: cost > 0 && creditsRemaining !== undefined,
       // Signiert (user, mode, imageCount, ops) — Pflicht für /apply.
       planToken: signPlanToken(user, mode, images.length, ops),
     },
