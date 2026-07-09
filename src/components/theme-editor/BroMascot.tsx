@@ -97,7 +97,7 @@ export function BroMascot({ state, stepTitle }: { state: BroState; stepTitle?: s
 
       {/* Bro-Avatar (kleiner separater Kreis) */}
       <span
-        className={`relative block w-9 h-9 rounded-full overflow-hidden border flex items-center justify-center ${
+        className={`relative block w-12 h-12 rounded-full overflow-hidden border flex items-center justify-center ${
           active ? "border-[#95BF47]/60" : "border-white/15"
         } bg-white/[0.05]`}
         title="Bro"
@@ -115,7 +115,7 @@ export function BroMascot({ state, stepTitle }: { state: BroState; stepTitle?: s
               // eslint-disable-next-line @next/next/no-img-element
               <img src={url} alt="Bro" className="w-full h-full object-cover" />
             ) : (
-              <span className="text-lg leading-none">{FALLBACK[state]}</span>
+              <span className="text-2xl leading-none">{FALLBACK[state]}</span>
             )}
           </motion.span>
         </AnimatePresence>
