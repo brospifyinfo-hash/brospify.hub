@@ -211,6 +211,47 @@ export function ensureReadableBg(hex: string): string {
   return "#f3f2ef";
 }
 
+/** Farbton (0–360) + Chroma (0–1, = max−min) eines Hex — für die Harmonie-
+ *  Klammer. Chroma statt HSL-Sättigung: bei sehr hellen Farben ist die
+ *  HSL-Sättigung irreführend hoch, Chroma misst „wie farbig" verlässlich. */
+function hueChroma(hex: string): { h: number; c: number } {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
+  if (!m) return { h: 0, c: 0 };
+  const r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255;
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  let h = 0;
+  if (d !== 0) {
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  return { h, c: d };
+}
+
+/**
+ * PALETTE-HARMONIE-GARANTIE (deterministisch, palette-unabhängig): ein
+ * GESÄTTIGTER, HELLER Seiten-Hintergrund (Beige/Sand/Creme/Oliv …), dessen
+ * FARBTON dem Akzent WIDERSPRICHT, wird auf ein sauberes, fast-weißes Neutral
+ * gezogen (minimal zum Akzent getönt). So clasht nie ein muddy Mid-Ton mit dem
+ * Akzent, und die daraus gemischten Section-Töne bleiben stimmig + lesbar.
+ * UNANGETASTET bleiben: dunkle Hintergründe (dunkle Themes), bereits neutrale
+ * Hintergründe und farbton-GLEICHE (harmonische) Paletten (z. B. rosa BG + rosa
+ * Akzent). Nur der klare Clash (heller, satter, gegensätzlicher Ton) wird gefixt.
+ */
+export function harmonizeBackground(bg: string, accent: string): string {
+  if (!/^#([0-9a-f]{6})$/i.test(bg) || !/^#([0-9a-f]{6})$/i.test(accent)) return bg;
+  if (relLuminance(bg) < 0.42) return bg;   // dunkles Theme → bewusst, ok
+  const bs = hueChroma(bg);
+  if (bs.c < 0.06) return bg;               // (fast) neutrales Off-White/Grau → ok
+  const as = hueChroma(accent);
+  let dh = Math.abs(bs.h - as.h);
+  if (dh > 180) dh = 360 - dh;
+  if (dh < 45) return bg;                   // harmonisch (gleicher Farbton) → ok
+  // Heller, gesättigter Hintergrund, der mit dem Akzent beißt → sauberes Neutral.
+  return mixHex("#ffffff", accent, 0.05);
+}
+
 /**
  * Übersetzt einen benannten Hintergrund-Ton in konkrete Design-Settings —
  * deterministisch aus der Palette (Vorschau = Download; auch die AI nutzt

@@ -27,6 +27,7 @@ import {
   SECTION_DIVIDERS,
   sectionToneSettings,
   sectionSupportsDesign,
+  harmonizeBackground,
   type SectionTone,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
@@ -92,7 +93,7 @@ const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as c
 /** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf.
  *  sec_fade absichtlich NICHT mehr dabei (keine Fades für neue Designs). */
 const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_divider", "sec_divider_top", "icon_1", "icon_2", "icon_3", "icon_4"]);
-const MAX_OPS = 48;
+const MAX_OPS = 34;
 const MAX_TEXT = 600;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
@@ -379,8 +380,14 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
         },
       };
     }
-    case "set_colors":
-      return { ...doc, global: { ...doc.global, colors: { ...doc.global.colors, ...op.colors } } };
+    case "set_colors": {
+      // Harmonie-Garantie: ein gesättigter heller Hintergrund, der mit dem
+      // (evtl. gerade geänderten) Akzent beißt, wird auf ein sauberes Neutral
+      // gezogen — kein clashendes Beige/Sand mehr, egal was die KI ausgibt.
+      const merged = { ...doc.global.colors, ...op.colors };
+      merged.background = harmonizeBackground(merged.background, merged.accent);
+      return { ...doc, global: { ...doc.global, colors: merged } };
+    }
     case "set_fonts":
       return {
         ...doc,
