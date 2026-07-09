@@ -364,18 +364,22 @@ export default function AiCopilot({
   const broStep = phase === "applying" ? plan?.steps[activeStep]?.title : undefined;
 
   return (
-    <div
-      onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
-      onDragLeave={() => setDrag(false)}
-      onDrop={onDrop}
-      className={`shrink-0 rounded-2xl border transition ${
-        drag
-          ? "border-[#95BF47] bg-[#95BF47]/[0.07]"
-          : focusPick
-            ? "border-amber-400/50 bg-amber-400/[0.04]"
-            : "border-white/[0.1] glass-strong"
-      }`}
-    >
+    <div className="flex items-end gap-2.5">
+      {/* Bro — kleiner separater Kreis LINKS neben der Leiste (frisst keine
+          Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm) */}
+      <BroMascot state={broState} stepTitle={broStep} />
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={onDrop}
+        className={`flex-1 min-w-0 rounded-2xl border transition ${
+          drag
+            ? "border-[#95BF47] bg-[#95BF47]/[0.07]"
+            : focusPick
+              ? "border-amber-400/50 bg-amber-400/[0.04]"
+              : "border-white/[0.1] glass-strong"
+        }`}
+      >
       {error && <p className="px-4 pt-3 text-[11.5px] text-amber-300/90 leading-snug">{error}</p>}
       {focusPick && !showPlanCard && (
         <p className="flex items-center gap-1.5 px-4 pt-3 text-[11px] font-medium text-amber-200/85 leading-snug">
@@ -549,10 +553,7 @@ export default function AiCopilot({
                   </button>
                 </div>
               )}
-
-      {/* Bro — kleines Maskottchen unten an der Eingabe (immer sichtbar,
-          wechselt Bild + Sprechblase je nach dem, was die AI gerade tut) */}
-      <BroMascot state={broState} stepTitle={broStep} />
+      </div>
     </div>
   );
 }
