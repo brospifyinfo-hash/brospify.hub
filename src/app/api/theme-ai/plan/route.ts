@@ -13,7 +13,11 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
-import { findKundeByKey, getCreditsState } from "@/lib/sheets";
+import { findKundeByKey, getCreditsState, logSystemEvent } from "@/lib/sheets";
+
+// Gemeinsame „gleich erneut"-Meldung für transiente Fehler (Überlastung,
+// Timeout, Sheets-Quota) — der Nutzer weiß dann, dass ein Retry hilft.
+const TRANSIENT_MSG = "Der AI-Dienst ist gerade überlastet oder langsam — bitte in ein paar Sekunden erneut versuchen.";
 import { getCreditCost } from "@/lib/credit-config-server";
 import { isValidDocument } from "@/lib/theme-compile";
 import { generateThemePlan, normalizeAiMode, type ThemeAiImage, type ThemeAiRawPlan } from "@/lib/theme-ai";
@@ -140,20 +144,34 @@ export async function POST(req: NextRequest) {
   const user = session.isAdmin ? "admin" : session.lizenzschluessel || "";
   if (!session.isAdmin) {
     if (!session.lizenzschluessel) return NextResponse.json({ error: "Kein Kundenkonto." }, { status: 403 });
-    const kunde = await findKundeByKey(session.lizenzschluessel);
-    if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
-    const minCost = await getCreditCost(aiTierCreditKey("small", mode));
-    const balance = getCreditsState(kunde.profile).balance;
-    if (minCost > 0 && balance < minCost) {
-      return NextResponse.json(
-        { error: `Nicht genug Credits — der AI Co-Pilot kostet ab ${minCost} Credits pro Umsetzung.`, creditsRemaining: balance },
-        { status: 402 },
-      );
+    try {
+      const kunde = await findKundeByKey(session.lizenzschluessel);
+      if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
+      const minCost = await getCreditCost(aiTierCreditKey("small", mode));
+      const balance = getCreditsState(kunde.profile).balance;
+      if (minCost > 0 && balance < minCost) {
+        return NextResponse.json(
+          { error: `Nicht genug Credits — der AI Co-Pilot kostet ab ${minCost} Credits pro Umsetzung.`, creditsRemaining: balance },
+          { status: 402 },
+        );
+      }
+    } catch (err) {
+      // Sheets-Quota/Hänger: nicht mit generischem 500 abstürzen, sondern
+      // klar als transient ausweisen + protokollieren.
+      console.error("[theme-ai] credit check failed:", err);
+      await logSystemEvent({ level: "error", actor: user, action: "theme-ai.plan.credit_check_failed", details: { message: err instanceof Error ? err.message.slice(0, 300) : String(err).slice(0, 300) } });
+      return NextResponse.json({ error: TRANSIENT_MSG }, { status: 503 });
     }
   }
 
   // Lern-Hinweise VOR dem Cache-Key laden (sie fließen in den Prompt ein).
-  const learnHints = productTitle ? await getLearnHints(productTitle) : null;
+  // Defensiv: ein Sheets-Hänger hier darf den ganzen Plan NICHT killen.
+  let learnHints: string | null = null;
+  try {
+    learnHints = productTitle ? await getLearnHints(productTitle) : null;
+  } catch (err) {
+    console.warn("[theme-ai] getLearnHints failed (ignoriert):", err);
+  }
 
   // Cache-Key über ALLE prompt-relevanten Eingaben (inkl. paletteHints);
   // Trenner = Unit Separator (U+001F), damit Feldgrenzen eindeutig bleiben.
@@ -183,8 +201,22 @@ export async function POST(req: NextRequest) {
       });
     } catch (err) {
       console.error("[theme-ai] plan failed:", err);
-      const msg = err instanceof Error ? err.message : "Plan konnte nicht erstellt werden.";
-      return NextResponse.json({ error: msg }, { status: 502 });
+      const status = (err as { status?: number } | null)?.status;
+      const msg = err instanceof Error ? err.message : "";
+      // Echte Config/Ablehnungs-Fehler (kein Status; „Key fehlt"/„abgelehnt")
+      // klar durchreichen; alles andere (429/529/5xx/Timeout/Netz/Parse) ist
+      // transient → „gleich erneut". Immer ins Admin-System-Log schreiben.
+      const configError = typeof status !== "number" && (msg.includes("ANTHROPIC_API_KEY") || msg.includes("abgelehnt"));
+      const transient = !configError;
+      await logSystemEvent({
+        level: "error",
+        actor: user,
+        action: "theme-ai.plan.generate_failed",
+        target: mode,
+        details: { status: status ?? null, transient, message: msg.slice(0, 300) },
+      });
+      if (transient) return NextResponse.json({ error: TRANSIENT_MSG }, { status: 503 });
+      return NextResponse.json({ error: msg || "Plan konnte nicht erstellt werden." }, { status: 502 });
     }
   }
 
