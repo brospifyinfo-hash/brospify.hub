@@ -1001,7 +1001,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const ac = str(s.accent_color, brand === "trustpilot" ? "#00b67a" : "#4285F4");
       const cardBg = str(s.card_bg, "#fbfbfb");
       const cards = [1, 2, 3, 4, 5, 6]
-        .map((i) => ({ tag: t[`tag_${i}`], quote: t[`quote_${i}`], name: t[`name_${i}`], rate: parseFloat((t[`rate_${i}`] || "5").replace(",", ".")) || 5 }))
+        .map((i) => ({ n: i, tag: t[`tag_${i}`], quote: t[`quote_${i}`], name: t[`name_${i}`], rate: parseFloat(t[`rate_${i}`] || "5") || 5 }))
         .filter((c) => c.quote);
       const bar = (rate: number) => (
         <span className="te-bgr-cstars"><span className="te-bgr-cstars-bg">{STARS}</span><span className="te-bgr-cstars-fg" style={{ width: `${Math.max(0, Math.min(100, rate * 20))}%`, color: star }}>{STARS}</span></span>
@@ -1010,9 +1010,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
         brand === "google" ? (
           <span className="te-bgr-brand" aria-label="Google"><span style={{ color: "#4285F4" }}>G</span><span style={{ color: "#EA4335" }}>o</span><span style={{ color: "#FBBC05" }}>o</span><span style={{ color: "#4285F4" }}>g</span><span style={{ color: "#34A853" }}>l</span><span style={{ color: "#EA4335" }}>e</span></span>
         ) : brand === "trustpilot" ? (
-          <span className="te-bgr-brand" style={{ color: "#00b67a" }}>★ <span data-ef="brand_word">{t.brand_word}</span></span>
+          <span className="te-bgr-brand" style={{ color: "#00b67a" }}>★ <span data-ef="brand_word">{t.brand_word || "Trustpilot"}</span></span>
         ) : (
-          <span className="te-bgr-brand" style={{ color: ac }} data-ef="brand_word">{t.brand_word}</span>
+          <span className="te-bgr-brand" style={{ color: ac }} data-ef="brand_word">{t.brand_word || "unseren Kunden"}</span>
         );
       return (
         <div className="te-bgr" style={{ color: str(s.text_color, "#141414") }}>
@@ -1023,12 +1023,12 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           <div className="te-bgr-scroller">
             {cards.map((c, i) => (
               <div key={i} className="te-bgr-card" style={{ background: cardBg }}>
-                {c.tag && <div className="te-bgr-tag" data-ef={`tag_${i + 1}`}>{c.tag}</div>}
-                <p className="te-bgr-quote" data-ef={`quote_${i + 1}`}>{c.quote}</p>
+                {c.tag && <div className="te-bgr-tag" data-ef={`tag_${c.n}`}>{c.tag}</div>}
+                <p className="te-bgr-quote" data-ef={`quote_${c.n}`}>{c.quote}</p>
                 <div className="te-bgr-who">
-                  <span className="te-bgr-av" style={{ background: ac }}>{(c.name || "K").slice(0, 1).toUpperCase()}</span>
+                  <span className="te-bgr-av" style={{ background: ac }}>{(c.name || "Kunde").slice(0, 1).toUpperCase()}</span>
                   <span>
-                    <span className="te-bgr-name" data-ef={`name_${i + 1}`}>{c.name}</span>
+                    <span className="te-bgr-name" data-ef={`name_${c.n}`}>{c.name || "Kunde"}</span>
                     {bar(c.rate)}
                   </span>
                 </div>
@@ -1054,7 +1054,8 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const g2 = str(s.ring_to, "#f59e0b");
       const size = num(s.circle_size, 108);
       const ringBg = ring === "akzent" ? ac : ring === "weich" ? "rgba(0,0,0,.10)" : `conic-gradient(from 210deg, ${g1}, ${g2}, ${g1})`;
-      const n = Math.max(6, Math.min(8, ctx.images.length || 8));
+      // Parität zum Liquid: mit Bildern 8 Ringe (zyklisch), ohne Bilder 6 Platzhalter.
+      const n = ctx.images.length > 0 ? 8 : 6;
       const idx = Array.from({ length: n }, (_, i) => i);
       const row = (dup: boolean) =>
         idx.map((i) => (

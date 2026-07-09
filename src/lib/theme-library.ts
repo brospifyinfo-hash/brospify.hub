@@ -1107,7 +1107,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
     descEn: "Review carousel in a Google/Trustpilot look: colourful brand headline, star score, scrollable cards with product label, avatar and quote.",
     fields: [
       { id: "heading_pre", label: "Überschrift — Teil 1", labelEn: "Heading — part 1", kind: "text", target: { key: "heading_pre" }, def: "Über 250+ Bewertungen auf" },
-      { id: "brand_word", label: "Marken-Wort (Trustpilot/Neutral)", labelEn: "Brand word (Trustpilot/plain)", kind: "text", target: { key: "brand_word" }, def: "Trustpilot" },
+      { id: "brand_word", label: "Marken-Wort (Trustpilot/Neutral)", labelEn: "Brand word (Trustpilot/plain)", kind: "text", target: { key: "brand_word" }, def: "" },
       { id: "heading_post", label: "Überschrift — Teil 2 (kursiv)", labelEn: "Heading — part 2 (italic)", kind: "text", target: { key: "heading_post" }, def: "von echten Kunden" },
       { id: "rating", label: "Bewertungs-Zeile", labelEn: "Rating line", kind: "text", target: { key: "rating" }, def: "4,8 / 5,0" },
       { id: "link_text", label: "Link-Text", labelEn: "Link text", kind: "text", target: { key: "link_text" }, def: "Mehr Bewertungen auf" },
