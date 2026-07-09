@@ -106,7 +106,8 @@ export function BroMascotAdmin() {
       </div>
       <p className="text-zinc-400 text-sm">
         Bro erscheint als kleines Profilbild unten an der AI-Eingabe im Theme-Editor. Pro Zustand kannst du bis
-        zu 3 Bilder hinterlegen — sie wechseln automatisch. Ohne Bilder zeigt Bro einen Emoji als Platzhalter.
+        zu 3 Bilder hinterlegen — sie wechseln automatisch. PNG, JPG, WebP oder animierte <strong>GIFs</strong>{" "}
+        (GIFs bis 15 MB, sonst 5 MB) — animierte GIFs laufen von selbst. Ohne Bilder zeigt Bro einen Emoji als Platzhalter.
       </p>
 
       {err && (

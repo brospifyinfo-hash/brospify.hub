@@ -35,10 +35,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "ZIP-Upload nur für Admins." }, { status: 403 });
     }
 
-    // Max 50MB for zip, 5MB for images
-    const maxSize = isZip ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+    // Max 50MB for zip, 15MB for GIFs (animiert → oft größer), 5MB sonst.
+    const isGif = file.type === "image/gif" || /\.gif$/i.test(file.name);
+    const maxSize = isZip ? 50 * 1024 * 1024 : isGif ? 15 * 1024 * 1024 : 5 * 1024 * 1024;
     if (file.size > maxSize) {
-      return NextResponse.json({ error: `Max. ${isZip ? "50" : "5"}MB pro Datei.` }, { status: 400 });
+      return NextResponse.json({ error: `Max. ${isZip ? "50" : isGif ? "15" : "5"}MB pro Datei.` }, { status: 400 });
     }
 
     const folder = isZip ? "themes" : "products";

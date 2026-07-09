@@ -10,15 +10,17 @@ import { useRef, useState, type DragEvent } from "react";
 import { ImagePlus, Loader2, X } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
-// Muss zum Limit in /api/upload passen (Bilder: 5 MB).
+// Muss zum Limit in /api/upload passen (Bilder: 5 MB, GIFs: 15 MB).
 const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES_GIF = 15 * 1024 * 1024;
 
 /** Lädt EIN Bild zu /api/upload (Vercel Blob) hoch und gibt die öffentliche
  *  URL zurück. Wirft mit stabilem Code ("type" | "size" | sonst) — der Aufrufer
  *  übersetzt ihn. Der einzige geteilte Client-Upload-Helfer. */
 export async function uploadImageFile(file: File): Promise<string> {
   if (!file.type.startsWith("image/")) throw new Error("type");
-  if (file.size > MAX_BYTES) throw new Error("size");
+  const isGif = file.type === "image/gif" || /\.gif$/i.test(file.name);
+  if (file.size > (isGif ? MAX_BYTES_GIF : MAX_BYTES)) throw new Error("size");
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch("/api/upload", { method: "POST", body: fd });
