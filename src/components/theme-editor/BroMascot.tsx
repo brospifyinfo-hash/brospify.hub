@@ -25,7 +25,17 @@ interface BroCfg {
 
 const FALLBACK: Record<BroState, string> = { idle: "🙂", thinking: "🤔", working: "🛠️" };
 
-export function BroMascot({ state, stepTitle }: { state: BroState; stepTitle?: string }) {
+export function BroMascot({
+  state,
+  stepTitle,
+  showBubble = true,
+}: {
+  state: BroState;
+  stepTitle?: string;
+  /** false, solange die Plan-Karte sichtbar ist — die Blase würde sie sonst
+   *  überdecken. Bro redet dann nur beim Nachdenken (dünne Zeile). */
+  showBubble?: boolean;
+}) {
   const { t } = useI18n();
   const [cfg, setCfg] = useState<BroCfg | null>(null);
   const [imgIdx, setImgIdx] = useState(0);
@@ -76,7 +86,7 @@ export function BroMascot({ state, stepTitle }: { state: BroState; stepTitle?: s
   }, [state, active, lines.length]);
 
   const url = pool.length ? pool[imgIdx % pool.length] : "";
-  const bubble = active
+  const bubble = active && showBubble
     ? state === "working" && stepTitle && lineIdx % 2 === 1
       ? stepTitle
       : lines[lineIdx] || lines[0] || ""

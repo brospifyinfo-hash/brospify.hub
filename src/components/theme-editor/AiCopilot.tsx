@@ -367,7 +367,7 @@ export default function AiCopilot({
     <div className="flex items-end gap-2.5">
       {/* Bro — kleiner separater Kreis LINKS neben der Leiste (frisst keine
           Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm) */}
-      <BroMascot state={broState} stepTitle={broStep} />
+      <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} />
       <div
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
