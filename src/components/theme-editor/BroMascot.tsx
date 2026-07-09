@@ -47,14 +47,19 @@ export function BroMascot({ state, stepTitle }: { state: BroState; stepTitle?: s
   const pool = cfg ? cfg[state] || [] : [];
   const active = state === "thinking" || state === "working";
 
-  // Bild „hin und wieder" wechseln, solange >1 Bild in der Gruppe ist.
+  // Bild wechseln — jedes Mal nach einer ZUFÄLLIG anderen Zeit (kein fester
+  // Takt). Selbst-neu-planender Timeout statt Intervall. Nur bei >1 Bild.
   useEffect(() => {
     setImgIdx(0);
     if (pool.length < 2) return;
-    const id = setInterval(() => {
+    let timer: ReturnType<typeof setTimeout>;
+    const nextDelay = () => 1500 + Math.floor(Math.random() * 3000); // 1,5–4,5 s, jedes Mal anders
+    const tick = () => {
       setImgIdx((i) => (i + 1 + Math.floor(Math.random() * (pool.length - 1))) % pool.length);
-    }, 2600 + Math.floor(Math.random() * 1000));
-    return () => clearInterval(id);
+      timer = setTimeout(tick, nextDelay());
+    };
+    timer = setTimeout(tick, nextDelay());
+    return () => clearTimeout(timer);
   }, [state, pool.length]);
 
   // Sprechblasen-Sätze nur während der Arbeit rotieren.
@@ -102,23 +107,13 @@ export function BroMascot({ state, stepTitle }: { state: BroState; stepTitle?: s
         } bg-white/[0.05]`}
         title="Bro"
       >
-        <AnimatePresence mode="wait">
-          <motion.span
-            key={`${state}:${url || FALLBACK[state]}`}
-            initial={{ opacity: 0, scale: 0.85 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.85 }}
-            transition={{ duration: 0.28 }}
-            className="absolute inset-0 flex items-center justify-center"
-          >
-            {url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={url} alt="Bro" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-2xl leading-none">{FALLBACK[state]}</span>
-            )}
-          </motion.span>
-        </AnimatePresence>
+        {/* harter Schnitt beim Bildwechsel — KEIN Übergang/Fade */}
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="Bro" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <span className="text-2xl leading-none">{FALLBACK[state]}</span>
+        )}
         {active && (
           <motion.span
             aria-hidden
