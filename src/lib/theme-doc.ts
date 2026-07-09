@@ -384,7 +384,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
           ? `blk|${action.blockType}|${action.field}`
           : action.type === "aiApply"
             ? "ai|batch"
-            : "gallery|badge";
+            : action.type === "setGallery" && action.patch.features !== undefined
+              ? "gallery|features"
+              : "gallery|badge";
     if (state.lastTextTarget === target) {
       return { ...state, present: next, future: [], lastTextTarget: target };
     }

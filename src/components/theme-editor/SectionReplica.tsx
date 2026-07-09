@@ -1154,7 +1154,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       const textColor = str(s.text_color, "#6b7280");
       const ac = str(s.accent_color, "#2f52ff");
       const cards = [1, 2, 3, 4]
-        .map((i) => ({ n: i, icon: str(s[`icon_${i}`], ["bag", "truck", "heart", "star"][i - 1]), title: t[`title_${i}`], text: t[`text_${i}`] }))
+        .map((i) => ({ n: i, icon: str(s[`icon_${i}`], ["box", "truck", "heart", "star"][i - 1]), title: t[`title_${i}`], text: t[`text_${i}`] }))
         .filter((c) => c.title);
       return (
         <div className="te-bsc" style={{ background: bg }}>
