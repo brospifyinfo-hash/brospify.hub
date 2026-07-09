@@ -1146,6 +1146,60 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       );
     }
 
+    case "bro-step-cards": {
+      const bg = str(s.bg, "#2f52ff");
+      const cardBg = str(s.card_bg, "#ffffff");
+      const numColor = str(s.num_color, "#c8d2ec");
+      const titleColor = str(s.title_color, "#2f52ff");
+      const textColor = str(s.text_color, "#6b7280");
+      const ac = str(s.accent_color, "#2f52ff");
+      const cards = [1, 2, 3, 4]
+        .map((i) => ({ n: i, icon: str(s[`icon_${i}`], ["bag", "truck", "heart", "star"][i - 1]), title: t[`title_${i}`], text: t[`text_${i}`] }))
+        .filter((c) => c.title);
+      return (
+        <div className="te-bsc" style={{ background: bg }}>
+          {t.heading && <h2 className="te-bsc-h" style={{ color: cardBg }} data-ef="heading">{t.heading}</h2>}
+          <div className="te-bsc-grid" style={{ gridTemplateColumns: `repeat(${Math.max(cards.length, 1)},1fr)` }}>
+            {cards.map((c, i) => (
+              <div key={i} className="te-bsc-card" style={{ background: cardBg }}>
+                <span className="te-bsc-num" style={{ color: numColor }}>{i + 1}</span>
+                <span className="te-bsc-icon" style={{ color: ac }}><RIcon id={c.icon} size={50} /></span>
+                <h3 className="te-bsc-title" style={{ color: titleColor }} data-ef={`title_${c.n}`}>{c.title}</h3>
+                {c.text && <p className="te-bsc-text" style={{ color: textColor }} data-ef={`text_${c.n}`}>{c.text}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    case "bro-announce": {
+      const mode = str(s.mode, "static");
+      const bg = str(s.bg, "#111111");
+      const fg = str(s.text_color, "#ffffff");
+      const sep = str(s.separator, "✦");
+      const icon = str(s.icon_1, "");
+      const height = num(s.height, 44);
+      const msgs = [1, 2, 3, 4, 5].map((i) => ({ n: i, m: t[`msg_${i}`] })).filter((x) => x.m);
+      if (mode === "ticker") {
+        const row = (dup: boolean) =>
+          msgs.map((x, i) => (
+            <span key={(dup ? "d" : "") + i} className="te-ban-item">{icon && <span className="te-ban-ic"><RIcon id={icon} size={15} /></span>}<span data-ef={dup ? undefined : `msg_${x.n}`}>{x.m}</span> <span className="te-ban-sep">{sep}</span></span>
+          ));
+        return (
+          <div className="te-ban" style={{ background: bg, color: fg, minHeight: height }}>
+            <div className="te-ban-vp"><div className="te-ban-track">{row(false)}{row(true)}</div></div>
+          </div>
+        );
+      }
+      const first = msgs[0];
+      return (
+        <div className="te-ban" style={{ background: bg, color: fg, minHeight: height }}>
+          <div className="te-ban-static">{icon && <span className="te-ban-ic"><RIcon id={icon} size={16} /></span>}<span data-ef={first ? `msg_${first.n}` : "msg_1"}>{first ? first.m : "Kostenloser Versand ab 50 €"}</span></div>
+        </div>
+      );
+    }
+
     default:
       return null;
   }
@@ -1586,6 +1640,27 @@ export const REPLICA_CSS = `
 .te-bcs-rev-x{font-size:13px;line-height:1.55;opacity:.82;margin:0 0 8px}
 .te-bcs-rev-n{font-size:12.5px;font-style:italic;opacity:.66}
 
+/* ── Schritt-Karten ── */
+.te-bsc{padding:34px 22px}
+.te-bsc-h{text-align:center;margin:0 auto 24px;max-width:640px;font-size:26px;font-weight:800;letter-spacing:-.01em;font-family:var(--pv-h)}
+.te-bsc-grid{max-width:1000px;margin:0 auto;display:grid;gap:18px}
+.te-bsc-card{border-radius:20px;padding:28px 22px;text-align:center;box-shadow:0 22px 44px -30px rgba(0,0,0,.5);display:flex;flex-direction:column;align-items:center;gap:9px}
+.te-bsc-num{font-size:30px;font-weight:700;line-height:1}
+.te-bsc-icon{display:flex;margin:2px 0}
+.te-bsc-title{font-size:17px;font-weight:800;letter-spacing:.02em;text-transform:uppercase;margin:0}
+.te-bsc-text{font-size:13.5px;line-height:1.6;margin:0;font-style:italic;max-width:240px}
+
+/* ── Ankündigungsleiste ── */
+.te-ban{display:flex;align-items:center;overflow:hidden;font-size:13px;font-weight:600;letter-spacing:.01em}
+.te-ban-static{width:100%;text-align:center;padding:6px 40px;display:flex;align-items:center;justify-content:center;gap:9px}
+.te-ban-ic{display:inline-flex}
+.te-ban-vp{width:100%;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent);mask-image:linear-gradient(90deg,transparent,#000 4%,#000 96%,transparent)}
+.te-ban-track{display:flex;width:max-content;animation:te-ban-scroll 26s linear infinite}
+.te-ban-track:hover{animation-play-state:paused}
+.te-ban-item{display:inline-flex;align-items:center;gap:9px;padding:7px 22px;white-space:nowrap}
+.te-ban-sep{opacity:.55}
+@keyframes te-ban-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
 .pm-mobile .te-cta-h{font-size:26px!important}
 .pm-mobile .te-benefits2{grid-template-columns:1fr}
 .pm-mobile .te-photo{flex-direction:column}
@@ -1607,4 +1682,5 @@ export const REPLICA_CSS = `
 .pm-mobile .te-bcs-h{font-size:26px}
 .pm-mobile .te-bgr-card{flex-basis:210px}
 .pm-mobile .te-circ-track{gap:12px}
+.pm-mobile .te-bsc-grid{grid-template-columns:1fr!important}
 `;

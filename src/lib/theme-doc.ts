@@ -49,11 +49,19 @@ export interface BlockConfig {
   settings?: Record<string, string | number | boolean>;
 }
 
+/** Ein Feature-Eintrag UNTER dem Produktbild (Icon + Text). */
+export interface GalleryFeature {
+  icon: string;
+  text: string;
+}
+
 /** Produktgalerie (Bereich Produktbild + Thumbnails) — pg_*-Settings. */
 export interface GalleryConfig {
   presetId: string;
   /** Badge-Text auf dem Hauptbild ("" = kein Badge). */
   badge: string;
+  /** Feature-Liste UNTER dem Produktbild (Icon + Text, max. 4; [] = aus). */
+  features?: GalleryFeature[];
 }
 
 export interface BuyboxConfig {
@@ -100,7 +108,7 @@ export function emptyDocument(): ThemeDocument {
       hidden: [],
       benefitIcons: [...DEFAULT_BENEFIT_ICONS],
       blocks: {},
-      gallery: { presetId: "thumbs-unten", badge: "" },
+      gallery: { presetId: "thumbs-unten", badge: "", features: [] },
       spacing: 15,
     },
   };
@@ -367,7 +375,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
   // Tipp-Serien im selben Feld nicht als einzelne History-Schritte stapeln
   // (gilt für Section-Texte, Block-Texte, das Galerie-Badge und die
   // Schritt-für-Schritt angewandten Ops EINES AI-Laufs).
-  const isGalleryTyping = action.type === "setGallery" && action.patch.badge !== undefined && action.patch.presetId === undefined;
+  const isGalleryTyping = action.type === "setGallery" && (action.patch.badge !== undefined || action.patch.features !== undefined) && action.patch.presetId === undefined;
   if (action.type === "setText" || action.type === "setBlockText" || isGalleryTyping || action.type === "aiApply") {
     const target =
       action.type === "setText"

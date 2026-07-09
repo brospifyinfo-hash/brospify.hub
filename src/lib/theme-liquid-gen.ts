@@ -79,10 +79,11 @@ ${whens}
 export function collectDocIconIds(doc: {
   sections?: { settings?: Record<string, unknown> }[];
   home?: { settings?: Record<string, unknown> }[];
-  buybox?: { benefitIcons?: string[] };
+  buybox?: { benefitIcons?: string[]; gallery?: { features?: { icon?: string }[] } };
 }): string[] {
   const out = new Set<string>();
   for (const id of doc.buybox?.benefitIcons || []) if (typeof id === "string") out.add(id);
+  for (const f of doc.buybox?.gallery?.features || []) if (typeof f?.icon === "string" && f.icon) out.add(f.icon);
   for (const list of [doc.sections || [], doc.home || []]) {
     for (const inst of list) {
       for (let i = 1; i <= 4; i++) {

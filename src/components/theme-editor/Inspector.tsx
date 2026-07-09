@@ -17,7 +17,7 @@ import {
   Boxes, Quote, Timer, RotateCcw, UserCheck, Scale, Ticket, Calculator,
   type LucideIcon,
 } from "lucide-react";
-import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
+import type { ThemeDocument, EditorAction, GalleryFeature } from "@/lib/theme-doc";
 import type { PreviewData } from "@/components/ThemePreview";
 import {
   getSectionDef, getBuyboxLib, GALLERY_PRESETS, getBuyboxControls, resolveBlockSettings,
@@ -122,6 +122,73 @@ function SecGroup({ icon, title, help, right, children }: { icon: ReactNode; tit
 
 /** Vorteile-Icons je Kaufbox-Vorteil (1.700+ durchsuchbar). Wohnt jetzt
  *  KONTEXTUELL im „Vorteile-Liste"-Baustein statt lose unter der Bausteinliste. */
+/** Editor für die Feature-Liste UNTER dem Produktbild (Icon + Text, max. 4). */
+function GalleryFeaturesEditor({ features, onChange }: { features: GalleryFeature[]; onChange: (f: GalleryFeature[]) => void }) {
+  const { lang } = useI18n();
+  const [openFor, setOpenFor] = useState<number | null>(null);
+  const [q, setQ] = useState("");
+  const DEF_ICONS = ["truck", "rotate", "shield", "leaf"];
+  const rows = [0, 1, 2, 3];
+  const get = (i: number): GalleryFeature => features[i] || { icon: DEF_ICONS[i] || "check", text: "" };
+  const setRow = (i: number, patch: Partial<GalleryFeature>) => {
+    const next = rows.map((k) => ({ ...get(k) }));
+    next[i] = { ...next[i], ...patch };
+    onChange(next);
+  };
+  return (
+    <div className="space-y-1">
+      {rows.map((i) => {
+        const cur = get(i);
+        return (
+          <div key={i} className="rounded-md border border-white/10 bg-white/[0.03] p-1.5">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setOpenFor(openFor === i ? null : i)}
+                className="w-7 h-7 shrink-0 rounded-md border border-white/15 bg-white/[0.05] text-white flex items-center justify-center hover:border-[#95BF47]/50 transition"
+                aria-label={`Feature ${i + 1}`}
+              >
+                <IconSvg id={cur.icon || "check"} size={15} />
+              </button>
+              <input
+                type="text"
+                value={cur.text}
+                placeholder={lang === "en" ? `Feature ${i + 1} (empty = off)` : `Feature ${i + 1} (leer = aus)`}
+                onChange={(e) => setRow(i, { text: e.target.value })}
+                className="flex-1 min-w-0 rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] text-white placeholder:text-zinc-500 focus:border-[#95BF47]/50 focus:outline-none"
+              />
+            </div>
+            {openFor === i && (
+              <div className="mt-1.5 pt-1.5 border-t border-white/[0.06]">
+                <input
+                  type="text"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder={lang === "en" ? "Search 1,700+ icons…" : "1.700+ Icons durchsuchen…"}
+                  className="w-full mb-1.5 rounded-md border border-white/10 bg-white/[0.05] px-2 py-1 text-[11px] text-white placeholder:text-zinc-500 focus:border-[#95BF47]/50 focus:outline-none"
+                />
+                <div className="grid grid-cols-7 gap-1 max-h-44 overflow-y-auto">
+                  {searchIcons(q, 63).map((ic) => (
+                    <button
+                      key={ic.id}
+                      title={ic.label}
+                      onClick={() => { setRow(i, { icon: ic.id }); setOpenFor(null); }}
+                      className={`aspect-square rounded-md border flex items-center justify-center transition ${
+                        cur.icon === ic.id ? "border-[#95BF47]/60 bg-[#95BF47]/10 text-white" : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.08]"
+                      }`}
+                    >
+                      <IconSvg id={ic.id} size={16} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function BenefitIconsEditor({ icons, labels, onPick }: { icons: string[]; labels: string[]; onPick: (i: number, id: string) => void }) {
   const { lang } = useI18n();
   const [openFor, setOpenFor] = useState<number | null>(null);
@@ -473,6 +540,13 @@ export default function Inspector({
               onChange={(v) => dispatch({ type: "setGallery", patch: { badge: v } })}
             />
           </label>
+          <div className="mt-2">
+            <FieldLabel>{lang === "en" ? "Features under the image" : "Features unter dem Bild"}</FieldLabel>
+            <GalleryFeaturesEditor
+              features={doc.buybox.gallery?.features || []}
+              onChange={(f) => dispatch({ type: "setGallery", patch: { features: f } })}
+            />
+          </div>
         </SecGroup>
 
         <SecGroup

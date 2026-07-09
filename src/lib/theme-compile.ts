@@ -367,6 +367,8 @@ function applyGallerySettings(data: TemplateData, doc: ThemeDocument, palette: C
   const main = findMainProduct(data);
   if (!main) return;
   main.settings = main.settings && typeof main.settings === "object" ? main.settings : {};
+  // Galerie folgt beim Scrollen mit (sticky) — 1:1 wie die Live-Vorschau.
+  main.settings.pg_sticky = true;
   const buybox = doc.buybox || ({} as ThemeDocument["buybox"]);
   // Ältere Clients senden evtl. kein gallery-Feld → dann Basis unangetastet.
   if (buybox.gallery && typeof buybox.gallery === "object") {
@@ -379,6 +381,16 @@ function applyGallerySettings(data: TemplateData, doc: ThemeDocument, palette: C
       main.settings.pg_badge_text = badge;
       main.settings.pg_badge_bg = palette.accent;
       main.settings.pg_badge_color = "#ffffff";
+    }
+    // Features UNTER dem Produktbild (Icon + Text) → statisch ins Theme gebacken.
+    const feats = Array.isArray(buybox.gallery.features) ? buybox.gallery.features : [];
+    const activeFeats = feats.filter((f) => f && typeof f.text === "string" && f.text.trim() !== "");
+    main.settings.pg_feat_enable = activeFeats.length > 0;
+    main.settings.pg_feat_color = palette.accent;
+    for (let i = 0; i < 4; i++) {
+      const f = activeFeats[i];
+      main.settings[`pg_feat_${i + 1}_icon`] = f && typeof f.icon === "string" ? f.icon.trim() : "";
+      main.settings[`pg_feat_${i + 1}_text`] = f ? String(f.text).trim() : "";
     }
   }
 }

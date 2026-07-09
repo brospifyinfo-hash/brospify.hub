@@ -154,6 +154,7 @@ export const SECTION_DESIGN_TYPES = new Set([
   "bro-logo-badges", "bro-image-cards",
   "bro-hero-luxe", "bro-hero-split", "bro-benefit-cards",
   "bro-google-reviews", "bro-circle-gallery", "bro-transformation", "bro-compare-slider",
+  "bro-step-cards",
 ]);
 export function sectionSupportsDesign(type: string): boolean {
   return SECTION_DESIGN_TYPES.has(type);
@@ -1207,6 +1208,52 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Dunkler Hintergrund", settings: { look: "dunkel", check_color: "@accent", mark_color: "@accent", accent_color: "@accent" } },
     ],
   },
+  {
+    type: "bro-step-cards",
+    category: "content",
+    label: "Schritt-Karten",
+    labelEn: "Step cards",
+    desc: "Farbige Fläche mit weißen Karten: große Nummer, Icon, Titel und Beschreibung — der klassische „So funktioniert's\"-Block mit Icons & Farben.",
+    descEn: "Coloured panel with white cards: big number, icon, title and description — the classic 'How it works' block with icons & colours.",
+    fields: [
+      { id: "heading", label: "Überschrift (optional)", labelEn: "Heading (optional)", kind: "text", target: { key: "heading" }, def: "" },
+      { id: "title_1", label: "Schritt 1 — Titel", labelEn: "Step 1 — title", kind: "text", target: { key: "title_1" }, def: "Produkt wählen" },
+      { id: "text_1", label: "Schritt 1 — Text", labelEn: "Step 1 — text", kind: "textarea", target: { key: "text_1" }, def: "Stöbere durch unser Sortiment und leg dein Lieblingsprodukt in den Warenkorb." },
+      { id: "title_2", label: "Schritt 2 — Titel", labelEn: "Step 2 — title", kind: "text", target: { key: "title_2" }, def: "Schnell geliefert" },
+      { id: "text_2", label: "Schritt 2 — Text", labelEn: "Step 2 — text", kind: "textarea", target: { key: "text_2" }, def: "Wir verpacken sorgfältig und liefern express direkt zu dir nach Hause." },
+      { id: "title_3", label: "Schritt 3 — Titel", labelEn: "Step 3 — title", kind: "text", target: { key: "title_3" }, def: "Genießen & teilen" },
+      { id: "text_3", label: "Schritt 3 — Text", labelEn: "Step 3 — text", kind: "textarea", target: { key: "text_3" }, def: "Erlebe den Unterschied im Alltag und teile deine Freude mit Freunden." },
+      { id: "title_4", label: "Schritt 4 — Titel (leer = aus)", labelEn: "Step 4 — title (empty = off)", kind: "text", target: { key: "title_4" }, def: "" },
+      { id: "text_4", label: "Schritt 4 — Text", labelEn: "Step 4 — text", kind: "textarea", target: { key: "text_4" }, def: "" },
+    ],
+    presets: [
+      { id: "bunt", label: "Farbig", labelEn: "Colourful", hint: "Farbfläche + weiße Karten wie im Referenz-Look", settings: { bg: "@accent", card_bg: "#ffffff", num_color: "#c8d2ec", title_color: "@accent", text_color: "#6b7280", accent_color: "@accent" } },
+      { id: "hell", label: "Hell", labelEn: "Light", hint: "Heller Hintergrund, dezente Karten", settings: { bg: "#f4f6fb", card_bg: "#ffffff", num_color: "#d0d6e2", title_color: "@accent", text_color: "#6b7280", accent_color: "@accent" } },
+      { id: "dunkel", label: "Dunkel", labelEn: "Dark", hint: "Dunkle Fläche, helle Karten", settings: { bg: "#14161c", card_bg: "rgba(255,255,255,0.05)", num_color: "rgba(255,255,255,0.28)", title_color: "#ffffff", text_color: "rgba(255,255,255,0.68)", accent_color: "@accent" } },
+    ],
+  },
+  {
+    type: "bro-announce",
+    category: "conversion",
+    label: "Ankündigungsleiste",
+    labelEn: "Announcement bar",
+    desc: "Schmale Leiste ganz oben — statisch (eine Botschaft) oder als scrollendes Laufband (mehrere Botschaften). Ideal für Versand-/Rabatt-Hinweise.",
+    descEn: "Thin top bar — static (one message) or a scrolling ticker (several messages). Great for shipping/discount notices.",
+    fields: [
+      { id: "msg_1", label: "Nachricht 1", labelEn: "Message 1", kind: "text", target: { key: "msg_1" }, def: "Kostenloser Versand ab 50 €" },
+      { id: "msg_2", label: "Nachricht 2", labelEn: "Message 2", kind: "text", target: { key: "msg_2" }, def: "30 Tage kostenlose Rückgabe" },
+      { id: "msg_3", label: "Nachricht 3", labelEn: "Message 3", kind: "text", target: { key: "msg_3" }, def: "Sicher bezahlen mit Käuferschutz" },
+      { id: "msg_4", label: "Nachricht 4 (leer = aus)", labelEn: "Message 4 (empty = off)", kind: "text", target: { key: "msg_4" }, def: "" },
+      { id: "msg_5", label: "Nachricht 5 (leer = aus)", labelEn: "Message 5 (empty = off)", kind: "text", target: { key: "msg_5" }, def: "" },
+    ],
+    presets: [
+      { id: "statisch", label: "Statisch dunkel", labelEn: "Static dark", hint: "Eine Botschaft, dunkle Leiste", settings: { mode: "static", bg: "#111111", text_color: "#ffffff" } },
+      { id: "laufband", label: "Laufband dunkel", labelEn: "Ticker dark", hint: "Scrollende Botschaften, dunkel", settings: { mode: "ticker", bg: "#111111", text_color: "#ffffff" } },
+      { id: "akzent", label: "Statisch Akzent", labelEn: "Static accent", hint: "Eine Botschaft in der Akzentfarbe", settings: { mode: "static", bg: "@accent", text_color: "#ffffff" } },
+      { id: "laufakzent", label: "Laufband Akzent", labelEn: "Ticker accent", hint: "Scrollende Botschaften in der Akzentfarbe", settings: { mode: "ticker", bg: "@accent", text_color: "#ffffff" } },
+      { id: "hell", label: "Statisch hell", labelEn: "Static light", hint: "Helle Leiste, dunkler Text", settings: { mode: "static", bg: "#f3f4f6", text_color: "#111111" } },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────
@@ -2213,6 +2260,7 @@ export const STYLE_COMPOSITION_EXTRAS: Record<string, CompositionEntry[]> = {
     { type: "image-with-text", presetId: "zentriert" },
     { type: "reviews", presetId: "ruhig" },
     { type: "collapsible-content", presetId: "schlicht" },
+    { type: "bro-step-cards", presetId: "hell" },
   ],
   noir: [
     { type: "video", presetId: "vollbreit" },
@@ -2229,6 +2277,7 @@ export const STYLE_COMPOSITION_EXTRAS: Record<string, CompositionEntry[]> = {
     { type: "bro-steps", presetId: "kreise" },
     { type: "bro-stats", presetId: "hell" },
     { type: "image-with-text", presetId: "split" },
+    { type: "bro-step-cards", presetId: "hell" },
   ],
   nature: [
     { type: "bro-guarantee", presetId: "siegel" },
@@ -2266,6 +2315,7 @@ export const STYLE_COMPOSITION_EXTRAS: Record<string, CompositionEntry[]> = {
     { type: "bro-stats", presetId: "hell" },
     { type: "collapsible-content", presetId: "reihen" },
     { type: "trustpilot", presetId: "kompakt" },
+    { type: "bro-step-cards", presetId: "bunt" },
   ],
   cozy: [
     { type: "multicolumn", presetId: "zwei" },
@@ -2333,13 +2383,13 @@ const ROLE_RANK: Record<SectionRole, number> = {
 };
 
 export const SECTION_ROLES: Record<string, SectionRole> = {
-  "slideshow2": "hero", "bro-hero-luxe": "hero", "bro-hero-split": "hero",
+  "slideshow2": "hero", "bro-hero-luxe": "hero", "bro-hero-split": "hero", "bro-announce": "hero",
   // bro-cta-banner ist in noir/retro der ABSCHLUSS-CTA (closing) — als Hook
   // funktioniert er nur als Anker an Position 0 (street), die der Funnel-Sort
   // ohnehin nie anfasst.
   "bro-cta-banner": "closing",
   "bro-icon-benefits": "benefits", "benefits": "benefits", "bro-feature-grid": "benefits",
-  "bro-benefit-cards": "benefits", "multicolumn": "benefits",
+  "bro-benefit-cards": "benefits", "multicolumn": "benefits", "bro-step-cards": "benefits",
   "bro-logo-badges": "authority", "trustpilot": "authority",
   "image-with-text": "story", "bro-callouts": "story", "bro-image-cards": "story",
   "scrollingbild": "story", "photo": "story", "collage": "story", "video": "story",
@@ -2381,7 +2431,7 @@ export function sortCompositionByFunnel(entries: CompositionEntry[]): Compositio
 // gleicher Zweck — nur ein anderes Gesicht. Nur Typen mit generischen
 // Inhalten (keine Kollektions-/Video-Bindung).
 const ROLE_SWAP_POOLS: string[][] = [
-  ["bro-icon-benefits", "bro-benefit-cards", "bro-feature-grid"],
+  ["bro-icon-benefits", "bro-benefit-cards", "bro-feature-grid", "bro-step-cards"],
   ["reviews2", "bro-chat-reviews", "bro-spotlight", "reviews", "bro-google-reviews", "bro-transformation", "bro-compare-slider"],
   ["qanda", "bro-compare", "bro-problem-solution"],
   ["image-with-text", "bro-callouts", "bro-image-cards", "bro-circle-gallery"],

@@ -162,6 +162,8 @@ export default function ThemePreview({
   // multipliziert die Einpass-Skalierung; bei Überbreite scrollt pm-outer.
   const outerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const galRef = useRef<HTMLDivElement>(null);
   const [box, setBox] = useState({ scale: 1, height: 0 });
   const targetW = viewMode === "mobile" ? 390 : 1080;
   const zoomClamped = Math.max(0.5, Math.min(2, typeof zoom === "number" && Number.isFinite(zoom) ? zoom : 1));
@@ -178,7 +180,7 @@ export default function ThemePreview({
     ro.observe(outer);
     ro.observe(canvas);
     return () => ro.disconnect();
-  }, [targetW, zoomClamped, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, page, spacing]);
+  }, [targetW, zoomClamped, data, giftOpen, bundleIdx, imgIdx, colors, radius, headingFont, bodyFont, hiddenSections.join("|"), JSON.stringify(sectionHeadings), buyboxOrder.join("|"), hiddenBlocks.join("|"), JSON.stringify(docSections), selectedUid, JSON.stringify(buyboxCfg), gallery?.presetId, gallery?.badge, JSON.stringify(gallery?.features), page, spacing]);
 
   // Inline-Text-Bearbeitung: das angeklickte Element trägt data-ef (Feld-ID);
   // der Kontext (Doc-Section vs. Kaufbox-Baustein) kommt aus dem Vorfahren.
@@ -206,6 +208,45 @@ export default function ThemePreview({
     [docSections, onEditText, onEditBlockText],
   );
   useInlineTextEdit(canvasRef, editTexts && !focusPick && (!!onEditText || !!onEditBlockText), resolveEdit);
+
+  // Sticky-Galerie im Vorschau-Canvas: das echte position:sticky wird vom
+  // transform:scale des Canvas ausgehebelt (transformierter Vorfahre = eigener
+  // Containing-Block). Deshalb ahmen wir die „Galerie scrollt mit"-Optik des
+  // Themes per JS nach: beim Scrollen des Vorschau-Bereichs verschiebt sich die
+  // Bildspalte innerhalb ihrer Zeile mit (Desktop; am Handy statisch).
+  useEffect(() => {
+    const gal = galRef.current, grid = gridRef.current;
+    if (!gal || !grid) return;
+    if (viewMode === "mobile") { gal.style.transform = ""; return; }
+    // Nächsten vertikalen Scroll-Container oberhalb der Vorschau finden.
+    let sc: HTMLElement | Window = window;
+    let el: HTMLElement | null = outerRef.current?.parentElement || null;
+    while (el) {
+      const oy = getComputedStyle(el).overflowY;
+      if (oy === "auto" || oy === "scroll") { sc = el; break; }
+      el = el.parentElement;
+    }
+    const STICK = 14;
+    const update = () => {
+      const scale = box.scale || 1;
+      const scTop = sc === window ? 0 : (sc as HTMLElement).getBoundingClientRect().top;
+      const gridRect = grid.getBoundingClientRect();
+      const galH = gal.offsetHeight * scale; // gerenderte (skalierte) Höhe
+      const maxShift = Math.max(0, gridRect.height - galH);
+      let shift = (scTop + STICK) - gridRect.top;
+      shift = Math.max(0, Math.min(shift, maxShift));
+      gal.style.transform = shift > 0 ? `translateY(${shift / scale}px)` : "";
+    };
+    update();
+    const target: Window | HTMLElement = sc;
+    target.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      target.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+      gal.style.transform = "";
+    };
+  }, [viewMode, box.scale, page, data, JSON.stringify(docSections), JSON.stringify(buyboxCfg), gallery?.presetId]);
 
   const rootStyle = {
     "--pv-bg": colors.background, "--pv-text": colors.text, "--pv-btn": colors.button,
@@ -1085,9 +1126,9 @@ export default function ThemePreview({
       ) : (
         <div className="pm-stage">
           {page !== "home" && (
-          <div className="pm-grid">
+          <div className="pm-grid" ref={gridRef}>
             {/* Galerie — Layout/Format/Pfeile/Zähler aus dem Galerie-Preset */}
-            <div className={`pm-gallery ${galLeft ? "pm-gal-left" : ""}`}>
+            <div ref={galRef} className={`pm-gallery ${galLeft ? "pm-gal-left" : ""}`}>
               {galLeft && data.images.length > 1 && (
                 <div className="pm-thumbs pm-thumbs-rail">
                   {data.images.slice(0, 5).map((u, i) => (
@@ -1117,6 +1158,17 @@ export default function ThemePreview({
                       </button>
                     ))}
                   </div>
+                )}
+                {/* Features UNTER dem Bild (Galerie-Spalte) — 1:1 wie im Theme */}
+                {(gallery?.features || []).filter((f) => (f.text || "").trim()).length > 0 && (
+                  <ul className="pm-gal-feats">
+                    {(gallery?.features || []).filter((f) => (f.text || "").trim()).map((f, i) => (
+                      <li key={i} className="pm-gal-feat">
+                        <span className="pm-gal-feat-ic"><BIcon id={f.icon || "check"} /></span>
+                        <span>{f.text}</span>
+                      </li>
+                    ))}
+                  </ul>
                 )}
               </div>
             </div>
@@ -1281,7 +1333,7 @@ const CSS = `
 .pm-stage{background:var(--pv-bg);color:var(--pv-text);font-family:var(--pv-b);padding:24px}
 .pm-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.08fr);gap:26px;align-items:start}
 
-.pm-gallery{position:sticky;top:0}
+.pm-gallery{position:relative;will-change:transform}
 .pm-main{position:relative;aspect-ratio:1;border-radius:var(--pv-r);overflow:hidden;background:color-mix(in srgb,var(--pv-text) 6%,var(--pv-bg))}
 .pm-main img{width:100%;height:100%;object-fit:cover;display:block}
 .pm-noimg{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:13px;opacity:.4}
@@ -1424,6 +1476,10 @@ const CSS = `
 /* ── Galerie-Varianten (Preset: Thumbnails links/unten, Pfeile, Zähler) ── */
 .pm-gal-left{display:flex;gap:10px;align-items:flex-start}
 .pm-gal-main{flex:1;min-width:0}
+.pm-gal-feats{list-style:none;margin:14px 0 0;padding:0;display:flex;flex-direction:column;gap:9px}
+.pm-gal-feat{display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600}
+.pm-gal-feat-ic{width:26px;height:26px;flex:0 0 auto;border-radius:50%;background:color-mix(in srgb,var(--pv-accent) 14%,var(--pv-bg));color:var(--pv-accent);display:inline-flex;align-items:center;justify-content:center}
+.pm-gal-feat-ic svg{width:15px;height:15px}
 .pm-thumbs-rail{display:flex;flex-direction:column;gap:8px;margin-top:0}
 .pm-arrow{position:absolute;top:50%;transform:translateY(-50%);z-index:2;width:34px;height:34px;border-radius:50%;border:0;background:rgba(255,255,255,.92);color:#111;font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.18)}
 .pm-arrow-l{left:10px}.pm-arrow-r{right:10px}
