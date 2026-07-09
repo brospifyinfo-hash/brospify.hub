@@ -1262,7 +1262,7 @@ export default function ThemeEditorPage() {
                     </button>
                   </div>
                 </div>
-                <div className={`lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none" : ""}`} onClick={() => setSelected(null)}>
+                <div className={`lg:flex-1 lg:min-h-0 lg:overflow-y-auto rounded-2xl ${aiBusy ? "pointer-events-none" : ""}`} onClick={() => setSelected(null)}>
                   <ThemePreview
                     data={previewData}
                     colors={doc.global.colors}
