@@ -23,6 +23,7 @@ import {
 } from "@/lib/theme-ai-ops";
 import type { ThemeDocument, EditorAction } from "@/lib/theme-doc";
 import type { BaseSectionInfo } from "@/lib/theme-library";
+import { BroMascot, type BroState } from "@/components/theme-editor/BroMascot";
 
 interface AiImage {
   dataUrl: string;
@@ -356,6 +357,12 @@ export default function AiCopilot({
   const showPlanCard = (phase === "plan" || phase === "applying" || phase === "done") && !!plan;
   const applyPct = plan ? Math.round((progress / Math.max(1, plan.ops.length)) * 100) : 0;
 
+  // Bro-Maskottchen: Zustand aus der Phase ableiten. planning → nachdenken,
+  // applying → arbeiten (mit echtem aktuellem Schritt in der Sprechblase),
+  // alles andere (idle/plan/done) → Default.
+  const broState: BroState = phase === "planning" ? "thinking" : phase === "applying" ? "working" : "idle";
+  const broStep = phase === "applying" ? plan?.steps[activeStep]?.title : undefined;
+
   return (
     <div
       onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -542,6 +549,10 @@ export default function AiCopilot({
                   </button>
                 </div>
               )}
+
+      {/* Bro — kleines Maskottchen unten an der Eingabe (immer sichtbar,
+          wechselt Bild + Sprechblase je nach dem, was die AI gerade tut) */}
+      <BroMascot state={broState} stepTitle={broStep} />
     </div>
   );
 }

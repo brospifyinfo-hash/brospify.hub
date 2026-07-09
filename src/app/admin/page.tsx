@@ -16,6 +16,7 @@ import {
 import Navigation from "@/components/Navigation";
 import { AdminErrorBoundary } from "@/components/AdminErrorBoundary";
 import { CodeBlockPreview } from "@/components/CodeBlockPreview";
+import { BroMascotAdmin } from "@/components/admin/BroMascotAdmin";
 import { safeFetch } from "@/lib/safe-fetch";
 import { refreshBranding } from "@/lib/branding";
 import {
@@ -3119,6 +3120,9 @@ export default function AdminPage() {
             <button onClick={saveSettings} disabled={settingsLoading} className="btn-accent px-6 py-3 rounded-xl font-semibold flex items-center gap-2">
               {settingsLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Save className="w-4 h-4" />Einstellungen speichern</>}
             </button>
+
+            {/* Bro-Maskottchen — eigener Store, speichert sich selbst */}
+            <BroMascotAdmin />
 
           </motion.div>
           </AdminErrorBoundary>

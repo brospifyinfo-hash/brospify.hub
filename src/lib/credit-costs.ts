@@ -60,7 +60,7 @@ export const RECURRING_PERIOD_DAYS = 28;
 // the orders/paid webhook to know which pack was bought.
 
 export interface CreditPackage {
-  id: "starter" | "pro" | "max";
+  id: "starter" | "plus" | "pro" | "max";
   variantId: string;
   credits: number;
   priceLabel: string;
@@ -69,33 +69,63 @@ export interface CreditPackage {
   hint?: string;
 }
 
+// ─── 4 Staffel-Pakete — MARGEN-GARANTIE: nie < 4× pro Prompt ──────
+// Regel (bewusst hart): der Credit-Preis des GÜNSTIGSTEN Pakets darf nie
+// so tief sinken, dass ein einzelner Prompt unter 4× Aufschlag fällt.
+// Teuerster wiederkehrender Prompt = Expert/Opus · groß · 3 Bilder ·
+// Cache-Treffer ≈ €0,15 → 85 Credits → ≈ €0,00175/Credit. 4× davon =
+// 0,70 ct/Credit als absoluter Boden. Max liegt bei 0,79 ct → ~4,5×
+// selbst im Worst Case; typische Prompts sind 6–14×. 1000/10 = teuerste
+// Ratio (der Anker). Reihenfolge = Anzeige-Reihenfolge (aufsteigend).
+//
+// ⚠️ SHOPIFY-SYNC PFLICHT, bevor das live geht:
+//   1. Die 3 bestehenden Varianten-PREISE in Shopify auf 10 / 22 / 45 €
+//      ändern (die IDs unten bleiben, die granted Credits kommen aus
+//      pkg.credits — der Preis kommt aus Shopify, beides MUSS matchen).
+//   2. Eine 4. Variante (Max, 95 €) in Shopify anlegen und ihre
+//      Variant-ID unten bei `id: "max"` eintragen (Platzhalter ersetzen).
+//   Solange der Platzhalter steht, ist der Max-Kauf-Link bewusst kaputt
+//   (fail-safe: lieber kein Kauf als ein Kauf zum falschen Preis).
 export const CREDIT_PACKAGES: readonly CreditPackage[] = [
   {
     id: "starter",
     variantId: "52911652667739",
-    credits: 500,
-    priceLabel: "9,95 €",
-    priceCents: 995,
+    credits: 1000,
+    priceLabel: "10 €",
+    priceCents: 1000,
     cartUrl:
       "https://brospify.com/cart/52911652667739:1?checkout[email]=[USER_EMAIL]",
   },
   {
-    id: "pro",
+    id: "plus",
     variantId: "52911654306139",
-    credits: 2000,
-    priceLabel: "24,95 €",
-    priceCents: 2495,
+    credits: 2500,
+    priceLabel: "22 €",
+    priceCents: 2200,
+    hint: "−12 %",
     cartUrl:
       "https://brospify.com/cart/52911654306139:1?checkout[email]=[USER_EMAIL]",
   },
   {
-    id: "max",
+    id: "pro",
     variantId: "52911655715163",
-    credits: 5000,
-    priceLabel: "39,95 €",
-    priceCents: 3995,
+    credits: 5500,
+    priceLabel: "45 €",
+    priceCents: 4500,
+    hint: "−18 %",
     cartUrl:
       "https://brospify.com/cart/52911655715163:1?checkout[email]=[USER_EMAIL]",
+  },
+  {
+    id: "max",
+    // ⚠️ In Shopify neu anlegen (95 €) und die echte Variant-ID hier eintragen:
+    variantId: "SHOPIFY_MAX_VARIANT_ID_HIER_EINTRAGEN",
+    credits: 12000,
+    priceLabel: "95 €",
+    priceCents: 9500,
+    hint: "−21 %",
+    cartUrl:
+      "https://brospify.com/cart/SHOPIFY_MAX_VARIANT_ID_HIER_EINTRAGEN:1?checkout[email]=[USER_EMAIL]",
   },
 ] as const;
 
