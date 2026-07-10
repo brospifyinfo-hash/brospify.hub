@@ -28,11 +28,12 @@ import type { ThemeDocument } from "@/lib/theme-doc";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// 120 s (Vercel Pro): ein volles „passe das Theme dem Produkt an" (10–12
-// Sektionen mit echten Texten) dauert in der Generierung oft 45–90 s. Mit dem
-// alten 60-s-Limit + 45-s-Abbruch wurde genau das gute Ergebnis abgewürgt und
-// durch den simplen Fallback ersetzt.
-export const maxDuration = 120;
+// 180 s (Vercel Pro): ein volles „passe das Theme dem Produkt an" (Expert/Opus,
+// 6–9 Sektionen mit komplett aufs Produkt geschriebenen Texten, bis 16000 Output-
+// Tokens) kann 60–140 s Generierung brauchen. Mit dem alten 120-s-Limit + 110-s-
+// Abbruch wurde genau das gute Ergebnis noch abgewürgt. 180 s lässt den vollen
+// Plan durch (AbortController 150 s) UND reserviert ~30 s für Abbuchung + Antwort.
+export const maxDuration = 180;
 
 // Rate-Limit pro Nutzer (Lambda-lokal): max. 30 Pläne in 10 Minuten. Höher als
 // früher (10), weil ein rate-limitierter Request jetzt einen Fallback liefert,
@@ -228,26 +229,31 @@ export async function POST(req: NextRequest) {
       raw = buildFallbackPlan(input);
       usedFallback = true;
     } else {
-      // Zeit-Limit via AbortController KNAPP unter dem 120-s-Funktions-Limit:
-      // die KI hat massig Zeit (volle Produkt-Anpassung ~45–90 s). Der Fallback
-      // greift damit praktisch nur noch bei ECHTEN API-Fehlern, nicht mehr als
-      // Ersatz für ein langsames, aber gutes Ergebnis.
+      // Zeit-Limit via AbortController unter dem maxDuration-Limit (180 s): die KI
+      // hat massig Zeit (volle Produkt-Anpassung, Expert/Opus, 60–140 s), und es
+      // bleiben ~30 s für Guthaben-Abbuchung + Antwort. Der Fallback greift damit
+      // praktisch nur noch bei ECHTEN API-Fehlern, nicht als Ersatz für ein
+      // langsames, aber gutes Ergebnis.
       const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 110000);
+      const timer = setTimeout(() => ac.abort(), 150000);
       try {
         raw = await generateThemePlan(input, { signal: ac.signal });
       } catch (err) {
         console.error("[theme-ai] plan failed → Fallback:", err);
         const status = (err as { status?: number } | null)?.status;
-        await logSystemEvent({
+        // ZUERST den Fallback bauen, DANN loggen (fire-and-forget): logSystemEvent
+        // schreibt ungetimeoutet in Sheets — ein hängender Sheets-Call darf NIEMALS
+        // den Fallback blockieren und die Anfrage ins 180-s-Limit laufen lassen
+        // (das wäre ein harter 502 statt des sauberen Ersatz-Plans).
+        raw = buildFallbackPlan(input);
+        usedFallback = true;
+        void logSystemEvent({
           level: "warn",
           actor: user,
           action: "theme-ai.plan.fallback",
           target: mode,
           details: { status: status ?? null, message: err instanceof Error ? err.message.slice(0, 300) : "" },
-        });
-        raw = buildFallbackPlan(input);
-        usedFallback = true;
+        }).catch(() => {});
       } finally {
         clearTimeout(timer);
       }
@@ -271,7 +277,10 @@ export async function POST(req: NextRequest) {
   }
   const points = aiEffortPoints(ops, images.length);
   const tier = aiEffortTier(points);
-  const cost = session.isAdmin ? 0 : await getCreditCost(aiTierCreditKey(tier, mode));
+  // Auf dem Fallback-Pfad wird NIE abgebucht (siehe !usedFallback unten) → dort den
+  // ungetimeouteten Sheets-Read von getCreditCost sparen: er wäre nur Kosten-Anzeige,
+  // könnte aber bei einem Sheets-Hänger die Antwort ins 180-s-Limit schieben (502).
+  const cost = session.isAdmin || usedFallback ? 0 : await getCreditCost(aiTierCreditKey(tier, mode));
 
   // ── Credits SOFORT bei der Plan-Erstellung abziehen (nicht erst beim
   //    Umsetzen). Cache-Treffer (identischer Wunsch innerhalb 10 Min) werden

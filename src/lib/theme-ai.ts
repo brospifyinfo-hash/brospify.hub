@@ -244,8 +244,34 @@ ${buildCatalog()}`;
 function extractJson(text: string): string {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fence) return fence[1].trim();
-  const brace = text.match(/\{[\s\S]*\}/);
-  return brace ? brace[0] : text.trim();
+  // Ersten balancierten, TATSÄCHLICH parsebaren {…}-Block suchen (String-/Escape-
+  // bewusst). Wichtig gegen Reasoning-/Prosa-Text VOR dem JSON: ein gieriges
+  // /\{[\s\S]*\}/ würde von einer Prosa-Klammer bis zur letzten } spannen und
+  // ungültiges JSON liefern → JSON.parse wirft → unnötiger „ausgelastet"-Fallback.
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "{") continue;
+    let depth = 0, inStr = false, esc = false;
+    for (let j = i; j < text.length; j++) {
+      const c = text[j];
+      if (inStr) {
+        if (esc) esc = false;
+        else if (c === "\\") esc = true;
+        else if (c === '"') inStr = false;
+      } else if (c === '"') inStr = true;
+      else if (c === "{") depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth === 0) {
+          const cand = text.slice(i, j + 1);
+          try { JSON.parse(cand); return cand; } catch { /* evtl. trailing comma */ }
+          const stripped = cand.replace(/,(\s*[}\]])/g, "$1");
+          try { JSON.parse(stripped); return stripped; } catch { /* nächster Block */ }
+          break; // dieser {-Block ist nicht parsebar → beim nächsten { neu ansetzen
+        }
+      }
+    }
+  }
+  return text.trim();
 }
 
 /** Dokument für den Prompt kompaktieren: lange Texte kappen (die AI schreibt
@@ -411,16 +437,17 @@ export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: A
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY fehlt.");
   // WICHTIG: Der Abbruch-Zeitpunkt wird vom AbortController der Route gesteuert
-  // (110 s, knapp unter dem 120-s-Funktions-Limit) — NICHT vom SDK-Timeout.
-  // Früher stand hier timeout: 42000: das kappte JEDEN vollen „passe das Theme
-  // dem Produkt an"-Plan (Opus 4.8 Expert, 10+ Sektionen, Bilder → 45–90 s
-  // Generierung) schon nach 42 s und ersetzte das gute Ergebnis durch den simplen
-  // Fallback — die Haupt-Ursache für „AI ausgelastet" / „AI ist schlechter
-  // geworden". Jetzt 115 s (> 110-s-AbortController), damit der Signal-Abbruch der
-  // Route greift, nicht das SDK. maxRetries: transiente 429/529/5xx werden intern
-  // nochmal versucht — vom Signal der Route gedeckelt, kann das 120-s-Limit also
-  // nicht sprengen.
-  const client = new Anthropic({ apiKey, maxRetries: 2, timeout: 115000 });
+  // Abbruch steuert der AbortController der Route (150 s, unter maxDuration 180 s)
+  // — NICHT das SDK. Zwei frühere Fehler hier behoben:
+  // (1) timeout 42000 kappte JEDEN vollen „passe das Theme dem Produkt an"-Plan
+  //     (Opus 4.8 Expert, 45–140 s Generierung) schon nach 42 s → simpler Fallback.
+  // (2) maxRetries: 2 → bei 429/529 schläft das SDK den vom Server geforderten
+  //     retry-after AB, OHNE das Route-Signal zu beachten (der Backoff-Sleep bekommt
+  //     kein AbortSignal) → der Sleep kann das Funktions-Limit REISSEN → harter 502
+  //     statt sauberem Fallback. Darum jetzt maxRetries: 0: transiente 429/529/5xx
+  //     werfen SOFORT → Route-catch liefert den graziösen Fallback-Plan.
+  // timeout 160000 (> 150-s-AbortController) ist nur ein Backstop; das Signal greift zuerst.
+  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: 160000 });
   const model = THEME_AI_MODELS[input.mode] || THEME_AI_MODELS.standard;
   // System-Prompt als Block mit cache_control: der statische Teil (Regeln +
   // Katalog, ~6k Tokens) wird gecacht — Folge-Calls zahlen ~10 % dafür.
@@ -433,7 +460,7 @@ export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: A
   try {
     msg = await client.messages.create({
       model,
-      max_tokens: 6400,
+      max_tokens: 16000,
       thinking: { type: "disabled" },
       output_config: { format: { type: "json_schema", schema: PLAN_SCHEMA } },
       system,
@@ -450,7 +477,7 @@ export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: A
     console.warn("[theme-ai] structured output fehlgeschlagen (400), Fallback auf Freitext-JSON:", err);
     msg = await client.messages.create({
       model,
-      max_tokens: 6400,
+      max_tokens: 16000,
       thinking: { type: "disabled" },
       system: [
         {
@@ -472,6 +499,15 @@ export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: A
   if (msg.stop_reason === "refusal") {
     throw new Error("Die AI hat die Anfrage abgelehnt — bitte formuliere den Wunsch anders.");
   }
+  // Token-Limit erreicht → JSON ist mitten im Objekt abgeschnitten und NICHT
+  // parsebar. Das war der zweite Haupt-Auslöser: mit dem alten max_tokens: 6400
+  // riss genau der volle Produkt-Anpassungs-Plan das Limit → abgeschnittenes JSON
+  // → JSON.parse warf ungefangen → „ausgelastet"-Fallback (ohne dass irgendwo
+  // stand warum). max_tokens ist jetzt 16000, sodass reale Pläne das nicht mehr
+  // reißen; falls doch, ein klarer, geloggter Fehler statt eines Parse-Absturzes.
+  if (msg.stop_reason === "max_tokens") {
+    throw new Error("AI-Antwort durch Token-Limit abgeschnitten — Plan zu groß.");
+  }
 
   const text = msg.content
     .filter((b): b is Anthropic.TextBlock => b.type === "text")
@@ -479,7 +515,14 @@ export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: A
     .join("\n");
   if (!text.trim()) throw new Error("Leere AI-Antwort.");
 
-  const parsed = JSON.parse(extractJson(text)) as Partial<ThemeAiRawPlan>;
+  let parsed: Partial<ThemeAiRawPlan>;
+  try {
+    parsed = JSON.parse(extractJson(text)) as Partial<ThemeAiRawPlan>;
+  } catch (err) {
+    // Nie als nackter SyntaxError abstürzen (extractJson hat bereits versucht,
+    // den ersten gültigen Block zu finden) — klar benennen, was schief ging.
+    throw new Error("AI-Antwort war kein gültiges JSON: " + (err instanceof Error ? err.message : String(err)));
+  }
   return {
     summary: typeof parsed.summary === "string" ? parsed.summary.slice(0, 500) : "",
     steps: Array.isArray(parsed.steps)
