@@ -48,7 +48,7 @@ import { STYLE_GALLERY } from "@/lib/theme-library";
 
 interface DrawnProduct { id: string; titel: string; bildUrl?: string }
 /** Eigenes (selbst angelegtes) Produkt — alle Felder außer id optional. */
-interface CustomProductLite { id: string; titel?: string; bildUrl?: string; preis?: string; beschreibung?: string }
+interface CustomProductLite { id: string; titel?: string; bildUrl?: string; images?: string[]; preis?: string; beschreibung?: string }
 interface PreviewResponse extends PreviewData {
   baseSections?: BaseSectionInfo[];
   homeSections?: BaseSectionInfo[];
@@ -265,6 +265,8 @@ export default function ThemeEditorPage() {
   /** Start-Fenster sichtbar (einmal pro Editor-Besuch, solange kein Produkt). */
   const [startOpen, setStartOpen] = useState(true);
   const [intakeOpen, setIntakeOpen] = useState(false);
+  /** Aktives eigenes Produkt NACHTRÄGLICH bearbeiten (Name/Bilder/Beschreibung). */
+  const [productEditOpen, setProductEditOpen] = useState(false);
   const [genesisJob, setGenesisJob] = useState<GenesisJob | null>(null);
   /** Demo-Produkt (gehört dem Admin) — nur für Toolbar-Chip/AI-Titel. */
   const [demoProduct, setDemoProduct] = useState<DrawnProduct | null>(null);
@@ -356,7 +358,11 @@ export default function ThemeEditorPage() {
 
   // Produkt wählen → Vorschau-Daten + Basis-Manifest laden; beim ersten Mal
   // initiales Dokument aus der Stil-Komposition bauen.
-  const pickProduct = useCallback((productId: string) => {
+  // keepDoc = true (Produkt-Edit): NUR Preview-Daten auffrischen — das
+  // Dokument bleibt in JEDEM Fall unangetastet, auch wenn es (bewusst,
+  // z. B. nach „Von 0 starten") noch keine Sections hat. Ohne den Guard
+  // würde der replace-Zweig den leeren Shop durch die Stil-Komposition ersetzen.
+  const pickProduct = useCallback((productId: string, keepDoc = false) => {
     // Während eines AI-/Genesis-Laufs kein konkurrierender Produkt-Flow —
     // ein Pick würde gegen die Timeline-Dispatches rennen (Lost Update,
     // previewData vom falschen Produkt, zerrissene Undo-Koaleszenz).
@@ -379,7 +385,7 @@ export default function ThemeEditorPage() {
         const blank = blankStartRef.current;
         blankStartRef.current = false;
         dispatch(
-          doc.sections.length === 0 || blank
+          !keepDoc && (doc.sections.length === 0 || blank)
             ? {
                 type: "replace",
                 doc: blank
@@ -818,6 +824,36 @@ export default function ThemeEditorPage() {
     return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products, customProducts, demoProduct, doc.productId]);
+
+  /** Aktives EIGENES Produkt (bearbeitbar) — gezogene Katalog-Produkte und
+   *  das Admin-Demo-Produkt lassen sich nicht nachträglich bearbeiten. */
+  const activeCustom = useMemo(
+    () => customProducts.find((p) => p.id === doc.productId) || null,
+    [customProducts, doc.productId],
+  );
+
+  /** Produkt nachträglich gespeichert → Listen + Vorschau (Galerie/Titel)
+   *  auffrischen; das Dokument (Sections/Design) bleibt unangetastet
+   *  (keepDoc). Läuft gerade ein AI-Apply (pickProduct würde stumm
+   *  abbrechen), wird der Preview-Refresh gemerkt und nachgeholt. */
+  const pendingPreviewRefreshRef = useRef("");
+  const handleProductEditSaved = useCallback((r: IntakeResult) => {
+    setProductEditOpen(false);
+    setMsg({ kind: "ok", text: t.themes.productEditSaved });
+    fetch("/api/custom-products", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => { if (Array.isArray(d?.products)) setCustomProducts(d.products as CustomProductLite[]); })
+      .catch(() => {});
+    if (aiBusyRef.current) pendingPreviewRefreshRef.current = r.productId;
+    else pickProduct(r.productId, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickProduct, t.themes.productEditSaved]);
+  useEffect(() => {
+    if (aiBusy || !pendingPreviewRefreshRef.current) return;
+    const id = pendingPreviewRefreshRef.current;
+    pendingPreviewRefreshRef.current = "";
+    pickProduct(id, true);
+  }, [aiBusy, pickProduct]);
   const sectionLabel = (type: string) => {
     const def = getSectionDef(type);
     return def ? (lang === "en" ? def.labelEn : def.label) : type;
@@ -888,10 +924,10 @@ export default function ThemeEditorPage() {
 
               {activeProduct && (
                 <button
-                  onClick={() => { if (pickerEnabled) setPickerOpen(true); }}
+                  onClick={() => { if (pickerEnabled) setPickerOpen(true); else if (activeCustom) setProductEditOpen(true); }}
                   disabled={aiBusy}
-                  className={`flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 transition min-w-0 shrink disabled:opacity-50 ${pickerEnabled ? "hover:border-[#95BF47]/40" : "cursor-default"}`}
-                  title={pickerEnabled ? t.themes.editorChangeProduct : undefined}
+                  className={`flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 transition min-w-0 shrink disabled:opacity-50 ${pickerEnabled || activeCustom ? "hover:border-[#95BF47]/40" : "cursor-default"}`}
+                  title={pickerEnabled ? t.themes.editorChangeProduct : activeCustom ? t.themes.productEditTitle : undefined}
                 >
                   {activeProduct.bildUrl
                     ? <img src={activeProduct.bildUrl} alt="" className="w-5.5 h-5.5 rounded object-cover shrink-0" />
@@ -989,10 +1025,10 @@ export default function ThemeEditorPage() {
                 </button>
                 {activeProduct ? (
                   <button
-                    onClick={() => { if (pickerEnabled) setPickerOpen(true); }}
+                    onClick={() => { if (pickerEnabled) setPickerOpen(true); else if (activeCustom) setProductEditOpen(true); }}
                     disabled={aiBusy}
-                    className={`flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 transition disabled:opacity-50 ${pickerEnabled ? "hover:border-[#95BF47]/40" : "cursor-default"}`}
-                    title={pickerEnabled ? t.themes.editorChangeProduct : undefined}
+                    className={`flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 transition disabled:opacity-50 ${pickerEnabled || activeCustom ? "hover:border-[#95BF47]/40" : "cursor-default"}`}
+                    title={pickerEnabled ? t.themes.editorChangeProduct : activeCustom ? t.themes.productEditTitle : undefined}
                   >
                     {activeProduct.bildUrl
                       ? <img src={activeProduct.bildUrl} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />
@@ -1790,6 +1826,44 @@ export default function ThemeEditorPage() {
           remove: t.themes.aiImageRemove,
         }}
       />
+
+      {/* Produkt NACHTRÄGLICH bearbeiten/speichern — gleiche Formular-
+          Komponente wie das Intake, nur ohne Pflichtfelder/Genesis. */}
+      {activeCustom && (
+        <ProductIntakeOverlay
+          open={productEditOpen}
+          mode="edit"
+          productId={activeCustom.id}
+          initial={{
+            titel: activeCustom.titel,
+            beschreibung: activeCustom.beschreibung,
+            preis: activeCustom.preis,
+            imageUrls: activeCustom.images?.length ? activeCustom.images : activeCustom.bildUrl ? [activeCustom.bildUrl] : [],
+          }}
+          onBack={() => setProductEditOpen(false)}
+          onStart={handleProductEditSaved}
+          t={{
+            title: t.themes.productEditTitle,
+            sub: t.themes.productEditSub,
+            name: t.themes.genesisFormName,
+            namePh: t.themes.genesisFormNamePh,
+            desc: t.themes.genesisFormDesc,
+            descPh: t.themes.genesisFormDescPh,
+            images: t.themes.genesisFormImages,
+            imagesHint: t.themes.productEditImagesHint,
+            add: t.themes.genesisFormAdd,
+            reqName: t.themes.genesisFormReqName,
+            reqDesc: t.themes.genesisFormReqDesc,
+            reqImages: t.themes.genesisFormReqImages,
+            start: t.themes.productEditSave,
+            cancel: t.themes.genesisFormCancel,
+            uploadErr: t.themes.genesisFormUploadErr,
+            remove: t.themes.aiImageRemove,
+            price: t.themes.productEditPrice,
+            pricePh: t.themes.productEditPricePh,
+          }}
+        />
+      )}
 
       {/* Inszenierter Shop-Aufbau (Demo = simuliert · Eigenes Produkt = echte AI) */}
       <GenerationTheater

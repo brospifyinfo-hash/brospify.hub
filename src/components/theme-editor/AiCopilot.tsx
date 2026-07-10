@@ -11,7 +11,8 @@
 // bleibt auch eingeklappt in der Kopfzeile sichtbar.
 
 import { useEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
-import { motion } from "framer-motion";
+import { createPortal } from "react-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Sparkles, X, Check, CircleDashed, Coins, Undo2, Target, Plus, ChevronDown,
 } from "lucide-react";
@@ -325,6 +326,14 @@ export default function AiCopilot({
 
   const showPlanCard = (phase === "plan" || phase === "applying" || phase === "done") && !!plan;
   const applyPct = plan ? Math.round((progress / Math.max(1, plan.ops.length)) * 100) : 0;
+  // Eingabe gesperrt, solange ein Plan aussteht/läuft — die Plan-Karte lebt
+  // als Slide-in-Panel unten RECHTS (Portal), damit die Preview frei bleibt.
+  const inputLocked = locked || phase === "planning" || phase === "plan" || phase === "applying";
+  const inputPlaceholder =
+    phase === "planning" ? t.themes.aiPlanning
+    : phase === "applying" ? t.themes.aiApplying
+    : phase === "plan" ? t.themes.aiPlanTitle
+    : t.themes.aiPlaceholderShort;
 
   // Bro-Maskottchen: Zustand aus der Phase ableiten. planning → nachdenken,
   // applying → arbeiten (mit echtem aktuellem Schritt in der Sprechblase),
@@ -375,8 +384,72 @@ export default function AiCopilot({
         </div>
       )}
 
-      {showPlanCard && plan ? (
-        <div className="max-h-[42vh] overflow-y-auto p-2.5">
+      {/* ── Dünne Command-Zeile: bleibt IMMER sichtbar (gesperrt, solange ein
+          Plan aussteht/läuft). Die Plan-/Fortschritts-Karte schiebt sich als
+          Panel unten RECHTS ins Bild (Portal unten) — die komplette
+          Live-Preview bleibt frei sichtbar. ── */}
+      <div className="flex items-center gap-2 px-2.5 py-2">
+        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+        {/* „+" — Datei/Bild anhängen (auch per Drag & Drop) */}
+        <button
+          onClick={() => fileRef.current?.click()}
+          disabled={images.length >= 3 || inputLocked}
+          title={t.themes.aiUploadHint}
+          aria-label={t.themes.aiUploadHint}
+          className="shrink-0 w-8 h-8 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+        {/* Bild-Vorschauen inline (klein) */}
+        {images.map((img, i) => (
+          <span key={i} className="relative shrink-0">
+            <img src={img.dataUrl} alt={img.name} className="w-8 h-8 rounded-lg object-cover border border-white/15" />
+            <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
+          </span>
+        ))}
+        {/* Eingabe — kurzer Platzhalter, schrumpft mit (min-w-0) */}
+        <textarea
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          onPaste={onPaste}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); requestPlan(); } }}
+          placeholder={inputPlaceholder}
+          rows={1}
+          disabled={inputLocked}
+          className="flex-1 min-w-0 resize-none bg-transparent px-1 text-[13.5px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
+          style={{ scrollbarWidth: "thin", maxHeight: 72 }}
+        />
+        {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
+        {/* Modus-Dropdown (Standard/Expert) */}
+        <ModeSelect mode={mode} onPick={pickMode} disabled={inputLocked} />
+        {/* Fokus-Icon (Hover erklärt es) */}
+        <button
+          onClick={() => onToggleFocusPick?.()}
+          aria-pressed={focusPick}
+          title={t.themes.aiFocusTooltip}
+          aria-label={t.themes.aiFocusTooltip}
+          className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition ${
+            focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
+          }`}
+        >
+          <Target className="w-4 h-4" />
+        </button>
+      </div>
+      </div>
+
+      {/* Plan-/Fortschritts-Panel — Portal nach <body>, animiert von unten
+          rechts eingeschoben (Spring), damit die Preview nie verdeckt wird. */}
+      {typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          {showPlanCard && plan && (
+            <motion.div
+              initial={{ y: 140, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 140, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="fixed right-3 bottom-24 lg:right-6 lg:bottom-6 z-[60] w-[min(400px,calc(100vw-1.5rem))]"
+            >
+              <div className="max-h-[62vh] overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#101014]/95 backdrop-blur-xl shadow-[0_24px_70px_-18px_rgba(0,0,0,0.85)] p-2.5">
                 <div
                   className={`relative rounded-xl border p-3 ${
                     phase === "applying"
@@ -471,59 +544,12 @@ export default function AiCopilot({
                     </div>
                   )}
                 </div>
-        </div>
-              ) : (
-                /* ── Dünne Command-Zeile: alles in EINER Reihe, Enter löst aus.
-                    Textarea min-w-0 schrumpft → nie Überlauf/Umbruch. ── */
-                <div className="flex items-center gap-2 px-2.5 py-2">
-                  <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-                  {/* „+" — Datei/Bild anhängen (auch per Drag & Drop) */}
-                  <button
-                    onClick={() => fileRef.current?.click()}
-                    disabled={images.length >= 3 || phase === "planning" || locked}
-                    title={t.themes.aiUploadHint}
-                    aria-label={t.themes.aiUploadHint}
-                    className="shrink-0 w-8 h-8 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                  {/* Bild-Vorschauen inline (klein) */}
-                  {images.map((img, i) => (
-                    <span key={i} className="relative shrink-0">
-                      <img src={img.dataUrl} alt={img.name} className="w-8 h-8 rounded-lg object-cover border border-white/15" />
-                      <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
-                    </span>
-                  ))}
-                  {/* Eingabe — kurzer Platzhalter, schrumpft mit (min-w-0) */}
-                  <textarea
-                    value={prompt}
-                    onChange={(e) => setPrompt(e.target.value)}
-                    onPaste={onPaste}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); requestPlan(); } }}
-                    placeholder={phase === "planning" ? t.themes.aiPlanning : t.themes.aiPlaceholderShort}
-                    rows={1}
-                    disabled={phase === "planning" || locked}
-                    className="flex-1 min-w-0 resize-none bg-transparent px-1 text-[13.5px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
-                    style={{ scrollbarWidth: "thin", maxHeight: 72 }}
-                  />
-                  {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
-                  {/* Modus-Dropdown (Standard/Expert) */}
-                  <ModeSelect mode={mode} onPick={pickMode} disabled={phase === "planning" || locked} />
-                  {/* Fokus-Icon (Hover erklärt es) */}
-                  <button
-                    onClick={() => onToggleFocusPick?.()}
-                    aria-pressed={focusPick}
-                    title={t.themes.aiFocusTooltip}
-                    aria-label={t.themes.aiFocusTooltip}
-                    className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition ${
-                      focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
-                    }`}
-                  >
-                    <Target className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-      </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body,
+      )}
     </div>
   );
 }

@@ -463,7 +463,17 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       const uid = resolveUid(op.uid);
       const inst = findInstance(doc, uid);
       if (!inst || !sectionSupportsDesign(inst.type)) return doc;
-      const toneSettings = sectionToneSettings(op.tone, doc.global.colors, { divider: op.divider, dividerTop: op.dividerTop });
+      // Symmetrie-Garantie: schlägt die AI nur EINE Kante vor, bekommt die
+      // Section dieselbe Form oben UND unten — einseitige oder gemischte
+      // Übergänge wirken kaputt und sind per Design-Regel verboten.
+      const shape =
+        op.divider && op.divider !== "none" ? op.divider
+        : op.dividerTop && op.dividerTop !== "none" ? op.dividerTop
+        : undefined;
+      const toneSettings = sectionToneSettings(op.tone, doc.global.colors, {
+        divider: shape ?? op.divider,
+        dividerTop: shape ?? op.dividerTop,
+      });
       const mapList = (list: SectionInstance[]) =>
         list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), ...toneSettings } } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
@@ -472,8 +482,15 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       const uid = resolveUid(op.uid);
       const inst = findInstance(doc, uid);
       if (!inst || !sectionSupportsDesign(inst.type)) return doc;
+      // Divider-Keys wirken IMMER als Paar (gleiche Form oben+unten, "none"
+      // entfernt beide) — dieselbe Symmetrie-Garantie wie bei set_section_tone,
+      // sonst könnte die AI über diesen Op-Typ einseitige Kanten erzeugen.
+      const patch: Record<string, string> =
+        op.key === "sec_divider" || op.key === "sec_divider_top"
+          ? { sec_divider: op.value, sec_divider_top: op.value }
+          : { [op.key]: op.value };
       const mapList = (list: SectionInstance[]) =>
-        list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), [op.key]: op.value } } : s));
+        list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), ...patch } } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
     }
     case "set_benefit_icons": {

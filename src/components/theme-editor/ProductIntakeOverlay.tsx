@@ -29,6 +29,9 @@ export interface IntakeTexts {
   cancel: string;
   uploadErr: string;
   remove: string;
+  /** Preis-Feld (nur Edit-Modus gerendert). */
+  price?: string;
+  pricePh?: string;
 }
 
 export interface IntakeResult {
@@ -61,16 +64,28 @@ const AI_IMAGE_MAX_BYTES = 4.5 * 1024 * 1024;
 const DESC_MIN = 10;
 
 export default function ProductIntakeOverlay({
-  open, onBack, onStart, t,
+  open, onBack, onStart, t, mode = "genesis", productId = "", initial,
 }: {
   open: boolean;
   onBack: () => void;
-  /** Formular ist valide + Produkt angelegt → Genesis starten. */
+  /** Formular gespeichert → Genesis starten (genesis) bzw. fertig (edit). */
   onStart: (r: IntakeResult) => void;
   t: IntakeTexts;
+  /** "genesis" = Pflichtfelder + Shop-Generierung · "edit" = Produkt
+   *  NACHTRÄGLICH bearbeiten/speichern (alles optional, kein Genesis-Lauf). */
+  mode?: "genesis" | "edit";
+  /** Bestehende Produkt-ID (edit) — Speichern aktualisiert statt anzulegen. */
+  productId?: string;
+  /** Vorbefüllung (edit) mit den aktuellen Produktdaten. */
+  initial?: { titel?: string; beschreibung?: string; preis?: string; imageUrls?: string[] };
 }) {
+  const isEdit = mode === "edit";
   const [titel, setTitel] = useState("");
   const [beschreibung, setBeschreibung] = useState("");
+  // Preis wird nur im Edit-Modus angezeigt — aber IMMER durchgereicht, damit
+  // ein Save den bestehenden Preis nie still löscht (Update-Merge überschreibt
+  // fehlende Keys mit undefined).
+  const [preis, setPreis] = useState("");
   const [images, setImages] = useState<IntakeImage[]>([]);
   const [drag, setDrag] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,6 +94,22 @@ export default function ProductIntakeOverlay({
   // Bei einem Retry (Genesis-Start schlug fehl, Formular ist noch gefüllt)
   // das BESTEHENDE Produkt aktualisieren statt ein Duplikat anzulegen.
   const createdIdRef = useRef("");
+
+  // Edit-Modus: beim Öffnen einmalig mit den aktuellen Produktdaten befüllen
+  // (bereits hochgeladene Bilder gelten als fertig — dataUrl = Blob-URL).
+  const openedRef = useRef(false);
+  useEffect(() => {
+    if (!open) { openedRef.current = false; return; }
+    if (openedRef.current) return;
+    openedRef.current = true;
+    if (!isEdit) return;
+    setTitel(initial?.titel || "");
+    setBeschreibung(initial?.beschreibung || "");
+    setPreis(initial?.preis || "");
+    setImages((initial?.imageUrls || []).map((u) => ({ dataUrl: u, url: u, bytes: 0, hints: [], uploading: false, failed: false })));
+    setError("");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isEdit]);
 
   // Fokus-Management (Haus-Muster wie FullPreviewOverlay): initialer Fokus
   // ins Formular, Tab-Falle im Dialog, ESC schließt (wie Backdrop-Klick).
@@ -166,7 +197,11 @@ export default function ProductIntakeOverlay({
   const reqDesc = beschreibung.trim().length >= DESC_MIN;
   const reqImages = uploaded.length >= INTAKE_MIN_IMAGES;
   const uploadsPending = images.some((i) => i.uploading);
-  const canStart = reqName && reqDesc && reqImages && !uploadsPending && !saving;
+  // Edit-Modus: alles optional (eigene Produkte erlauben leere Felder) —
+  // nur laufende Uploads blockieren das Speichern.
+  const canStart = isEdit
+    ? !uploadsPending && !saving
+    : reqName && reqDesc && reqImages && !uploadsPending && !saving;
 
   async function handleStart() {
     if (!canStart) return;
@@ -179,9 +214,10 @@ export default function ProductIntakeOverlay({
         headers: { "Content-Type": "application/json" },
         cache: "no-store",
         body: JSON.stringify({
-          id: createdIdRef.current || undefined,
+          id: productId || createdIdRef.current || undefined,
           titel: titel.trim(),
           beschreibung: beschreibung.trim(),
+          preis: preis.trim(),
           bildUrl: urls[0],
           images: urls,
         }),
@@ -255,8 +291,10 @@ export default function ProductIntakeOverlay({
               {/* Bilder — Pflicht, min. 3 */}
               <div className="mb-4">
                 <div className="flex items-baseline justify-between mb-1.5">
-                  <span className="text-[12px] font-bold text-white">{t.images} <span className="text-amber-300">*</span></span>
-                  <span className={`text-[10.5px] tabular-nums ${reqImages ? "text-[#cfe9a3]" : "text-zinc-500"}`}>{uploaded.length} / {INTAKE_MIN_IMAGES}+</span>
+                  <span className="text-[12px] font-bold text-white">{t.images} {!isEdit && <span className="text-amber-300">*</span>}</span>
+                  {!isEdit && (
+                    <span className={`text-[10.5px] tabular-nums ${reqImages ? "text-[#cfe9a3]" : "text-zinc-500"}`}>{uploaded.length} / {INTAKE_MIN_IMAGES}+</span>
+                  )}
                 </div>
                 <p className="text-[10.5px] text-zinc-500 mb-2">{t.imagesHint}</p>
                 <div
@@ -330,7 +368,7 @@ export default function ProductIntakeOverlay({
               {/* Name + Beschreibung — Pflicht */}
               <div className="space-y-3 mb-5">
                 <div>
-                  <label className="block text-[12px] font-bold text-white mb-1.5">{t.name} <span className="text-amber-300">*</span></label>
+                  <label className="block text-[12px] font-bold text-white mb-1.5">{t.name} {!isEdit && <span className="text-amber-300">*</span>}</label>
                   <input
                     value={titel}
                     onChange={(e) => setTitel(e.target.value)}
@@ -339,8 +377,20 @@ export default function ProductIntakeOverlay({
                     className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-[13.5px] text-white placeholder:text-zinc-600 focus:border-[#95BF47]/60 outline-none transition"
                   />
                 </div>
+                {isEdit && (
+                  <div>
+                    <label className="block text-[12px] font-bold text-white mb-1.5">{t.price}</label>
+                    <input
+                      value={preis}
+                      onChange={(e) => setPreis(e.target.value)}
+                      placeholder={t.pricePh}
+                      maxLength={40}
+                      className="w-full rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 text-[13.5px] text-white placeholder:text-zinc-600 focus:border-[#95BF47]/60 outline-none transition"
+                    />
+                  </div>
+                )}
                 <div>
-                  <label className="block text-[12px] font-bold text-white mb-1.5">{t.desc} <span className="text-amber-300">*</span></label>
+                  <label className="block text-[12px] font-bold text-white mb-1.5">{t.desc} {!isEdit && <span className="text-amber-300">*</span>}</label>
                   <textarea
                     value={beschreibung}
                     onChange={(e) => setBeschreibung(e.target.value)}
@@ -352,8 +402,9 @@ export default function ProductIntakeOverlay({
                 </div>
               </div>
 
-              {/* Anforderungs-Checkliste — hakt live ab */}
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5">
+              {/* Anforderungs-Checkliste — hakt live ab (nur Genesis; im
+                  Edit-Modus ist alles optional) */}
+              <div className={`flex flex-wrap items-center gap-x-4 gap-y-1.5 mb-5 ${isEdit ? "hidden" : ""}`}>
                 {reqs.map((r) => (
                   <span key={r.label} className="inline-flex items-center gap-1.5 text-[11px] font-semibold">
                     <motion.span
@@ -385,7 +436,7 @@ export default function ProductIntakeOverlay({
                 >
                   {saving || uploadsPending
                     ? <CircleDashed className="w-4 h-4 animate-spin" />
-                    : <Sparkles className="w-4 h-4" />}
+                    : isEdit ? <Check className="w-4 h-4" /> : <Sparkles className="w-4 h-4" />}
                   {t.start}
                 </motion.button>
               </div>

@@ -2453,12 +2453,67 @@ export function sectionRoleRank(type: string): number {
   return role ? ROLE_RANK[role] : ROLE_RANK.story; // Unbekanntes in die Mitte
 }
 
+// Rollen, deren Sections sich visuell ähneln — zwei davon direkt
+// untereinander wirken „gestapelt" (Feature-Grids, Review-Blöcke, FAQ-artige).
+// Story-Sections (Bild+Text, Callouts, …) dürfen dagegen aufeinander folgen.
+const NO_STACK_ROLES = new Set<SectionRole>(["benefits", "proof", "objections"]);
+// Zwischenschieber, Stufe 1: ruhige, früh rangierende Rollen — die ideale
+// Auflockerung zwischen zwei gleichen Blöcken. FAQ/Garantie/Abschluss dürfen
+// NIE nach oben gezogen werden (FAQ gehört ganz unten).
+const SEPARATOR_ROLES = new Set<SectionRole>(["authority", "story"]);
+// Stufe 2 (nur wenn Stufe 1 leer ist, z. B. laute Stile ohne Story-Sections):
+// ein Review-/Stats-Band oder Angebots-Block zwischen zwei Feature-Sections
+// ist gängiges D2C-Muster und immer besser als ein sichtbarer Stapel.
+const SEPARATOR_ROLES_FALLBACK = new Set<SectionRole>(["proof", "urgency", "offer"]);
+
+/** Löst Läufe visuell gleicher Rollen auf — nie zwei Feature-/Review-/FAQ-
+ *  Sections direkt untereinander. Erst wird eine Story-/Authority-Section
+ *  von weiter hinten dazwischengezogen, danach notfalls Proof/Urgency/Offer;
+ *  zuletzt wandert der Doppelte nach vorn zwischen zwei fremde Rollen (so
+ *  tief wie möglich). Deterministisch (Client/Server-Parität für AI-Ops). */
+function breakSameRoleRuns(list: CompositionEntry[], headType?: string): CompositionEntry[] {
+  const out = [...list];
+  const role = (t: string): SectionRole => SECTION_ROLES[t] || "story";
+  for (let i = 0; i < out.length; i++) {
+    const prevRole = i === 0 ? (headType ? role(headType) : null) : role(out[i - 1].type);
+    if (prevRole === null || role(out[i].type) !== prevRole || !NO_STACK_ROLES.has(prevRole)) continue;
+    // Lauf gefunden — Zwischenschieber von weiter hinten holen (Stufe 1 → 2).
+    let j = -1;
+    for (const pool of [SEPARATOR_ROLES, SEPARATOR_ROLES_FALLBACK]) {
+      for (let s = i + 1; s < out.length; s++) {
+        const r = role(out[s].type);
+        if (pool.has(r) && r !== prevRole) { j = s; break; }
+      }
+      if (j >= 0) break;
+    }
+    if (j >= 0) {
+      const [moved] = out.splice(j, 1);
+      out.splice(i, 0, moved);
+      continue;
+    }
+    // Kein Separator mehr hinter dem Lauf: den Doppelten nach vorn zwischen
+    // zwei anders-rollige Nachbarn ziehen — so tief wie möglich, damit z. B.
+    // Reviews trotzdem in der unteren Hälfte bleiben.
+    for (let k = i - 1; k >= 1; k--) {
+      if (role(out[k].type) !== prevRole && role(out[k - 1].type) !== prevRole) {
+        const [moved] = out.splice(i, 1);
+        out.splice(k, 0, moved);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /** Sortiert eine Komposition stabil nach dem Verkaufs-Funnel — der erste
- *  Eintrag bleibt als Anker (kuratierter Hook, z. B. Countdown bei „deal"). */
+ *  Eintrag bleibt als Anker (kuratierter Hook, z. B. Countdown bei „deal").
+ *  Danach werden Läufe gleicher Rollen aufgelöst (Struktur-Pflicht: oben
+ *  Hero/Features, Reviews/FAQ unten, nie zwei gleiche Rollen gestapelt). */
 export function sortCompositionByFunnel(entries: CompositionEntry[]): CompositionEntry[] {
   if (entries.length <= 2) return entries;
   const [head, ...rest] = entries;
-  return [head, ...[...rest].sort((a, b) => sectionRoleRank(a.type) - sectionRoleRank(b.type))];
+  const sorted = [...rest].sort((a, b) => sectionRoleRank(a.type) - sectionRoleRank(b.type));
+  return [head, ...breakSameRoleRuns(sorted, head.type)];
 }
 
 /**
@@ -2598,11 +2653,12 @@ export function buildInitialDocument(
       : shuffleComposition(style.id, seededRnd(`${productId}|${style.id}`)),
   );
   const sections: SectionInstance[] = [];
-  // Formen-Rhythmus: getönte Sections OHNE explizite Übergangs-Marker bekommen
-  // deterministisch (Stil + Position) eine Formen-Kante — Wellen/Zacken statt
-  // Fades; dunkle Panels werden oben UND unten von der Seitenfarbe angeschnitten.
+  // Formen-Kanten: pro Seite gilt EINE stil-stabile Form (nie gemischte
+  // Wellen/Zacken/Bögen auf einer Seite), und eine Kante kommt IMMER als
+  // Paar — oben UND unten dieselbe Form (nie einseitig angeschnitten).
   const styleOffset = Array.from(style.id).reduce((a, c) => a + c.charCodeAt(0), 0);
-  let toneIdx = 0;
+  const shapePool = SECTION_DIVIDERS.filter((d) => d !== "none");
+  const pageShape = shapePool[styleOffset % shapePool.length];
   for (const entry of composition) {
     if (caps.size && !caps.has(entry.type)) continue; // Basis kennt den Typ nicht
     const base = baseSections.find((b) => b.type === entry.type && !used.has(b.id));
@@ -2616,10 +2672,14 @@ export function buildInitialDocument(
       let dividerTop = typeof sec_divider_top === "string" ? (sec_divider_top as (typeof SECTION_DIVIDERS)[number]) : undefined;
       const hasExplicitEdge = divider !== undefined || dividerTop !== undefined || typeof sec_fade === "string";
       if (!hasExplicitEdge && tone !== "none") {
-        const shapes = SECTION_DIVIDERS.filter((d) => d !== "none");
-        divider = shapes[(styleOffset + toneIdx) % shapes.length];
-        if (tone === "deep") dividerTop = shapes[(styleOffset + toneIdx + 2) % shapes.length];
-        toneIdx++;
+        divider = pageShape;
+        dividerTop = pageShape;
+      }
+      // Konsistenz-Garantie (auch für kuratierte Kompositions-Marker):
+      // irgendeine Form gesetzt → beide Kanten, immer die Seiten-Form.
+      if ((divider && divider !== "none") || (dividerTop && dividerTop !== "none")) {
+        divider = pageShape;
+        dividerTop = pageShape;
       }
       settings = {
         ...sectionToneSettings(tone, style.palette, {
