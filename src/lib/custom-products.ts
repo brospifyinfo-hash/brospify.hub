@@ -108,6 +108,25 @@ export async function listCustomProducts(
   return Array.isArray(kunde?.profile?.customProducts) ? kunde!.profile.customProducts! : [];
 }
 
+/** Eigene Produkte eines BELIEBIGEN Besitzers laden — Besitzer ist der
+ *  `user`-Wert eines gespeicherten Designs ("admin" oder Lizenzschlüssel).
+ *  Genutzt vom Beispiel-Design (/api/theme-demo): das vom Admin vorbereitete
+ *  Demo-Produkt muss für ALLE Kunden auflösbar sein, ohne Besitz-Prüfung. */
+export async function listCustomProductsOfOwner(owner: string): Promise<CustomProduct[]> {
+  if (owner === "admin") {
+    try {
+      const raw = await getAdminSetting(ADMIN_SETTINGS_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? (parsed as CustomProduct[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  if (!owner) return [];
+  const kunde = await findKundeByKey(owner);
+  return Array.isArray(kunde?.profile?.customProducts) ? kunde!.profile.customProducts! : [];
+}
+
 /** Eigene Produkte des Nutzers speichern (Admin: Settings-Tab).
  *  Wirft PROFILE_FULL_ERROR, wenn das Ziel-JSON das Zellen-Budget sprengt. */
 export async function saveCustomProducts(

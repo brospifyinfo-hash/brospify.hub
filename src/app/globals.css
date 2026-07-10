@@ -740,6 +740,65 @@ html.theme-light .shadow-xl {
   box-shadow: 0 4px 18px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04) !important;
 }
 
+/* ── Theme-Editor White-Mode (Admin-Einstellung „Ansicht") ─────────────
+   Der Editor setzt html.theme-light + html.theme-editor-light selbst
+   (Effekt in /themes/editor/page.tsx), wenn der Admin „White" gewählt hat.
+   Die Basis-Overrides oben greifen über theme-light; die folgenden
+   Attribut-Wildcards decken die ARBITRARY-Werte des Editor-Chromes ab
+   (bg-white/[0.04], border-white/[0.08], #101014, #17171d, #cfe9a3 …).
+   WICHTIG: Sie sind auf html.theme-editor-light gescoped — NIE auf das
+   globale theme-light, sonst restylen sie den bestehenden Shopify-Embed-
+   Light-Mode (?theme=light) auf allen Hub-Seiten. Basis-Selektoren sind
+   wort-verankert ([class^=…], [class*=" …"]), damit hover:-Varianten im
+   Ruhezustand NICHT matchen. Block steht bewusst VOR dem Admin-Reset
+   (gleiche Spezifität — Reihenfolge zählt). */
+
+/* Weiße Alpha-Flächen/Borders (alle Abstufungen, inkl. [0.02]–[0.15]) */
+html.theme-editor-light [class^="bg-white/"],
+html.theme-editor-light [class*=" bg-white/"] { background-color: rgba(17, 17, 17, 0.05) !important; }
+html.theme-editor-light [class^="border-white/"],
+html.theme-editor-light [class*=" border-white/"] { border-color: rgba(17, 17, 17, 0.13) !important; }
+html.theme-editor-light [class*="hover:bg-white/"]:hover { background-color: rgba(17, 17, 17, 0.09) !important; }
+html.theme-editor-light [class*="hover:border-white/"]:hover { border-color: rgba(17, 17, 17, 0.24) !important; }
+
+/* Schwarze Alpha-Flächen (Badges, Chips) — wort-verankert wie oben */
+html.theme-editor-light [class^="bg-black/2"], html.theme-editor-light [class*=" bg-black/2"],
+html.theme-editor-light [class^="bg-black/3"], html.theme-editor-light [class*=" bg-black/3"],
+html.theme-editor-light [class^="bg-black/4"], html.theme-editor-light [class*=" bg-black/4"],
+html.theme-editor-light [class^="bg-black/5"], html.theme-editor-light [class*=" bg-black/5"],
+html.theme-editor-light [class^="bg-black/6"], html.theme-editor-light [class*=" bg-black/6"] { background-color: rgba(255, 255, 255, 0.82) !important; }
+/* Modal-Backdrops bleiben abdunkelnd, nur weicher */
+html.theme-editor-light [class^="bg-black/70"], html.theme-editor-light [class*=" bg-black/70"],
+html.theme-editor-light [class^="bg-black/80"], html.theme-editor-light [class*=" bg-black/80"] { background-color: rgba(24, 24, 27, 0.35) !important; }
+
+/* Dunkle Panel-Literale der Editor-Overlays/Dropdowns */
+html.theme-editor-light [class*="bg-[#101014]"],
+html.theme-editor-light [class*="bg-[#17171d]"] {
+  background-color: rgba(255, 255, 255, 0.97) !important;
+  border-color: #e4e4e7 !important;
+  color: #111111 !important;
+}
+
+/* Hellgrüner Akzent-Text ist auf Weiß unlesbar → dunkles Brospify-Grün */
+html.theme-editor-light [class*="text-[#cfe9a3]"] { color: #55771f !important; }
+
+/* Grün-Alpha-Chips: Border kräftiger, damit sie auf Weiß Kontur behalten */
+html.theme-editor-light [class*="border-[#95BF47]/2"],
+html.theme-editor-light [class*="border-[#95BF47]/4"] { border-color: rgba(122, 158, 55, 0.55) !important; }
+
+/* Amber-Texte (Fokus-Chips, FEHLERMELDUNGEN text-amber-300/90) lesbar halten */
+html.theme-editor-light [class*="text-amber-1"],
+html.theme-editor-light [class*="text-amber-2"],
+html.theme-editor-light [class*="text-amber-3"],
+html.theme-editor-light [class*="text-amber-4"] { color: #92600a !important; }
+
+/* Sky-Texte (AI-Notice, „Live-Demo"-Badge) lesbar halten */
+html.theme-editor-light [class*="text-sky-2"],
+html.theme-editor-light [class*="text-sky-3"] { color: #0369a1 !important; }
+
+/* Segment-Buttons „aktiv" (bg-white/12) — Auswahl sichtbar lassen */
+html.theme-editor-light .bg-white\/12 { background-color: rgba(17, 17, 17, 0.1) !important; }
+
 /* Admin-Bereich bleibt explizit Dark — Ausnahme laut Vorgabe */
 html.theme-light [data-section="admin"],
 html.theme-light [data-section="admin"] * {

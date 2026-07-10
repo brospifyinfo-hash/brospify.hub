@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
-import { ACCENT } from "@/components/theme-editor/editor-ui";
+import { ACCENT, extractPalette } from "@/components/theme-editor/editor-ui";
 import {
   applyAiOpToDoc, newAiApplyCtx, type AiOp, type AiPlanStep,
 } from "@/lib/theme-ai-ops";
@@ -61,44 +61,6 @@ function loadAiMode(): AiMode {
     return localStorage.getItem(AI_MODE_LS) === "expert" ? "expert" : "standard";
   } catch {
     return "standard";
-  }
-}
-
-/** Dominante Farbtöne eines Bildes clientseitig extrahieren (Canvas). */
-async function extractPalette(dataUrl: string): Promise<string[]> {
-  try {
-    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const el = new Image();
-      el.onload = () => resolve(el);
-      el.onerror = reject;
-      el.src = dataUrl;
-    });
-    const size = 48;
-    const canvas = document.createElement("canvas");
-    canvas.width = size;
-    canvas.height = size;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return [];
-    ctx.drawImage(img, 0, 0, size, size);
-    const { data } = ctx.getImageData(0, 0, size, size);
-    const buckets = new Map<string, { r: number; g: number; b: number; n: number }>();
-    for (let i = 0; i < data.length; i += 4) {
-      if (data[i + 3] < 128) continue;
-      const r = data[i], g = data[i + 1], b = data[i + 2];
-      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-      if (lum > 244 || lum < 12) continue; // fast weiß/schwarz ignorieren
-      const key = `${r >> 5}_${g >> 5}_${b >> 5}`;
-      const e = buckets.get(key) || { r: 0, g: 0, b: 0, n: 0 };
-      e.r += r; e.g += g; e.b += b; e.n += 1;
-      buckets.set(key, e);
-    }
-    const hex = (n: number) => Math.round(n).toString(16).padStart(2, "0");
-    return Array.from(buckets.values())
-      .sort((a, b) => b.n - a.n)
-      .slice(0, 4)
-      .map((e) => `#${hex(e.r / e.n)}${hex(e.g / e.n)}${hex(e.b / e.n)}`);
-  } catch {
-    return [];
   }
 }
 
@@ -152,7 +114,7 @@ function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMo
 }
 
 export default function AiCopilot({
-  doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange,
+  doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange, locked = false,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
   focusPick = false, onToggleFocusPick, onClearFocus,
 }: {
@@ -165,6 +127,10 @@ export default function AiCopilot({
   /** true, solange die AI Ops anwendet — der Editor sperrt dann Undo/Edits,
    *  damit nichts vom nächsten Animations-Schritt überschrieben wird. */
   onBusyChange?: (busy: boolean) => void;
+  /** true, solange die GENESIS (Start-Fenster-Aufbau) läuft — der Co-Pilot
+   *  darf dann keinen eigenen Op-Strom starten (pointer-events reicht nicht:
+   *  Tastatur-Fokus + Enter kämen sonst durch). */
+  locked?: boolean;
   /** Für die AI fokussierte Sections/Kaufbox — die AI ändert dann primär diese. */
   focus?: { uid: string; label: string }[];
   onRemoveFocus?: (uid: string) => void;
@@ -240,6 +206,7 @@ export default function AiCopilot({
   }
 
   async function requestPlan() {
+    if (locked) return;
     if (phase === "planning" || phase === "applying") return;
     if (!prompt.trim() && !images.length) return;
     clearDoneTimer();
@@ -288,6 +255,7 @@ export default function AiCopilot({
   }
 
   async function confirmPlan(explicitPlan?: PlanResponse) {
+    if (locked) return;
     const p = explicitPlan || plan;
     if (!p || phase === "applying") return;
     clearDoneTimer();
@@ -512,7 +480,7 @@ export default function AiCopilot({
                   {/* „+" — Datei/Bild anhängen (auch per Drag & Drop) */}
                   <button
                     onClick={() => fileRef.current?.click()}
-                    disabled={images.length >= 3 || phase === "planning"}
+                    disabled={images.length >= 3 || phase === "planning" || locked}
                     title={t.themes.aiUploadHint}
                     aria-label={t.themes.aiUploadHint}
                     className="shrink-0 w-8 h-8 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
@@ -534,13 +502,13 @@ export default function AiCopilot({
                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); requestPlan(); } }}
                     placeholder={phase === "planning" ? t.themes.aiPlanning : t.themes.aiPlaceholderShort}
                     rows={1}
-                    disabled={phase === "planning"}
+                    disabled={phase === "planning" || locked}
                     className="flex-1 min-w-0 resize-none bg-transparent px-1 text-[13.5px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
                     style={{ scrollbarWidth: "thin", maxHeight: 72 }}
                   />
                   {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
                   {/* Modus-Dropdown (Standard/Expert) */}
-                  <ModeSelect mode={mode} onPick={pickMode} disabled={phase === "planning"} />
+                  <ModeSelect mode={mode} onPick={pickMode} disabled={phase === "planning" || locked} />
                   {/* Fokus-Icon (Hover erklärt es) */}
                   <button
                     onClick={() => onToggleFocusPick?.()}

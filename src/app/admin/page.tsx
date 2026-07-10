@@ -537,6 +537,56 @@ export default function AdminPage() {
   const [themeBusyId, setThemeBusyId] = useState<string | null>(null);
   const [themePreviewBusyId, setThemePreviewBusyId] = useState<string | null>(null);
 
+  // Theme-Editor: Start-Erlebnis (Beispiel-Design) + Ansicht (Black/White).
+  // Eigener KV-Store (theme_editor_config_v1) — unabhängig vom Settings-Blob.
+  interface ThemeEditorDemoInfo { ok: boolean; name?: string; productTitle?: string; sections?: number; error?: string }
+  const [teCfg, setTeCfg] = useState<{ demoDesignCode: string; appearance: "black" | "white" }>({ demoDesignCode: "", appearance: "black" });
+  const [teDemo, setTeDemo] = useState<ThemeEditorDemoInfo | null>(null);
+  const [teLoaded, setTeLoaded] = useState(false);
+  const [teSaving, setTeSaving] = useState(false);
+  const loadThemeEditorCfg = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/theme-editor-config", { cache: "no-store" });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d?.config) {
+        setTeCfg({
+          demoDesignCode: typeof d.config.demoDesignCode === "string" ? d.config.demoDesignCode : "",
+          appearance: d.config.appearance === "white" ? "white" : "black",
+        });
+        setTeDemo(d.demo ?? null);
+      }
+    } catch { /* Karte zeigt dann leeren Zustand */ }
+    finally { setTeLoaded(true); }
+  }, []);
+  async function saveThemeEditorCfg(patch?: Partial<{ demoDesignCode: string; appearance: "black" | "white" }>) {
+    setTeSaving(true);
+    setError("");
+    try {
+      // Nur das Geänderte senden — die Route merged mit der gespeicherten
+      // Config (Appearance-Toggle scheitert so nie an einem Code-Entwurf im Feld).
+      const body = patch ?? { demoDesignCode: teCfg.demoDesignCode };
+      const res = await fetch("/api/admin/theme-editor-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (res.ok && d?.config) {
+        setTeCfg(d.config);
+        setTeDemo(d.demo ?? null);
+        setSuccess("Theme-Editor-Einstellungen gespeichert.");
+        setTimeout(() => setSuccess(""), 3000);
+      } else {
+        setTeDemo(d?.demo ?? teDemo);
+        setError(d?.error || "Speichern fehlgeschlagen.");
+        // Optimistisch gesetzten State (z. B. Appearance-Toggle) mit dem
+        // Server-Stand resyncen — sonst zeigt die UI einen nicht gespeicherten Wert.
+        loadThemeEditorCfg();
+      }
+    } catch { setError("Verbindungsfehler."); loadThemeEditorCfg(); }
+    finally { setTeSaving(false); }
+  }
+
   // Knowledge Base
   const [kbContent, setKbContent] = useState("");
   const [kbLoading, setKbLoading] = useState(false);
@@ -867,6 +917,10 @@ export default function AdminPage() {
   useEffect(() => {
     if (activeTab === "settings" || activeTab === "tiers") loadTierConfig();
   }, [activeTab, loadTierConfig]);
+
+  useEffect(() => {
+    if (activeTab === "settings" && !teLoaded) loadThemeEditorCfg();
+  }, [activeTab, teLoaded, loadThemeEditorCfg]);
 
   // ─── Stats / Dashboard ─────────────────────────────────────────
   const [stats, setStats] = useState<AdminStats | null>(null);
@@ -2977,6 +3031,78 @@ export default function AdminPage() {
                   <img src={settingsData.aboImageUrl} alt="Abo-Bild" className="w-full max-h-44 object-cover rounded-lg" />
                 </div>
               )}
+            </div>
+
+            {/* Theme-Editor: Beispiel-Design (Start-Fenster) + Black/White-Mode */}
+            <div className="glass-strong rounded-2xl border border-white/10 p-6 space-y-4">
+              <h3 className="font-semibold flex items-center gap-2"><Wand2 className="w-5 h-5 text-[#95BF47]" />Theme-Editor: Start-Erlebnis &amp; Ansicht</h3>
+              <p className="text-zinc-400 text-xs">
+                Kunden sehen beim Öffnen des Editors ein Start-Fenster („Eigenes Produkt“ · „Beispiel-Produkt“ · „Von 0 starten“).
+                Für das Beispiel-Produkt wird das hier hinterlegte Design allen Kunden als <span className="text-zinc-200">simulierte Live-Generierung</span> gezeigt —
+                ohne AI-Kosten, das Ergebnis ist immer exakt dein Design.
+              </p>
+
+              {/* Ansicht: Black / White */}
+              <div>
+                <label className="block text-xs text-zinc-400 mb-1.5">Editor-Ansicht (für alle Nutzer)</label>
+                <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 gap-1">
+                  {(["black", "white"] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => { setTeCfg((c) => ({ ...c, appearance: m })); saveThemeEditorCfg({ appearance: m }); }}
+                      disabled={teSaving}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
+                        teCfg.appearance === m ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-300 hover:text-white hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      <span className={`w-3.5 h-3.5 rounded-full border ${m === "black" ? "bg-zinc-950 border-zinc-500" : "bg-white border-zinc-300"}`} />
+                      {m === "black" ? "Black Mode" : "White Mode"}
+                      {teCfg.appearance === m && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">Wird beim Umschalten sofort gespeichert und gilt beim nächsten Editor-Besuch.</p>
+              </div>
+
+              <div className="border-t border-white/[0.06] pt-4">
+                <label className="block text-xs text-zinc-400 mb-1">Design-Code des Beispiel-Shops (z. B. „Tragbarer USB Mixer“)</label>
+                <p className="text-[10px] text-zinc-500 mb-2">
+                  So gehst du vor: Beispiel-Shop im Theme-Editor mit deinem Admin-Konto bauen → über „Designs“ speichern → den Sync-Code kopieren und hier eintragen.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={teCfg.demoDesignCode}
+                    onChange={(e) => setTeCfg((c) => ({ ...c, demoDesignCode: e.target.value.trim() }))}
+                    placeholder="Design-/Sync-Code einfügen — leer lassen = Demo-Karte ausgeblendet"
+                    className="input-glass flex-1 font-mono text-sm"
+                  />
+                  <button
+                    onClick={() => saveThemeEditorCfg()}
+                    disabled={teSaving}
+                    className="btn-accent px-5 py-2.5 rounded-xl font-semibold flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {teSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    Prüfen &amp; speichern
+                  </button>
+                </div>
+                {teDemo && (
+                  <div className={`mt-2.5 flex items-start gap-2 rounded-xl border px-3 py-2.5 text-xs ${
+                    teDemo.ok ? "border-[#95BF47]/30 bg-[#95BF47]/[0.06] text-[#cfe9a3]" : "border-amber-400/30 bg-amber-400/[0.06] text-amber-200"
+                  }`}>
+                    {teDemo.ok ? <Check className="w-4 h-4 shrink-0 mt-[1px]" /> : <AlertCircle className="w-4 h-4 shrink-0 mt-[1px]" />}
+                    {teDemo.ok ? (
+                      <span>
+                        Demo aktiv: <span className="font-semibold">„{teDemo.name}“</span>
+                        {teDemo.productTitle ? <> · Produkt: <span className="font-semibold">{teDemo.productTitle}</span></> : null}
+                        {typeof teDemo.sections === "number" ? <> · {teDemo.sections} Sections</> : null}
+                      </span>
+                    ) : (
+                      <span>{teDemo.error || "Design-Code ungültig."}</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Favicon (Browser-Tab-Icon) — Drag & Drop */}

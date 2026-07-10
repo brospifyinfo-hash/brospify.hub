@@ -30,7 +30,12 @@ import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
 import BuyboxGalleryOverlay from "@/components/theme-editor/BuyboxGalleryOverlay";
 import FullPreviewOverlay from "@/components/theme-editor/FullPreviewOverlay";
 import AiCopilot from "@/components/theme-editor/AiCopilot";
+import StartChoiceOverlay from "@/components/theme-editor/StartChoiceOverlay";
+import ProductIntakeOverlay, { type IntakeResult } from "@/components/theme-editor/ProductIntakeOverlay";
+import GenerationTheater, { type GenesisJob } from "@/components/theme-editor/GenerationTheater";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
+import { blankDocument, buildRevealTimeline, type RevealLabels } from "@/lib/theme-genesis";
+import { applyAiOpToDoc, newAiApplyCtx, type AiOp } from "@/lib/theme-ai-ops";
 import {
   editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
 } from "@/lib/theme-doc";
@@ -238,13 +243,75 @@ export default function ThemeEditorPage() {
   const [cost, setCost] = useState<number | null>(null);
   const [building, setBuilding] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  /** true, solange der AI Co-Pilot Ops anwendet — Editor-Eingriffe (Undo,
-   *  Leisten, Download/Sync) sind dann gesperrt, damit kein Animations-
-   *  Schritt eine parallele Nutzer-Änderung überschreibt. */
-  const [aiBusy, setAiBusy] = useState(false);
+  /** true, solange der AI Co-Pilot bzw. die Genesis Ops anwendet — Editor-
+   *  Eingriffe (Undo, Leisten, Download/Sync) sind dann gesperrt, damit kein
+   *  Animations-Schritt eine parallele Nutzer-Änderung überschreibt.
+   *  BEWUSST zwei getrennte Flags: teilten sich Co-Pilot und Genesis EIN
+   *  Flag, würde das finally des Co-Pilot-Laufs die Genesis-Sperre vorzeitig
+   *  aufheben (Undo mitten in der Timeline möglich). */
+  const [copilotBusy, setCopilotBusy] = useState(false);
+  const [genesisBusy, setGenesisBusy] = useState(false);
+  const aiBusy = copilotBusy || genesisBusy;
+  const aiBusyRef = useRef(false);
+  aiBusyRef.current = aiBusy;
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const shellRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLElement>(null);
+
+  // ── Start-Fenster + Genesis (inszenierte Generierung) ──
+  // Editor-Config vom Admin: Ansicht (Black/White) + ob eine Demo hinterlegt ist.
+  const [editorCfg, setEditorCfg] = useState<{ appearance: "black" | "white"; demoReady: boolean } | null>(null);
+  /** Start-Fenster sichtbar (einmal pro Editor-Besuch, solange kein Produkt). */
+  const [startOpen, setStartOpen] = useState(true);
+  const [intakeOpen, setIntakeOpen] = useState(false);
+  const [genesisJob, setGenesisJob] = useState<GenesisJob | null>(null);
+  /** Demo-Produkt (gehört dem Admin) — nur für Toolbar-Chip/AI-Titel. */
+  const [demoProduct, setDemoProduct] = useState<DrawnProduct | null>(null);
+  /** „Von 0 starten": nächstes pickProduct baut ein LEERES Dokument. */
+  const blankStartRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/theme-editor-config", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled) return;
+        setEditorCfg({ appearance: d?.appearance === "white" ? "white" : "black", demoReady: !!d?.demoReady });
+      })
+      .catch(() => { if (!cancelled) setEditorCfg({ appearance: "black", demoReady: false }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // White-Mode (Admin-Einstellung): nutzt die vorhandene theme-light-Mechanik
+  // (globals.css-Overrides) — nur solange der Editor gemountet ist. Der
+  // Marker theme-editor-light scoped die Editor-spezifischen Wildcard-
+  // Overrides (globals.css), damit der Shopify-Embed-Light-Mode
+  // (?theme=light, layout.tsx-Bootstrapper) auf anderen Seiten unberührt
+  // bleibt. War theme-light BEIM MOUNT schon gesetzt (Embed), darf der
+  // Cleanup ihn NICHT entfernen — sonst kippt die SPA nach dem Verlassen
+  // des Editors bis zum Hard-Reload auf Dark.
+  useEffect(() => {
+    if (editorCfg?.appearance !== "white") return;
+    const html = document.documentElement;
+    const body = document.body;
+    const wasLight = html.classList.contains("theme-light");
+    html.classList.add("theme-editor-light");
+    if (!wasLight) {
+      html.classList.add("theme-light");
+      body.classList.add("theme-light");
+      body.classList.remove("bg-zinc-950", "text-white");
+      body.classList.add("bg-white", "text-zinc-900");
+    }
+    return () => {
+      html.classList.remove("theme-editor-light");
+      if (!wasLight) {
+        html.classList.remove("theme-light");
+        body.classList.remove("theme-light");
+        body.classList.remove("bg-white", "text-zinc-900");
+        body.classList.add("bg-zinc-950", "text-white");
+      }
+    };
+  }, [editorCfg?.appearance]);
 
   // Klick auf eine Section/Baustein → auf schmalen Screens automatisch auf den
   // Einstellungen-Tab wechseln und ihn sanft in den Blick scrollen.
@@ -285,6 +352,10 @@ export default function ThemeEditorPage() {
   // Produkt wählen → Vorschau-Daten + Basis-Manifest laden; beim ersten Mal
   // initiales Dokument aus der Stil-Komposition bauen.
   const pickProduct = useCallback((productId: string) => {
+    // Während eines AI-/Genesis-Laufs kein konkurrierender Produkt-Flow —
+    // ein Pick würde gegen die Timeline-Dispatches rennen (Lost Update,
+    // previewData vom falschen Produkt, zerrissene Undo-Koaleszenz).
+    if (aiBusyRef.current) return;
     setPickerOpen(false);
     setPreviewLoading(true);
     fetch(`/api/theme-export/preview?productId=${encodeURIComponent(productId)}`, { cache: "no-store" })
@@ -298,9 +369,18 @@ export default function ThemeEditorPage() {
         setBaseSections(bs);
         setHomeSections(hs);
         setCapabilities(caps);
+        // „Von 0 starten": leeres Dokument (keine Sections, minimale Kaufbox,
+        // Platzhalter-/Produktbilder) statt der Stil-Komposition.
+        const blank = blankStartRef.current;
+        blankStartRef.current = false;
         dispatch(
-          doc.sections.length === 0
-            ? { type: "replace", doc: buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs) }
+          doc.sections.length === 0 || blank
+            ? {
+                type: "replace",
+                doc: blank
+                  ? blankDocument(productId)
+                  : buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs),
+              }
             : { type: "setProduct", productId },
         );
         // Speicherstände sind produktgebunden — bei Produktwechsel entkoppeln.
@@ -544,13 +624,158 @@ export default function ThemeEditorPage() {
     }
   }
 
+  // ── Genesis: Timeline-Beschriftungen + die drei Start-Wege ──
+  const revealLabels: RevealLabels = {
+    style: t.themes.genesisStepStyle,
+    styleDetail: t.themes.genesisStepStyleSub,
+    buybox: t.themes.genesisStepBuybox,
+    section: t.themes.genesisStepSection,
+    home: t.themes.genesisStepHome,
+    homeDetail: t.themes.genesisStepHomeSub,
+    finish: t.themes.genesisStepFinish,
+  };
+  const genesisSectionLabel = useCallback((type: string) => {
+    const def = getSectionDef(type);
+    return def ? (lang === "en" ? def.labelEn : def.label) : type;
+  }, [lang]);
+  const genesisBlockLabel = useCallback((type: string) => {
+    const meta = getBuyboxMeta(type);
+    return lang === "en" ? meta.labelEn : meta.label;
+  }, [lang]);
+
+  /** Beispiel-Produkt: Admin-Design laden, Generierung nur INSZENIEREN —
+   *  kein AI-Call, keine Credits; Ziel ist exakt das hinterlegte Design. */
+  const startDemo = useCallback(() => {
+    setStartOpen(false);
+    const tt = t.themes;
+    const intro = [tt.genesisIntroDemo1, tt.genesisIntroDemo2, tt.genesisIntroDemo3, tt.genesisIntroDemo4, tt.genesisIntroDemo5];
+    const labels = revealLabels;
+    setGenesisJob({
+      id: Date.now(),
+      intro,
+      minIntroMs: 5600,
+      doneTitle: tt.genesisDemoDone,
+      doneSub: tt.genesisDemoDoneSub,
+      prepare: async () => {
+        const res = await fetch("/api/theme-demo", { cache: "no-store" });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || !d?.document || !d?.preview) {
+          throw new Error(typeof d?.error === "string" ? d.error : tt.genesisDemoErr);
+        }
+        const targetDoc = d.document as ThemeDocument;
+        const pv = d.preview as PreviewResponse;
+        setPreviewData(pv);
+        setBaseSections(Array.isArray(pv.baseSections) ? pv.baseSections : []);
+        setHomeSections(Array.isArray(pv.homeSections) ? pv.homeSections : []);
+        setCapabilities(Array.isArray(pv.capabilities) ? pv.capabilities : []);
+        setDemoProduct({ id: targetDoc.productId, titel: pv.title, bildUrl: pv.images?.[0] });
+        setActiveDesign(null);
+        // Leerer Shop sichtbar, während die „AI nachdenkt".
+        dispatch({ type: "replace", doc: blankDocument(targetDoc.productId) });
+        return { steps: buildRevealTimeline(targetDoc, labels, genesisSectionLabel, genesisBlockLabel) };
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, lang, genesisSectionLabel, genesisBlockLabel]);
+
+  /** Eigenes Produkt: Intake ist fertig → leerer Shop + ECHTER AI-Plan,
+   *  Aufbau wird trotzdem wie ein Build-from-zero inszeniert. */
+  const startOwnGenesis = useCallback((r: IntakeResult) => {
+    setIntakeOpen(false);
+    // Eigene Produkte-Liste nachziehen (das Intake hat eines angelegt).
+    fetch("/api/custom-products", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((d) => { if (Array.isArray(d?.products)) setCustomProducts(d.products as CustomProductLite[]); })
+      .catch(() => {});
+    const tt = t.themes;
+    const intro = [tt.genesisIntroOwn1, tt.genesisIntroOwn2, tt.genesisIntroOwn3, tt.genesisIntroOwn4, tt.genesisIntroOwn5];
+    const labels = revealLabels;
+    const currentLang = lang;
+    setGenesisJob({
+      id: Date.now(),
+      intro,
+      minIntroMs: 2800,
+      doneTitle: tt.genesisDone,
+      doneSub: tt.genesisDoneSub,
+      prepare: async () => {
+        // 1) Preview-Daten des frisch angelegten eigenen Produkts.
+        const pvRes = await fetch(`/api/theme-export/preview?productId=${encodeURIComponent(r.productId)}`, { cache: "no-store" });
+        const pv = (await pvRes.json().catch(() => null)) as PreviewResponse | null;
+        if (!pvRes.ok || !pv || typeof pv.title !== "string") throw new Error(tt.genesisErr);
+        const bs = Array.isArray(pv.baseSections) ? pv.baseSections : [];
+        const hs = Array.isArray(pv.homeSections) ? pv.homeSections : [];
+        const caps = Array.isArray(pv.capabilities) ? pv.capabilities : [];
+        setPreviewData(pv);
+        setBaseSections(bs);
+        setHomeSections(hs);
+        setCapabilities(caps);
+        setActiveDesign(null);
+        const blank = blankDocument(r.productId);
+        dispatch({ type: "replace", doc: blank });
+
+        // 2) Echter AI-Plan auf Basis von Bildern + Beschreibung (Standard-Modus).
+        const prompt = currentLang === "en"
+          ? `Build a complete, high-converting shop for this product from scratch. Product: ${r.titel}. Description: ${r.beschreibung}`
+          : `Baue einen kompletten, hochkonvertierenden Shop für dieses Produkt von 0 auf. Produkt: ${r.titel}. Beschreibung: ${r.beschreibung}`;
+        const res = await fetch("/api/theme-ai/plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({
+            document: blank,
+            prompt,
+            images: r.dataUrls.map((dataUrl) => ({ dataUrl })),
+            paletteHints: r.paletteHints,
+            productTitle: r.titel,
+            lang: currentLang,
+            mode: "standard",
+            capabilities: caps,
+          }),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          throw new Error(typeof d?.error === "string" && d.error ? d.error : tt.genesisErr);
+        }
+        if (typeof d?.creditsRemaining === "number") credits.setBalance(d.creditsRemaining);
+        const ops = (Array.isArray(d?.ops) ? d.ops : []) as AiOp[];
+        // Attribution + Lernspeicher — darf den Aufbau NIE blockieren.
+        fetch("/api/theme-ai/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({ document: blank, ops, planToken: d?.planToken, productTitle: r.titel, capabilities: caps }),
+        }).catch(() => {});
+
+        // 3) Ziel-Dokument still berechnen (die Ops selbst laufen NICHT einzeln
+        //    durch die Preview — die Inszenierung übernimmt die Timeline).
+        const ctx = newAiApplyCtx(bs, caps, hs);
+        let target = blank;
+        for (const op of ops) target = applyAiOpToDoc(target, op, ctx);
+        // Sicherheitsnetz: liefert die AI keine Sections (z. B. Fallback-Plan),
+        // baut die Stil-Komposition den Shop — AI-Farben/Fonts bleiben erhalten.
+        if (!target.sections.length) {
+          const rebuilt = buildInitialDocument(r.productId, target.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs);
+          target = { ...rebuilt, global: { ...rebuilt.global, ...target.global }, buybox: { ...rebuilt.buybox, gallery: target.buybox.gallery } };
+        }
+        return {
+          steps: buildRevealTimeline(target, labels, genesisSectionLabel, genesisBlockLabel),
+          notice: d?.fallback ? tt.aiFallbackNote : undefined,
+        };
+      },
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, lang, credits, genesisSectionLabel, genesisBlockLabel]);
+
   const activeProduct = useMemo(() => {
     const drawn = (products || []).find((p) => p.id === doc.productId);
     if (drawn) return drawn;
     const custom = customProducts.find((p) => p.id === doc.productId);
-    return custom ? { id: custom.id, titel: custom.titel || t.themes.editorCustomUntitled, bildUrl: custom.bildUrl } : null;
+    if (custom) return { id: custom.id, titel: custom.titel || t.themes.editorCustomUntitled, bildUrl: custom.bildUrl };
+    // Beispiel-Produkt (gehört dem Admin — taucht in keiner eigenen Liste auf).
+    if (demoProduct && demoProduct.id === doc.productId) return demoProduct;
+    return null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [products, customProducts, doc.productId]);
+  }, [products, customProducts, demoProduct, doc.productId]);
   const sectionLabel = (type: string) => {
     const def = getSectionDef(type);
     return def ? (lang === "en" ? def.labelEn : def.label) : type;
@@ -619,7 +844,8 @@ export default function ThemeEditorPage() {
               {activeProduct && (
                 <button
                   onClick={() => setPickerOpen(true)}
-                  className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 hover:border-[#95BF47]/40 transition min-w-0 shrink"
+                  disabled={aiBusy}
+                  className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 hover:border-[#95BF47]/40 transition min-w-0 shrink disabled:opacity-50"
                   title={t.themes.editorChangeProduct}
                 >
                   {activeProduct.bildUrl
@@ -719,7 +945,8 @@ export default function ThemeEditorPage() {
                 {activeProduct ? (
                   <button
                     onClick={() => setPickerOpen(true)}
-                    className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 hover:border-[#95BF47]/40 transition"
+                    disabled={aiBusy}
+                    className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 hover:border-[#95BF47]/40 transition disabled:opacity-50"
                     title={t.themes.editorChangeProduct}
                   >
                     {activeProduct.bildUrl
@@ -812,9 +1039,12 @@ export default function ThemeEditorPage() {
             <p className="mb-3 text-[11.5px] text-zinc-500 shrink-0 text-center">{t.themes.editorFreeNote.replace("{n}", String(cost))}</p>
           )}
 
-          {/* ── Schritt 1: Produkt-Bilder-Grid ── */}
+          {/* ── Schritt 1: Produkt-Bilder-Grid ──
+              Während der Genesis (aiBusy, z. B. Demo-Fetch vor dem ersten
+              Dokument) gesperrt — ein Produkt-Klick würde sonst einen
+              konkurrierenden pickProduct-Flow gegen die Timeline starten. */}
           {showPicker ? (
-            <div className="max-w-4xl mx-auto">
+            <div className={`max-w-4xl mx-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
               <header className="text-center mb-6 mt-4 sm:mt-8">
                 <div className="inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] font-semibold mb-2" style={{ color: ACCENT }}>
                   <ShoppingCart className="w-3 h-3" /> Schritt 1
@@ -1295,8 +1525,10 @@ export default function ThemeEditorPage() {
                     onToggleFocus={toggleFocus}
                   />
                 </div>
-                {/* AI Co-Pilot — dünne Command-Leiste MITTIG unter der Vorschau (mit Abstand) */}
-                <div className="mt-4 shrink-0">
+                {/* AI Co-Pilot — dünne Command-Leiste MITTIG unter der Vorschau (mit
+                    Abstand). Während aiBusy (eigener Apply-Lauf ODER Genesis) gesperrt —
+                    sonst könnten zwei Op-Ströme dasselbe Dokument überschreiben. */}
+                <div className={`mt-4 shrink-0 ${aiBusy ? "pointer-events-none opacity-70" : ""}`}>
                   <AiCopilot
                     doc={doc}
                     dispatch={dispatch}
@@ -1304,7 +1536,8 @@ export default function ThemeEditorPage() {
                     capabilities={capabilities}
                     homeSections={homeSections}
                     productTitle={activeProduct?.titel}
-                    onBusyChange={setAiBusy}
+                    onBusyChange={setCopilotBusy}
+                    locked={genesisBusy}
                     focus={focusChips}
                     onRemoveFocus={toggleFocus}
                     onSelectFocus={(uid) => setSelected(uid)}
@@ -1442,6 +1675,68 @@ export default function ThemeEditorPage() {
           subtitle={t.themes.editorLibrarySub}
         />
       )}
+
+      {/* ── Start-Fenster: Eigenes Produkt · Beispiel-Produkt · Von 0 ──
+          Öffnet erst mit geladener Config (editorCfg) — sonst flackert die
+          Demo-Karte kurz als „wird vorbereitet" auf und springt dann um. */}
+      <StartChoiceOverlay
+        open={startOpen && !doc.productId && !intakeOpen && !genesisJob && editorCfg !== null}
+        demoReady={!!editorCfg?.demoReady}
+        onOwn={() => { setStartOpen(false); setIntakeOpen(true); }}
+        onDemo={startDemo}
+        onBlank={() => { blankStartRef.current = true; setStartOpen(false); }}
+        onSkip={() => { blankStartRef.current = false; setStartOpen(false); }}
+        t={{
+          title: t.themes.genesisTitle,
+          sub: t.themes.genesisSub,
+          ownTitle: t.themes.genesisOwnTitle,
+          ownSub: t.themes.genesisOwnSub,
+          ownBadge: t.themes.genesisOwnBadge,
+          demoTitle: t.themes.genesisDemoTitle,
+          demoSub: t.themes.genesisDemoSub,
+          demoBadge: t.themes.genesisDemoBadge,
+          demoNotReady: t.themes.genesisDemoNotReady,
+          blankTitle: t.themes.genesisBlankTitle,
+          blankSub: t.themes.genesisBlankSub,
+          skip: t.themes.genesisSkip,
+          go: t.themes.genesisGo,
+        }}
+      />
+
+      {/* „Eigenes Produkt": min. 3 Bilder + Name + Beschreibung (Pflicht) */}
+      <ProductIntakeOverlay
+        open={intakeOpen}
+        onBack={() => { setIntakeOpen(false); setStartOpen(true); }}
+        onStart={startOwnGenesis}
+        t={{
+          title: t.themes.genesisFormTitle,
+          sub: t.themes.genesisFormSub,
+          name: t.themes.genesisFormName,
+          namePh: t.themes.genesisFormNamePh,
+          desc: t.themes.genesisFormDesc,
+          descPh: t.themes.genesisFormDescPh,
+          images: t.themes.genesisFormImages,
+          imagesHint: t.themes.genesisFormImagesHint,
+          add: t.themes.genesisFormAdd,
+          reqName: t.themes.genesisFormReqName,
+          reqDesc: t.themes.genesisFormReqDesc,
+          reqImages: t.themes.genesisFormReqImages,
+          start: t.themes.genesisFormStart,
+          cancel: t.themes.genesisFormCancel,
+          uploadErr: t.themes.genesisFormUploadErr,
+          remove: t.themes.aiImageRemove,
+        }}
+      />
+
+      {/* Inszenierter Shop-Aufbau (Demo = simuliert · Eigenes Produkt = echte AI) */}
+      <GenerationTheater
+        job={genesisJob}
+        dispatch={dispatch}
+        onBusyChange={setGenesisBusy}
+        onDone={(notice) => { if (notice) setMsg({ kind: "ok", text: notice }); }}
+        onError={(text) => { setMsg({ kind: "err", text }); setGenesisJob(null); setStartOpen(true); }}
+        t={{ analyzing: t.themes.genesisAnalyzing, skip: t.themes.genesisSkipReveal }}
+      />
     </>
   );
 }
