@@ -16,12 +16,16 @@ export async function GET() {
   try {
     const config = await getThemeEditorConfig();
     return NextResponse.json(
-      { appearance: config.appearance, demoReady: !!config.demoDesignCode },
+      {
+        appearance: config.appearance,
+        demoReady: !!config.demoDesignCode,
+        showProductPicker: config.showProductPicker,
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (err) {
     console.error("[theme-editor-config] public GET failed:", err);
-    // Editor soll trotzdem starten — Default-Ansicht, keine Demo.
-    return NextResponse.json({ appearance: "black", demoReady: false });
+    // Editor soll trotzdem starten — Default-Ansicht, keine Demo, kein Picker.
+    return NextResponse.json({ appearance: "black", demoReady: false, showProductPicker: false });
   }
 }

@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   }
 
-  let body: { demoDesignCode?: unknown; appearance?: unknown };
+  let body: { demoDesignCode?: unknown; appearance?: unknown; showProductPicker?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
     const next: ThemeEditorConfig = {
       demoDesignCode: codeInBody ? (body.demoDesignCode as string).trim().slice(0, 64) : current.demoDesignCode,
       appearance: body.appearance !== undefined ? normalizeAppearance(body.appearance) : current.appearance,
+      showProductPicker:
+        body.showProductPicker !== undefined ? body.showProductPicker === true : current.showProductPicker,
     };
 
     // Ein MITGESCHICKTER nicht-leerer Code muss auf ein ladbares Design +

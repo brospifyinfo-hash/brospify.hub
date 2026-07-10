@@ -540,7 +540,8 @@ export default function AdminPage() {
   // Theme-Editor: Start-Erlebnis (Beispiel-Design) + Ansicht (Black/White).
   // Eigener KV-Store (theme_editor_config_v1) — unabhängig vom Settings-Blob.
   interface ThemeEditorDemoInfo { ok: boolean; name?: string; productTitle?: string; sections?: number; error?: string }
-  const [teCfg, setTeCfg] = useState<{ demoDesignCode: string; appearance: "black" | "white" }>({ demoDesignCode: "", appearance: "black" });
+  interface ThemeEditorCfg { demoDesignCode: string; appearance: "black" | "white"; showProductPicker: boolean }
+  const [teCfg, setTeCfg] = useState<ThemeEditorCfg>({ demoDesignCode: "", appearance: "black", showProductPicker: false });
   const [teDemo, setTeDemo] = useState<ThemeEditorDemoInfo | null>(null);
   const [teLoaded, setTeLoaded] = useState(false);
   const [teSaving, setTeSaving] = useState(false);
@@ -552,13 +553,14 @@ export default function AdminPage() {
         setTeCfg({
           demoDesignCode: typeof d.config.demoDesignCode === "string" ? d.config.demoDesignCode : "",
           appearance: d.config.appearance === "white" ? "white" : "black",
+          showProductPicker: d.config.showProductPicker === true,
         });
         setTeDemo(d.demo ?? null);
       }
     } catch { /* Karte zeigt dann leeren Zustand */ }
     finally { setTeLoaded(true); }
   }, []);
-  async function saveThemeEditorCfg(patch?: Partial<{ demoDesignCode: string; appearance: "black" | "white" }>) {
+  async function saveThemeEditorCfg(patch?: Partial<ThemeEditorCfg>) {
     setTeSaving(true);
     setError("");
     try {
@@ -3062,6 +3064,30 @@ export default function AdminPage() {
                   ))}
                 </div>
                 <p className="text-[10px] text-zinc-500 mt-1">Wird beim Umschalten sofort gespeichert und gilt beim nächsten Editor-Besuch.</p>
+              </div>
+
+              {/* Produkt-Übersicht (Schritt 1 „Wähle dein Produkt") an/aus */}
+              <div className="border-t border-white/[0.06] pt-4">
+                <label className="block text-xs text-zinc-400 mb-1.5">Produkt-Übersicht „Wähle dein Produkt“ (Schritt 1)</label>
+                <p className="text-[10px] text-zinc-500 mb-2">
+                  AUS (Standard): „Von 0 starten“ öffnet DIREKT den leeren Editor — ohne Produkt-Grid.
+                  AN: klassischer Ablauf mit Produkt-Auswahl aus den gezogenen/eigenen Produkten (inkl. „Direkt zum klassischen Editor“-Link im Start-Fenster).
+                </p>
+                <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 gap-1">
+                  {([false, true] as const).map((v) => (
+                    <button
+                      key={String(v)}
+                      onClick={() => { setTeCfg((c) => ({ ...c, showProductPicker: v })); saveThemeEditorCfg({ showProductPicker: v }); }}
+                      disabled={teSaving}
+                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
+                        teCfg.showProductPicker === v ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-300 hover:text-white hover:bg-white/[0.06]"
+                      }`}
+                    >
+                      {v ? "Anzeigen" : "Ausgeblendet"}
+                      {teCfg.showProductPicker === v && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="border-t border-white/[0.06] pt-4">

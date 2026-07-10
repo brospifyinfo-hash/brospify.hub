@@ -22,9 +22,15 @@ export interface ThemeEditorConfig {
   demoDesignCode: string;
   /** Editor-Ansicht für ALLE Nutzer. */
   appearance: EditorAppearance;
+  /** Produkt-Übersicht „Wähle dein Produkt" (Schritt 1) anzeigen? Standard
+   *  AUS: „Von 0 starten" geht dann DIREKT in den leeren Editor (mit einem
+   *  automatisch angelegten leeren eigenen Produkt) statt übers Grid. Der
+   *  Admin kann die Übersicht hier jederzeit wieder aktivieren — der
+   *  Picker-Code bleibt vollständig erhalten. */
+  showProductPicker: boolean;
 }
 
-const DEFAULTS: ThemeEditorConfig = { demoDesignCode: "", appearance: "black" };
+const DEFAULTS: ThemeEditorConfig = { demoDesignCode: "", appearance: "black", showProductPicker: false };
 
 // Config wird bei JEDEM Editor-Open gelesen (public Route) — kurzer
 // In-Memory-Cache schützt die projektweit geteilte Sheets-Read-Quota
@@ -44,6 +50,9 @@ export async function getThemeEditorConfig(): Promise<ThemeEditorConfig> {
     const cfg: ThemeEditorConfig = {
       demoDesignCode: typeof parsed.demoDesignCode === "string" ? parsed.demoDesignCode.trim() : "",
       appearance: normalizeAppearance(parsed.appearance),
+      // Nur explizites true aktiviert die Übersicht — ältere Configs ohne
+      // das Feld bleiben beim neuen Standard AUS.
+      showProductPicker: parsed.showProductPicker === true,
     };
     cfgCache = { cfg, at: Date.now() };
     return { ...cfg };

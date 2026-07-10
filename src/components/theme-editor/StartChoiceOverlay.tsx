@@ -30,7 +30,7 @@ export interface StartChoiceTexts {
 }
 
 export default function StartChoiceOverlay({
-  open, demoReady, onOwn, onDemo, onBlank, onSkip, t,
+  open, demoReady, onOwn, onDemo, onBlank, onSkip, showSkip = true, t,
 }: {
   open: boolean;
   /** false = Admin hat noch kein Beispiel-Design hinterlegt → Karte gesperrt. */
@@ -40,6 +40,9 @@ export default function StartChoiceOverlay({
   onBlank: () => void;
   /** „Direkt zum klassischen Editor" (Produkt-Grid wie bisher). */
   onSkip: () => void;
+  /** false = Produkt-Übersicht ist per Admin-Setting ausgeblendet → der
+   *  Skip-Link entfällt und ESC startet „Von 0" (es gibt kein Grid dahinter). */
+  showSkip?: boolean;
   t: StartChoiceTexts;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
@@ -56,7 +59,8 @@ export default function StartChoiceOverlay({
     requestAnimationFrame(() => focusables()[0]?.focus());
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        onSkip();
+        // Ohne Picker führt ESC auf „Von 0" — onSkip zeigt sonst ein leeres Grid.
+        if (showSkip) onSkip(); else onBlank();
         return;
       }
       if (e.key !== "Tab") return;
@@ -78,7 +82,7 @@ export default function StartChoiceOverlay({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onSkip]);
+  }, [open, onSkip, onBlank, showSkip]);
 
   const cards = [
     {
@@ -224,19 +228,21 @@ export default function StartChoiceOverlay({
                 ))}
               </div>
 
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.55, duration: 0.35 }}
-                className="text-center mt-6"
-              >
-                <button
-                  onClick={onSkip}
-                  className="text-[11.5px] text-zinc-500 hover:text-white underline underline-offset-4 transition"
+              {showSkip && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.55, duration: 0.35 }}
+                  className="text-center mt-6"
                 >
-                  {t.skip}
-                </button>
-              </motion.div>
+                  <button
+                    onClick={onSkip}
+                    className="text-[11.5px] text-zinc-500 hover:text-white underline underline-offset-4 transition"
+                  >
+                    {t.skip}
+                  </button>
+                </motion.div>
+              )}
             </div>
           </motion.div>
         </motion.div>

@@ -259,8 +259,9 @@ export default function ThemeEditorPage() {
   const inspectorRef = useRef<HTMLElement>(null);
 
   // ── Start-Fenster + Genesis (inszenierte Generierung) ──
-  // Editor-Config vom Admin: Ansicht (Black/White) + ob eine Demo hinterlegt ist.
-  const [editorCfg, setEditorCfg] = useState<{ appearance: "black" | "white"; demoReady: boolean } | null>(null);
+  // Editor-Config vom Admin: Ansicht (Black/White), ob eine Demo hinterlegt
+  // ist und ob die Produkt-Übersicht (Schritt 1) angezeigt wird.
+  const [editorCfg, setEditorCfg] = useState<{ appearance: "black" | "white"; demoReady: boolean; showProductPicker: boolean } | null>(null);
   /** Start-Fenster sichtbar (einmal pro Editor-Besuch, solange kein Produkt). */
   const [startOpen, setStartOpen] = useState(true);
   const [intakeOpen, setIntakeOpen] = useState(false);
@@ -276,9 +277,13 @@ export default function ThemeEditorPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (cancelled) return;
-        setEditorCfg({ appearance: d?.appearance === "white" ? "white" : "black", demoReady: !!d?.demoReady });
+        setEditorCfg({
+          appearance: d?.appearance === "white" ? "white" : "black",
+          demoReady: !!d?.demoReady,
+          showProductPicker: d?.showProductPicker === true,
+        });
       })
-      .catch(() => { if (!cancelled) setEditorCfg({ appearance: "black", demoReady: false }); });
+      .catch(() => { if (!cancelled) setEditorCfg({ appearance: "black", demoReady: false, showProductPicker: false }); });
     return () => { cancelled = true; };
   }, []);
 
@@ -390,6 +395,43 @@ export default function ThemeEditorPage() {
       .finally(() => setPreviewLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.sections.length, doc.global.styleId]);
+
+  /** „Von 0 starten" OHNE Produkt-Übersicht (Admin-Setting): ein leeres
+   *  eigenes Produkt wird automatisch angelegt (bzw. ein vorhandenes leeres
+   *  wiederverwendet — kein Clutter) und der leere Editor öffnet DIREKT.
+   *  Download/Designs/Live-Sync funktionieren damit ganz normal; ohne Titel
+   *  entfällt die KI-Text-Erstellung (Download kostenlos). */
+  const startBlankDirect = useCallback(async () => {
+    setStartOpen(false);
+    setMsg(null);
+    const existing = customProducts.find((p) => !p.titel && !p.bildUrl && !p.beschreibung && !p.preis);
+    let productId = existing?.id || "";
+    if (!productId) {
+      try {
+        const res = await fetch("/api/custom-products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          cache: "no-store",
+          body: JSON.stringify({}),
+        });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok || !d?.product?.id) {
+          setMsg({ kind: "err", text: d?.error || t.themes.builderErr });
+          setStartOpen(true);
+          return;
+        }
+        productId = d.product.id as string;
+        if (Array.isArray(d.products)) setCustomProducts(d.products as CustomProductLite[]);
+      } catch {
+        setMsg({ kind: "err", text: t.themes.builderErr });
+        setStartOpen(true);
+        return;
+      }
+    }
+    blankStartRef.current = true;
+    pickProduct(productId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customProducts, pickProduct, t.themes.builderErr]);
 
   // Stil wechseln = neue Seiten-Architektur (Komposition des Stils).
   // shuffle=true mischt die Komposition zu einer individuellen Variante
@@ -804,6 +846,9 @@ export default function ThemeEditorPage() {
 
   // ── Schritt 1: Produkt wählen (Bilder-Grid) ──
   const showPicker = !doc.productId || pickerOpen;
+  /** Produkt-Übersicht per Admin-Setting an/aus — AUS blendet das Grid nur
+   *  aus (Code bleibt erhalten), „Von 0" geht dann direkt in den Editor. */
+  const pickerEnabled = editorCfg?.showProductPicker === true;
 
   return (
     <>
@@ -843,10 +888,10 @@ export default function ThemeEditorPage() {
 
               {activeProduct && (
                 <button
-                  onClick={() => setPickerOpen(true)}
+                  onClick={() => { if (pickerEnabled) setPickerOpen(true); }}
                   disabled={aiBusy}
-                  className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 hover:border-[#95BF47]/40 transition min-w-0 shrink disabled:opacity-50"
-                  title={t.themes.editorChangeProduct}
+                  className={`flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] pl-1 pr-2 py-1 transition min-w-0 shrink disabled:opacity-50 ${pickerEnabled ? "hover:border-[#95BF47]/40" : "cursor-default"}`}
+                  title={pickerEnabled ? t.themes.editorChangeProduct : undefined}
                 >
                   {activeProduct.bildUrl
                     ? <img src={activeProduct.bildUrl} alt="" className="w-5.5 h-5.5 rounded object-cover shrink-0" />
@@ -944,10 +989,10 @@ export default function ThemeEditorPage() {
                 </button>
                 {activeProduct ? (
                   <button
-                    onClick={() => setPickerOpen(true)}
+                    onClick={() => { if (pickerEnabled) setPickerOpen(true); }}
                     disabled={aiBusy}
-                    className="flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 hover:border-[#95BF47]/40 transition disabled:opacity-50"
-                    title={t.themes.editorChangeProduct}
+                    className={`flex-1 min-w-0 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] pl-1.5 pr-2 py-1.5 transition disabled:opacity-50 ${pickerEnabled ? "hover:border-[#95BF47]/40" : "cursor-default"}`}
+                    title={pickerEnabled ? t.themes.editorChangeProduct : undefined}
                   >
                     {activeProduct.bildUrl
                       ? <img src={activeProduct.bildUrl} alt="" className="w-6 h-6 rounded-md object-cover shrink-0" />
@@ -1044,6 +1089,13 @@ export default function ThemeEditorPage() {
               Dokument) gesperrt — ein Produkt-Klick würde sonst einen
               konkurrierenden pickProduct-Flow gegen die Timeline starten. */}
           {showPicker ? (
+            !pickerEnabled ? (
+              /* Produkt-Übersicht per Admin-Setting AUSGEBLENDET (nicht gelöscht) —
+                 das Start-Fenster liegt darüber, „Von 0 starten" öffnet den
+                 leeren Editor direkt. Wieder aktivierbar unter /admin →
+                 Einstellungen → Theme-Editor. */
+              <div className="min-h-[40vh]" />
+            ) : (
             <div className={`max-w-4xl mx-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
               <header className="text-center mb-6 mt-4 sm:mt-8">
                 <div className="inline-flex items-center gap-1.5 text-[9px] uppercase tracking-[0.2em] font-semibold mb-2" style={{ color: ACCENT }}>
@@ -1219,6 +1271,7 @@ export default function ThemeEditorPage() {
                 </div>
               )}
             </div>
+            )
           ) : (
             /* ── Split-Pane-Editor ── */
             /* Rechte Leiste bewusst schmal (300/316px) — der gewonnene Platz
@@ -1682,9 +1735,19 @@ export default function ThemeEditorPage() {
       <StartChoiceOverlay
         open={startOpen && !doc.productId && !intakeOpen && !genesisJob && editorCfg !== null}
         demoReady={!!editorCfg?.demoReady}
+        showSkip={pickerEnabled}
         onOwn={() => { setStartOpen(false); setIntakeOpen(true); }}
         onDemo={startDemo}
-        onBlank={() => { blankStartRef.current = true; setStartOpen(false); }}
+        onBlank={() => {
+          // Mit Produkt-Übersicht: Grid zeigen (Nutzer wählt sein Produkt).
+          // Ohne (Standard): direkt in den leeren Editor.
+          if (pickerEnabled) {
+            blankStartRef.current = true;
+            setStartOpen(false);
+          } else {
+            startBlankDirect();
+          }
+        }}
         onSkip={() => { blankStartRef.current = false; setStartOpen(false); }}
         t={{
           title: t.themes.genesisTitle,
