@@ -2454,9 +2454,11 @@ export function sectionRoleRank(type: string): number {
 }
 
 // Rollen, deren Sections sich visuell ähneln — zwei davon direkt
-// untereinander wirken „gestapelt" (Feature-Grids, Review-Blöcke, FAQ-artige).
-// Story-Sections (Bild+Text, Callouts, …) dürfen dagegen aufeinander folgen.
-const NO_STACK_ROLES = new Set<SectionRole>(["benefits", "proof", "objections"]);
+// untereinander wirken „gestapelt" (Feature-Grids, Review-Blöcke).
+// Story-Sections (Bild+Text, Callouts, …) dürfen aufeinander folgen;
+// objections bleibt bewusst draußen: FAQ-artige dürfen im Notfall
+// benachbart sein, aber NIE über die Features nach oben rutschen.
+const NO_STACK_ROLES = new Set<SectionRole>(["benefits", "proof"]);
 // Zwischenschieber, Stufe 1: ruhige, früh rangierende Rollen — die ideale
 // Auflockerung zwischen zwei gleichen Blöcken. FAQ/Garantie/Abschluss dürfen
 // NIE nach oben gezogen werden (FAQ gehört ganz unten).
@@ -2465,55 +2467,147 @@ const SEPARATOR_ROLES = new Set<SectionRole>(["authority", "story"]);
 // ein Review-/Stats-Band oder Angebots-Block zwischen zwei Feature-Sections
 // ist gängiges D2C-Muster und immer besser als ein sichtbarer Stapel.
 const SEPARATOR_ROLES_FALLBACK = new Set<SectionRole>(["proof", "urgency", "offer"]);
+// Stufe 3 — NUR zum Aufbrechen von Review-Läufen (proof/objections-Alternanz):
+// zwischen zwei Reviews darf eine FAQ-/Vergleichs-Section, für Feature-Läufe
+// ist das verboten (FAQ würde sonst über die Features rutschen).
+const SEPARATOR_ROLES_PROOF_ONLY = new Set<SectionRole>(["objections"]);
 
-/** Löst Läufe visuell gleicher Rollen auf — nie zwei Feature-/Review-/FAQ-
- *  Sections direkt untereinander. Erst wird eine Story-/Authority-Section
- *  von weiter hinten dazwischengezogen, danach notfalls Proof/Urgency/Offer;
- *  zuletzt wandert der Doppelte nach vorn zwischen zwei fremde Rollen (so
- *  tief wie möglich). Deterministisch (Client/Server-Parität für AI-Ops). */
-function breakSameRoleRuns(list: CompositionEntry[], headType?: string): CompositionEntry[] {
+/** Echte Hero-Sections — davon gibt es pro Seite GENAU EINE (zwei Heros
+ *  untereinander sind ein klassischer Anfänger-Look). Die schmale
+ *  Ankündigungsleiste (bro-announce) zählt bewusst NICHT als Hero. */
+export const HERO_TYPES = new Set(["slideshow2", "bro-hero-luxe", "bro-hero-split"]);
+
+/** Bildlastige Sections — zwei davon direkt untereinander wirken wie ein
+ *  unstrukturierter Bild-Stapel (auch Hero + Parallax-Bild!). Zwischen zwei
+ *  Bild-Sections gehört immer eine Text-/Feature-/Review-Section. */
+export const IMAGE_HEAVY_TYPES = new Set([
+  "slideshow2", "bro-hero-luxe", "bro-hero-split", "scrollingbild", "photo",
+  "collage", "video", "bro-image-cards", "bro-circle-gallery",
+  "bro-transformation", "bro-compare-slider",
+]);
+
+const roleOf = (t: string): SectionRole => SECTION_ROLES[t] || "story";
+
+/** Stapeln zwei Section-Typen visuell? (gleiche No-Stack-Rolle ODER beide
+ *  bildlastig — deckt „2 Feature-Grids", „2 Review-Blöcke" UND „2 große
+ *  Bilder/Heros untereinander" ab.) */
+function stacksVisually(aType: string, bType: string): boolean {
+  const ra = roleOf(aType);
+  if (ra === roleOf(bType) && NO_STACK_ROLES.has(ra)) return true;
+  return IMAGE_HEAVY_TYPES.has(aType) && IMAGE_HEAVY_TYPES.has(bType);
+}
+
+/** Löst visuelle Stapel auf (gleiche Rollen UND Bild-auf-Bild). Strategien
+ *  in dieser Reihenfolge: (1) verträglichen Story-/Authority-Zwischenschieber
+ *  von weiter hinten holen, notfalls Proof/Urgency/Offer; (2) einen der
+ *  beiden Stapel-Partner nach vorn zwischen zwei verträgliche Nachbarn
+ *  ziehen (so tief wie möglich); (3) letzte Rettung: einen Partner ans
+ *  Seitenende schieben — visuelle Sauberkeit schlägt in diesem Randfall die
+ *  perfekte Funnel-Position. Nach jeder Mutation wird die Stelle erneut
+ *  geprüft (Revisit); ein Iterations-Guard verhindert Endlosschleifen.
+ *  Deterministisch (Client/Server-Parität für AI-Ops bleibt erhalten). */
+function breakVisualStacks<T extends { type: string }>(list: T[], headType?: string): T[] {
   const out = [...list];
-  const role = (t: string): SectionRole => SECTION_ROLES[t] || "story";
+  let guard = out.length * 4;
   for (let i = 0; i < out.length; i++) {
-    const prevRole = i === 0 ? (headType ? role(headType) : null) : role(out[i - 1].type);
-    if (prevRole === null || role(out[i].type) !== prevRole || !NO_STACK_ROLES.has(prevRole)) continue;
-    // Lauf gefunden — Zwischenschieber von weiter hinten holen (Stufe 1 → 2).
+    const prevType = i === 0 ? headType : out[i - 1].type;
+    if (!prevType || !stacksVisually(prevType, out[i].type)) continue;
+    if (--guard < 0) break;
+
+    // (1) Zwischenschieber suchen (Stufe 1 → 2; Stufe 3 = Einwände/FAQ NUR
+    // zwischen zwei Review-Sections — proof/objections-Alternanz ist gängig
+    // und hält FAQ trotzdem unter den Features). Der Kandidat darf selbst mit
+    // KEINEM der beiden Nachbarn stapeln (kein Foto zwischen zwei Bilder).
+    const proofRun = roleOf(out[i].type) === "proof" && roleOf(prevType) === "proof";
+    const pools = proofRun
+      ? [SEPARATOR_ROLES, SEPARATOR_ROLES_FALLBACK, SEPARATOR_ROLES_PROOF_ONLY]
+      : [SEPARATOR_ROLES, SEPARATOR_ROLES_FALLBACK];
     let j = -1;
-    for (const pool of [SEPARATOR_ROLES, SEPARATOR_ROLES_FALLBACK]) {
+    for (const pool of pools) {
       for (let s = i + 1; s < out.length; s++) {
-        const r = role(out[s].type);
-        if (pool.has(r) && r !== prevRole) { j = s; break; }
+        const cand = out[s];
+        if (!pool.has(roleOf(cand.type))) continue;
+        if (stacksVisually(prevType, cand.type) || stacksVisually(cand.type, out[i].type)) continue;
+        j = s;
+        break;
       }
       if (j >= 0) break;
     }
     if (j >= 0) {
       const [moved] = out.splice(j, 1);
       out.splice(i, 0, moved);
+      // Die Lücke am Ursprung des Separators kann einen NEUEN Stapel bilden —
+      // liegt hinter i und wird vom Vorwärtslauf ohnehin geprüft.
       continue;
     }
-    // Kein Separator mehr hinter dem Lauf: den Doppelten nach vorn zwischen
-    // zwei anders-rollige Nachbarn ziehen — so tief wie möglich, damit z. B.
-    // Reviews trotzdem in der unteren Hälfte bleiben.
-    for (let k = i - 1; k >= 1; k--) {
-      if (role(out[k].type) !== prevRole && role(out[k - 1].type) !== prevRole) {
-        const [moved] = out.splice(i, 1);
-        out.splice(k, 0, moved);
-        break;
+
+    // (2) Einen Stapel-Partner nach vorn zwischen verträgliche Nachbarn ziehen
+    // (erst den hinteren, dann den vorderen Partner probieren).
+    const slotInsert = (idx: number): boolean => {
+      for (let k = idx - 1; k >= 1; k--) {
+        if (k === idx) continue;
+        if (!stacksVisually(out[k].type, out[idx].type) && !stacksVisually(out[k - 1].type, out[idx].type)) {
+          const [moved] = out.splice(idx, 1);
+          out.splice(k, 0, moved);
+          return true;
+        }
       }
+      return false;
+    };
+    if (slotInsert(i)) {
+      // Join-Paar (alt i-1, alt i+1) liegt jetzt bei (i, i+1) → Revisit ab i.
+      i -= 1;
+      continue;
+    }
+    if (i - 1 >= 1 && slotInsert(i - 1)) {
+      i -= 2;
+      continue;
+    }
+
+    // (3) Letzte Rettung: hinteren Partner ans Ende schieben, wenn er dort
+    // nicht wieder stapelt (sonst den vorderen).
+    const moveToEnd = (idx: number): boolean => {
+      if (idx >= out.length - 1) return false;
+      if (stacksVisually(out[out.length - 1].type, out[idx].type)) return false;
+      const [moved] = out.splice(idx, 1);
+      out.push(moved);
+      return true;
+    };
+    if (moveToEnd(i) || (i - 1 >= 1 && moveToEnd(i - 1))) {
+      i -= 1;
+      continue;
     }
   }
   return out;
 }
 
+/** Struktur-Normalisierung für JEDE Section-Folge (Kompositionen UND
+ *  AI-gebaute Seiten): (1) höchstens EIN echter Hero — der erste bleibt,
+ *  weitere fliegen raus; (2) visuelle Stapel werden aufgelöst. Die
+ *  bestehende Reihenfolge bleibt ansonsten erhalten (kein Re-Sort). */
+export function normalizeSectionFlow<T extends { type: string }>(entries: T[]): T[] {
+  let heroSeen = false;
+  const deduped = entries.filter((e) => {
+    if (!HERO_TYPES.has(e.type)) return true;
+    if (heroSeen) return false;
+    heroSeen = true;
+    return true;
+  });
+  if (deduped.length <= 2) return deduped;
+  const [head, ...rest] = deduped;
+  return [head, ...breakVisualStacks(rest, head.type)];
+}
+
 /** Sortiert eine Komposition stabil nach dem Verkaufs-Funnel — der erste
  *  Eintrag bleibt als Anker (kuratierter Hook, z. B. Countdown bei „deal").
- *  Danach werden Läufe gleicher Rollen aufgelöst (Struktur-Pflicht: oben
- *  Hero/Features, Reviews/FAQ unten, nie zwei gleiche Rollen gestapelt). */
+ *  Danach werden Hero-Dubletten entfernt und visuelle Stapel aufgelöst
+ *  (Struktur-Pflicht: oben Hero/Features, Reviews/FAQ unten, nie zwei
+ *  gleiche Blöcke oder zwei große Bilder untereinander). */
 export function sortCompositionByFunnel(entries: CompositionEntry[]): CompositionEntry[] {
   if (entries.length <= 2) return entries;
   const [head, ...rest] = entries;
   const sorted = [...rest].sort((a, b) => sectionRoleRank(a.type) - sectionRoleRank(b.type));
-  return [head, ...breakSameRoleRuns(sorted, head.type)];
+  return normalizeSectionFlow([head, ...sorted]);
 }
 
 /**

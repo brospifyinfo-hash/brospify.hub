@@ -37,11 +37,11 @@ import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import { blankDocument, buildRevealTimeline, type RevealLabels } from "@/lib/theme-genesis";
 import { applyAiOpToDoc, newAiApplyCtx, type AiOp } from "@/lib/theme-ai-ops";
 import {
-  editorReducer, initialEditorState, type ThemeDocument, type EditorPage,
+  editorReducer, initialEditorState, emptyDocument, type ThemeDocument, type EditorPage,
 } from "@/lib/theme-doc";
 import {
   buildInitialDocument, createLibraryInstance, getSectionDef, shuffleComposition,
-  type BaseSectionInfo,
+  normalizeSectionFlow, type BaseSectionInfo,
 } from "@/lib/theme-library";
 import { THEME_STYLES, DEFAULT_STYLE_ID, getThemeStyle, type StyleDesign } from "@/lib/theme-styles";
 import { STYLE_GALLERY } from "@/lib/theme-library";
@@ -762,15 +762,26 @@ export default function ThemeEditorPage() {
         dispatch({ type: "replace", doc: blank });
 
         // 2) Echter AI-Plan auf Basis von Bildern + Beschreibung (Standard-Modus).
+        // WICHTIG: Die AI plant auf einer VOLLEN Standard-Kaufbox (aiBase) —
+        // die minimale Genesis-Kaufbox des angezeigten blank-Docs würde die
+        // Kaufbox-Personalisierung aushebeln (Regel H arbeitet auf sichtbaren
+        // Bausteinen) und der fertige Shop bliebe in der Kaufbox dünn.
+        // Angezeigt wird während der Analyse trotzdem der leere Shop.
+        const aiBase: ThemeDocument = { ...blank, buybox: { ...emptyDocument().buybox } };
+        // Auftrags-Brief für den Neubau: die Pflicht-Checkliste spiegelt die
+        // harten Qualitätsregeln (EIN Hero, keine Bild-Stapel, volle Kaufbox,
+        // Töne nur aus der Palette) direkt im User-Prompt.
         const prompt = currentLang === "en"
-          ? `Build a complete, high-converting shop for this product from scratch. Product: ${r.titel}. Description: ${r.beschreibung}`
-          : `Baue einen kompletten, hochkonvertierenden Shop für dieses Produkt von 0 auf. Produkt: ${r.titel}. Beschreibung: ${r.beschreibung}`;
+          ? `Build a complete, high-converting shop for this product FROM SCRATCH. Product: ${r.titel}. ${r.preis ? `Price: ${r.preis}. ` : ""}Description: ${r.beschreibung}
+MANDATORY for this full build: (1) style, palette and fonts derived from the product photos — neutral page background, accent = brand color; (2) EXACTLY ONE hero at the top, then features/benefits, story/imagery, reviews in the lower half, FAQ near the end, guarantee + closing CTA — never two similar sections or two large image sections stacked; (3) EVERY section fully copywritten for this exact product; (4) FULLY personalize the buy box: product-specific copy for every visible block (sale banner, urgency, benefits, stock, bundles, free gift, delivery), 4 niche-matching benefit icons, plus 2–3 fitting trust blocks; (5) section backgrounds ONLY via the tone system (no foreign colors), one transition shape used top+bottom.`
+          : `Baue einen kompletten, hochkonvertierenden Shop für dieses Produkt VON 0 auf. Produkt: ${r.titel}. ${r.preis ? `Preis: ${r.preis}. ` : ""}Beschreibung: ${r.beschreibung}
+PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos ableiten — Seiten-Hintergrund neutral, Akzent = Markenfarbe; (2) GENAU EIN Hero oben, danach Features/Vorteile, Story/Bilder, Bewertungen in der unteren Hälfte, FAQ weit unten, Garantie + Abschluss-CTA — nie zwei ähnliche Sections oder zwei große Bild-Sections direkt untereinander; (3) JEDE Section vollständig auf genau dieses Produkt getextet; (4) Die KAUFBOX VOLL personalisieren: produktspezifische Texte für jeden sichtbaren Baustein (Sale-Banner, Dringlichkeit, Vorteile, Lager, Bundles, Gratis-Geschenk, Lieferzeit), 4 nischen-passende Vorteil-Icons, dazu 2–3 passende Vertrauens-Bausteine; (5) Section-Hintergründe NUR über das Ton-System (keine Fremdfarben), eine Übergangs-Form, immer oben+unten.`;
         const res = await fetch("/api/theme-ai/plan", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
           body: JSON.stringify({
-            document: blank,
+            document: aiBase,
             prompt,
             images: r.dataUrls.map((dataUrl) => ({ dataUrl })),
             paletteHints: r.paletteHints,
@@ -787,24 +798,36 @@ export default function ThemeEditorPage() {
         if (typeof d?.creditsRemaining === "number") credits.setBalance(d.creditsRemaining);
         const ops = (Array.isArray(d?.ops) ? d.ops : []) as AiOp[];
         // Attribution + Lernspeicher — darf den Aufbau NIE blockieren.
+        // WICHTIG: exakt die ORIGINAL-Ops + dasselbe Plan-Dokument (aiBase)
+        // senden — der planToken hasht die validierten Ops.
         fetch("/api/theme-ai/apply", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           cache: "no-store",
-          body: JSON.stringify({ document: blank, ops, planToken: d?.planToken, productTitle: r.titel, capabilities: caps }),
+          body: JSON.stringify({ document: aiBase, ops, planToken: d?.planToken, productTitle: r.titel, capabilities: caps }),
         }).catch(() => {});
 
         // 3) Ziel-Dokument still berechnen (die Ops selbst laufen NICHT einzeln
         //    durch die Preview — die Inszenierung übernimmt die Timeline).
+        //    Genesis = Auto-Build: rohe Section-Hintergrundfarben (sec_bg/sec_bg2)
+        //    werden LOKAL übersprungen — beim Neubau zählt nur das Palette-
+        //    Ton-System, Fremdfarben zerstören den Look. (Die Original-Ops
+        //    gingen unverändert an /apply.)
+        const localOps = ops.filter(
+          (op) => !(op.op === "set_section_setting" && (op.key === "sec_bg" || op.key === "sec_bg2")),
+        );
         const ctx = newAiApplyCtx(bs, caps, hs);
-        let target = blank;
-        for (const op of ops) target = applyAiOpToDoc(target, op, ctx);
+        let target = aiBase;
+        for (const op of localOps) target = applyAiOpToDoc(target, op, ctx);
         // Sicherheitsnetz: liefert die AI keine Sections (z. B. Fallback-Plan),
         // baut die Stil-Komposition den Shop — AI-Farben/Fonts bleiben erhalten.
         if (!target.sections.length) {
           const rebuilt = buildInitialDocument(r.productId, target.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs);
           target = { ...rebuilt, global: { ...rebuilt.global, ...target.global }, buybox: { ...rebuilt.buybox, gallery: target.buybox.gallery } };
         }
+        // Struktur-Garantie auch für AI-gebaute Seiten: höchstens EIN Hero,
+        // keine visuellen Stapel (2 Feature-Grids / 2 große Bilder).
+        target = { ...target, sections: normalizeSectionFlow(target.sections) };
         return {
           steps: buildRevealTimeline(target, labels, genesisSectionLabel, genesisBlockLabel),
           notice: d?.fallback ? tt.aiFallbackNote : undefined,

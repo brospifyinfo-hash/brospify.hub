@@ -93,7 +93,11 @@ const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as c
 /** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf.
  *  sec_fade absichtlich NICHT mehr dabei (keine Fades für neue Designs). */
 const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_divider", "sec_divider_top", "icon_1", "icon_2", "icon_3", "icon_4"]);
-const MAX_OPS = 34;
+// MUSS mit dem System-Prompt übereinstimmen („Max. 48 Operationen",
+// theme-ai.ts Regel 5)! Ein niedrigeres Validierungs-Limit würde die
+// ZULETZT generierten Ops still verwerfen — das sind bei Voll-Neubauten
+// typischerweise die Kaufbox-Personalisierungen (dünne Kaufbox als Symptom).
+const MAX_OPS = 48;
 const MAX_TEXT = 600;
 
 const isStr = (v: unknown): v is string => typeof v === "string";

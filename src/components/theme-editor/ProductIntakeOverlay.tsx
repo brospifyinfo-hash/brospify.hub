@@ -38,6 +38,8 @@ export interface IntakeResult {
   productId: string;
   titel: string;
   beschreibung: string;
+  /** Preis-Angabe (leer, wenn nicht gesetzt) — fließt in den AI-Brief ein. */
+  preis: string;
   /** Hochgeladene Blob-URLs (für das Produkt/Preview). */
   imageUrls: string[];
   /** dataURLs der ersten Bilder ≤ 4.5 MB (für den AI-Plan, max. 3). */
@@ -232,6 +234,7 @@ export default function ProductIntakeOverlay({
         productId: d.product.id as string,
         titel: titel.trim(),
         beschreibung: beschreibung.trim(),
+        preis: preis.trim(),
         imageUrls: urls,
         dataUrls: uploaded.filter((i) => i.bytes <= AI_IMAGE_MAX_BYTES).slice(0, 3).map((i) => i.dataUrl),
         paletteHints: uploaded.flatMap((i) => i.hints).slice(0, 8),
