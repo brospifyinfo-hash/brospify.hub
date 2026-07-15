@@ -9,7 +9,9 @@ import type { Metadata } from "next";
 // räumt beim Unmount auf.
 
 export const metadata: Metadata = {
-  title: "Brospify Editor — Dein Shopify-Shop, gebaut in Sekunden",
+  // absolute: das Root-Layout hängt sonst per Template „· Brospify Hub" an —
+  // die Editor-Website ist aber eine eigene Marke ohne Hub-Bezug.
+  title: { absolute: "Brospify Editor — Dein Shopify-Shop, gebaut in Sekunden" },
   description:
     "Der Brospify Theme-Editor: Produkt zeigen, AI baut den kompletten Shop — Design, Texte, Kaufbox. Erste Vorschau kostenlos.",
 };

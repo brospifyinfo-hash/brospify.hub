@@ -24,9 +24,17 @@ const nextConfig: NextConfig = {
   // Next automatisch durchgereicht). 307 (permanent:false), damit Browser
   // nichts für immer cachen, solange die Struktur noch in Bewegung ist.
   async redirects() {
-    return [
+    const redirects = [
       { source: "/themes/editor", destination: "/editor", permanent: false },
     ];
+    // Editor-Deployment (eigenes Vercel-Projekt mit EDITOR_SITE=1): Die
+    // Domain-Wurzel gehört der Landing (/start) — der Hub-Login unter /
+    // existiert auf der Editor-Website nicht. Build-Zeit-Schalter, damit
+    // der Hub (ohne diese Variable) sein "/" als Login behält.
+    if (process.env.EDITOR_SITE === "1") {
+      redirects.unshift({ source: "/", destination: "/start", permanent: false });
+    }
+    return redirects;
   },
   async rewrites() {
     return [
