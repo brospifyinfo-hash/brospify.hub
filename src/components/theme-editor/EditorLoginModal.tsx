@@ -8,7 +8,7 @@
 // damit keine Theme-/White-Mode-Regel die Lesbarkeit kippen kann.
 // Wiederverwendet als Modal im Editor UND als Karte auf /start/login.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { signIn } from "next-auth/react";
 
 const INK = "#14121a";
@@ -69,6 +69,18 @@ const inputStyle: React.CSSProperties = {
 };
 
 /** Die weiße Login-Karte (ohne Overlay) — nutzbar im Modal und auf Seiten. */
+const VERIFY_ERROR_TEXT: Record<string, string> = {
+  code_wrong: "Der Code stimmt nicht — bitte prüfe die Eingabe.",
+  code_expired: "Der Code ist abgelaufen — fordere unten einen neuen an.",
+  code_missing: "Bitte fordere unten einen neuen Code an.",
+  too_many_attempts: "Zu oft falsch eingegeben — fordere bitte einen neuen Code an.",
+  use_primary_login:
+    "Zu dieser Adresse gehört ein Konto mit Mitgliedschaft oder Admin-Rechten — bitte melde dich mit Google an.",
+  blocked: "Dieses Konto ist gesperrt — bitte wende dich an den Support.",
+  invalid: "Anmeldung nicht möglich — bitte versuche es erneut.",
+  server: "Technischer Fehler — bitte versuche es gleich erneut.",
+};
+
 export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: () => void }) {
   const [view, setView] = useState<"choose" | "shopify" | "email" | "emailSent">("choose");
   const [shop, setShop] = useState("");
@@ -76,6 +88,14 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [devUrl, setDevUrl] = useState<string | null>(null);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [codeInput, setCodeInput] = useState("");
+  const [cooldown, setCooldown] = useState(false);
+  const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cooldown-Timer beim Unmount aufräumen (kein verwaister Timer, der
+  // später den Cooldown eines neueren Sends vorzeitig beendet).
+  useEffect(() => () => { if (cooldownTimer.current) clearTimeout(cooldownTimer.current); }, []);
 
   // Google/Shopify setzen busy=true und navigieren dann weg. Kommt der
   // Nutzer per Browser-Back aus dem OAuth-Fenster zurück, stellt der
@@ -112,22 +132,59 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ email: v, next }),
       });
-      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; devUrl?: string };
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; devUrl?: string; devCode?: string };
       if (d.ok) {
         setDevUrl(d.devUrl || null);
+        setDevCode(d.devCode || null);
+        setCodeInput("");
         setView("emailSent");
+        // Kleiner Client-Cooldown fürs erneute Senden (Server limitiert zusätzlich).
+        // Vorherigen Timer canceln, damit er nicht den neuen Cooldown killt.
+        if (cooldownTimer.current) clearTimeout(cooldownTimer.current);
+        setCooldown(true);
+        cooldownTimer.current = setTimeout(() => setCooldown(false), 30000);
       } else {
         setErr(
           d.error === "rate_limited"
             ? "Zu viele Versuche — bitte warte ein paar Minuten."
             : d.error === "email_invalid"
               ? "Bitte gib eine gültige E-Mail-Adresse ein."
-              : "Der Link konnte nicht verschickt werden — bitte versuche es gleich erneut.",
+              : "Der Code konnte nicht verschickt werden — bitte versuche es gleich erneut.",
         );
       }
     } catch {
       setErr("Netzwerkfehler — bitte versuche es erneut.");
     } finally {
+      setBusy(false);
+    }
+  };
+
+  const verifyCode = async () => {
+    if (busy) return;
+    const v = codeInput.replace(/\D/g, "");
+    if (v.length !== 6) { setErr("Bitte gib den 6-stelligen Code aus der E-Mail ein."); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/editor-auth/email/verify", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ code: v, next }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; next?: string; attemptsLeft?: number };
+      if (d.ok) {
+        // Eingeloggt — weiter ins Ziel (busy bleibt an, die Seite wechselt).
+        window.location.href = d.next || next;
+        return;
+      }
+      let msg = VERIFY_ERROR_TEXT[d.error || "server"] ?? VERIFY_ERROR_TEXT.server;
+      if (d.error === "code_wrong" && typeof d.attemptsLeft === "number") {
+        msg = `Der Code stimmt nicht — noch ${d.attemptsLeft} ${d.attemptsLeft === 1 ? "Versuch" : "Versuche"}.`;
+      }
+      setErr(msg);
+      setBusy(false);
+    } catch {
+      setErr("Netzwerkfehler — bitte versuche es erneut.");
       setBusy(false);
     }
   };
@@ -161,19 +218,73 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
 
       {view === "emailSent" ? (
         <>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" }}>Dein Link ist unterwegs ✉️</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" }}>Gib deinen Code ein ✉️</h2>
           <p style={{ margin: "10px 0 0", fontSize: 13.5, lineHeight: 1.6, color: INK_SOFT }}>
-            Wir haben dir einen Login-Link an <strong>{email.trim().toLowerCase()}</strong> geschickt.
+            Wir haben einen 6-stelligen Code an{" "}
+            {email.trim() ? <strong>{email.trim().toLowerCase()}</strong> : "deine E-Mail-Adresse"} geschickt.
             Er ist 15 Minuten gültig — schau auch im Spam-Ordner nach.
           </p>
-          {devUrl && (
-            <a href={devUrl} style={{ display: "inline-block", marginTop: 14, fontSize: 12.5, fontWeight: 700, color: "#7c3aed" }}>
-              (Dev) Link direkt öffnen →
-            </a>
+
+          {err && (
+            <p style={{ margin: "14px 0 0", padding: "10px 14px", borderRadius: 12, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)", color: "#b91c1c", fontSize: 12.5, fontWeight: 600 }}>
+              {err}
+            </p>
           )}
-          <button onClick={() => { setView("email"); setErr(null); }} style={{ ...secondaryBtn, marginTop: 18 }}>
-            Andere Adresse verwenden
+          {devCode && (
+            <p style={{ margin: "12px 0 0", fontSize: 12.5, fontWeight: 700, color: "#7c3aed" }}>
+              (Dev) Code: {devCode}
+              {devUrl && (
+                <>
+                  {" · "}
+                  <a href={devUrl} style={{ color: "#7c3aed" }}>Link öffnen →</a>
+                </>
+              )}
+            </p>
+          )}
+
+          <input
+            value={codeInput}
+            onChange={(e) => { setCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6)); setErr(null); }}
+            onKeyDown={(e) => { if (e.key === "Enter") verifyCode(); }}
+            placeholder="123456"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+            disabled={busy}
+            style={{
+              ...inputStyle,
+              flex: "none",
+              width: "100%",
+              marginTop: 18,
+              textAlign: "center",
+              fontSize: 26,
+              fontWeight: 800,
+              letterSpacing: "0.35em",
+              padding: "14px 10px",
+            }}
+          />
+
+          <button
+            onClick={verifyCode}
+            disabled={busy}
+            style={{
+              marginTop: 12, width: "100%", padding: "14px 22px", borderRadius: 999, border: 0,
+              cursor: busy ? "default" : "pointer", background: INK, color: "#fff",
+              fontFamily: "inherit", fontSize: 14.5, fontWeight: 700, opacity: busy ? 0.7 : 1,
+              boxShadow: "0 10px 26px rgba(20,18,26,0.22)",
+            }}
+          >
+            {busy ? "Wird geprüft …" : "Anmelden →"}
           </button>
+
+          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+            <button onClick={sendEmailLink} disabled={busy || cooldown} style={{ ...secondaryBtn, opacity: busy || cooldown ? 0.6 : 1 }}>
+              {cooldown ? "Code gesendet ✓" : "Code erneut senden"}
+            </button>
+            <button onClick={() => { setView("email"); setErr(null); setCodeInput(""); }} disabled={busy} style={secondaryBtn}>
+              Andere Adresse
+            </button>
+          </div>
         </>
       ) : (
         <>
@@ -242,12 +353,21 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
                   disabled={busy}
                 />
                 <button onClick={sendEmailLink} disabled={busy} style={{ ...secondaryBtn, width: "auto" }}>
-                  {busy ? "…" : "Link senden"}
+                  {busy ? "…" : "Code senden"}
                 </button>
               </div>
               <p style={{ margin: 0, fontSize: 11.5, color: INK_FAINT }}>
-                Du bekommst einen Login-Link per E-Mail — kein Passwort nötig.
+                Du bekommst einen 6-stelligen Code per E-Mail — kein Passwort nötig.
               </p>
+              {/* Rückweg, falls das Fenster mitten in der Code-Eingabe
+                  geschlossen wurde: der Code in der Mail gilt 15 Min weiter. */}
+              <button
+                onClick={() => { setView("emailSent"); setErr(null); }}
+                disabled={busy}
+                style={{ margin: "2px auto 0", border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: INK_SOFT }}
+              >
+                Code schon erhalten? Hier eingeben →
+              </button>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -255,7 +375,7 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
                 <ShopifyIcon /> Mit Shopify anmelden
               </button>
               <button onClick={() => { setView("email"); setErr(null); }} disabled={busy} style={secondaryBtn}>
-                ✉️&nbsp; Mit E-Mail-Link anmelden
+                ✉️&nbsp; Mit E-Mail-Code anmelden
               </button>
             </div>
           )}

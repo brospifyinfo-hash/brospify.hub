@@ -1,14 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
-import { signEmailLoginToken, safeNextPath, rateLimit, editorAuthSecret } from "@/lib/editor-auth";
+import { getSession } from "@/lib/session";
+import {
+  signEmailLoginToken,
+  safeNextPath,
+  rateLimit,
+  editorAuthSecret,
+  generateEmailLoginCode,
+  generateCodeId,
+  hashEmailLoginCode,
+  EMAIL_CODE_TTL_MS,
+} from "@/lib/editor-auth";
 import { sendEditorLoginEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
-// ─── Editor-Login per E-Mail — Schritt 1: Link anfordern ───────────────
-// POST { email, next? } → verschickt einen signierten 15-Minuten-Link.
-// Antwortet IMMER mit ok:true bei gültiger E-Mail (kein Konto-Enumeration-
-// Leck: ob die Adresse ein Konto hat, wird hier nicht verraten — beim
-// Klick entsteht ohnehin automatisch ein Gratis-Konto).
+// ─── Editor-Login per E-Mail — Schritt 1: Code anfordern ───────────────
+// POST { email, next? } → verschickt einen 6-stelligen Bestätigungscode
+// (plus Login-Link als Fallback-Button). Der Code-Hash landet in der
+// verschlüsselten iron-Session DIESES Browsers — eingeben kann ihn also
+// nur, wer die Anfrage gestellt hat. Antwortet IMMER mit ok:true bei
+// gültiger E-Mail (kein Konto-Enumeration-Leck: ob die Adresse ein Konto
+// hat, wird hier nicht verraten — beim Einlösen entsteht ohnehin
+// automatisch ein Gratis-Konto).
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -31,28 +44,47 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "server" }, { status: 503 });
     }
 
-    // Best-effort-Rate-Limit: 3 Links / 10 min pro Adresse, 10 pro IP.
+    // Best-effort-Rate-Limit: 3 Codes / 10 min pro Adresse, 10 pro IP.
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
     if (!rateLimit(`email-req:${email}`, 3, 10 * 60 * 1000) || !rateLimit(`email-ip:${ip}`, 10, 10 * 60 * 1000)) {
       return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
     }
 
+    const code = generateEmailLoginCode();
+    const codeHash = hashEmailLoginCode(email, code);
     const token = signEmailLoginToken(email, next);
-    if (!token) return NextResponse.json({ ok: false, error: "server" }, { status: 503 });
+    if (!codeHash || !token) return NextResponse.json({ ok: false, error: "server" }, { status: 503 });
 
     const loginUrl = `${originFrom(req)}/api/editor-auth/email/callback?token=${encodeURIComponent(token)}`;
-    const sent = await sendEditorLoginEmail({ to: email, loginUrl });
+    const sent = await sendEditorLoginEmail({ to: email, code, loginUrl });
 
-    // Lokal/ohne Resend-Key: Link im Dev-Modus zurückgeben, damit der
+    // WICHTIG: Den neuen Code ERST NACH erfolgreichem Versand in die
+    // Session schreiben. Sonst würde ein fehlgeschlagener Resend einen
+    // bereits zugestellten (alten) Code entwerten, obwohl der Nutzer ihn
+    // noch im Postfach hat.
+    const commit = async () => {
+      const session = await getSession();
+      session.editorEmailLogin = {
+        email,
+        codeHash,
+        expiresAt: Date.now() + EMAIL_CODE_TTL_MS,
+        codeId: generateCodeId(),
+      };
+      await session.save();
+    };
+
+    // Lokal/ohne Resend-Key: Code+Link im Dev-Modus zurückgeben, damit der
     // Flow testbar bleibt (niemals in Produktion).
     if (!sent.sent) {
       if (process.env.NODE_ENV !== "production") {
-        console.warn("[editor-auth/email] Versand übersprungen — Dev-Link:", loginUrl);
-        return NextResponse.json({ ok: true, devUrl: loginUrl });
+        await commit();
+        console.warn("[editor-auth/email] Versand übersprungen — Dev-Code:", code, "Link:", loginUrl);
+        return NextResponse.json({ ok: true, devCode: code, devUrl: loginUrl });
       }
       return NextResponse.json({ ok: false, error: "send_failed" }, { status: 502 });
     }
 
+    await commit();
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[editor-auth/email] request error:", err);

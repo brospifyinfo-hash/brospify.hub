@@ -370,38 +370,46 @@ export async function sendAdminAllDrawnAlert(args: AdminAllDrawnAlertArgs): Prom
   });
 }
 
-// ─── Editor-Login-Link (Magic Link der Standalone-Editor-Website) ──────
-// Kurzer, heller Mail-Look passend zur Landing. Der Link ist 15 Minuten
-// gültig (signiert, siehe src/lib/editor-auth.ts).
+// ─── Editor-Login-Code (Standalone-Editor-Website) ─────────────────────
+// Kurzer, heller Mail-Look passend zur Landing. Prominent: der 6-stellige
+// Bestätigungscode (wird im Login-Fenster eingegeben, 15 Minuten gültig,
+// nur im anfordernden Browser einlösbar). Darunter der Login-Link als
+// Fallback-Button (signiert, siehe src/lib/editor-auth.ts).
 export interface EditorLoginEmailArgs {
   to: string;
+  code: string;
   loginUrl: string;
 }
 
 export async function sendEditorLoginEmail(args: EditorLoginEmailArgs): Promise<SendResult> {
   const url = args.loginUrl;
+  const code = args.code;
   const html = `<!DOCTYPE html>
 <html lang="de"><body style="margin:0;padding:32px 16px;background:#faf7f1;font-family:-apple-system,'Segoe UI',sans-serif;">
   <div style="max-width:460px;margin:0 auto;background:#ffffff;border:1px solid rgba(20,18,26,0.10);border-radius:24px;padding:36px 32px;text-align:center;">
     <div style="width:52px;height:52px;border-radius:16px;margin:0 auto 20px;background:linear-gradient(100deg,#7c3aed,#ec4899 52%,#fb923c);line-height:52px;color:#fff;font-size:24px;font-weight:800;">B</div>
-    <h1 style="margin:0;font-size:20px;letter-spacing:-0.02em;color:#14121a;">Dein Login-Link</h1>
+    <h1 style="margin:0;font-size:20px;letter-spacing:-0.02em;color:#14121a;">Dein Bestätigungscode</h1>
     <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:#5b5766;">
-      Klick auf den Button, um dich im Brospify&nbsp;Editor anzumelden und deinen Shop zu bauen.
-      Der Link ist <strong>15 Minuten</strong> gültig.
+      Gib diesen Code im Brospify&nbsp;Editor ein, um dich anzumelden.
+      Er ist <strong>15 Minuten</strong> gültig.
     </p>
-    <a href="${escapeHtml(url)}" style="display:inline-block;margin-top:24px;padding:15px 34px;border-radius:999px;background:#14121a;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">Jetzt anmelden →</a>
+    <div style="margin:24px auto 0;display:inline-block;padding:16px 28px;border-radius:16px;background:#faf7f1;border:1.5px solid rgba(20,18,26,0.12);font-size:34px;font-weight:800;letter-spacing:0.35em;color:#14121a;font-family:'Segoe UI',Consolas,monospace;">${escapeHtml(code)}</div>
+    <p style="margin:24px 0 0;font-size:12.5px;line-height:1.6;color:#8c8896;">
+      Klappt die Eingabe nicht? Dann nimm den Button — er meldet dich direkt an:
+    </p>
+    <a href="${escapeHtml(url)}" style="display:inline-block;margin-top:12px;padding:13px 30px;border-radius:999px;background:#14121a;color:#ffffff;font-size:14px;font-weight:700;text-decoration:none;">Direkt anmelden →</a>
     <p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:#8c8896;">
       Du hast das nicht angefordert? Dann ignoriere diese E-Mail einfach —
-      ohne Klick passiert nichts.
+      ohne Code-Eingabe passiert nichts.
     </p>
   </div>
 </body></html>`.trim();
 
-  const text = `Dein Brospify-Editor Login-Link (15 Minuten gültig):\n\n${url}\n\nDu hast das nicht angefordert? Dann ignoriere diese E-Mail einfach.`;
+  const text = `Dein Brospify-Editor Bestätigungscode (15 Minuten gültig): ${code}\n\nAlternativ per Link anmelden:\n${url}\n\nDu hast das nicht angefordert? Dann ignoriere diese E-Mail einfach.`;
 
   return sendViaResend({
     to: args.to,
-    subject: "Dein Login-Link für den Brospify Editor",
+    subject: `${code} ist dein Brospify-Code`,
     html,
     text,
     replyTo: "support@brospify.com",

@@ -65,7 +65,69 @@ export function verifyShopifyQueryHmac(searchParams: URLSearchParams, clientSecr
   }
 }
 
-// ── E-Mail-Login-Token (Magic Link) ─────────────────────────────────
+// ── E-Mail-Login-Code (OTP) ─────────────────────────────────────────
+// Der 6-stellige Code wird NICHT serverseitig gespeichert (Serverless!),
+// sondern als HMAC-Hash in der verschlüsselten iron-Session des Browsers
+// abgelegt, der ihn angefordert hat. Verifiziert wird timing-sicher;
+// Brute-Force scheitert an EMAIL_CODE_MAX_ATTEMPTS + kurzer TTL.
+export const EMAIL_CODE_TTL_MS = 15 * 60 * 1000;
+export const EMAIL_CODE_MAX_ATTEMPTS = 5;
+
+export function generateEmailLoginCode(): string {
+  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
+}
+
+// Jeder ausgestellte Code bekommt eine zufällige, nicht erratbare ID. Sie
+// bindet den Code an einen SERVERSEITIGEN Fehlversuch-Zähler (unten) —
+// nicht an den mitgeschickten Cookie. Damit bringt es dem Angreifer
+// nichts, einen frischen attempts:0-Cookie erneut abzuspielen: der Zähler
+// lebt hier im Speicher und steigt bei jedem Versuch weiter.
+export function generateCodeId(): string {
+  return crypto.randomBytes(16).toString("hex");
+}
+
+// Fehlversuch-Zähler pro Code-ID (best effort, prozesslokal — auf Vercel
+// pro Lambda-Instanz; zusammen mit dem Per-IP-Limit auf /verify deckelt
+// das den Rate-Durchsatz massiv, ohne externen Store).
+const codeAttempts = new Map<string, { count: number; resetAt: number }>();
+
+/** Zählt einen Verify-Versuch für diese Code-ID und liefert die neue
+ *  Gesamtzahl belegter Versuche. */
+export function bumpCodeAttempt(codeId: string): number {
+  const now = Date.now();
+  const b = codeAttempts.get(codeId);
+  if (!b || now > b.resetAt) {
+    codeAttempts.set(codeId, { count: 1, resetAt: now + EMAIL_CODE_TTL_MS });
+    return 1;
+  }
+  b.count += 1;
+  return b.count;
+}
+
+export function clearCodeAttempts(codeId: string): void {
+  codeAttempts.delete(codeId);
+}
+
+/** HMAC über E-Mail UND Code — der Hash gilt nur für genau diese Adresse. */
+export function hashEmailLoginCode(email: string, code: string): string | null {
+  const secret = editorAuthSecret();
+  if (!secret) return null;
+  return b64url(
+    crypto.createHmac("sha256", secret).update(`otp:${email.trim().toLowerCase()}:${code}`).digest(),
+  );
+}
+
+export function verifyEmailLoginCodeHash(email: string, code: string, expectedHash: string): boolean {
+  const actual = hashEmailLoginCode(email, code);
+  if (!actual) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(actual), Buffer.from(expectedHash));
+  } catch {
+    return false;
+  }
+}
+
+// ── E-Mail-Login-Token (Magic Link — Fallback-Button in der Mail) ───
 // Stateless: base64url(JSON{e-mail, exp, next}) + "." + HMAC. Kurze
 // Lebensdauer (15 min). Ohne Server-Store ist ein Link innerhalb der
 // TTL mehrfach nutzbar — bewusster Trade-off, loggt nur denselben

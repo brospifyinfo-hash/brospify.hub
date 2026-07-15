@@ -11,6 +11,18 @@ export interface SessionData {
   customerClientId?: string;
   customerClientSecret?: string;
   oauthNonce?: string;
+  /** Offener E-Mail-Login-Code des Editor-Logins (OTP). Liegt in der
+   *  verschlüsselten Session (bindet den Code an GENAU diesen Browser);
+   *  gespeichert wird nur der HMAC-Hash, nie der Code selbst. Der
+   *  Fehlversuch-Zähler liegt bewusst NICHT hier, sondern serverseitig
+   *  (editor-auth.ts, keyed per codeId) — sonst ließe er sich durch
+   *  erneutes Abspielen eines attempts:0-Cookies umgehen. */
+  editorEmailLogin?: {
+    email: string;
+    codeHash: string;
+    expiresAt: number;
+    codeId: string;
+  };
   hasShopifyConnection?: boolean;
   onboardingDone?: boolean;
   setupStep1Done?: boolean;
