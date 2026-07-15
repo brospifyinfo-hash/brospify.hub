@@ -416,6 +416,36 @@ export async function sendEditorLoginEmail(args: EditorLoginEmailArgs): Promise<
   });
 }
 
+// ─── Editor-Login-Mail zustellen: lokal ODER über den Hub-Proxy ────────
+// Die Standalone-Editor-Website hat KEINEN Resend-Key (der liegt als
+// „sensitive" nur im Hub-Projekt). Ist lokal kein Key gesetzt, reicht der
+// Editor die Mail an den Hub-Endpoint /api/editor-mail weiter (dort läuft
+// Resend), authentifiziert per Shared-Secret. Im Hub selbst (Key da) wird
+// direkt gesendet — derselbe Code, zwei Deployments.
+export async function deliverEditorLoginEmail(args: EditorLoginEmailArgs): Promise<SendResult> {
+  if ((process.env.RESEND_API_KEY || "").trim()) {
+    return sendEditorLoginEmail(args);
+  }
+  const url = (process.env.EDITOR_MAIL_PROXY_URL || "").trim();
+  const secret = (process.env.EDITOR_MAIL_SECRET || "").trim();
+  if (!url || !secret) {
+    console.warn("[email] Editor-Mail: weder Resend-Key noch Hub-Proxy konfiguriert.");
+    return { sent: false, error: "no_mailer" };
+  }
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-editor-mail-secret": secret },
+      body: JSON.stringify(args),
+    });
+    const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+    return { sent: !!d.ok, error: d.error };
+  } catch (e) {
+    console.error("[email] Editor-Mail-Proxy fehlgeschlagen:", e);
+    return { sent: false, error: e instanceof Error ? e.message : "proxy_failed" };
+  }
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

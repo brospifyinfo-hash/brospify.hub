@@ -10,7 +10,7 @@ import {
   hashEmailLoginCode,
   EMAIL_CODE_TTL_MS,
 } from "@/lib/editor-auth";
-import { sendEditorLoginEmail } from "@/lib/email";
+import { deliverEditorLoginEmail } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -56,7 +56,9 @@ export async function POST(req: NextRequest) {
     if (!codeHash || !token) return NextResponse.json({ ok: false, error: "server" }, { status: 503 });
 
     const loginUrl = `${originFrom(req)}/api/editor-auth/email/callback?token=${encodeURIComponent(token)}`;
-    const sent = await sendEditorLoginEmail({ to: email, code, loginUrl });
+    // Zustellung: lokaler Resend-Key ODER Weiterleitung an den Hub-Proxy
+    // (die Editor-Website hat keinen eigenen Resend-Key).
+    const sent = await deliverEditorLoginEmail({ to: email, code, loginUrl });
 
     // WICHTIG: Den neuen Code ERST NACH erfolgreichem Versand in die
     // Session schreiben. Sonst würde ein fehlgeschlagener Resend einen
