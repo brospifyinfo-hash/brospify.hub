@@ -7,7 +7,6 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutTemplate,
@@ -284,14 +283,19 @@ function EmptyCard({ error }: { error?: string }) {
 }
 
 // ─── Editor-Einstieg ─────────────────────────────────────────────
-// Der eigentliche Theme-Bau lebt jetzt im vollwertigen Editor unter
-// /themes/editor (Produkt-zuerst-Flow, Split-Pane, Section-Bibliothek).
+// Der eigentliche Theme-Bau lebt in der eigenständigen Editor-Website
+// unter /editor (Produkt-zuerst-Flow, Split-Pane, Section-Bibliothek).
 
 function EditorLinkCard() {
   const { t } = useI18n();
   return (
-    <Link
-      href="/themes/editor"
+    // Bewusst <a> (voller Seiten-Load) statt <Link>: der Editor ist eine
+    // eigenständige, IMMER helle Website. Ein client-seitiger <Link>-Wechsel
+    // würde das No-Flash-Script des Editor-Layouts NICHT ausführen (React
+    // führt client-gerenderte Inline-Scripts nie aus) → kurzer Dark-Flash.
+    // Der volle Load setzt die hellen Klassen serverseitig vor dem Paint.
+    <a
+      href="/editor"
       className="group block glass-strong rounded-2xl border border-[#95BF47]/25 p-4 sm:p-5 hover:border-[#95BF47]/50 transition"
       style={{ background: "var(--accent-light)" }}
     >
@@ -317,6 +321,6 @@ function EditorLinkCard() {
           <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
         </span>
       </div>
-    </Link>
+    </a>
   );
 }

@@ -1,18 +1,19 @@
-// ─── /api/theme-editor-config — Editor-Ansicht für eingeloggte Nutzer ──
-// Liefert dem Theme-Editor die vom Admin gewählte Ansicht (Black/White)
-// und ob ein Beispiel-Design für das Start-Fenster hinterlegt ist.
-// Bewusst schlank: Code selbst wird NIE an Kunden ausgeliefert.
+// ─── /api/theme-editor-config — Start-Fenster-Config des Editors ───────
+// Liefert dem Theme-Editor die vom Admin gewählte Ansicht (Black/White),
+// ob ein Beispiel-Design hinterlegt ist (demoReady) und ob der Produkt-
+// Picker gezeigt wird. BEWUSST ÖFFENTLICH (kein Login nötig): Die
+// Standalone-Editor-Website zeigt Gästen sofort die 3 Start-Optionen —
+// erst beim Wählen kommt das Login-Fenster. Es werden ausschließlich
+// nicht-geheime Booleans/Enums ausgeliefert, NIE der Beispiel-Design-Code
+// oder sonstiger Theme-Code (`demoReady` ist nur ein Flag).
 
 import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
 import { getThemeEditorConfig } from "@/lib/theme-demo";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const session = await getSession();
-  if (!session.isLoggedIn) return NextResponse.json({ error: "Nicht autorisiert" }, { status: 401 });
   try {
     const config = await getThemeEditorConfig();
     return NextResponse.json(

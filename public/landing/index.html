@@ -1,0 +1,707 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#ffffff">
+  <meta name="color-scheme" content="light">
+  <script>document.documentElement.className += " js";</script>
+
+  <title>Brospify — Dein Shopify-Shop, gebaut in Sekunden</title>
+  <meta name="description" content="Brospify ist die AI, die aus deinem Produkt eine komplette, verkaufsfertige Shopify-Website baut — mit Design, Texten und Kaufbox. Erste Vorschau kostenlos.">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=Instrument+Serif:ital@0;1&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500&family=Instrument+Serif:ital@0;1&display=swap"></noscript>
+
+  <link rel="stylesheet" href="/landing/styles.css">
+
+  <!-- CTA-spezifische Ergänzungen (Landing wird eigenständig ausgeliefert,
+       styles.css bleibt unangetastet als geteiltes Theme-Asset). -->
+  <style>
+    .btn-cta { padding: 18px 34px; font-size: 1.08rem; }
+    .hero .btn-cta { box-shadow: 0 14px 34px rgba(20, 18, 26, 0.26); }
+    .cta-note { margin: 16px auto 0; font-size: 0.95rem; font-weight: 600; color: var(--ink-faint); }
+    .cta-note b { color: var(--ink-soft); }
+    .cta-note .cta-dot { color: rgba(20, 18, 26, 0.28); margin: 0 4px; }
+    .final .btn-cta { margin-top: 4px; }
+    .final .cta-note { color: rgba(255, 255, 255, 0.72); }
+    .final .cta-note b { color: #fff; }
+    .final .cta-note .cta-dot { color: rgba(255, 255, 255, 0.4); }
+  </style>
+</head>
+<body class="brospify-waitlist">
+
+<!-- Scroll-Fortschritt -->
+<div class="scroll-progress" aria-hidden="true"><span id="scrollBar"></span></div>
+
+<!-- ================= NAV ================= -->
+<header class="nav-wrap" id="navWrap">
+  <nav class="nav" aria-label="Hauptnavigation">
+    <a class="brand" href="/start" aria-label="Brospify">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 3.5h7a4.5 4.5 0 0 1 2.6 8.2A5 5 0 0 1 13.5 21H6V3.5Z" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>
+      </span>
+      <span class="brand-word">brospify<em>.ai</em></span>
+    </a>
+    <div class="nav-links">
+      <a href="#how">So funktioniert&rsquo;s</a>
+      <a href="#features">Features</a>
+      <a href="#styles">Stile</a>
+      <a href="#faq">FAQ</a>
+    </div>
+    <a href="/editor" class="btn btn-dark btn-sm nav-cta" data-magnetic>
+      Kostenlos starten <span class="btn-arrow" aria-hidden="true">→</span>
+    </a>
+  </nav>
+</header>
+
+<main id="top">
+
+<!-- ================= HERO ================= -->
+<section class="hero" id="hero">
+  <!-- Aurora-Gradienten mit Tiefen-Parallax -->
+  <div class="aurora au-1" data-px="0.30" aria-hidden="true"></div>
+  <div class="aurora au-2" data-px="0.50" aria-hidden="true"></div>
+  <div class="aurora au-3" data-px="0.18" aria-hidden="true"></div>
+  <div class="hero-beam" data-px="0.10" aria-hidden="true"></div>
+  <div class="grain" aria-hidden="true"></div>
+
+  <div class="container hero-inner">
+    <div class="hero-badge reveal" data-reveal>
+      <span class="sfy-bag" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5.6 7.4h12.8l1 12.6a1.5 1.5 0 0 1-1.5 1.6H6.1a1.5 1.5 0 0 1-1.5-1.6L5.6 7.4Z" fill="#95BF47"/><path d="M8.6 9V6.4a3.4 3.4 0 0 1 6.8 0V9" stroke="#4d6a24" stroke-width="1.6" stroke-linecap="round"/><text x="12" y="17.6" text-anchor="middle" font-size="9.5" font-weight="800" fill="#fff" font-family="Arial">S</text></svg>
+      </span>
+      <b class="sfy-word">Shopify</b>
+      <span class="hero-badge-sep" aria-hidden="true"></span>
+      <span class="pulse-dot" aria-hidden="true"></span>
+      Erste Vorschau gratis
+    </div>
+
+    <h1 class="hero-h1">
+      <span class="h1-line reveal" data-reveal data-delay="60">Dein Shopify&#8209;Shop.</span>
+      <span class="h1-line reveal" data-reveal data-delay="160">Gebaut in <em class="gradient-serif">Sekunden<svg class="underline-squiggle" viewBox="0 0 220 14" aria-hidden="true" preserveAspectRatio="none"><path d="M3 10 C 40 2, 75 12, 110 7 S 185 3, 217 8" fill="none" stroke="url(#squigGrad)" stroke-width="5" stroke-linecap="round"/><defs><linearGradient id="squigGrad" x1="0" x2="1"><stop offset="0" stop-color="#7c3aed"/><stop offset=".5" stop-color="#ec4899"/><stop offset="1" stop-color="#fb923c"/></linearGradient></defs></svg></em></span>
+    </h1>
+
+    <p class="hero-sub reveal" data-reveal data-delay="260">
+      Brospify ist die AI, die aus deinem Produkt eine <strong>komplette, verkaufsfertige
+      Shopify&#8209;Website</strong> baut — mit Design, Texten und Kaufbox.<br class="br-desktop">
+      Du zeigst ihr ein Foto. Sie macht den Rest.
+    </p>
+
+    <div class="wl-zone reveal" data-reveal data-delay="360">
+      <a href="/editor" class="btn btn-dark btn-cta" data-magnetic>
+        Kostenlos deinen Shop bauen <span class="btn-arrow" aria-hidden="true">→</span>
+      </a>
+      <p class="cta-note">
+        <b>Erste Vorschau gratis</b><span class="cta-dot">·</span>Login mit Google, Shopify oder E-Mail<span class="cta-dot">·</span>keine Kreditkarte
+      </p>
+    </div>
+
+    <div class="hero-trust reveal" data-reveal data-delay="440">
+      <div class="avatar-stack" aria-hidden="true">
+        <span class="avatar av1">M</span><span class="avatar av2">L</span><span class="avatar av3">S</span><span class="avatar av4">J</span><span class="avatar av5">+</span>
+      </div>
+      <div class="hero-trust-text">
+        <span class="stars" aria-label="5 von 5 Sternen">★★★★★</span>
+        <span><strong data-count="500" data-suffix="+">500+</strong> Shops schon gebaut &middot; erste Vorschau kostenlos</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="hero-cue reveal" data-reveal data-delay="520" aria-hidden="true">Scroll — und schau der AI bei der Arbeit zu <i>↓</i></div>
+</section>
+
+<!-- ================= EDITOR-SHOWCASE ================= -->
+<section class="editor-show section" id="editor">
+  <div class="container section-head reveal" data-reveal>
+    <span class="eyebrow">Der Editor</span>
+    <h2>Dein Cockpit. <em class="gradient-serif">Volle Kontrolle.</em></h2>
+    <p>Nach der Generierung gehört die Bühne dir: Alles anklicken, umschreiben, verschieben —<br class="br-desktop"> oder du sagst es einfach wieder der AI.</p>
+  </div>
+  <div class="container genesis-wrap reveal r-3d" data-reveal>
+    <div class="genesis ed" id="genesis" aria-label="Vorschau des Brospify Theme-Editors" role="img">
+
+      <!-- Top-Bar -->
+      <div class="ed-top" aria-hidden="true">
+        <span class="ed-btn ed-btn-ic"><svg viewBox="0 0 24 24"><path d="M19 12H5m7 7-7-7 7-7"/></svg></span>
+        <span class="ed-title"><svg viewBox="0 0 24 24" class="ic-green"><path d="M12 3c1 3.5 3.5 6 7 7-3.5 1-6 3.5-7 7-1-3.5-3.5-6-7-7 3.5-1 6-3.5 7-7Z"/></svg><b>Theme-Editor</b></span>
+        <span class="ed-chip ed-product"><img loading="lazy" decoding="async" src="/landing/product-mixer-main.jpg" alt=""><span class="ed-prod-name">Tragbarer USB Mixer</span><svg viewBox="0 0 24 24" class="ic-faint"><path d="m9 18 6-6-6-6"/></svg></span>
+        <span class="ed-top-right">
+          <span class="ed-credits"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v8m-3-5.5h6"/></svg><b id="edCredits">1.480</b></span>
+          <span class="ed-btn ed-lbl"><svg viewBox="0 0 24 24" class="ic-green"><path d="M12 22a10 10 0 1 1 10-10c0 1.6-1.3 3-3 3h-2c-1.1 0-2 .9-2 2 0 .5.2 1 .5 1.4.9 1.1.1 3.6-1.5 3.6Z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="11" cy="7.5" r="1"/><circle cx="15.5" cy="9.5" r="1"/></svg>Stil-Galerie</span>
+          <span class="ed-btn ed-lbl"><svg viewBox="0 0 24 24" class="ic-green"><path d="m19 21-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v16Z"/></svg>Designs</span>
+          <span class="ed-undo">
+            <svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>
+            <svg viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H10a6 6 0 0 0 0 12h3"/></svg>
+          </span>
+          <span class="ed-deploy"><svg viewBox="0 0 24 24"><path d="M12 4v11m0 0 4-4m-4 4-4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>Download</span>
+          <span class="ed-sync"><svg viewBox="0 0 24 24" id="edSyncIc"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg><span class="ed-lbl-txt">Live aktualisieren</span></span>
+        </span>
+      </div>
+
+      <div class="ed-body" aria-hidden="true">
+        <!-- Aufbau-Leiste -->
+        <aside class="ed-rail">
+          <div class="ed-general"><svg viewBox="0 0 24 24" class="ic-green"><path d="M12 22a10 10 0 1 1 10-10c0 1.6-1.3 3-3 3h-2c-1.1 0-2 .9-2 2 0 .5.2 1 .5 1.4.9 1.1.1 3.6-1.5 3.6Z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="11" cy="7.5" r="1"/><circle cx="15.5" cy="9.5" r="1"/></svg>Allgemeines Design</div>
+          <div class="ed-pageswitch"><span class="on">Produktseite</span><span>Startseite</span></div>
+          <div class="ed-rail-head"><i></i>Aufbau der Seite</div>
+          <div class="ed-buybox">
+            <svg viewBox="0 0 24 24" class="ic-faint"><path d="m6 9 6 6 6-6"/></svg>
+            <svg viewBox="0 0 24 24" class="ic-green"><circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2 3h2.5l2.6 12.4a2 2 0 0 0 2 1.6h8.2a2 2 0 0 0 2-1.6L21 7H6"/></svg>
+            <b>Kaufbox</b><small>8 Bausteine</small>
+            <svg viewBox="0 0 24 24" class="ic-target"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg>
+          </div>
+          <div class="ed-rail-list" id="edRail"></div>
+          <div class="ed-add"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>Section hinzufügen</div>
+        </aside>
+
+        <!-- Mitte: Toolbar + Vorschau + AI-Leiste -->
+        <div class="ed-center">
+          <div class="ed-toolbar">
+            <span class="ed-seg">
+              <span class="on"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 21h8m-4-5v5"/></svg>PC</span>
+              <span><svg viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18.5h2"/></svg>Handy</span>
+            </span>
+            <span class="ed-btn ed-lbl"><svg viewBox="0 0 24 24" class="ic-green"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>Vorschau</span>
+            <span class="ed-btn ed-lbl ed-pencil"><svg viewBox="0 0 24 24" class="ic-green"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Texte bearbeiten</span>
+            <span class="ed-zoom">
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M8 11h6"/></svg>
+              <span class="ed-zoom-track"><i></i></span>
+              <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M11 8v6M8 11h6"/></svg>
+              <span class="ed-zoom-val">100&nbsp;%</span>
+            </span>
+          </div>
+
+          <div class="ed-canvas-wrap">
+            <div class="g-canvas" id="gCanvas">
+              <div class="gs-shopbar">
+                <b>blendjoy<i>.</i></b>
+                <span class="gsb-nav"><u>Shop</u><u>Bestseller</u><u>Rezepte</u><u>Über uns</u></span>
+                <span class="gsb-cart"><svg viewBox="0 0 24 24"><path d="M6 7h12l1.2 13H4.8L6 7Z"/><path d="M9 10V6a3 3 0 1 1 6 0v4"/></svg><i>1</i></span>
+              </div>
+              <div class="gs gs-announce"><span id="gAnnounce">Gratis-Versand ab 30&nbsp;€ &middot; 30 Tage Rückgabe</span></div>
+              <!-- Produktseite wie im Hub: Galerie links, Kaufbox rechts -->
+              <div class="gs sh-product">
+                <div class="shp-gal">
+                  <div class="shp-main">
+                    <img loading="lazy" decoding="async" id="gHeroImg" src="/landing/product-smoothie-pink.jpg" alt="">
+                    <span class="shp-badge">Bestseller</span>
+                    <span class="shp-count">1&nbsp;/&nbsp;5</span>
+                    <span class="gs-img-shine"></span>
+                  </div>
+                  <div class="shp-thumbs">
+                    <img loading="lazy" decoding="async" src="/landing/product-smoothie-pink.jpg" alt="" class="on">
+                    <img loading="lazy" decoding="async" src="/landing/product-smoothie-berries.jpg" alt="">
+                    <img loading="lazy" decoding="async" src="/landing/product-lifestyle-pour.jpg" alt="">
+                    <img loading="lazy" decoding="async" src="/landing/product-mixer-green.jpg" alt="">
+                  </div>
+                  <ul class="shp-feats">
+                    <li><i>⚡</i>22.000 U/min — mixt auch gefrorene Früchte</li>
+                    <li><i>🔋</i>USB-C: bis zu 15 Smoothies pro Ladung</li>
+                  </ul>
+                </div>
+                <div class="shp-buy">
+                  <span class="bb bb-sale">🔥&nbsp; SOMMER-SALE: −30&nbsp;% AUF ALLES &nbsp;🔥</span>
+                  <span class="bb bb-urgency">🔥 Fast ausverkauft — Angebot endet heute</span>
+                  <div class="bb bb-countdown"><small>Angebot endet in</small><span><b>04</b><em>:</em><b>59</b><em>:</em><b>12</b></span></div>
+                  <h4 class="bb bb-title">Tragbarer Smoothie-Mixer</h4>
+                  <span class="bb bb-rating">★★★★★ <b>4,9</b> <u>· 2.314 Bewertungen</u></span>
+                  <span class="bb bb-quote">&bdquo;Bester Kauf des Jahres!&ldquo; <small>— Sarah M. ★★★★★</small></span>
+                  <span class="bb bb-avatar"><span class="bba"><i>S</i><i>T</i><i>L</i></span><span><b>Sarah</b> ✓ und <b>1.500+</b> andere lieben es</span></span>
+                  <div class="bb bb-price"><b>34,90&nbsp;€</b><s>49,90&nbsp;€</s><em>−30&nbsp;%</em></div>
+                  <div class="bb bb-stock"><i></i>Nur noch wenige auf Lager</div>
+                  <div class="bb bb-bundle">
+                    <label class="on"><i></i><img loading="lazy" decoding="async" src="/landing/product-smoothie-pink.jpg" alt=""><span class="bbl-txt"><b>2× Mixer</b><small>Spare 24,90&nbsp;€</small></span><span class="bbl-badge">Beliebt</span><b class="bbl-price">44,90&nbsp;€</b></label>
+                    <label><i></i><img loading="lazy" decoding="async" src="/landing/product-smoothie-pink.jpg" alt=""><span class="bbl-txt"><b>1× Mixer</b><small>Einzelpreis</small></span><b class="bbl-price">34,90&nbsp;€</b></label>
+                  </div>
+                  <ul class="bb bb-benefits">
+                    <li><i>⚡</i>In 30 Sekunden gemixt</li>
+                    <li><i>💧</i>Reinigt sich selbst in 10 Sek.</li>
+                    <li><i>🚚</i>1–3 Tage Lieferung aus DE</li>
+                  </ul>
+                  <div class="bb bb-value">
+                    <b>Das bekommst du heute:</b>
+                    <span><i>✓</i>Smoothie-Mixer To-Go<em>34,90&nbsp;€</em></span>
+                    <span><i>✓</i>Rezept-E-Book (25 Rezepte)<em class="bbv-free">GRATIS</em></span>
+                    <span><i>✓</i>USB-C-Ladekabel<em class="bbv-free">GRATIS</em></span>
+                  </div>
+                  <span class="bb bb-buy">🛒&nbsp; In den Warenkorb — 34,90&nbsp;€</span>
+                  <span class="bb bb-paypal">Direkt kaufen mit <i>Pay<u>Pal</u></i></span>
+                  <div class="bb bb-payments"><small>Sichere Zahlung</small><span><i>Visa</i><i>Mastercard</i><i>PayPal</i><i>Klarna</i></span></div>
+                  <div class="bb bb-gift">🎁<span class="bbg-txt"><b>Gratis Rezept-E-Book</b><small>heute automatisch dazu</small></span></div>
+                  <div class="bb bb-timeline">
+                    <small>Bestelle in den nächsten <b>4 Std.</b> —</small>
+                    <span class="bbt"><i class="on"></i>Bestellt<u></u><i></i>Versendet<u></u><i></i>Mo. 15.07.</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Kompositions-Sections (pro Stil unterschiedlich sichtbar, wie im Hub) -->
+              <div class="gs sh-iconb t-tint">
+                <span class="shi"><i>🥤</i><b>Frisch</b><small>in 30 Sek.</small></span>
+                <span class="shi"><i>🔋</i><b>USB-C</b><small>überall laden</small></span>
+                <span class="shi"><i>💧</i><b>Selbstreinigend</b><small>10 Sekunden</small></span>
+                <span class="shi"><i>🚚</i><b>Schnell</b><small>1–3 Tage</small></span>
+              </div>
+              <div class="gs-divider" aria-hidden="true"><svg viewBox="0 0 100 8" preserveAspectRatio="none"><path d="M0 8V4.5C8 1 17 7 25 4.5S42 1 50 4.5 67 7 75 4.5 92 1 100 4.5V8Z"/></svg></div>
+              <div class="gs sh-featgrid">
+                <b class="sh-h">Warum blendjoy?</b>
+                <div class="shf-grid">
+                  <span class="shf"><i>⚡</i><b>Kraftvoll</b><small>22.000 U/min</small></span>
+                  <span class="shf"><i>🎒</i><b>Kompakt</b><small>passt in jede Tasche</small></span>
+                  <span class="shf"><i>🛡️</i><b>2 Jahre Garantie</b><small>auf Motor &amp; Akku</small></span>
+                </div>
+              </div>
+              <div class="gs sh-chat t-wash">
+                <b class="sh-h">Das schreiben unsere Kunden</b>
+                <div class="shc-grid">
+                  <div class="shc"><header><i>S</i><b>Sarah</b><u></u></header><div class="shc-body"><p>Nutze ihn jeden Morgen im Auto 😍</p><p>Bester Kauf des Jahres!<em>09:41 ✓✓</em></p></div></div>
+                  <div class="shc"><header><i>D</i><b>Denis</b><u></u></header><div class="shc-body"><p>Schafft sogar gefrorene Beeren 💪</p><p>Ohne zu ruckeln.<em>18:22 ✓✓</em></p></div></div>
+                </div>
+              </div>
+              <div class="gs sh-spotlight t-soft">
+                <span class="shs-q">&bdquo;</span>
+                <p class="shs-quote">Nach 2 Wochen habe ich schon 3 Stück verschenkt. Die Selbstreinigung ist ein Gamechanger.</p>
+                <span class="shs-stars">★★★★★</span>
+                <footer><i>A</i><span><b>Aylin T.</b><small>Verifizierte Kundin</small></span></footer>
+              </div>
+              <div class="gs sh-reviews2">
+                <b class="sh-h">Über <em>25.000</em> zufriedene Kunden</b>
+                <div class="shr-grid">
+                  <div class="shr"><span>★★★★★</span><p>&bdquo;Smoothie fertig, bevor ich auf der Arbeit bin.&ldquo;</p><small>Sarah M. · Köln</small></div>
+                  <div class="shr"><span>★★★★★</span><p>&bdquo;Überraschend kraftvoll und leise.&ldquo;</p><small>Denis K. · Berlin</small></div>
+                  <div class="shr"><span>★★★★★</span><p>&bdquo;Nie wieder ohne. Kaufempfehlung!&ldquo;</p><small>Aylin T. · Hamburg</small></div>
+                </div>
+              </div>
+              <div class="gs sh-stepcards">
+                <b class="sh-h sh-h-light">So einfach geht&rsquo;s</b>
+                <div class="shsc-grid">
+                  <span class="shsc"><em>1</em><i>🍓</i><b>Befüllen</b><small>Früchte + Flüssigkeit</small></span>
+                  <span class="shsc"><em>2</em><i>⚡</i><b>Mixen</b><small>ein Knopf, 30 Sek.</small></span>
+                  <span class="shsc"><em>3</em><i>🥤</i><b>Genießen</b><small>direkt aus dem Becher</small></span>
+                </div>
+              </div>
+              <div class="gs sh-guarantee t-tint">
+                <span class="shg-seal"><b>30</b><small>Tage<br>✓ Garantie</small></span>
+                <span class="shg-txt"><b>30 Tage risikofrei testen</b><small>✓ Geld zurück &nbsp;·&nbsp; ✓ ohne Fragen &nbsp;·&nbsp; ✓ ohne Formulare</small></span>
+              </div>
+              <div class="gs sh-logos"><small>Bekannt aus</small><span>VOGUE</span><span>GQ</span><span>FIT&amp;FUN</span><span>TREND</span></div>
+              <div class="gs sh-cta t-deep">
+                <b>Hol dir deinen Sommer-Mix.</b>
+                <small>Über 25.000 Kunden mixen schon — du fehlst noch.</small>
+                <span class="shcta-btn">Jetzt bestellen →</span>
+              </div>
+              <div class="gs sh-faq">
+                <b class="sh-h">Häufige Fragen</b>
+                <div class="shq on"><span>Wie lange hält der Akku?<em>−</em></span><p>Bis zu 15 Smoothies pro Ladung — geladen wird per USB-C.</p></div>
+                <div class="shq"><span>Schafft er gefrorene Früchte?<em>+</em></span></div>
+              </div>
+              <div class="gs gs-footer"><span>Versand</span><span>Rückgabe</span><span>Kontakt</span><span>FAQ</span><small>© 2026 blendjoy</small></div>
+              <div class="g-scan" id="gScan"></div>
+            </div>
+
+            <!-- AI-Plan-Karte (wie im Editor: unten rechts) -->
+            <div class="ed-plan" id="edPlan">
+              <div class="ed-plan-title" id="edPlanTitle">Die AI setzt deinen Plan um …</div>
+              <div class="ed-plan-steps" id="edPlanSteps">
+                <span data-pl="0"><i></i>Stil &amp; Farben<small id="edPlanStyle">Fresh</small></span>
+                <span data-pl="1"><i></i>Sections aufbauen<small>7 Sections</small></span>
+                <span data-pl="2"><i></i>Texte schreiben<small>zum Produkt</small></span>
+                <span data-pl="3"><i></i>Kaufbox anordnen<small>bewährtes Muster</small></span>
+                <span data-pl="4"><i></i>Feinschliff<small>Icons &amp; Übergänge</small></span>
+              </div>
+              <div class="ed-plan-bar"><i id="edPlanBar"></i></div>
+              <div class="ed-plan-done" id="edPlanDone"><svg viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 0 12h-3"/></svg>Mit Strg+Z komplett rückgängig</div>
+            </div>
+          </div>
+
+          <!-- AI-Co-Pilot-Leiste -->
+          <div class="ed-copilot">
+            <span class="ed-bro-wrap">
+              <span class="ed-bubble" id="edBubble">Sag mir, wie dein Shop aussehen soll ✨</span>
+              <span class="ed-bro" id="edBro">🙂</span>
+            </span>
+            <div class="ed-cmd-ring" id="edRing">
+              <div class="ed-cmd">
+                <span class="ed-plus"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+                <span class="ed-input">
+                  <span class="ed-ph" id="edPh">AI fragen — sie baut es sofort um …</span>
+                  <span class="g-typing" id="gTyping"></span><span class="g-caret" id="gCaret"></span>
+                </span>
+                <svg viewBox="0 0 24 24" class="ed-spin" id="edSpin" hidden><circle cx="12" cy="12" r="8.5" stroke-dasharray="4 5"/></svg>
+                <span class="ed-mode">Standard<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+                <span class="ed-target"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/></svg></span>
+                <span class="ed-send"><svg viewBox="0 0 24 24"><path d="M12 19V5m0 0-6 6m6-6 6 6"/></svg></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Inspector -->
+        <aside class="ed-inspector">
+          <div class="ed-ins-hero">
+            <svg viewBox="0 0 24 24" class="ic-green"><path d="M12 22a10 10 0 1 1 10-10c0 1.6-1.3 3-3 3h-2c-1.1 0-2 .9-2 2 0 .5.2 1 .5 1.4.9 1.1.1 3.6-1.5 3.6Z"/><circle cx="7.5" cy="11.5" r="1"/><circle cx="11" cy="7.5" r="1"/><circle cx="15.5" cy="9.5" r="1"/></svg>
+            <div><b>Allgemeines Design</b><small>Stil, Farben, Schriften &amp; Design des ganzen Themes.</small></div>
+          </div>
+          <div class="ed-group">
+            <div class="ed-group-head">Stil<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+            <div class="ed-style-row"><span class="ed-style-dots"><i id="edDotA"></i><i id="edDotB"></i></span><div><b id="edStyleName">Fresh</b><small id="edStyleHint">Frisch &amp; leicht, Food</small></div></div>
+            <div class="ed-mini-grid"><span class="ed-mini ed-mini-green">Stil-Galerie</span><span class="ed-mini">Zufall</span></div>
+          </div>
+          <div class="ed-group">
+            <div class="ed-group-head">Farben<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+            <div class="ed-colors">
+              <span class="ed-color"><i id="edCw1"></i><div><small>Buttons</small><b id="edCh1">#65a30d</b></div></span>
+              <span class="ed-color"><i style="background:#ffffff"></i><div><small>Button-Text</small><b>#ffffff</b></div></span>
+              <span class="ed-color"><i id="edCw2"></i><div><small>Hintergrund</small><b id="edCh2">#f7fee7</b></div></span>
+              <span class="ed-color"><i id="edCw3"></i><div><small>Text</small><b id="edCh3">#1a2e05</b></div></span>
+              <span class="ed-color"><i id="edCw4"></i><div><small>Akzent</small><b id="edCh4">#65a30d</b></div></span>
+            </div>
+          </div>
+          <div class="ed-group">
+            <div class="ed-group-head">Schriften &amp; Ecken<svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></div>
+            <div class="ed-select" id="edFontH">Poppins</div>
+            <div class="ed-select">Inter</div>
+            <div class="ed-slider"><small>Ecken</small><span class="ed-slider-track"><i id="edRadFill"></i></span><b id="edRadVal">16&nbsp;px</b></div>
+          </div>
+        </aside>
+      </div>
+    </div>
+    <p class="genesis-caption">Das ist der echte Editor: Du schreibst der AI einen Satz — sie baut Stil, Sections, Texte und Kaufbox. Live.</p>
+  </div>
+</section>
+
+<!-- ================= TRUST-BAR ================= -->
+<section class="trustbar" aria-label="Vertrauen &amp; Kompatibilität">
+  <div class="container trustbar-inner reveal" data-reveal>
+    <span class="trustbar-label">Gebaut auf Standards, denen du vertraust</span>
+    <ul class="trustbar-items">
+      <li><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2 3 7v6c0 5 3.8 8.4 9 9 5.2-.6 9-4 9-9V7l-9-5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m8.5 12 2.5 2.5 4.5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>100&nbsp;% Shopify-Theme-Standard</li>
+      <li><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3c1 3.5 3.5 6 7 7-3.5 1-6 3.5-7 7-1-3.5-3.5-6-7-7 3.5-1 6-3.5 7-7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Läuft mit Claude&nbsp;AI</li>
+      <li><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="10" rx="2.5" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V7a4 4 0 1 1 8 0v3" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>DSGVO-konform</li>
+      <li><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 21s-7-4.4-9.3-9A5.4 5.4 0 0 1 12 6.6 5.4 5.4 0 0 1 21.3 12C19 16.6 12 21 12 21Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Made in Germany</li>
+      <li><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13 3 5 13h5l-1 8 8-10h-5l1-8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Läuft in <b>deinem</b> Shop</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= SO FUNKTIONIERT'S ================= -->
+<section class="how section how-galaxy" id="how">
+  <div class="stats-sky" aria-hidden="true">
+    <div class="stats-bg" data-gal="0.12"></div>
+    <div class="gal-layer gal-far" data-gal="0.16"></div>
+    <div class="gal-layer gal-mid" data-gal="0.30"></div>
+    <div class="stats-glow sg1" data-gal="0.34"></div>
+    <div class="stats-glow sg2" data-gal="-0.26"></div>
+    <div class="gal-layer gal-near" data-gal="0.42"></div>
+    <div class="gal-shooting"><i></i><i></i><i></i></div>
+  </div>
+  <div class="container">
+    <div class="section-head section-head-dark reveal" data-reveal>
+      <span class="eyebrow eyebrow-dark">So funktioniert&rsquo;s</span>
+      <h2>Drei Schritte. <em class="gradient-serif-light">Kein Stress.</em></h2>
+      <p>Was früher Wochen mit Agentur, Freelancer oder Page-Builder gedauert hat,<br class="br-desktop"> passiert jetzt, während dein Kaffee noch warm ist.</p>
+    </div>
+
+    <div class="steps-stack" id="stepsStack">
+      <article class="stack-card sc-a" style="--i:0">
+        <div class="sc-inner">
+          <div class="sc-visual">
+            <span class="sc-num">1</span>
+            <div class="step-art art-upload" aria-hidden="true">
+              <div class="art-photo p1"></div>
+              <div class="art-photo p2"></div>
+              <div class="art-photo p3"><span>+</span></div>
+            </div>
+          </div>
+          <div class="sc-body">
+            <span class="sc-kicker">Schritt 1</span>
+            <h3>Zeig der AI dein Produkt</h3>
+            <p>Lade ein paar Fotos hoch oder beschreib deine Idee in einem Satz. Kein Produkt? Starte mit einer Demo oder komplett von null.</p>
+          </div>
+        </div>
+      </article>
+      <article class="stack-card sc-b" style="--i:1">
+        <div class="sc-inner">
+          <div class="sc-visual">
+            <span class="sc-num">2</span>
+            <div class="step-art art-build" aria-hidden="true">
+              <span class="art-row r1"></span><span class="art-row r2"></span><span class="art-row r3"></span>
+              <span class="art-spark">✦</span>
+            </div>
+          </div>
+          <div class="sc-body">
+            <span class="sc-kicker">Schritt 2</span>
+            <h3>Schau zu, wie dein Shop entsteht</h3>
+            <p>Stil, Farben, Sections, Texte, Kaufbox — die AI baut live vor deinen Augen. Danach änderst du alles per Zuruf: <em>&bdquo;Mach&rsquo;s edler. Mehr Trust.&ldquo;</em></p>
+          </div>
+        </div>
+      </article>
+      <article class="stack-card sc-c" style="--i:2">
+        <div class="sc-inner">
+          <div class="sc-visual">
+            <span class="sc-num">3</span>
+            <div class="step-art art-launch" aria-hidden="true">
+              <div class="art-zip">theme.zip</div>
+              <span class="art-arrow">→</span>
+              <div class="art-shop"><svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16l-1.2 11a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8L4 8Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 11V6a3 3 0 1 1 6 0v5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+            </div>
+          </div>
+          <div class="sc-body">
+            <span class="sc-kicker">Schritt 3</span>
+            <h3>Ein Klick. Online.</h3>
+            <p>Theme als ZIP herunterladen, in Shopify hochladen, verkaufen. Du installierst es wie jedes offizielle Theme — direkt in deinem eigenen Shopify-Account.</p>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= BENTO FEATURES ================= -->
+<section class="features section section-cream" id="features">
+  <div class="px-scene" aria-hidden="true">
+    <div class="aurora au-pink" data-px="0.36"></div>
+    <div class="aurora au-violet" data-px="0.24"></div>
+  </div>
+  <div class="container">
+    <div class="section-head reveal" data-reveal>
+      <span class="eyebrow">Features</span>
+      <h2>Ein Designer. Ein Texter. Ein Entwickler.<br><em class="gradient-serif">In einem Eingabefeld.</em></h2>
+      <p>Alles, was ein verkaufsstarker Shop braucht — eingebaut, mitgedacht, sofort da.</p>
+    </div>
+
+    <div class="bento">
+      <!-- Co-Pilot (groß) -->
+      <article class="bento-cell cell-copilot reveal" data-reveal data-tilt>
+        <div class="cell-tag">AI Co&#8209;Pilot</div>
+        <h3>Sag es. <em class="gradient-serif">Sieh es.</em></h3>
+        <p>Schreib der AI wie einem Designer, der nie schlecht gelaunt ist. Sie denkt wie ein Art Director: Funnel-Aufbau, produktspezifische Texte, nischen-passende Icons — und sie lernt mit jeder Nische dazu. Standard für schnelle Runden, Expert&#8209;Modus für den Feinschliff.</p>
+        <div class="copilot-demo" aria-hidden="true">
+          <div class="cp-msg cp-user" data-cp="0">Mach den Shop edler und heller ✨</div>
+          <div class="cp-msg cp-ai" data-cp="1"><span class="cp-badge">AI</span>Klar! Stil <b>Luxe</b>, hellere Palette, Serifen-Headline, 2 Trust-Bausteine in die Kaufbox …</div>
+          <div class="cp-ops" data-cp="2">
+            <span class="cp-op">Stil → Luxe</span><span class="cp-op">Farben harmonisiert</span><span class="cp-op">+ Bewertungen</span><span class="cp-op">+ Garantie</span>
+          </div>
+        </div>
+      </article>
+
+      <!-- 24 Stile -->
+      <article class="bento-cell cell-styles reveal" data-reveal data-delay="80" data-tilt>
+        <div class="cell-num"><b data-count="24">24</b></div>
+        <h3>Stile</h3>
+        <p>Von Cozy bis Noir, von Care bis Street — jede Nische hat ihren Look.</p>
+        <div class="style-dots" aria-hidden="true">
+          <span style="--c1:#f4e8dc;--c2:#c2703d"></span>
+          <span style="--c1:#101014;--c2:#d4af37"></span>
+          <span style="--c1:#eef6ff;--c2:#2563eb"></span>
+          <span style="--c1:#fdf2f8;--c2:#ec4899"></span>
+          <span style="--c1:#f0fdf4;--c2:#16a34a"></span>
+          <span style="--c1:#fff7ed;--c2:#ea580c"></span>
+        </div>
+      </article>
+
+      <!-- 45+ Sections -->
+      <article class="bento-cell cell-sections reveal" data-reveal data-delay="140" data-tilt>
+        <div class="cell-num"><b data-count="45" data-suffix="+">45+</b></div>
+        <h3>Sections</h3>
+        <p>Hero, Reviews, Vergleich, FAQ, Countdown, Vorher/Nachher-Slider &hellip; die AI stapelt sie in bewährter Funnel-Reihenfolge.</p>
+        <div class="section-stack" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+      </article>
+
+      <!-- 1700 Icons -->
+      <article class="bento-cell cell-icons reveal" data-reveal data-delay="200" data-tilt>
+        <div class="cell-num"><b data-count="1700" data-suffix="+">1.700+</b></div>
+        <h3>Icons</h3>
+        <p>Die AI wählt automatisch das passende Icon für deine Nische — von 🐾 bis ⚡.</p>
+        <div class="icon-float" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-4.4-9.3-9A5.4 5.4 0 0 1 12 6.6 5.4 5.4 0 0 1 21.3 12C19 16.6 12 21 12 21Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M13 3 5 13h5l-1 8 8-10h-5l1-8Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M8 12.5 11 15l5-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M3 7h13v10H3zM16 10h3l2 3v4h-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><circle cx="7" cy="17" r="1.6" stroke="currentColor" stroke-width="2"/><circle cx="17" cy="17" r="1.6" stroke="currentColor" stroke-width="2"/></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M12 3c1 3.5 3.5 6 7 7-3.5 1-6 3.5-7 7-1-3.5-3.5-6-7-7 3.5-1 6-3.5 7-7Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        </div>
+      </article>
+
+      <!-- Inline Editing -->
+      <article class="bento-cell cell-edit reveal" data-reveal data-delay="260" data-tilt>
+        <div class="cell-tag">Inline-Editing</div>
+        <h3>Klick. Tipp. Fertig.</h3>
+        <p>Jeden Text direkt in der Vorschau anklicken und umschreiben — ohne Menü-Labyrinth.</p>
+        <div class="edit-demo" aria-hidden="true"><span class="edit-text" id="editDemoText">Dein Bestseller</span><span class="edit-cursor"></span></div>
+      </article>
+
+      <!-- Kaufbox -->
+      <article class="bento-cell cell-buybox reveal" data-reveal data-delay="320" data-tilt>
+        <div class="cell-tag">Conversion-Kaufbox</div>
+        <h3>Gebaut, um zu verkaufen</h3>
+        <p>Countdown, Lager-Anzeige, Garantien, Bewertungen — Trust-Bausteine in der Reihenfolge, die konvertiert.</p>
+        <div class="buybox-demo" aria-hidden="true">
+          <span class="bb-line">⏰ Angebot endet in <b>04:59</b></span>
+          <span class="bb-line">✓ 30 Tage Geld-zurück</span>
+          <span class="bb-btn">In den Warenkorb</span>
+        </div>
+      </article>
+
+      <!-- Live Vorschau -->
+      <article class="bento-cell cell-preview reveal" data-reveal data-delay="380" data-tilt>
+        <div class="cell-tag">Live-Vorschau</div>
+        <h3>PC &amp; Handy, in Echtzeit</h3>
+        <p>Du siehst jede Änderung sofort — auf beiden Bildschirmen, mit Zoom bis ins Detail.</p>
+        <div class="preview-demo" aria-hidden="true">
+          <span class="pd-desktop"><i></i><i></i></span>
+          <span class="pd-phone"><i></i></span>
+        </div>
+      </article>
+
+      <!-- Immer lesbar -->
+      <article class="bento-cell cell-contrast reveal" data-reveal data-delay="440" data-tilt>
+        <div class="cell-tag">Eingebaute Qualität</div>
+        <h3>Nie wieder hässlich</h3>
+        <p>Kontrast-Garantie und Farb-Harmonie sind fest eingebaut. Jede Kombination bleibt lesbar — automatisch.</p>
+        <div class="contrast-demo" aria-hidden="true"><span class="cd-a">Aa</span><span class="cd-check">✓</span></div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ================= STIL-MARQUEE ================= -->
+<section class="styles-strip section" id="styles">
+  <div class="container section-head reveal" data-reveal>
+    <span class="eyebrow">24 Stile</span>
+    <h2>Jede Nische. <em class="gradient-serif">Ihr eigener Look.</em></h2>
+    <p>Ein Klick wechselt den kompletten Charakter deines Shops — Farben, Fonts, Formen, Aufbau.</p>
+  </div>
+  <div class="marquee" data-speed="34" aria-hidden="true"><div class="marquee-track" id="marqueeA"></div></div>
+  <div class="marquee marquee-rev" data-speed="46" aria-hidden="true"><div class="marquee-track" id="marqueeB"></div></div>
+</section>
+
+<!-- ================= DARK STATS (Superhuman-Moment) ================= -->
+<section class="stats" id="stats">
+  <div class="stats-sky" aria-hidden="true">
+    <div class="stats-bg" data-gal="0.12"></div>
+    <div class="gal-layer gal-far" data-gal="0.16"></div>
+    <div class="gal-layer gal-mid" data-gal="0.30"></div>
+    <div class="stats-glow sg1" data-gal="0.34"></div>
+    <div class="stats-glow sg2" data-gal="-0.26"></div>
+    <div class="gal-layer gal-near" data-gal="0.42"></div>
+    <div class="gal-shooting"><i></i><i></i><i></i></div>
+  </div>
+  <div class="container stats-inner">
+    <div class="section-head section-head-dark reveal" data-reveal>
+      <span class="eyebrow eyebrow-dark">Warum Brospify?</span>
+      <h2>Die Zahlen bauen <em class="gradient-serif-light">für dich.</em></h2>
+    </div>
+    <div class="stats-grid">
+      <div class="stat reveal" data-reveal><b><span data-count="60" data-prefix="~">~60</span><small>&nbsp;Sek.</small></b><span>bis zum ersten kompletten Entwurf</span></div>
+      <div class="stat reveal" data-reveal data-delay="90"><b><span data-count="24">24</span><small>&nbsp;Stile</small></b><span>kuratiert für echte Nischen</span></div>
+      <div class="stat reveal" data-reveal data-delay="180"><b><span data-count="45" data-suffix="+">45+</span><small>&nbsp;Sections</small></b><span>in bewährter Funnel-Logik</span></div>
+      <div class="stat reveal" data-reveal data-delay="270"><b><span data-count="42">42</span><small>&nbsp;Bausteine</small></b><span>für die Kaufbox — von Countdown bis Geld-zurück</span></div>
+    </div>
+    <div class="stats-quote reveal" data-reveal data-delay="200">
+      <p>&bdquo;Du beschreibst. Die AI designt, textet und baut.<br>Du bleibst der Boss — sie macht die Arbeit.&ldquo;</p>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FAQ ================= -->
+<section class="faq section" id="faq">
+  <div class="px-scene" aria-hidden="true">
+    <div class="aurora au-green-r" data-px="0.30"></div>
+  </div>
+  <div class="container faq-grid">
+    <div class="faq-intro reveal" data-reveal>
+      <span class="eyebrow">FAQ</span>
+      <h2>Kurze Fragen,<br><em class="gradient-serif">ehrliche Antworten.</em></h2>
+      <p>Noch was offen? Schreib uns — ein Mensch antwortet.</p>
+    </div>
+    <div class="faq-list">
+      <details class="faq-item reveal" data-reveal>
+        <summary>Wie fange ich an?<span class="faq-ic" aria-hidden="true"></span></summary>
+        <p>Sofort. Melde dich mit Google, deinem Shopify-Shop oder per E-Mail-Link an, lade ein paar Fotos deines Produkts hoch und schreib einen Satz dazu — die AI baut deine erste komplette Shop-Vorschau. Ansehen kostet nichts.</p>
+      </details>
+      <details class="faq-item reveal" data-reveal data-delay="60">
+        <summary>Was kostet es?<span class="faq-ic" aria-hidden="true"></span></summary>
+        <p>Die erste Vorschau ist kostenlos. Zum Herunterladen deines fertigen Themes schließt du eine Monats-Mitgliedschaft ab (geplant: 21&nbsp;€/Monat) — statt einer vierstelligen Agentur-Rechnung. Du zahlst erst, wenn du dein Theme wirklich mitnehmen willst.</p>
+      </details>
+      <details class="faq-item reveal" data-reveal data-delay="120">
+        <summary>Brauche ich einen Shopify-Account?<span class="faq-ic" aria-hidden="true"></span></summary>
+        <p>Zum Ansehen nicht. Zum Verkaufen ja — Brospify baut dein Theme, Shopify betreibt deinen Shop. Das Theme lädst du als ZIP hoch, wie jedes offizielle Theme. Keine zusätzlichen Apps nötig.</p>
+      </details>
+      <details class="faq-item reveal" data-reveal data-delay="180">
+        <summary>Funktioniert das mit meinem Produkt?<span class="faq-ic" aria-hidden="true"></span></summary>
+        <p>Ja. Du lädst eigene Produktfotos hoch oder beschreibst deine Idee — die AI passt Stil, Icons, Texte und Aufbau an deine Nische an. Es gibt 24 Stile von Beauty über Tech bis Outdoor.</p>
+      </details>
+      <details class="faq-item reveal" data-reveal data-delay="240">
+        <summary>Was, wenn mir das Ergebnis nicht gefällt?<span class="faq-ic" aria-hidden="true"></span></summary>
+        <p>Dann sagst du es der AI — wörtlich. &bdquo;Dunkler. Edler. Andere Reihenfolge.&ldquo; Jede Änderung siehst du live, und mit einem Klick machst du alles rückgängig.</p>
+      </details>
+      <details class="faq-item reveal" data-reveal data-delay="300">
+        <summary>Bin ich an Brospify gebunden?<span class="faq-ic" aria-hidden="true"></span></summary>
+        <p>Dein Shop läuft in deinem eigenen Shopify-Account — Produkte, Bestellungen, Zahlungen und Kundendaten gehören dir und sind unabhängig von Brospify. Dein Theme installierst du wie jedes offizielle Shopify-Theme über das Theme-Menü.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ================= FINAL CTA ================= -->
+<section class="final" id="join">
+  <div class="container">
+    <div class="final-card reveal" data-reveal>
+      <div class="final-blob fb1" data-px="0.28" aria-hidden="true"></div>
+      <div class="final-blob fb2" data-px="0.44" aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
+      <div class="final-inner">
+        <span class="final-badge">✦ Erste Vorschau gratis</span>
+        <h2>Sieh deinen Shop,<br>bevor du dich entscheidest.</h2>
+        <p>Melde dich mit Google, Shopify oder E-Mail an, lade dein Produkt hoch — die AI baut deine erste komplette Vorschau kostenlos.</p>
+        <div class="wl-zone wl-zone-final">
+          <a href="/editor" class="btn btn-light btn-cta" data-magnetic>
+            Jetzt kostenlos starten <span class="btn-arrow" aria-hidden="true">→</span>
+          </a>
+          <p class="cta-note">
+            <b>Kostenlos ansehen</b><span class="cta-dot">·</span>Login mit Google, Shopify oder E-Mail<span class="cta-dot">·</span>keine Kreditkarte
+          </p>
+        </div>
+        <ul class="final-perks">
+          <li>✓ Erste Vorschau gratis</li>
+          <li>✓ In Sekunden fertig</li>
+          <li>✓ Download jederzeit im Abo</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<!-- ================= FOOTER ================= -->
+<footer class="footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <img src="/landing/brospify-logo.png" alt="Brospify" width="140" height="47" loading="lazy">
+      <p>Die AI, die Shopify-Websites baut.<br>Made with ♥ in Germany.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="#how">So funktioniert&rsquo;s</a>
+      <a href="#features">Features</a>
+      <a href="#styles">Stile</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <nav class="footer-links footer-legal" aria-label="Rechtliches">
+      <a href="https://brospify.com/policies/legal-notice" rel="nofollow">Impressum</a>
+      <a href="https://brospify.com/policies/privacy-policy" rel="nofollow">Datenschutz</a>
+      <a href="https://brospify.com/policies/terms-of-service" rel="nofollow">AGB</a>
+    </nav>
+  </div>
+  <div class="container footer-base">
+    <span>© 2026 Brospify. Alle Rechte vorbehalten.</span>
+    <span class="footer-up"><a href="#top">Nach oben ↑</a></span>
+  </div>
+</footer>
+
+<script src="/landing/app.js" defer></script>
+</body>
+</html>

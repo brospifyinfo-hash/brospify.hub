@@ -370,6 +370,44 @@ export async function sendAdminAllDrawnAlert(args: AdminAllDrawnAlertArgs): Prom
   });
 }
 
+// ─── Editor-Login-Link (Magic Link der Standalone-Editor-Website) ──────
+// Kurzer, heller Mail-Look passend zur Landing. Der Link ist 15 Minuten
+// gültig (signiert, siehe src/lib/editor-auth.ts).
+export interface EditorLoginEmailArgs {
+  to: string;
+  loginUrl: string;
+}
+
+export async function sendEditorLoginEmail(args: EditorLoginEmailArgs): Promise<SendResult> {
+  const url = args.loginUrl;
+  const html = `<!DOCTYPE html>
+<html lang="de"><body style="margin:0;padding:32px 16px;background:#faf7f1;font-family:-apple-system,'Segoe UI',sans-serif;">
+  <div style="max-width:460px;margin:0 auto;background:#ffffff;border:1px solid rgba(20,18,26,0.10);border-radius:24px;padding:36px 32px;text-align:center;">
+    <div style="width:52px;height:52px;border-radius:16px;margin:0 auto 20px;background:linear-gradient(100deg,#7c3aed,#ec4899 52%,#fb923c);line-height:52px;color:#fff;font-size:24px;font-weight:800;">B</div>
+    <h1 style="margin:0;font-size:20px;letter-spacing:-0.02em;color:#14121a;">Dein Login-Link</h1>
+    <p style="margin:12px 0 0;font-size:14.5px;line-height:1.6;color:#5b5766;">
+      Klick auf den Button, um dich im Brospify&nbsp;Editor anzumelden und deinen Shop zu bauen.
+      Der Link ist <strong>15 Minuten</strong> gültig.
+    </p>
+    <a href="${escapeHtml(url)}" style="display:inline-block;margin-top:24px;padding:15px 34px;border-radius:999px;background:#14121a;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;">Jetzt anmelden →</a>
+    <p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:#8c8896;">
+      Du hast das nicht angefordert? Dann ignoriere diese E-Mail einfach —
+      ohne Klick passiert nichts.
+    </p>
+  </div>
+</body></html>`.trim();
+
+  const text = `Dein Brospify-Editor Login-Link (15 Minuten gültig):\n\n${url}\n\nDu hast das nicht angefordert? Dann ignoriere diese E-Mail einfach.`;
+
+  return sendViaResend({
+    to: args.to,
+    subject: "Dein Login-Link für den Brospify Editor",
+    html,
+    text,
+    replyTo: "support@brospify.com",
+  });
+}
+
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

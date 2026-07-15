@@ -1,6 +1,6 @@
 "use client";
 
-// ─── /themes/editor — Theme-Editor v2 ───────────────────────────────
+// ─── /editor — Theme-Editor v2 (Standalone-Editor-Website) ──────────
 // Produkt-zuerst-Flow: (1) Produkt aus Bilder-Grid wählen → (2) Split-Pane-
 // Editor (Aufbau/Navigation links · Live-Vorschau + AI-Leiste Mitte · Einstellungen rechts). Alles lebt
 // in EINEM ThemeDocument (Undo/Redo), das die Compile-Engine 1:1 in das
@@ -18,7 +18,6 @@ import {
   Pencil, Target, ChevronDown, ArrowDownUp,
   type LucideIcon,
 } from "lucide-react";
-import Navigation from "@/components/Navigation";
 import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
 import ThemePreview, { type PreviewData } from "@/components/ThemePreview";
@@ -31,6 +30,7 @@ import BuyboxGalleryOverlay from "@/components/theme-editor/BuyboxGalleryOverlay
 import FullPreviewOverlay from "@/components/theme-editor/FullPreviewOverlay";
 import AiCopilot from "@/components/theme-editor/AiCopilot";
 import StartChoiceOverlay from "@/components/theme-editor/StartChoiceOverlay";
+import EditorLoginModal from "@/components/theme-editor/EditorLoginModal";
 import ProductIntakeOverlay, { type IntakeResult } from "@/components/theme-editor/ProductIntakeOverlay";
 import GenerationTheater, { type GenesisJob } from "@/components/theme-editor/GenerationTheater";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
@@ -170,11 +170,15 @@ export default function ThemeEditorPage() {
   // bleibt dauerhaft true). Damit der Editor-Chip nicht ewig „…" zeigt, holen
   // wir isAdmin und zeigen dann „∞" — genau wie das globale Credits-Pill.
   const [isAdmin, setIsAdmin] = useState(false);
+  // Login-Status für den öffentlichen Editor-Einstieg (Landing → Editor ohne
+  // Login): Gäste sehen das Start-Fenster, der Login kommt erst beim Wählen
+  // einer Option. null = Status noch unbekannt.
+  const [loggedIn, setLoggedIn] = useState<boolean | null>(null);
   useEffect(() => {
     fetch("/api/auth/session", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => setIsAdmin(!!d?.isAdmin))
-      .catch(() => {});
+      .then((d) => { setIsAdmin(!!d?.isAdmin); setLoggedIn(!!d?.isLoggedIn); })
+      .catch(() => setLoggedIn(false));
   }, []);
 
   const [state, dispatch] = useReducer(editorReducer, undefined, () => initialEditorState());
@@ -298,7 +302,9 @@ export default function ThemeEditorPage() {
   // Cleanup ihn NICHT entfernen — sonst kippt die SPA nach dem Verlassen
   // des Editors bis zum Hard-Reload auf Dark.
   useEffect(() => {
-    if (editorCfg?.appearance !== "white") return;
+    // Standalone-Editor: IMMER White-Mode (heller Look wie die neue Website) —
+    // vom Hub-Dark-Theme entkoppelt. Der Editor gehört zur eigenständigen
+    // Editor-Website, nicht zum Brospify-Hub; er ist fest hell.
     const html = document.documentElement;
     const body = document.body;
     const wasLight = html.classList.contains("theme-light");
@@ -318,7 +324,7 @@ export default function ThemeEditorPage() {
         body.classList.add("bg-zinc-950", "text-white");
       }
     };
-  }, [editorCfg?.appearance]);
+  }, []);
 
   // Klick auf eine Section/Baustein → auf schmalen Screens automatisch auf den
   // Einstellungen-Tab wechseln und ihn sanft in den Blick scrollen.
@@ -334,7 +340,9 @@ export default function ThemeEditorPage() {
     let cancelled = false;
     fetch(`/api/charts/draw?lang=${lang}`, { cache: "no-store" })
       .then((r) => {
-        if (r.status === 401) { router.push("/"); return null; }
+        // Gäste (nicht eingeloggt) werden NICHT mehr auf / geworfen — sie sehen
+        // das Start-Fenster; der Login kommt erst beim Wählen einer Option.
+        if (r.status === 401) return null;
         return r.json();
       })
       .then((d) => {
@@ -909,11 +917,62 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
    *  aus (Code bleibt erhalten), „Von 0" geht dann direkt in den Editor. */
   const pickerEnabled = editorCfg?.showProductPicker === true;
 
+  // ── Login-Gate für den Landing-Funnel („Eingangstür") ────────────────
+  // Die 3 Start-Optionen sind auch für Gäste sichtbar. Wählt ein Gast eine,
+  // erscheint zuerst ein Login-Fenster (mit der Option als Ziel). Nach dem
+  // Login landet man über den ?start=-Deeplink direkt wieder hier und die
+  // Option wird ausgeführt. Eingeloggte Nutzer starten die Option sofort.
+  const [loginChoice, setLoginChoice] = useState<"own" | "demo" | "blank" | null>(null);
+  const runChoice = useCallback((choice: "own" | "demo" | "blank") => {
+    if (choice === "own") { setStartOpen(false); setIntakeOpen(true); }
+    else if (choice === "demo") { startDemo(); }
+    else if (pickerEnabled) { blankStartRef.current = true; setStartOpen(false); }
+    else { startBlankDirect(); }
+  }, [startDemo, startBlankDirect, pickerEnabled]);
+  const gateChoice = useCallback((choice: "own" | "demo" | "blank") => {
+    // Nur bei EINDEUTIG eingeloggtem Status sofort ausführen. Solange der
+    // Session-Fetch läuft (loggedIn === null) wie einen Gast behandeln und
+    // erst das Login-Fenster zeigen — sonst liefen die geschützten Aufrufe
+    // (Upload/Custom-Product/Demo) ungated in 401.
+    if (loggedIn !== true) { setLoginChoice(choice); return; }
+    runChoice(choice);
+  }, [loggedIn, runChoice]);
+
+  // Race-Auflösung: Klickt ein Gast, bevor der Session-Status da ist, öffnet
+  // sich das Login-Fenster. Stellt sich dann heraus, dass er DOCH schon
+  // eingeloggt war, die Wahl automatisch ausführen (kein unnötiger Login).
+  useEffect(() => {
+    if (loginChoice !== null && loggedIn === true) {
+      const choice = loginChoice;
+      setLoginChoice(null);
+      runChoice(choice);
+    }
+  }, [loginChoice, loggedIn, runChoice]);
+
+  // Deep-Link aus der Landing (/editor?start=own|demo|blank): sobald
+  // Config UND Login-Status bekannt sind, die Option ausführen — bei Gästen
+  // öffnet gateChoice zuerst das Login-Fenster (danach kommt man hierher zurück).
+  const startParamRef = useRef(false);
+  useEffect(() => {
+    if (editorCfg === null || loggedIn === null || startParamRef.current || typeof window === "undefined") return;
+    const choice = new URLSearchParams(window.location.search).get("start");
+    if ((choice === "own" || choice === "demo" || choice === "blank") && !doc.productId) {
+      startParamRef.current = true;
+      // ?start aus der URL entfernen, damit ein Reload dieselbe Option
+      // NICHT erneut auslöst (sonst re-öffnet sich Intake/Demo bzw. es
+      // entsteht wieder ein leeres Von-0-Produkt).
+      const url = new URL(window.location.href);
+      url.searchParams.delete("start");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+      gateChoice(choice);
+    }
+  }, [editorCfg, loggedIn, doc.productId, gateChoice]);
+
   return (
     <>
-      {/* Globales Menü NUR beim Produkt-Picker (noch kein Produkt). Im Editor
-          ist es ausgeblendet — die dünne Editor-Toolbar sitzt ganz oben. */}
-      {!doc.productId && <Navigation />}
+      {/* Kein Hub-Menü mehr: der Editor ist eine eigenständige App der neuen
+          Website (kein Bezug zum Brospify-Hub) — die dünne Editor-Toolbar
+          sitzt ganz oben, „Zurück" führt auf die Landing (/start). */}
       <main className={`min-h-screen bg-mesh font-sf ${showPicker ? "" : "lg:min-h-0"}`}>
         {/* Im Editor-Modus (Desktop) wird die Seite zur App-Shell: exakt Viewport-
             Höhe, nichts scrollt außen — Leisten & Vorschau scrollen INTERN und
@@ -934,7 +993,7 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                 die Leiste ganz oben nur eine feine Zeile bildet. */}
             <div className="hidden lg:flex items-center gap-1.5 flex-nowrap min-w-0">
               <button
-                onClick={() => router.push("/themes")}
+                onClick={() => { window.location.href = "/start"; }}
                 title={t.themes.editorBack}
                 className="shrink-0 flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[11.5px] font-semibold text-zinc-300 hover:text-white transition"
               >
@@ -961,15 +1020,14 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
               )}
 
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                {/* Credits — im Editor sichtbar, da das globale Menü aus ist */}
-                <a
-                  href="/credits"
+                {/* Credits — reine Anzeige (kein Link mehr in den Hub) */}
+                <span
                   title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3] hover:text-white hover:bg-[#95BF47]/15 transition"
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3]"
                 >
                   <span className="text-[12px] leading-none">{credits.creditIcon}</span>
                   <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </a>
+                </span>
                 {/* Gesamt-Stil jederzeit änderbar */}
                 {doc.productId && (
                   <button
@@ -1040,7 +1098,7 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
             <div className="lg:hidden space-y-2">
               <div className="flex items-center gap-2 min-w-0">
                 <button
-                  onClick={() => router.push("/themes")}
+                  onClick={() => { window.location.href = "/start"; }}
                   title={t.themes.editorBack}
                   className="shrink-0 flex items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] w-9 h-9 text-zinc-300 hover:text-white transition"
                 >
@@ -1065,14 +1123,13 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                     <span className="truncate">{t.themes.editorTitle}</span>
                   </div>
                 )}
-                <a
-                  href="/credits"
+                <span
                   title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
                   className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3]"
                 >
                   <span className="leading-none">{credits.creditIcon}</span>
                   <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </a>
+                </span>
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
@@ -1792,21 +1849,12 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
           Öffnet erst mit geladener Config (editorCfg) — sonst flackert die
           Demo-Karte kurz als „wird vorbereitet" auf und springt dann um. */}
       <StartChoiceOverlay
-        open={startOpen && !doc.productId && !intakeOpen && !genesisJob && editorCfg !== null}
+        open={startOpen && !doc.productId && !intakeOpen && !genesisJob && editorCfg !== null && loginChoice === null}
         demoReady={!!editorCfg?.demoReady}
         showSkip={pickerEnabled}
-        onOwn={() => { setStartOpen(false); setIntakeOpen(true); }}
-        onDemo={startDemo}
-        onBlank={() => {
-          // Mit Produkt-Übersicht: Grid zeigen (Nutzer wählt sein Produkt).
-          // Ohne (Standard): direkt in den leeren Editor.
-          if (pickerEnabled) {
-            blankStartRef.current = true;
-            setStartOpen(false);
-          } else {
-            startBlankDirect();
-          }
-        }}
+        onOwn={() => gateChoice("own")}
+        onDemo={() => gateChoice("demo")}
+        onBlank={() => gateChoice("blank")}
         onSkip={() => { blankStartRef.current = false; setStartOpen(false); }}
         t={{
           title: t.themes.genesisTitle,
@@ -1824,6 +1872,13 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
           go: t.themes.genesisGo,
         }}
       />
+
+      {/* Login-Fenster (Landing-Funnel): erscheint, wenn ein Gast eine der 3
+          Start-Optionen wählt — Google, Shopify oder E-Mail-Link. Nach dem
+          Login geht es über ?next=/editor?start=… direkt in die Option. */}
+      {loginChoice !== null && (
+        <EditorLoginModal next={`/editor?start=${loginChoice}`} onClose={() => setLoginChoice(null)} />
+      )}
 
       {/* „Eigenes Produkt": min. 3 Bilder + Name + Beschreibung (Pflicht) */}
       <ProductIntakeOverlay

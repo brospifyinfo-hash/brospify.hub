@@ -3044,26 +3044,16 @@ export default function AdminPage() {
                 ohne AI-Kosten, das Ergebnis ist immer exakt dein Design.
               </p>
 
-              {/* Ansicht: Black / White */}
+              {/* Ansicht: seit der Standalone-Editor-Website (/editor) fest
+                  hell — der frühere Black/White-Schalter ist wirkungslos und
+                  wurde daher entfernt. */}
               <div>
-                <label className="block text-xs text-zinc-400 mb-1.5">Editor-Ansicht (für alle Nutzer)</label>
-                <div className="inline-flex rounded-xl border border-white/10 bg-white/[0.03] p-1 gap-1">
-                  {(["black", "white"] as const).map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => { setTeCfg((c) => ({ ...c, appearance: m })); saveThemeEditorCfg({ appearance: m }); }}
-                      disabled={teSaving}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition disabled:opacity-50 ${
-                        teCfg.appearance === m ? "bg-[#95BF47] text-[#0a0a0a]" : "text-zinc-300 hover:text-white hover:bg-white/[0.06]"
-                      }`}
-                    >
-                      <span className={`w-3.5 h-3.5 rounded-full border ${m === "black" ? "bg-zinc-950 border-zinc-500" : "bg-white border-zinc-300"}`} />
-                      {m === "black" ? "Black Mode" : "White Mode"}
-                      {teCfg.appearance === m && <Check className="w-3.5 h-3.5" />}
-                    </button>
-                  ))}
+                <label className="block text-xs text-zinc-400 mb-1.5">Editor-Ansicht</label>
+                <div className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2">
+                  <span className="w-3.5 h-3.5 rounded-full border bg-white border-zinc-300" />
+                  <span className="text-sm font-medium text-zinc-200">Immer White Mode</span>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-1">Wird beim Umschalten sofort gespeichert und gilt beim nächsten Editor-Besuch.</p>
+                <p className="text-[10px] text-zinc-500 mt-1">Die eigenständige Editor-Website läuft fest im hellen Design — keine Umschaltung nötig.</p>
               </div>
 
               {/* Produkt-Übersicht (Schritt 1 „Wähle dein Produkt") an/aus */}

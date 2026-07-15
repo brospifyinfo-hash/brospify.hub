@@ -46,6 +46,19 @@ export const CREDIT_COSTS = {
 // Idempotent via `credits.starterGranted` auf dem Kundenrecord.
 export const STARTER_CREDITS = 1500;
 
+// Gratis-Kontingent für selbst registrierte Editor-Konten (Standalone-
+// Editor-Website, Login via Google/Shopify/E-Mail). BEWUSST bemessen für
+// die kostenlose VORSCHAU, nicht für den Download:
+//   - reicht für einen kompletten Genesis-Plan (großer Plan = 50) plus
+//     eine kleine Nachbesserung (15) mit Puffer,
+//   - liegt aber ABSICHTLICH unter THEME_EXPORT (=100, KI-Text beim
+//     Download) — das ist die Paywall-Grenze: vorschauen gratis,
+//     herunterladen erst nach Abo-/Credit-Kauf.
+// Diese Konten sind vom 28-Tage-Recurring ausgenommen
+// (profile.noRecurringGrant) und bekommen NICHT die 1500
+// Hub-Starter-Credits (starterGranted wird beim Anlegen direkt true).
+export const EDITOR_STARTER_CREDITS = 80;
+
 // Fortlaufende Gutschrift: danach alle RECURRING_PERIOD_DAYS Tage automatisch
 // RECURRING_CREDITS dazu. Anker ist `creditsStartedAt` (erster Login). Die
 // Top-ups passieren idempotent beim Profil-Lesen (ensureRecurringGrant).

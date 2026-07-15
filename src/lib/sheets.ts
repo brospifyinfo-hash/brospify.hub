@@ -167,6 +167,14 @@ export interface KundeProfile {
    *  BESTANDSKUNDEN (die vor dem Tour-Feature onboardet waren) die Tour
    *  einmalig automatisch sehen. Bleibt unangetastet beim manuellen Replay. */
   hasSeenTour?: boolean;
+  /** Selbst registriertes Gratis-Konto der Standalone-Editor-Website
+   *  (Login via Google/Shopify/E-Mail auf /start bzw. /editor). Bekommt
+   *  beim Anlegen EDITOR_STARTER_CREDITS statt der 1500 Hub-Starter und
+   *  ist vom 28-Tage-Recurring ausgenommen (noRecurringGrant). */
+  editorFree?: boolean;
+  /** Hartes Opt-out aus der fortlaufenden 28-Tage-Gutschrift (z. B.
+   *  Editor-Gratis-Konten) — geprüft ganz oben in ensureRecurringGrant. */
+  noRecurringGrant?: boolean;
   linkedGoogleEmail?: string;
   /** Vom Kunden im Onboarding gewählter Anzeigename (im Profil sichtbar).
    *  Fällt im UI auf den Google-Namen bzw. den Lizenzschlüssel zurück. */
@@ -286,7 +294,7 @@ export interface CustomProduct {
 export { CREDIT_COSTS as CREDIT_LIMITS } from "./credit-costs";
 import { STARTER_CREDITS, RECURRING_CREDITS, RECURRING_PERIOD_DAYS } from "./credit-costs";
 
-function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
+export function normalizeCredits(raw: CreditsRecord | undefined): CreditsRecord {
   if (!raw) {
     return {
       balance: 0,
@@ -603,6 +611,10 @@ export async function ensureRecurringGrant(
   rowIndex: number,
   profile: KundeProfile,
 ): Promise<KundeProfile> {
+  // Editor-Gratis-Konten (und andere Opt-outs) bekommen KEINE fortlaufende
+  // Gutschrift — sie starten mit einem festen Gratis-Kontingent.
+  if (profile.noRecurringGrant) return profile;
+
   const nowIso = new Date().toISOString();
 
   // Anker nachsetzen, falls Bestandskunde ohne creditsStartedAt — ab JETZT
@@ -668,11 +680,16 @@ export function getCreditCycle(profile: KundeProfile): {
   lastGrantAt: string | null;
 } {
   const periodDays = RECURRING_PERIOD_DAYS;
-  if (!profile.creditsStartedAt) {
+  // Editor-Gratis-Konten (noRecurringGrant) haben zwar einen
+  // creditsStartedAt-Anker, bekommen aber NIE die 28-Tage-Gutschrift
+  // (ensureRecurringGrant bricht früh ab). Darum keinen „+1000 in X
+  // Tagen"-Countdown ausweisen — sonst verspricht der Hub eine
+  // Gutschrift, die nie kommt.
+  if (!profile.creditsStartedAt || profile.noRecurringGrant) {
     return {
       startedAt: null,
       periodDays,
-      recurringAmount: RECURRING_CREDITS,
+      recurringAmount: profile.noRecurringGrant ? 0 : RECURRING_CREDITS,
       nextGrantAt: null,
       daysUntilNext: null,
       cycleProgressPct: 0,
@@ -926,6 +943,19 @@ export async function findKundeByEmail(email: string): Promise<Kunde | null> {
   const kunden = await getAllKunden();
   return (
     kunden.find((k) => (k.kundenEmail || "").trim().toLowerCase() === target) ||
+    null
+  );
+}
+
+// Match by Shopify shop domain (Spalte D) — der Shopify-Login der
+// Standalone-Editor-Website erkennt daran wiederkehrende Shops.
+// Lower-cased; Domains sind eindeutig pro Shop (*.myshopify.com).
+export async function findKundeByShopDomain(domain: string): Promise<Kunde | null> {
+  const target = (domain || "").trim().toLowerCase();
+  if (!target) return null;
+  const kunden = await getAllKunden();
+  return (
+    kunden.find((k) => (k.shopDomain || "").trim().toLowerCase() === target) ||
     null
   );
 }

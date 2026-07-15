@@ -126,7 +126,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
         />
       </head>
-      <body className={`${outfit.className} bg-zinc-950 text-white antialiased`}>
+      <body className={`${outfit.className} bg-zinc-950 text-white antialiased`} suppressHydrationWarning>
         {/* Light-Mode Switch: erkennt ?theme=light (für Embed im Shopify-Theme)
             und setzt die `theme-light` Klasse vor First Paint. Verhindert
             Flash-of-Dark-Mode in der iframe-Integration. */}

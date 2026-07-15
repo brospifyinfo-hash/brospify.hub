@@ -8,26 +8,56 @@ import {
   logSystemEvent,
 } from "@/lib/sheets";
 import { applySessionLifetime, getSession } from "@/lib/session";
+import { findOrCreateEditorKunde } from "@/lib/editor-accounts";
 
 export const dynamic = "force-dynamic";
 
 // After Google sign-in, this route maps the Google email to a Kunden entry
 // and creates an iron-session (same as license key login).
 export async function GET(req: NextRequest) {
+  // Optionales Post-Login-Ziel (Standalone-Landing → Theme-Editor). Nur
+  // interne, absolute Pfade zulassen (Open-Redirect-Schutz): muss mit „/"
+  // beginnen, aber nicht mit „//" (protocol-relative) oder „/\".
+  const nextParam = req.nextUrl.searchParams.get("next");
+  const safeNext =
+    nextParam && /^\/(?![/\\])/.test(nextParam) ? nextParam : null;
+
+  // Fehler-Ziel: Kommt der Login aus dem Editor-Funnel (next gesetzt), landen
+  // Fehler auf der EIGENEN hellen Login-Seite der Editor-Website — nicht auf
+  // dem Hub-Login. Hub-Logins (ohne next) behalten ihr bisheriges Verhalten.
+  const errTo = (code: string) =>
+    safeNext
+      ? `/start/login?error=${code}&next=${encodeURIComponent(safeNext)}`
+      : `/?error=${code}`;
+
   try {
     const authSession = await auth();
 
     if (!authSession?.user?.email) {
-      return NextResponse.redirect(new URL("/?error=no_email", req.url));
+      return NextResponse.redirect(new URL(errTo("no_email"), req.url));
     }
 
     const email = authSession.user.email;
-    const kunde = await findKundeByGoogleEmail(email);
+    let kunde = await findKundeByGoogleEmail(email);
 
     if (!kunde) {
-      return NextResponse.redirect(
-        new URL("/?error=no_license", req.url)
-      );
+      // Editor-Funnel (next gesetzt): Selbst-Registrierung — beim ersten
+      // Login entsteht automatisch ein Gratis-Konto (EDITOR_STARTER_CREDITS,
+      // kein Abo-SKU, kein Recurring). Hub-Logins ohne next behalten die
+      // bisherige Ablehnung unbekannter Konten.
+      if (safeNext) {
+        const created = await findOrCreateEditorKunde({
+          provider: "google",
+          email,
+          displayName: authSession.user.name || undefined,
+        });
+        if (!created.ok) {
+          return NextResponse.redirect(new URL(errTo(created.error), req.url));
+        }
+        kunde = created.kunde;
+      } else {
+        return NextResponse.redirect(new URL(errTo("no_license"), req.url));
+      }
     }
 
     if (kunde.profile.blocked === true) {
@@ -38,7 +68,7 @@ export async function GET(req: NextRequest) {
         target: kunde.lizenzschluessel,
         details: { method: "google" },
       });
-      return NextResponse.redirect(new URL("/?error=blocked", req.url));
+      return NextResponse.redirect(new URL(errTo("blocked"), req.url));
     }
 
     const isAdminRole = kunde.profile.role === "admin";
@@ -84,6 +114,13 @@ export async function GET(req: NextRequest) {
       details: { method: "google" },
     });
 
+    // Editor-Funnel: IMMER direkt ins gewünschte Ziel (z. B.
+    // /editor?start=own) — auch Admins und Nicht-Onboardete landen dort,
+    // das Hub-Onboarding gehört nicht zur Editor-Website.
+    if (safeNext) {
+      return NextResponse.redirect(new URL(safeNext, req.url));
+    }
+
     if (isAdminRole) {
       return NextResponse.redirect(new URL("/admin", req.url));
     }
@@ -95,6 +132,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(new URL("/home", req.url));
   } catch (error) {
     console.error("[Google Callback] Error:", error);
-    return NextResponse.redirect(new URL("/?error=server", req.url));
+    return NextResponse.redirect(new URL(errTo("server"), req.url));
   }
 }

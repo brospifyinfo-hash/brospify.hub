@@ -36,6 +36,8 @@ import {
   updateKundeProfile,
   upsertKundeByKey,
   applySubscriptionRefill,
+  ensureStarterGrant,
+  normalizeCredits,
   type Kunde,
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
@@ -212,6 +214,52 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, ignored: true, topic });
 }
 
+// ─── Editor-Gratis-Konto → echte Mitgliedschaft hochstufen ──────
+// Gemeinsam genutzt von orders/paid UND subscription_contracts: eine
+// editor-free-Zeile ist KEIN Bestandsabo. Statt sie (falsch) als Renewal
+// nur zu verlängern, wird sie zur vollen Membership umgeschrieben:
+// SKU-Spalte + Abo-Fenster setzen, Editor-Flags entfernen, den
+// 28-Tage-Recurring-Zyklus ab jetzt starten und die 1500 Willkommens-
+// Credits idempotent nachtragen (starterGranted:false → ensureStarterGrant).
+async function upgradeEditorFreeToMember(
+  kunde: Kunde,
+  opts: { sku: string; charge?: string; endsAt: string; customerId?: string; contractId?: string },
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  const tierKey = resolveTierKey(opts.sku);
+  await upsertKundeByKey({
+    lizenzschluessel: kunde.lizenzschluessel,
+    sku: opts.sku,
+    charge: opts.charge || undefined,
+    subscriptionEndsAt: opts.endsAt,
+    profilePatch: {
+      editorFree: undefined,
+      noRecurringGrant: undefined,
+      tier: tierKey,
+      tierSince: nowIso,
+      tierCanceledAt: undefined,
+      creditsStartedAt: undefined,
+      recurringPeriodsGranted: 0,
+      lastRecurringGrantAt: undefined,
+      credits: { ...normalizeCredits(kunde.profile.credits), starterGranted: false },
+      shopifyCustomerId: kunde.profile.shopifyCustomerId || opts.customerId || undefined,
+      subscriptionContractId: opts.contractId || kunde.profile.subscriptionContractId,
+    },
+  });
+  const fresh = await findKundeByKey(kunde.lizenzschluessel);
+  if (fresh) await ensureStarterGrant(fresh.rowIndex, fresh.profile);
+  if (["abgelaufen", "expired"].includes((kunde.status || "").trim().toLowerCase())) {
+    await updateKundeField(kunde.rowIndex, "C", "aktiv");
+  }
+}
+
+function isEditorFreeRow(kunde: Kunde): boolean {
+  return (
+    kunde.profile.editorFree === true ||
+    (kunde.sku || "").trim().toLowerCase() === "editor-free"
+  );
+}
+
 // ─── orders/paid ────────────────────────────────────────────────
 async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promise<NextResponse> {
   const orderName = (payload.name || (payload.order_number ? `#${payload.order_number}` : "")).trim();
@@ -279,6 +327,27 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
   const existing = await findKundeByEmail(email);
   if (existing) {
     const newEndsAt = new Date(Date.now() + SUBSCRIPTION_WINDOW_DAYS * DAY_MS).toISOString();
+
+    // ── Editor-Gratis-Konto kauft ERSTMALS die Membership ──────────
+    // Der Order ist garantiert eine Membership — non-subscription-Orders
+    // sind oben via lineItemMintsLicense bereits ausgesiebt. Editor-Zeilen
+    // dürfen also nicht als Renewal (nur endsAt) behandelt, sondern müssen
+    // zur echten Mitgliedschaft hochgestuft werden.
+    if (isEditorFreeRow(existing)) {
+      await upgradeEditorFreeToMember(existing, { sku, charge, endsAt: newEndsAt, customerId });
+      if (orderId) {
+        await writeOrderMetafield({ orderId, key: "license_key", value: existing.lizenzschluessel });
+      }
+      void logSystemEvent({
+        level: "audit",
+        actor: "shopify.webhook",
+        action: "webhook.editor_upgraded",
+        target: existing.lizenzschluessel,
+        details: { shopDomain, orderName, email, sku, via: "order", subscriptionEndsAt: newEndsAt },
+      });
+      return NextResponse.json({ ok: true, action: "editor_upgraded", key: existing.lizenzschluessel });
+    }
+
     // Re-read profile AFTER potential refill to avoid clobbering the
     // credits update. We update tier-window separately from refill so
     // each is independently traceable in the audit log.
@@ -511,6 +580,24 @@ async function handleSubscriptionUpdate(
     endsAt = kunde.profile.subscriptionEndsAt || new Date().toISOString();
   } else {
     endsAt = new Date(Date.now() + SUBSCRIPTION_WINDOW_DAYS * DAY_MS).toISOString();
+  }
+
+  // Kommt der Contract-Webhook VOR orders/paid und matcht eine
+  // editor-free-Zeile, dann ist das der erste Abo-Beweis: zur echten
+  // Mitgliedschaft hochstufen statt nur endsAt zu rollen (die SKU kennt
+  // der Contract nicht → neutrale "membership"-SKU, tierFromSku → pro).
+  // Ein toter/gekündigter Contract auf einer editor-free-Zeile ist
+  // dagegen kein Upgrade — der fällt in die normale Behandlung.
+  if (!isDead && isEditorFreeRow(kunde)) {
+    await upgradeEditorFreeToMember(kunde, { sku: "membership", endsAt, customerId, contractId });
+    void logSystemEvent({
+      level: "audit",
+      actor: "shopify.webhook",
+      action: "webhook.editor_upgraded",
+      target: kunde.lizenzschluessel,
+      details: { shopDomain, status, contractId, via: "subscription", subscriptionEndsAt: endsAt },
+    });
+    return NextResponse.json({ ok: true, action: "editor_upgraded", key: kunde.lizenzschluessel });
   }
 
   await updateKundeProfile(kunde.rowIndex, {
