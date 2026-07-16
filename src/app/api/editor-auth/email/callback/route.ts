@@ -20,10 +20,30 @@ export async function GET(req: NextRequest) {
     NextResponse.redirect(new URL(`/start/login?error=${code}&next=${encodeURIComponent(payload.next)}`, req.url));
 
   try {
-    const result = await findOrCreateEditorKunde({ provider: "email", email: payload.email });
-    if (!result.ok) return errTo(result.error);
-
     const session = await getSession();
+
+    // Registrierung mit Passwort: Klickt der Nutzer den Magic-Link STATT
+    // den Code einzugeben, muss der Link dieselben Zugangsdaten anwenden —
+    // sonst entstünde ein passwortloses Konto und der gerade gewählte
+    // Username/das Passwort wären verloren. Nur übernehmen, wenn die
+    // pending-Session zu genau dieser (signierten) E-Mail gehört.
+    const pending = session.editorEmailLogin;
+    const useCreds = pending && pending.email === payload.email;
+
+    const result = await findOrCreateEditorKunde({
+      provider: "email",
+      email: payload.email,
+      username: useCreds ? pending!.username : undefined,
+      passwordHash: useCreds ? pending!.passwordHash : undefined,
+    });
+    if (!result.ok) {
+      // username_taken beim Link-Einlösen: pending behalten, Nutzer soll's
+      // erneut (mit anderem Username) über das Formular versuchen.
+      if (result.error === "username_taken") return errTo("username_taken");
+      return errTo(result.error);
+    }
+
+    if (useCreds) session.editorEmailLogin = undefined;
     applyKundeToSession(session, result.kunde, { googleEmail: payload.email });
     await session.save();
 
@@ -32,7 +52,7 @@ export async function GET(req: NextRequest) {
       actor: payload.email,
       action: result.created ? "auth.editor.signup" : "auth.editor.login",
       target: result.kunde.lizenzschluessel,
-      details: { method: "email" },
+      details: { method: "email-link" },
     });
 
     return NextResponse.redirect(new URL(payload.next, req.url));

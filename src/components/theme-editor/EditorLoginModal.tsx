@@ -76,21 +76,27 @@ const VERIFY_ERROR_TEXT: Record<string, string> = {
   too_many_attempts: "Zu oft falsch eingegeben — fordere bitte einen neuen Code an.",
   use_primary_login:
     "Zu dieser Adresse gehört ein Konto mit Mitgliedschaft oder Admin-Rechten — bitte melde dich mit Google an.",
+  username_taken: "Dieser Username wurde gerade vergeben — bitte wähle im Formular einen anderen.",
   blocked: "Dieses Konto ist gesperrt — bitte wende dich an den Support.",
   invalid: "Anmeldung nicht möglich — bitte versuche es erneut.",
   server: "Technischer Fehler — bitte versuche es gleich erneut.",
 };
 
 export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: () => void }) {
-  const [view, setView] = useState<"choose" | "shopify" | "email" | "emailSent">("choose");
+  const [view, setView] = useState<"choose" | "register" | "shopify" | "email" | "emailSent">("choose");
   const [shop, setShop] = useState("");
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [identifier, setIdentifier] = useState("");
+  const [loginPw, setLoginPw] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [devUrl, setDevUrl] = useState<string | null>(null);
   const [devCode, setDevCode] = useState<string | null>(null);
   const [codeInput, setCodeInput] = useState("");
   const [cooldown, setCooldown] = useState(false);
+  const [regMode, setRegMode] = useState(false); // ob der aktuelle Code-Flow eine Registrierung ist
   const cooldownTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cooldown-Timer beim Unmount aufräumen (kein verwaister Timer, der
@@ -121,22 +127,36 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
     window.location.href = `/api/editor-auth/shopify/start?shop=${encodeURIComponent(v)}&next=${encodeURIComponent(next)}`;
   };
 
-  const sendEmailLink = async () => {
+  // withCreds=true → Registrierung mit Username+Passwort; sonst reiner
+  // Code-Login (Passwort-vergessen / passwortloser Weg).
+  const sendEmailLink = async (withCreds: boolean) => {
+    if (busy) return;
     const v = email.trim().toLowerCase();
     if (!EMAIL_RE.test(v)) { setErr("Bitte gib eine gültige E-Mail-Adresse ein."); return; }
+    const payload: Record<string, string> = { email: v, next };
+    if (withCreds) {
+      const u = username.trim().toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_.-]{1,28}[a-z0-9]$/.test(u)) {
+        setErr("Username: 3–30 Zeichen, Buchstaben/Zahlen/._- (Anfang & Ende alphanumerisch)."); return;
+      }
+      if (password.length < 8) { setErr("Passwort muss mindestens 8 Zeichen haben."); return; }
+      payload.username = u;
+      payload.password = password;
+    }
     setBusy(true);
     setErr(null);
     try {
       const res = await fetch("/api/editor-auth/email/request", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email: v, next }),
+        body: JSON.stringify(payload),
       });
       const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; devUrl?: string; devCode?: string };
       if (d.ok) {
         setDevUrl(d.devUrl || null);
         setDevCode(d.devCode || null);
         setCodeInput("");
+        setRegMode(withCreds);
         setView("emailSent");
         // Kleiner Client-Cooldown fürs erneute Senden (Server limitiert zusätzlich).
         // Vorherigen Timer canceln, damit er nicht den neuen Cooldown killt.
@@ -149,12 +169,47 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
             ? "Zu viele Versuche — bitte warte ein paar Minuten."
             : d.error === "email_invalid"
               ? "Bitte gib eine gültige E-Mail-Adresse ein."
-              : "Der Code konnte nicht verschickt werden — bitte versuche es gleich erneut.",
+              : d.error === "username_taken"
+                ? "Dieser Username ist schon vergeben — bitte wähle einen anderen."
+                : d.error === "username_invalid"
+                  ? "Username: 3–30 Zeichen, Buchstaben/Zahlen/._-."
+                  : d.error === "password_weak"
+                    ? "Passwort muss mindestens 8 Zeichen haben."
+                    : "Der Code konnte nicht verschickt werden — bitte versuche es gleich erneut.",
         );
       }
     } catch {
       setErr("Netzwerkfehler — bitte versuche es erneut.");
     } finally {
+      setBusy(false);
+    }
+  };
+
+  // Direkter Login mit Username/E-Mail + Passwort (kein Code nötig).
+  const passwordLogin = async () => {
+    if (busy) return;
+    const id = identifier.trim();
+    if (!id || loginPw.length < 1) { setErr("Bitte Username/E-Mail und Passwort eingeben."); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/editor-auth/password/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ identifier: id, password: loginPw, next }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string; next?: string };
+      if (d.ok) { window.location.href = d.next || next; return; }
+      setErr(
+        d.error === "rate_limited"
+          ? "Zu viele Versuche — bitte warte ein paar Minuten."
+          : d.error === "blocked"
+            ? "Dieses Konto ist gesperrt — bitte wende dich an den Support."
+            : "Username/E-Mail oder Passwort stimmt nicht.",
+      );
+      setBusy(false);
+    } catch {
+      setErr("Netzwerkfehler — bitte versuche es erneut.");
       setBusy(false);
     }
   };
@@ -175,6 +230,15 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
       if (d.ok) {
         // Eingeloggt — weiter ins Ziel (busy bleibt an, die Seite wechselt).
         window.location.href = d.next || next;
+        return;
+      }
+      // Username wurde zwischenzeitlich vergeben → zurück ins Formular
+      // (dort kann ein neuer Username gewählt werden; Code-View hat keins).
+      if (d.error === "username_taken") {
+        setErr(VERIFY_ERROR_TEXT.username_taken);
+        setCodeInput("");
+        setView("register");
+        setBusy(false);
         return;
       }
       let msg = VERIFY_ERROR_TEXT[d.error || "server"] ?? VERIFY_ERROR_TEXT.server;
@@ -278,106 +342,100 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
           </button>
 
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button onClick={sendEmailLink} disabled={busy || cooldown} style={{ ...secondaryBtn, opacity: busy || cooldown ? 0.6 : 1 }}>
+            <button onClick={() => sendEmailLink(regMode)} disabled={busy || cooldown} style={{ ...secondaryBtn, opacity: busy || cooldown ? 0.6 : 1 }}>
               {cooldown ? "Code gesendet ✓" : "Code erneut senden"}
             </button>
-            <button onClick={() => { setView("email"); setErr(null); setCodeInput(""); }} disabled={busy} style={secondaryBtn}>
-              Andere Adresse
+            <button onClick={() => { setView(regMode ? "register" : "email"); setErr(null); setCodeInput(""); }} disabled={busy} style={secondaryBtn}>
+              Zurück
             </button>
           </div>
         </>
       ) : (
         <>
-          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" }}>Melde dich an, um deinen Shop zu bauen</h2>
+          <h2 style={{ margin: 0, fontSize: 19, fontWeight: 800, letterSpacing: "-0.02em" }}>
+            {view === "register" ? "Konto erstellen" : "Willkommen zurück"}
+          </h2>
           <p style={{ margin: "8px 0 0", fontSize: 13.5, lineHeight: 1.55, color: INK_SOFT }}>
-            Erste Vorschau gratis — herunterladen kannst du später jederzeit im Abo.
+            {view === "register"
+              ? "Username + Passwort festlegen — danach meldest du dich direkt damit an."
+              : "Melde dich an, um deinen Shop zu bauen. Erste Vorschau gratis."}
           </p>
 
           {err && (
-            <p style={{ margin: "14px 0 0", padding: "10px 14px", borderRadius: 12, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)", color: "#b91c1c", fontSize: 12.5, fontWeight: 600 }}>
+            <p style={{ margin: "14px 0 0", padding: "10px 14px", borderRadius: 12, background: "rgba(220,38,38,0.08)", border: "1px solid rgba(220,38,38,0.25)", color: "#b91c1c", fontSize: 12.5, fontWeight: 600, textAlign: "left" }}>
               {err}
             </p>
           )}
 
-          {/* Google — primär */}
-          <button
-            onClick={startGoogle}
-            disabled={busy}
-            style={{
-              marginTop: 20, width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 12,
-              padding: "14px 22px", borderRadius: 999, border: 0, cursor: busy ? "default" : "pointer",
-              background: INK, color: "#fff", fontFamily: "inherit", fontSize: 14.5, fontWeight: 700,
-              opacity: busy ? 0.7 : 1, boxShadow: "0 10px 26px rgba(20,18,26,0.22)",
-            }}
-          >
-            <GoogleIcon /> Mit Google anmelden
-          </button>
-
-          <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0" }} aria-hidden>
-            <span style={{ flex: 1, height: 1, background: LINE }} />
-            <span style={{ fontSize: 11, fontWeight: 700, color: INK_FAINT, letterSpacing: "0.08em" }}>ODER</span>
-            <span style={{ flex: 1, height: 1, background: LINE }} />
-          </div>
-
-          {view === "shopify" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={shop}
-                  onChange={(e) => { setShop(e.target.value); setErr(null); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") startShopify(); }}
-                  placeholder="dein-shop.myshopify.com"
-                  autoFocus
-                  style={inputStyle}
-                  disabled={busy}
-                />
-                <button onClick={startShopify} disabled={busy} style={{ ...secondaryBtn, width: "auto", background: "#95BF47", border: 0, color: "#10230a" }}>
-                  Weiter →
-                </button>
-              </div>
-              <p style={{ margin: 0, fontSize: 11.5, color: INK_FAINT }}>
-                Die Adresse findest du im Shopify-Admin — sie endet auf .myshopify.com.
+          {view === "register" ? (
+            /* ── Registrieren: E-Mail + Username + Passwort → Code ── */
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+              <input value={email} onChange={(e) => { setEmail(e.target.value); setErr(null); }} placeholder="deine@email.de" type="email" autoComplete="email" autoFocus disabled={busy} style={{ ...inputStyle, flex: "none", width: "100%" }} />
+              <input value={username} onChange={(e) => { setUsername(e.target.value); setErr(null); }} placeholder="Username (z. B. maxmustermann)" autoComplete="username" disabled={busy} style={{ ...inputStyle, flex: "none", width: "100%" }} />
+              <input value={password} onChange={(e) => { setPassword(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === "Enter") sendEmailLink(true); }} placeholder="Passwort (mind. 8 Zeichen)" type="password" autoComplete="new-password" disabled={busy} style={{ ...inputStyle, flex: "none", width: "100%" }} />
+              <button onClick={() => sendEmailLink(true)} disabled={busy} style={{ marginTop: 4, width: "100%", padding: "14px 22px", borderRadius: 999, border: 0, cursor: busy ? "default" : "pointer", background: INK, color: "#fff", fontFamily: "inherit", fontSize: 14.5, fontWeight: 700, opacity: busy ? 0.7 : 1, boxShadow: "0 10px 26px rgba(20,18,26,0.22)" }}>
+                {busy ? "…" : "Konto erstellen →"}
+              </button>
+              <p style={{ margin: "2px 0 0", fontSize: 11.5, color: INK_FAINT }}>
+                Wir schicken dir einen 6-stelligen Code, um deine E-Mail zu bestätigen.
               </p>
+              <button onClick={() => { setView("choose"); setErr(null); }} disabled={busy} style={{ margin: "2px auto 0", border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: INK_SOFT }}>
+                Schon ein Konto? Anmelden
+              </button>
+            </div>
+          ) : view === "shopify" ? (
+            /* ── Shopify-Shop verbinden ── */
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <input value={shop} onChange={(e) => { setShop(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === "Enter") startShopify(); }} placeholder="dein-shop.myshopify.com" autoFocus style={inputStyle} disabled={busy} />
+                <button onClick={startShopify} disabled={busy} style={{ ...secondaryBtn, width: "auto", background: "#95BF47", border: 0, color: "#10230a" }}>Weiter →</button>
+              </div>
+              <p style={{ margin: 0, fontSize: 11.5, color: INK_FAINT }}>Die Adresse findest du im Shopify-Admin — sie endet auf .myshopify.com.</p>
+              <button onClick={() => { setView("choose"); setErr(null); }} disabled={busy} style={{ margin: "2px auto 0", border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: INK_SOFT }}>← Zurück</button>
             </div>
           ) : view === "email" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            /* ── Code-Login (Passwort vergessen / passwortloser Weg) ── */
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
               <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  value={email}
-                  onChange={(e) => { setEmail(e.target.value); setErr(null); }}
-                  onKeyDown={(e) => { if (e.key === "Enter") sendEmailLink(); }}
-                  placeholder="deine@email.de"
-                  type="email"
-                  autoFocus
-                  style={inputStyle}
-                  disabled={busy}
-                />
-                <button onClick={sendEmailLink} disabled={busy} style={{ ...secondaryBtn, width: "auto" }}>
-                  {busy ? "…" : "Code senden"}
-                </button>
+                <input value={email} onChange={(e) => { setEmail(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === "Enter") sendEmailLink(false); }} placeholder="deine@email.de" type="email" autoFocus style={inputStyle} disabled={busy} />
+                <button onClick={() => sendEmailLink(false)} disabled={busy} style={{ ...secondaryBtn, width: "auto" }}>{busy ? "…" : "Code senden"}</button>
               </div>
-              <p style={{ margin: 0, fontSize: 11.5, color: INK_FAINT }}>
-                Du bekommst einen 6-stelligen Code per E-Mail — kein Passwort nötig.
-              </p>
-              {/* Rückweg, falls das Fenster mitten in der Code-Eingabe
-                  geschlossen wurde: der Code in der Mail gilt 15 Min weiter. */}
-              <button
-                onClick={() => { setView("emailSent"); setErr(null); }}
-                disabled={busy}
-                style={{ margin: "2px auto 0", border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: INK_SOFT }}
-              >
+              <p style={{ margin: 0, fontSize: 11.5, color: INK_FAINT }}>Du bekommst einen 6-stelligen Code per E-Mail — kein Passwort nötig.</p>
+              <button onClick={() => { setView("emailSent"); setErr(null); }} disabled={busy} style={{ margin: "2px auto 0", border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, color: INK_SOFT }}>
                 Code schon erhalten? Hier eingeben →
               </button>
+              <button onClick={() => { setView("choose"); setErr(null); }} disabled={busy} style={{ border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: INK_SOFT }}>← Zurück zum Login</button>
             </div>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <button onClick={() => { setView("shopify"); setErr(null); }} disabled={busy} style={secondaryBtn}>
-                <ShopifyIcon /> Mit Shopify anmelden
-              </button>
-              <button onClick={() => { setView("email"); setErr(null); }} disabled={busy} style={secondaryBtn}>
-                ✉️&nbsp; Mit E-Mail-Code anmelden
-              </button>
-            </div>
+            /* ── Standard: direkter Login mit Username/E-Mail + Passwort ── */
+            <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+                <input value={identifier} onChange={(e) => { setIdentifier(e.target.value); setErr(null); }} placeholder="Username oder E-Mail" autoComplete="username" autoFocus disabled={busy} style={{ ...inputStyle, flex: "none", width: "100%" }} />
+                <input value={loginPw} onChange={(e) => { setLoginPw(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === "Enter") passwordLogin(); }} placeholder="Passwort" type="password" autoComplete="current-password" disabled={busy} style={{ ...inputStyle, flex: "none", width: "100%" }} />
+                <button onClick={passwordLogin} disabled={busy} style={{ width: "100%", padding: "14px 22px", borderRadius: 999, border: 0, cursor: busy ? "default" : "pointer", background: INK, color: "#fff", fontFamily: "inherit", fontSize: 14.5, fontWeight: 700, opacity: busy ? 0.7 : 1, boxShadow: "0 10px 26px rgba(20,18,26,0.22)" }}>
+                  {busy ? "…" : "Anmelden →"}
+                </button>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: 10 }}>
+                <button onClick={() => { setView("register"); setErr(null); }} disabled={busy} style={{ border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: INK }}>
+                  Neu hier? Konto erstellen
+                </button>
+                <button onClick={() => { setView("email"); setErr(null); setRegMode(false); setUsername(""); setPassword(""); }} disabled={busy} style={{ border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 600, color: INK_FAINT }}>
+                  Passwort vergessen?
+                </button>
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "16px 0" }} aria-hidden>
+                <span style={{ flex: 1, height: 1, background: LINE }} />
+                <span style={{ fontSize: 11, fontWeight: 700, color: INK_FAINT, letterSpacing: "0.08em" }}>ODER</span>
+                <span style={{ flex: 1, height: 1, background: LINE }} />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button onClick={startGoogle} disabled={busy} style={secondaryBtn}><GoogleIcon /> Mit Google anmelden</button>
+                <button onClick={() => { setView("shopify"); setErr(null); }} disabled={busy} style={secondaryBtn}><ShopifyIcon /> Mit Shopify anmelden</button>
+              </div>
+            </>
           )}
         </>
       )}

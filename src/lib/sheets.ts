@@ -176,6 +176,15 @@ export interface KundeProfile {
    *  Editor-Gratis-Konten) — geprüft ganz oben in ensureRecurringGrant. */
   noRecurringGrant?: boolean;
   linkedGoogleEmail?: string;
+  /** Editor-Konto: selbst gewählter Login-Username (kleingeschrieben,
+   *  eindeutig). Erlaubt Login mit Username statt E-Mail. */
+  username?: string;
+  /** Editor-Konto: scrypt-Hash des Login-Passworts (NIE Klartext). Nur
+   *  gesetzt, wenn der Nutzer bei der Registrierung ein Passwort vergeben
+   *  hat (der Login mit Google/Shopify/Code funktioniert weiterhin ohne). */
+  passwordHash?: string;
+  /** ISO-Zeitstempel, wann das Passwort zuletzt gesetzt wurde. */
+  passwordSetAt?: string;
   /** Vom Kunden im Onboarding gewählter Anzeigename (im Profil sichtbar).
    *  Fällt im UI auf den Google-Namen bzw. den Lizenzschlüssel zurück. */
   displayName?: string;
@@ -3348,6 +3357,15 @@ export async function findKundeByGoogleEmail(email: string): Promise<Kunde | nul
     all.find((k) => (k.profile.linkedGoogleEmail || "").trim().toLowerCase() === target) ||
     null
   );
+}
+
+// Editor-Konto per selbst gewähltem Username finden (case-insensitive).
+// Für den Passwort-Login der Standalone-Editor-Website.
+export async function findKundeByUsername(username: string): Promise<Kunde | null> {
+  const target = (username || "").trim().toLowerCase();
+  if (!target) return null;
+  const all = await getAllKunden();
+  return all.find((k) => (k.profile.username || "").trim().toLowerCase() === target) || null;
 }
 
 // Record `signupAt` if missing. Used the first time we see a profile

@@ -108,6 +108,60 @@ export function clearCodeAttempts(codeId: string): void {
   codeAttempts.delete(codeId);
 }
 
+// ── Username + Passwort (klassisches Editor-Konto) ──────────────────
+// Passwörter werden NIE im Klartext gespeichert — scrypt mit Zufalls-Salt.
+// Format: scrypt$N$r$p$salt(b64url)$hash(b64url). Verifikation timing-sicher.
+const SCRYPT_N = 16384;
+const SCRYPT_r = 8;
+const SCRYPT_p = 1;
+const SCRYPT_KEYLEN = 64;
+
+export function hashPassword(password: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(16);
+    crypto.scrypt(password, salt, SCRYPT_KEYLEN, { N: SCRYPT_N, r: SCRYPT_r, p: SCRYPT_p }, (err, dk) => {
+      if (err) return reject(err);
+      resolve(`scrypt$${SCRYPT_N}$${SCRYPT_r}$${SCRYPT_p}$${salt.toString("base64url")}$${dk.toString("base64url")}`);
+    });
+  });
+}
+
+export function verifyPassword(password: string, stored: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      const parts = (stored || "").split("$");
+      if (parts.length !== 6 || parts[0] !== "scrypt") return resolve(false);
+      const N = parseInt(parts[1], 10), r = parseInt(parts[2], 10), p = parseInt(parts[3], 10);
+      const salt = Buffer.from(parts[4], "base64url");
+      const expected = Buffer.from(parts[5], "base64url");
+      if (!Number.isFinite(N) || !salt.length || !expected.length) return resolve(false);
+      crypto.scrypt(password, salt, expected.length, { N, r, p }, (err, dk) => {
+        if (err) return resolve(false);
+        try { resolve(crypto.timingSafeEqual(dk, expected)); } catch { resolve(false); }
+      });
+    } catch {
+      resolve(false);
+    }
+  });
+}
+
+/** Username normalisieren (lowercase) + validieren. Erlaubt: 3–30 Zeichen,
+ *  a-z 0-9 _ . - , Start/Ende alphanumerisch. Liefert null bei ungültig. */
+export function normalizeUsername(raw: string): string {
+  return (raw || "").trim().toLowerCase();
+}
+export function validateUsername(raw: string): string | null {
+  const u = normalizeUsername(raw);
+  return /^[a-z0-9][a-z0-9_.-]{1,28}[a-z0-9]$/.test(u) ? u : null;
+}
+/** Sieht der Identifier wie eine E-Mail aus? (sonst: Username) */
+export function looksLikeEmail(raw: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((raw || "").trim());
+}
+export function validatePassword(pw: unknown): pw is string {
+  return typeof pw === "string" && pw.length >= 8 && pw.length <= 200;
+}
+
 /** HMAC über E-Mail UND Code — der Hash gilt nur für genau diese Adresse. */
 export function hashEmailLoginCode(email: string, code: string): string | null {
   const secret = editorAuthSecret();

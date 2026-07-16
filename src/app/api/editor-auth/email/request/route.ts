@@ -8,9 +8,13 @@ import {
   generateEmailLoginCode,
   generateCodeId,
   hashEmailLoginCode,
+  validateUsername,
+  validatePassword,
+  hashPassword,
   EMAIL_CODE_TTL_MS,
 } from "@/lib/editor-auth";
 import { deliverEditorLoginEmail } from "@/lib/email";
+import { findKundeByUsername } from "@/lib/sheets";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +37,9 @@ function originFrom(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { email?: string; next?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      email?: string; next?: string; username?: string; password?: string;
+    };
     const email = (body.email || "").trim().toLowerCase();
     const next = safeNextPath(body.next);
 
@@ -44,10 +50,33 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: "server" }, { status: 503 });
     }
 
-    // Best-effort-Rate-Limit: 3 Codes / 10 min pro Adresse, 10 pro IP.
+    // Rate-Limit ZUERST — VOR jedem Sheet-Read/scrypt. Sonst könnte ein
+    // Angreifer mit rohen Requests unbegrenzt Usernamen enumerieren
+    // (username_taken) bzw. teure scrypt-/Sheets-Arbeit erzwingen, bevor
+    // das Limit greift. Format-Validierung (billig) läuft zwar davor, der
+    // teure Teil (Sheets/Hash) erst danach.
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+    // Billige Format-Checks der Registrierungsdaten (kein Sheet/kein Hash).
+    let username: string | undefined;
+    if (body.username !== undefined || body.password !== undefined) {
+      const u = validateUsername(body.username || "");
+      if (!u) return NextResponse.json({ ok: false, error: "username_invalid" }, { status: 400 });
+      if (!validatePassword(body.password)) {
+        return NextResponse.json({ ok: false, error: "password_weak" }, { status: 400 });
+      }
+      username = u;
+    }
     if (!rateLimit(`email-req:${email}`, 3, 10 * 60 * 1000) || !rateLimit(`email-ip:${ip}`, 10, 10 * 60 * 1000)) {
       return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+    }
+
+    // Erst NACH dem Rate-Limit: teurer Sheet-Read (Username-Verfügbarkeit)
+    // + scrypt-Hash. Finaler Uniqueness-Check nochmal beim Einlösen.
+    let passwordHash: string | undefined;
+    if (username) {
+      const taken = await findKundeByUsername(username);
+      if (taken) return NextResponse.json({ ok: false, error: "username_taken" }, { status: 409 });
+      passwordHash = await hashPassword(body.password as string);
     }
 
     const code = generateEmailLoginCode();
@@ -71,6 +100,8 @@ export async function POST(req: NextRequest) {
         codeHash,
         expiresAt: Date.now() + EMAIL_CODE_TTL_MS,
         codeId: generateCodeId(),
+        username,
+        passwordHash,
       };
       await session.save();
     };

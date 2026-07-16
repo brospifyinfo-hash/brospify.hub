@@ -18,6 +18,7 @@ import {
   findKundeByGoogleEmail,
   findKundeByShopDomain,
   findKundeByKey,
+  findKundeByUsername,
   generateLicenseKey,
   upsertKundeByKey,
   type Kunde,
@@ -33,7 +34,7 @@ export type EditorAuthProvider = "google" | "shopify" | "email";
 // Editor-Selbstregistrierungs-Weg (E-Mail-Link, Shopify-shop.email)
 // eingeloggt/übernommen werden — nur über echte OAuth-Verifikation
 // (Google) oder den Lizenzschlüssel-Login des Hubs.
-function isProtectedAccount(k: Kunde): boolean {
+export function isProtectedAccount(k: Kunde): boolean {
   if (k.profile.role === "admin") return true;
   return isActiveSubFromKunde({ sku: k.sku, profile: k.profile });
 }
@@ -48,11 +49,19 @@ export interface EditorAccountInput {
   shopifyToken?: string;
   /** Anzeigename (Google-Profil / Shop-Name). */
   displayName?: string;
+  /** Nur bei E-Mail-Registrierung mit Passwort: gewählter (validierter,
+   *  kleingeschriebener) Username. Wird nur auf NEUE oder bislang
+   *  username-lose Konten gesetzt, nie überschrieben. */
+  username?: string;
+  /** Nur bei E-Mail-Registrierung mit Passwort: FERTIGER scrypt-Hash
+   *  (Klartext-Passwort erreicht diese Schicht nie). Wird nur auf NEUE
+   *  oder passwortlose Konten gesetzt, nie über ein bestehendes Passwort. */
+  passwordHash?: string;
 }
 
 export type EditorAccountResult =
   | { ok: true; kunde: Kunde; created: boolean }
-  | { ok: false; error: "blocked" | "invalid" | "server" | "use_primary_login" };
+  | { ok: false; error: "blocked" | "invalid" | "server" | "use_primary_login" | "username_taken" };
 
 /** Bestandskonto wiederfinden — bewusst PROVIDER-abhängig, weil die
  *  Login-Wege unterschiedlich stark beweisen, wem ein Konto gehört:
@@ -74,6 +83,7 @@ export async function findOrCreateEditorKunde(
   const email = (input.email || "").trim().toLowerCase();
   const shopDomain = (input.shopDomain || "").trim().toLowerCase();
   if (!email && !shopDomain) return { ok: false, error: "invalid" };
+  const nowIso = new Date().toISOString();
 
   try {
     const existing = await findExisting({ ...input, email, shopDomain });
@@ -88,6 +98,24 @@ export async function findOrCreateEditorKunde(
       // regulären Hub-Login / Lizenzschlüssel verwenden).
       if (input.provider !== "google" && isProtectedAccount(existing)) {
         return { ok: false, error: "use_primary_login" };
+      }
+
+      // Registrierung mit Passwort auf ein passwortloses Bestandskonto:
+      // der Code-Verify hat die E-Mail-Inhaberschaft bewiesen, also darf
+      // hier ein Passwort (+ Username) NACHGETRAGEN werden — aber NIE ein
+      // vorhandenes Passwort überschrieben (dann bloß einloggen).
+      if (input.passwordHash && !existing.profile.passwordHash) {
+        const patch: Partial<KundeProfile> = { passwordHash: input.passwordHash, passwordSetAt: nowIso };
+        if (input.username && !existing.profile.username) {
+          const taken = await findKundeByUsername(input.username);
+          if (taken && taken.lizenzschluessel !== existing.lizenzschluessel) {
+            return { ok: false, error: "username_taken" };
+          }
+          patch.username = input.username;
+        }
+        await upsertKundeByKey({ lizenzschluessel: existing.lizenzschluessel, profilePatch: patch });
+        const fresh = await findKundeByKey(existing.lizenzschluessel);
+        if (fresh) return { ok: true, kunde: fresh, created: false };
       }
 
       // Shopify-Login auf ein Bestandskonto: frisch erhaltene Shop-Daten
@@ -110,12 +138,17 @@ export async function findOrCreateEditorKunde(
     }
 
     // ── Neues Gratis-Konto anlegen ──────────────────────────────────
+    // Bei Passwort-Registrierung zuerst Username-Eindeutigkeit prüfen.
+    if (input.username) {
+      const taken = await findKundeByUsername(input.username);
+      if (taken) return { ok: false, error: "username_taken" };
+    }
+
     let key = generateLicenseKey();
     for (let i = 0; i < 3 && (await findKundeByKey(key)); i += 1) {
       key = generateLicenseKey();
     }
 
-    const nowIso = new Date().toISOString();
     const profilePatch: Partial<KundeProfile> = {
       editorFree: true,
       noRecurringGrant: true,
@@ -124,6 +157,9 @@ export async function findOrCreateEditorKunde(
       signupAt: nowIso,
       displayName: (input.displayName || "").trim() || undefined,
       linkedGoogleEmail: input.provider === "google" && email ? email : undefined,
+      username: input.username || undefined,
+      passwordHash: input.passwordHash || undefined,
+      passwordSetAt: input.passwordHash ? nowIso : undefined,
       // Anker + Zähler gesetzt, damit ensureStarterGrant/-RecurringGrant
       // nichts "nachziehen"; starterGranted=true blockt Login-Grant UND
       // den täglichen Backfill-Cron.

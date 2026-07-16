@@ -22,6 +22,11 @@ export interface SessionData {
     codeHash: string;
     expiresAt: number;
     codeId: string;
+    /** Registrierung mit Passwort: gewählter Username + fertiger scrypt-
+     *  Hash, die nach erfolgreicher Code-Bestätigung auf das Konto
+     *  angewandt werden. Klartext-Passwort wird NIE gespeichert. */
+    username?: string;
+    passwordHash?: string;
   };
   hasShopifyConnection?: boolean;
   onboardingDone?: boolean;

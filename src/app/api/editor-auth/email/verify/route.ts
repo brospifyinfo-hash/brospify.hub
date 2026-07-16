@@ -72,8 +72,24 @@ export async function POST(req: NextRequest) {
     // Code korrekt → einloggen. Bei einem TRANSIENTEN Server-Fehler bleibt
     // der Code gültig (Nutzer drückt einfach nochmal „Anmelden"); nur bei
     // Erfolg oder harter Ablehnung wird er endgültig entwertet.
-    const result = await findOrCreateEditorKunde({ provider: "email", email: pending.email });
+    const result = await findOrCreateEditorKunde({
+      provider: "email",
+      email: pending.email,
+      username: pending.username,
+      passwordHash: pending.passwordHash,
+    });
     if (!result.ok) {
+      // username_taken (seltener Race: Username zwischen Anfrage und
+      // Einlösen von jemand anderem belegt): Der Code war KORREKT, zählt
+      // also nicht als Fehlversuch — Zähler zurücksetzen, Code entwerten,
+      // der Client schickt den Nutzer zurück ins Formular (neuer Username,
+      // neuer Code). Kein Lockout durch wiederholte Code-Eingabe.
+      if (result.error === "username_taken") {
+        session.editorEmailLogin = undefined;
+        await session.save();
+        clearCodeAttempts(pending.codeId);
+        return NextResponse.json({ ok: false, error: "username_taken" }, { status: 409 });
+      }
       if (result.error !== "server") {
         session.editorEmailLogin = undefined;
         await session.save();
