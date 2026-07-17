@@ -57,8 +57,10 @@ export async function GET() {
     loggedIn: true,
     isAdmin: false,
     name: session.googleName || kunde?.profile?.displayName || kunde?.profile?.username || null,
-    email: session.googleEmail || kunde?.kundenEmail || null,
+    email: kunde?.kundenEmail || session.googleEmail || null,
     username: kunde?.profile?.username || null,
+    hasPassword: !!kunde?.profile?.passwordHash,
+    shopDomain: kunde?.shopDomain || null,
     plan: {
       active,
       key: active ? tierKey : null,

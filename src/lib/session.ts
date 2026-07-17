@@ -28,6 +28,16 @@ export interface SessionData {
     username?: string;
     passwordHash?: string;
   };
+  /** Ausstehende E-Mail-Änderung im Einstellungen-Overlay: Code an die
+   *  NEUE Adresse, an das eingeloggte Konto gebunden. Erst nach korrektem
+   *  Code wird kundenEmail umgestellt. */
+  editorEmailChange?: {
+    newEmail: string;
+    codeHash: string;
+    expiresAt: number;
+    codeId: string;
+    lizenzschluessel: string;
+  };
   hasShopifyConnection?: boolean;
   onboardingDone?: boolean;
   setupStep1Done?: boolean;

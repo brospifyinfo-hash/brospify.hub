@@ -32,6 +32,7 @@ import AiCopilot from "@/components/theme-editor/AiCopilot";
 import StartChoiceOverlay from "@/components/theme-editor/StartChoiceOverlay";
 import EditorLoginModal from "@/components/theme-editor/EditorLoginModal";
 import AccountOverlay from "@/components/theme-editor/AccountOverlay";
+import ProfileMenu from "@/components/theme-editor/ProfileMenu";
 import ProductIntakeOverlay, { type IntakeResult } from "@/components/theme-editor/ProductIntakeOverlay";
 import GenerationTheater, { type GenesisJob } from "@/components/theme-editor/GenerationTheater";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
@@ -1027,15 +1028,20 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
               )}
 
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                {/* Credits → öffnet Konto/Abo-Overlay (Plan, Credits, Designs) */}
-                <button
-                  onClick={() => setAccountOverlay("account")}
-                  title="Konto & Abo öffnen"
-                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3] hover:border-[#95BF47]/55 transition cursor-pointer"
+                {/* Credits — Anzeige */}
+                <span
+                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3]"
                 >
                   <span className="text-[12px] leading-none">{credits.creditIcon}</span>
                   <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </button>
+                </span>
+                {/* Profil-Avatar mit Dropdown (Konto, Plan, Sprache, Logout) */}
+                <ProfileMenu
+                  isAdmin={isAdmin}
+                  onOpenSettings={() => setAccountOverlay("account")}
+                  onOpenPlans={() => setAccountOverlay("account")}
+                />
                 {/* Gesamt-Stil jederzeit änderbar */}
                 {doc.productId && (
                   <button
@@ -1131,14 +1137,19 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                     <span className="truncate">{t.themes.editorTitle}</span>
                   </div>
                 )}
-                <button
-                  onClick={() => setAccountOverlay("account")}
-                  title="Konto & Abo öffnen"
-                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3] cursor-pointer"
+                <span
+                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3]"
                 >
                   <span className="leading-none">{credits.creditIcon}</span>
                   <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </button>
+                </span>
+                <ProfileMenu
+                  compact
+                  isAdmin={isAdmin}
+                  onOpenSettings={() => setAccountOverlay("account")}
+                  onOpenPlans={() => setAccountOverlay("account")}
+                />
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
