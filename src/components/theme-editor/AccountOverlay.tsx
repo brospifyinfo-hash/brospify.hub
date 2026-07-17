@@ -205,8 +205,15 @@ export default function AccountOverlay({
           </div>
         )}
 
-        {/* ── Einstellungen (nur account, nicht Admin) ── */}
-        {mode === "account" && !isAdmin && (
+        {/* Ladehinweis, solange /api/editor/account noch nicht da ist —
+            sonst würde die Passwort-Sektion kurz den falschen Zustand
+            (hasPassword=undefined → „Passwort setzen") zeigen. */}
+        {mode === "account" && !isAdmin && !data && (
+          <p style={{ marginTop: 22, fontSize: 13, color: INK_FAINT }}>Lädt …</p>
+        )}
+
+        {/* ── Einstellungen (nur account, nicht Admin, geladen) ── */}
+        {mode === "account" && !isAdmin && data && (
           <>
             {/* Konto / E-Mail */}
             <Section title="Konto">

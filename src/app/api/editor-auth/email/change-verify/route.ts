@@ -44,9 +44,12 @@ export async function POST(req: NextRequest) {
 
     const used = bumpCodeAttempt(pending.codeId);
     if (used > EMAIL_CODE_MAX_ATTEMPTS) {
+      // WICHTIG: den Zähler NICHT löschen — sonst könnte ein Angreifer das
+      // pre-Lockout-Cookie erneut abspielen und der Zähler startet neu.
+      // Er bleibt (bis zur Code-TTL) gedeckelt. Session leeren reicht für
+      // ehrliche Clients.
       session.editorEmailChange = undefined;
       await session.save();
-      clearCodeAttempts(pending.codeId);
       return NextResponse.json({ ok: false, error: "too_many_attempts" }, { status: 429 });
     }
     if (digits.length !== 6 || !verifyEmailLoginCodeHash(pending.newEmail, digits, pending.codeHash)) {

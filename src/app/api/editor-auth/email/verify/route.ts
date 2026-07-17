@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
     // weil dieser Zähler nicht im Cookie steckt.
     const used = bumpCodeAttempt(pending.codeId);
     if (used > EMAIL_CODE_MAX_ATTEMPTS) {
+      // Zähler NICHT löschen — sonst würde ein Replay des pre-Lockout-
+      // Cookies den Zähler zurücksetzen und weitere Rateversuche erlauben.
+      // Er bleibt bis zur Code-TTL gedeckelt; Session leeren reicht.
       session.editorEmailLogin = undefined;
       await session.save();
-      clearCodeAttempts(pending.codeId);
       return NextResponse.json({ ok: false, error: "too_many_attempts" }, { status: 429 });
     }
 
