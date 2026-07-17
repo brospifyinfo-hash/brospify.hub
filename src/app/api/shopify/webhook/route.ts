@@ -42,7 +42,7 @@ import {
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
 import { writeOrderMetafield } from "@/lib/shopify";
-import { tierFromSku, DEFAULT_TIERS, TIER_DISPLAY_LABEL, type TierKey } from "@/lib/tiers-shared";
+import { tierFromSku, isEditorTier, DEFAULT_TIERS, TIER_DISPLAY_LABEL, type TierKey } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -260,6 +260,52 @@ function isEditorFreeRow(kunde: Kunde): boolean {
   );
 }
 
+// ─── Editor-Website-Abo (14/23/89€) aktivieren/verlängern ──────────
+// Anders als die Hub-Membership (upgradeEditorFreeToMember): KEINE 1500
+// Hub-Starter, KEIN 28-Tage-Hub-Zyklus (noRecurringGrant BLEIBT true).
+// Die Plan-Credits (monthlyCreditAllowance: 1000/2000/8000) kommen je
+// Abrechnungs-Order über applySubscriptionRefill (idempotent per Order),
+// so bekommt der Kunde pro Monat genau die Credits seines Plans.
+async function activateEditorPlan(
+  kunde: Kunde,
+  tierKey: TierKey,
+  opts: { sku: string; charge?: string; endsAt: string; customerId?: string; contractId?: string; orderName?: string },
+): Promise<void> {
+  const nowIso = new Date().toISOString();
+  await upsertKundeByKey({
+    lizenzschluessel: kunde.lizenzschluessel,
+    sku: opts.sku,
+    charge: opts.charge || undefined,
+    subscriptionEndsAt: opts.endsAt,
+    profilePatch: {
+      editorFree: undefined,        // nicht mehr das Gratis-Konto
+      noRecurringGrant: true,       // KEIN Hub-1000/28d-Zyklus
+      tier: tierKey,
+      tierSince: kunde.profile.tierSince || nowIso, // Startdatum bei Renewal behalten
+      tierCanceledAt: undefined,
+      shopifyCustomerId: kunde.profile.shopifyCustomerId || opts.customerId || undefined,
+      subscriptionContractId: opts.contractId || kunde.profile.subscriptionContractId,
+    },
+  });
+  if (["abgelaufen", "expired"].includes((kunde.status || "").trim().toLowerCase())) {
+    await updateKundeField(kunde.rowIndex, "C", "aktiv");
+  }
+  // Plan-Credits gutschreiben (idempotent per Order).
+  const tierDef = DEFAULT_TIERS.find((t) => t.key === tierKey);
+  if (tierDef && opts.orderName && tierDef.monthlyCreditAllowance > 0) {
+    const fresh = await findKundeByKey(kunde.lizenzschluessel);
+    if (fresh) {
+      await applySubscriptionRefill(
+        fresh.rowIndex,
+        fresh.profile,
+        tierDef.monthlyCreditAllowance,
+        opts.orderName,
+        TIER_DISPLAY_LABEL[tierKey],
+      );
+    }
+  }
+}
+
 // ─── orders/paid ────────────────────────────────────────────────
 async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promise<NextResponse> {
   const orderName = (payload.name || (payload.order_number ? `#${payload.order_number}` : "")).trim();
@@ -321,10 +367,60 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     }
   }
 
+  const existing = await findKundeByEmail(email);
+
+  // ── EDITOR-WEBSITE-ABO (14/23/89€) ───────────────────────────────
+  // Eigener Pfad, komplett getrennt von der Hub-Membership: setzt den
+  // Editor-Tier + Abo-Fenster, behält noRecurringGrant und schreibt die
+  // Plan-Credits gut. Deckt Neukauf, editor-free-Upgrade UND Renewal ab.
+  const purchasedTierKey = resolveTierKey(sku);
+  if (isEditorTier(purchasedTierKey)) {
+    const endsAt = new Date(Date.now() + SUBSCRIPTION_WINDOW_DAYS * DAY_MS).toISOString();
+    let kunde = existing;
+    if (!kunde) {
+      // Direktkäufer ohne vorherige Editor-Registrierung → frische Zeile.
+      let key = generateLicenseKey();
+      for (let i = 0; i < 3 && (await findKundeByKey(key)); i += 1) key = generateLicenseKey();
+      await upsertKundeByKey({
+        lizenzschluessel: key,
+        status: "aktiv",
+        kundenEmail: email,
+        bestellnummer: orderName || `EDITOR-PLAN-${key}`,
+        sku,
+        charge: charge || undefined,
+        subscriptionEndsAt: endsAt,
+        profilePatch: {
+          noRecurringGrant: true,
+          hasCompletedOnboarding: true,
+          role: "user",
+          signupAt: new Date().toISOString(),
+          tier: purchasedTierKey,
+          tierSince: new Date().toISOString(),
+          shopifyCustomerId: customerId || undefined,
+        },
+      });
+      kunde = await findKundeByKey(key);
+      if (!kunde) {
+        return NextResponse.json({ ok: false, error: "Editor-Plan nicht persistiert." }, { status: 500 });
+      }
+    }
+    await activateEditorPlan(kunde, purchasedTierKey, { sku, charge, endsAt, customerId, orderName });
+    if (orderId) {
+      await writeOrderMetafield({ orderId, key: "license_key", value: kunde.lizenzschluessel });
+    }
+    void logSystemEvent({
+      level: "audit",
+      actor: "shopify.webhook",
+      action: "webhook.editor_plan_activated",
+      target: kunde.lizenzschluessel,
+      details: { shopDomain, orderName, email, sku, plan: purchasedTierKey, via: "order", subscriptionEndsAt: endsAt },
+    });
+    return NextResponse.json({ ok: true, action: "editor_plan_activated", plan: purchasedTierKey, key: kunde.lizenzschluessel });
+  }
+
   // 2. Renewal: customer already has a licence → extend the window,
   //    keep the same key. Each renewal order rolls subscriptionEndsAt
   //    forward, so the licence stays valid as long as billing runs.
-  const existing = await findKundeByEmail(email);
   if (existing) {
     const newEndsAt = new Date(Date.now() + SUBSCRIPTION_WINDOW_DAYS * DAY_MS).toISOString();
 
@@ -582,22 +678,14 @@ async function handleSubscriptionUpdate(
     endsAt = new Date(Date.now() + SUBSCRIPTION_WINDOW_DAYS * DAY_MS).toISOString();
   }
 
-  // Kommt der Contract-Webhook VOR orders/paid und matcht eine
-  // editor-free-Zeile, dann ist das der erste Abo-Beweis: zur echten
-  // Mitgliedschaft hochstufen statt nur endsAt zu rollen (die SKU kennt
-  // der Contract nicht → neutrale "membership"-SKU, tierFromSku → pro).
-  // Ein toter/gekündigter Contract auf einer editor-free-Zeile ist
-  // dagegen kein Upgrade — der fällt in die normale Behandlung.
-  if (!isDead && isEditorFreeRow(kunde)) {
-    await upgradeEditorFreeToMember(kunde, { sku: "membership", endsAt, customerId, contractId });
-    void logSystemEvent({
-      level: "audit",
-      actor: "shopify.webhook",
-      action: "webhook.editor_upgraded",
-      target: kunde.lizenzschluessel,
-      details: { shopDomain, status, contractId, via: "subscription", subscriptionEndsAt: endsAt },
-    });
-    return NextResponse.json({ ok: true, action: "editor_upgraded", key: kunde.lizenzschluessel });
+  // Editor-Gratis-Zeile im Contract-Webhook: NICHT hochstufen. Der
+  // Contract kennt die SKU nicht — ob es die Hub-Membership ODER ein
+  // Editor-Plan (14/23/89€) ist, weiß nur der orders/paid-Webhook (der
+  // die Line-Item-SKU trägt und immer feuert). Der aktiviert korrekt.
+  // Hier also kein Tier setzen, nur überspringen — sonst bekäme ein
+  // Editor-Plan-Käufer fälschlich die volle Hub-Membership.
+  if (isEditorFreeRow(kunde)) {
+    return NextResponse.json({ ok: true, skipped: "editor-free — activation via orders/paid" });
   }
 
   await updateKundeProfile(kunde.rowIndex, {

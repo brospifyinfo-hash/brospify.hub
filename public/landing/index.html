@@ -29,6 +29,44 @@
     .final .cta-note { color: rgba(255, 255, 255, 0.72); }
     .final .cta-note b { color: #fff; }
     .final .cta-note .cta-dot { color: rgba(255, 255, 255, 0.4); }
+
+    /* Header: Login-Link (immer sichtbar, auch mobil) + Aktionen rechts */
+    .nav-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .nav-actions .nav-cta { margin-left: 0 !important; }
+    .nav-login {
+      text-decoration: none; font-weight: 700; font-size: 0.95rem; color: var(--ink);
+      padding: 8px 12px; border-radius: 999px; white-space: nowrap; transition: background .2s;
+    }
+    .nav-login:hover { background: rgba(20, 18, 26, 0.06); }
+    @media (max-width: 520px) { .nav-login { padding: 6px 8px; font-size: 0.9rem; } }
+
+    /* Preis-Sektion: 3 Pläne */
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px; max-width: 980px; margin: 46px auto 0; align-items: stretch;
+    }
+    .plan {
+      position: relative; display: flex; flex-direction: column;
+      background: #fff; border: 1.5px solid rgba(20, 18, 26, 0.1);
+      border-radius: 22px; padding: 28px 24px;
+      box-shadow: 0 10px 30px rgba(20, 18, 26, 0.05);
+    }
+    .plan.plan-featured { border-color: #7c3aed; box-shadow: 0 20px 50px rgba(124, 58, 237, 0.16); }
+    .plan-badge {
+      position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+      background: var(--gradient); color: #fff; font-size: 0.72rem; font-weight: 800;
+      letter-spacing: 0.06em; padding: 5px 14px; border-radius: 999px; white-space: nowrap;
+    }
+    .plan-name { font-size: 1.15rem; font-weight: 800; color: var(--ink); }
+    .plan-tagline { margin-top: 4px; font-size: 0.9rem; color: var(--ink-faint); min-height: 2.2em; }
+    .plan-price { margin-top: 14px; display: flex; align-items: baseline; gap: 6px; }
+    .plan-price b { font-size: 2.4rem; font-weight: 800; color: var(--ink); letter-spacing: -0.03em; }
+    .plan-price span { font-size: 0.95rem; color: var(--ink-faint); }
+    .plan-feats { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .plan-feats li { display: flex; gap: 10px; align-items: flex-start; font-size: 0.96rem; color: var(--ink-soft); }
+    .plan-feats .pf-check { color: #7c3aed; font-weight: 800; flex-shrink: 0; }
+    .plan-cta { margin-top: 24px; width: 100%; justify-content: center; }
+    .pricing-note { text-align: center; margin: 28px auto 0; font-size: 0.92rem; color: var(--ink-faint); }
   </style>
 </head>
 <body class="brospify-waitlist">
@@ -49,11 +87,15 @@
       <a href="#how">So funktioniert&rsquo;s</a>
       <a href="#features">Features</a>
       <a href="#styles">Stile</a>
+      <a href="#preise">Preise</a>
       <a href="#faq">FAQ</a>
     </div>
-    <a href="/editor" class="btn btn-dark btn-sm nav-cta" data-magnetic>
-      Kostenlos starten <span class="btn-arrow" aria-hidden="true">→</span>
-    </a>
+    <div class="nav-actions">
+      <a href="/start/login" class="nav-login">Login</a>
+      <a href="/editor" class="btn btn-dark btn-sm nav-cta" data-magnetic>
+        Editor öffnen <span class="btn-arrow" aria-hidden="true">→</span>
+      </a>
+    </div>
   </nav>
 </header>
 
@@ -606,6 +648,64 @@
   </div>
 </section>
 
+<!-- ================= PREISE ================= -->
+<section class="section section-cream" id="preise">
+  <div class="container">
+    <div class="section-head reveal" data-reveal>
+      <span class="eyebrow eyebrow-dark">Preise</span>
+      <h2>Vorschau gratis. Herunterladen im Abo.</h2>
+      <p>Bau deinen Shop kostenlos zusammen und schau ihn dir an. Zum Herunterladen &amp; Live-Halten wählst du einen Plan — jederzeit kündbar.</p>
+    </div>
+
+    <div class="pricing-grid reveal" data-reveal>
+      <!-- Starter -->
+      <div class="plan" data-tilt>
+        <div class="plan-name">Starter</div>
+        <div class="plan-tagline">Dein erster eigener Shop — live.</div>
+        <div class="plan-price"><b>14&nbsp;&euro;</b><span>/ Monat</span></div>
+        <ul class="plan-feats">
+          <li><span class="pf-check">&#10003;</span> 1.000 Credits pro Monat</li>
+          <li><span class="pf-check">&#10003;</span> 1 aktives Design</li>
+          <li><span class="pf-check">&#10003;</span> Theme-Download + Live-Updates</li>
+          <li><span class="pf-check">&#10003;</span> Alle Editor-Funktionen</li>
+        </ul>
+        <a href="/editor" class="btn btn-dark btn-sm plan-cta" data-magnetic>Kostenlos testen</a>
+      </div>
+
+      <!-- Pro (beliebt) -->
+      <div class="plan plan-featured" data-tilt>
+        <span class="plan-badge">Beliebt</span>
+        <div class="plan-name">Pro</div>
+        <div class="plan-tagline">Mehr Designs, mehr Spielraum.</div>
+        <div class="plan-price"><b>23&nbsp;&euro;</b><span>/ Monat</span></div>
+        <ul class="plan-feats">
+          <li><span class="pf-check">&#10003;</span> 2.000 Credits pro Monat</li>
+          <li><span class="pf-check">&#10003;</span> 3 aktive Designs</li>
+          <li><span class="pf-check">&#10003;</span> Theme-Download + Live-Updates</li>
+          <li><span class="pf-check">&#10003;</span> Alle Editor-Funktionen</li>
+        </ul>
+        <a href="/editor" class="btn btn-dark btn-sm plan-cta" data-magnetic>Kostenlos testen</a>
+      </div>
+
+      <!-- Business -->
+      <div class="plan" data-tilt>
+        <div class="plan-name">Business</div>
+        <div class="plan-tagline">Für Agenturen &amp; viele Shops.</div>
+        <div class="plan-price"><b>89&nbsp;&euro;</b><span>/ Monat</span></div>
+        <ul class="plan-feats">
+          <li><span class="pf-check">&#10003;</span> 8.000 Credits pro Monat</li>
+          <li><span class="pf-check">&#10003;</span> 25 aktive Designs</li>
+          <li><span class="pf-check">&#10003;</span> Theme-Download + Live-Updates</li>
+          <li><span class="pf-check">&#10003;</span> Alle Editor-Funktionen</li>
+        </ul>
+        <a href="/editor" class="btn btn-dark btn-sm plan-cta" data-magnetic>Kostenlos testen</a>
+      </div>
+    </div>
+
+    <p class="pricing-note">Credits werden monatlich gutgeschrieben. Kein Abo n&ouml;tig zum Ausprobieren &mdash; erst zum Download.</p>
+  </div>
+</section>
+
 <!-- ================= FAQ ================= -->
 <section class="faq section" id="faq">
   <div class="px-scene" aria-hidden="true">
@@ -624,7 +724,7 @@
       </details>
       <details class="faq-item reveal" data-reveal data-delay="60">
         <summary>Was kostet es?<span class="faq-ic" aria-hidden="true"></span></summary>
-        <p>Die erste Vorschau ist kostenlos. Zum Herunterladen deines fertigen Themes schließt du eine Monats-Mitgliedschaft ab (geplant: 21&nbsp;€/Monat) — statt einer vierstelligen Agentur-Rechnung. Du zahlst erst, wenn du dein Theme wirklich mitnehmen willst.</p>
+        <p>Die erste Vorschau ist kostenlos. Zum Herunterladen deines fertigen Themes brauchst du ein Abo: <b>Starter 14&nbsp;€</b> (1.000 Credits, 1 aktives Design), <b>Pro 23&nbsp;€</b> (2.000 Credits, 3 Designs) oder <b>Business 89&nbsp;€</b> (8.000 Credits, 25 Designs) — pro Monat, jederzeit kündbar. Du zahlst erst, wenn du dein Theme wirklich mitnehmen willst.</p>
       </details>
       <details class="faq-item reveal" data-reveal data-delay="120">
         <summary>Brauche ich einen Shopify-Account?<span class="faq-ic" aria-hidden="true"></span></summary>

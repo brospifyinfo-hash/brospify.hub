@@ -21,6 +21,7 @@ import { safeFetch } from "@/lib/safe-fetch";
 import { refreshBranding } from "@/lib/branding";
 import {
   type TierDefinition,
+  type TierKey,
   type FeatureFlag,
   type LimitKey,
   FEATURE_FLAGS,
@@ -176,7 +177,7 @@ const KATEGORIE_OPTIONS = [
 
 // ─── Admin module-level types ───────────────────────────────────
 
-type AdminTierKey = "pro";
+type AdminTierKey = TierKey;
 type AdminUserRole = "admin" | "user";
 
 interface TierPricing { key: AdminTierKey; label: string; priceEur: number }
@@ -6092,11 +6093,13 @@ function GodModeKpis({ stats, onJumpTab }: {
           {subs.activeTotal}
         </div>
         <div className="text-[10px] text-zinc-500 mt-1.5 flex flex-wrap gap-x-2 gap-y-0.5">
-          {(["pro"] as const).map((k) => (
-            <span key={k} className="tabular-nums">
-              {tierLabelMap.get(k) || k}: <span className="text-zinc-300 font-semibold">{byTier[k] ?? 0}</span>
-            </span>
-          ))}
+          {(Object.entries(byTier) as [AdminTierKey, number][])
+            .filter(([, n]) => n > 0)
+            .map(([k, n]) => (
+              <span key={k} className="tabular-nums">
+                {tierLabelMap.get(k) || k}: <span className="text-zinc-300 font-semibold">{n}</span>
+              </span>
+            ))}
         </div>
       </button>
 
@@ -6537,6 +6540,9 @@ function LogsView({
 
 const TIER_COLORS: Record<AdminTierKey, string> = {
   pro: "#F59E0B",
+  estarter: "#7c3aed",
+  epro: "#ec4899",
+  ebusiness: "#0ea5e9",
 };
 
 function TiersFullEditor({

@@ -7,8 +7,20 @@
 // the rest of the codebase (gating, profile, admin) keeps its shape —
 // `TIER_KEYS` is just a one-element tuple now.
 
-export const TIER_KEYS = ["pro"] as const;
+// "pro" bleibt der bestehende Hub-Membership-Tier (21€, unlimited) und
+// MUSS erster Eintrag bleiben (Fallback für resolveTierKey/Admin). Die
+// drei estarter/epro/ebusiness sind die neuen EDITOR-Abos der Standalone-
+// Editor-Website (Download-Paywall + aktive Designs), getrennt vom Hub.
+export const TIER_KEYS = ["pro", "estarter", "epro", "ebusiness"] as const;
 export type TierKey = (typeof TIER_KEYS)[number];
+
+// Die Editor-Website-Abos (NICHT die Hub-Membership). Für Paywall,
+// Design-Limit und Webhook-Routing.
+export const EDITOR_TIER_KEYS = ["estarter", "epro", "ebusiness"] as const;
+export type EditorTierKey = (typeof EDITOR_TIER_KEYS)[number];
+export function isEditorTier(key: string | null | undefined): key is EditorTierKey {
+  return !!key && (EDITOR_TIER_KEYS as readonly string[]).includes(key);
+}
 
 export const FEATURE_FLAGS = [
   "aiChat",
@@ -66,6 +78,7 @@ export const LIMIT_KEYS = [
   "maxStores",
   "maxThemesInstall",
   "maxTeamMembers",
+  "maxActiveDesigns",
 ] as const;
 export type LimitKey = (typeof LIMIT_KEYS)[number];
 
@@ -80,6 +93,7 @@ export const LIMIT_LABELS: Record<LimitKey, string> = {
   maxStores: "Verbundene Shops",
   maxThemesInstall: "Theme-Installs",
   maxTeamMembers: "Team-Mitglieder",
+  maxActiveDesigns: "Aktive Designs",
 };
 
 export type TierFeatures = Record<FeatureFlag, boolean>;
@@ -127,6 +141,13 @@ export const SKU_TO_TIER: Record<string, TierKey> = {
   membership: "pro",
   mitglied: "pro",
   mitgliedschaft: "pro",
+  // Editor-Website-Abos: Diese SKUs müssen auf den 3 Shopify-Produkten
+  // stehen (14€/23€/89€), damit der Webhook den Kauf dem richtigen Plan
+  // zuordnet. "editor-free" (Gratis-Konto) ist bewusst NICHT hier → gilt
+  // nie als aktives Abo.
+  "editor-starter": "estarter",
+  "editor-pro": "epro",
+  "editor-business": "ebusiness",
 };
 
 export function tierFromSku(sku: string | null | undefined): TierKey | null {
@@ -137,6 +158,9 @@ export function tierFromSku(sku: string | null | undefined): TierKey | null {
 /** Public German tier names used for display + admin defaults. */
 export const TIER_DISPLAY_LABEL: Record<TierKey, string> = {
   pro: "Brospify Membership",
+  estarter: "Starter",
+  epro: "Pro",
+  ebusiness: "Business",
 };
 
 function allFeatures(): TierFeatures {
@@ -144,6 +168,36 @@ function allFeatures(): TierFeatures {
   for (const f of FEATURE_FLAGS) out[f] = true;
   return out;
 }
+
+// Editor-Pläne schalten KEINE Hub-Premium-Tools frei (das ist die 21€-
+// Membership). Ihr Wert = Download + Credits + aktive Designs im Editor.
+function noFeatures(): TierFeatures {
+  const out = {} as TierFeatures;
+  for (const f of FEATURE_FLAGS) out[f] = false;
+  return out;
+}
+
+// Limits für Editor-Pläne: Hub-Limits irrelevant (-1), nur maxActiveDesigns zählt.
+function editorLimits(maxActiveDesigns: number): TierLimits {
+  return {
+    maxProducts: -1,
+    maxBlogsPerMonth: -1,
+    maxEmailsPerMonth: -1,
+    maxAiChatsPerMonth: -1,
+    maxAiStudioJobsPerMonth: -1,
+    maxBgRemovesPerMonth: -1,
+    maxUpscalesPerMonth: -1,
+    maxStores: -1,
+    maxThemesInstall: -1,
+    maxTeamMembers: -1,
+    maxActiveDesigns,
+  };
+}
+
+// Standardgrenze aktiver Designs für Konten OHNE aktives Abo (Gratis-
+// Vorschau): 1 gespeichertes Design zum Ausprobieren (Download bleibt
+// hinter der Paywall).
+export const FREE_MAX_ACTIVE_DESIGNS = 1;
 
 export const DEFAULT_TIERS: TierDefinition[] = [
   {
@@ -175,6 +229,7 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       maxStores: -1,
       maxThemesInstall: -1,
       maxTeamMembers: -1,
+      maxActiveDesigns: -1,
     },
     features: allFeatures(),
     bullets: [
@@ -184,7 +239,111 @@ export const DEFAULT_TIERS: TierDefinition[] = [
       "Keine künstlichen Limits",
     ],
   },
+  // ─── Editor-Website-Abos (Standalone-Editor, Download-Paywall) ──────
+  // Preise/Credits/aktive Designs laut Vorgabe. monthlyCreditAllowance>0
+  // → Credits kommen übers Webhook-Refill je Abrechnungs-Order (NICHT den
+  // Hub-Zyklus). ctaUrl = Shopify-Checkout-Link je Plan (Platzhalter unten
+  // durch echten Link ersetzen); der zugehörige Shopify-Produkt-SKU muss
+  // editor-starter / editor-pro / editor-business sein (siehe SKU_TO_TIER).
+  {
+    key: "estarter",
+    label: "Starter",
+    hidden: false,
+    highlighted: false,
+    tagline: "Dein erster eigener Shop — live.",
+    description: "Theme herunterladen und live halten, 1 aktives Design, 1.000 Credits pro Monat.",
+    ctaLabel: "Starter buchen",
+    ctaUrl: "https://brospify.com/cart/REPLACE_STARTER_VARIANT_ID:1",
+    priceMonthlyEur: 14,
+    priceYearlyEur: 0,
+    trialDays: 0,
+    startingCredits: 0,
+    monthlyCreditAllowance: 1000,
+    limits: editorLimits(1),
+    features: noFeatures(),
+    bullets: [
+      "1.000 Credits pro Monat",
+      "1 aktives Design",
+      "Theme-Download + Live-Updates",
+      "Alle Editor-Funktionen",
+    ],
+  },
+  {
+    key: "epro",
+    label: "Pro",
+    hidden: false,
+    highlighted: true,
+    tagline: "Mehr Designs, mehr Spielraum.",
+    description: "Alles aus Starter, plus 3 aktive Designs und 2.000 Credits pro Monat.",
+    ctaLabel: "Pro buchen",
+    ctaUrl: "https://brospify.com/cart/REPLACE_PRO_VARIANT_ID:1",
+    priceMonthlyEur: 23,
+    priceYearlyEur: 0,
+    trialDays: 0,
+    startingCredits: 0,
+    monthlyCreditAllowance: 2000,
+    limits: editorLimits(3),
+    features: noFeatures(),
+    bullets: [
+      "2.000 Credits pro Monat",
+      "3 aktive Designs",
+      "Theme-Download + Live-Updates",
+      "Alle Editor-Funktionen",
+    ],
+  },
+  {
+    key: "ebusiness",
+    label: "Business",
+    hidden: false,
+    highlighted: false,
+    tagline: "Für Agenturen & viele Shops.",
+    description: "Alles aus Pro, plus 25 aktive Designs und 8.000 Credits pro Monat.",
+    ctaLabel: "Business buchen",
+    ctaUrl: "https://brospify.com/cart/REPLACE_BUSINESS_VARIANT_ID:1",
+    priceMonthlyEur: 89,
+    priceYearlyEur: 0,
+    trialDays: 0,
+    startingCredits: 0,
+    monthlyCreditAllowance: 8000,
+    limits: editorLimits(25),
+    features: noFeatures(),
+    bullets: [
+      "8.000 Credits pro Monat",
+      "25 aktive Designs",
+      "Theme-Download + Live-Updates",
+      "Alle Editor-Funktionen",
+    ],
+  },
 ];
+
+// ─── Editor-Plan-Helfer (client-safe) ───────────────────────────────
+export interface EditorPlanSummary {
+  key: EditorTierKey;
+  label: string;
+  priceEur: number;
+  credits: number;
+  activeDesigns: number;
+  ctaUrl: string;
+  highlighted: boolean;
+  tagline: string;
+}
+
+/** Die 3 Editor-Pläne kompakt für Paywall/Profil/Landing. */
+export function editorPlanSummaries(): EditorPlanSummary[] {
+  return EDITOR_TIER_KEYS.map((key) => {
+    const t = DEFAULT_TIERS.find((d) => d.key === key)!;
+    return {
+      key,
+      label: t.label,
+      priceEur: t.priceMonthlyEur,
+      credits: t.monthlyCreditAllowance,
+      activeDesigns: t.limits.maxActiveDesigns,
+      ctaUrl: t.ctaUrl || "",
+      highlighted: t.highlighted,
+      tagline: t.tagline,
+    };
+  });
+}
 
 // ─── Pure helpers (client-safe) ──────────────────────────────────
 
@@ -217,6 +376,20 @@ export function isActiveSubFromKunde(k: {
   if (tierFromSku(k.sku)) return true;
   if (k.profile) return isActiveSub(k.profile);
   return false;
+}
+
+/** HUB-Abonnent (echte Membership) — NICHT die Editor-Website-Abos.
+ *  Die Editor-Pläne (estarter/epro/ebusiness) gelten via isActiveSubFromKunde
+ *  zwar als aktives Abo (für die Editor-Download-Paywall), schalten aber
+ *  KEINE Hub-Premium-Tools frei. Hub-Tool-Endpunkte müssen deshalb diesen
+ *  Check statt isActiveSubFromKunde verwenden. */
+export function isHubSubscriber(k: {
+  sku?: string | null;
+  profile?: { tier?: TierKey | string; tierSince?: string; tierCanceledAt?: string };
+}): boolean {
+  if (!isActiveSubFromKunde(k)) return false;
+  const key: TierKey | null = tierFromSku(k.sku) || resolveTier(k.profile?.tier) || null;
+  return !!key && !isEditorTier(key);
 }
 
 export function hasFeature(tier: TierDefinition, flag: FeatureFlag): boolean {

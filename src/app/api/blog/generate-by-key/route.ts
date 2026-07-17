@@ -19,7 +19,7 @@ import {
   getCreditsState,
   getKundeProfile,
 } from "@/lib/sheets";
-import { isActiveSubFromKunde } from "@/lib/tiers-shared";
+import { isHubSubscriber } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     return json({ error: "Upstream-Fehler." }, 502);
   }
   if (!kunde) return json({ error: "Kunde nicht gefunden." }, 404);
-  if (!isActiveSubFromKunde(kunde)) {
+  if (!isHubSubscriber(kunde)) {
     return json({ error: "Membership erforderlich.", gated: true }, 403);
   }
 

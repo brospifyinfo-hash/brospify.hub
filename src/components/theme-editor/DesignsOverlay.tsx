@@ -84,6 +84,13 @@ export default function DesignsOverlay({
       });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) {
+        // Aktive-Designs-Limit des Plans erreicht → verständlicher Hinweis.
+        if (res.status === 403 && d?.error === "design_limit") {
+          setErr(
+            `Design-Limit erreicht (${d.used}/${d.limit}). Für mehr aktive Designs brauchst du ein größeres Abo — öffne oben dein Konto.`,
+          );
+          return;
+        }
         setErr(d?.error || "Fehler");
         return;
       }

@@ -14,6 +14,7 @@ import {
 } from "@/lib/sheets";
 import { CREDIT_PRICE_EUR, costForReason } from "@/lib/ai-costs";
 import { getTierConfig, isActiveSubFromKunde, resolveTier, tierFromSku } from "@/lib/tiers";
+import { TIER_KEYS } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -170,7 +171,7 @@ export async function GET() {
     const monthlyToolMap = new Map<string, { calls: number; costEur: number; creditsCharged: number }>();
 
     // ── Subscription rollups ──
-    const subsByTier: Record<TierKey, number> = { pro: 0 };
+    const subsByTier = Object.fromEntries(TIER_KEYS.map((k) => [k, 0])) as Record<TierKey, number>;
     let mrrEur = 0;
     let newPaid30d = 0;
     let churn30d = 0;

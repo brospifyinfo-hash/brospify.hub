@@ -16,7 +16,7 @@ import {
   getAllProdukte,
   type Produkt,
 } from "@/lib/sheets";
-import { isActiveSubFromKunde } from "@/lib/tiers-shared";
+import { isHubSubscriber } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
   }
   if (!kunde) return json({ ok: false, error: "unknown-identifier", produkte: [] }, 404);
 
-  if (!isActiveSubFromKunde(kunde)) {
+  if (!isHubSubscriber(kunde)) {
     return json(
       {
         ok: true,

@@ -23,7 +23,7 @@ import {
   getKundeProfile,
 } from "@/lib/sheets";
 import { getCreditCost } from "@/lib/credit-config-server";
-import { isActiveSubFromKunde } from "@/lib/tiers-shared";
+import { isHubSubscriber } from "@/lib/tiers-shared";
 import {
   AI_STUDIO_SCENES,
   buildNegativePrompt,
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
     return json({ error: "Upstream-Fehler." }, 502);
   }
   if (!kunde) return json({ error: "Kunde nicht gefunden." }, 404);
-  if (!isActiveSubFromKunde(kunde)) {
+  if (!isHubSubscriber(kunde)) {
     return json({ error: "Membership erforderlich.", gated: true }, 403);
   }
   const profile = await getKundeProfile(kunde.rowIndex);

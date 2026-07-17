@@ -18,6 +18,7 @@ import {
   type KundeProfile,
 } from "@/lib/sheets";
 import { resolveEditorProduct, type ResolvedProduct } from "@/lib/custom-products";
+import { isActiveSubFromKunde } from "@/lib/tiers-shared";
 import { getCreditCost } from "@/lib/credit-config-server";
 import { getEditorBaseThemeZip } from "@/lib/theme-master";
 import { generateThemeCopy } from "@/lib/theme-copy";
@@ -140,6 +141,19 @@ export async function POST(req: NextRequest) {
     if (!kunde) return NextResponse.json({ error: "Kunde nicht gefunden." }, { status: 404 });
     if (!resolved.owned) {
       return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
+    }
+
+    // ── Download-Paywall: nur mit aktivem Editor-Abo ────────────────
+    // Der Editor-Download (Theme-ZIP) erfordert ein aktives Abo. Editor-
+    // Gratis-Konten (sku "editor-free") fallen bewusst durch → Vorschau
+    // bleibt gratis, Download erst nach Abo. Admins sind schon oben
+    // ausgenommen. needsSubscription ist das maschinenlesbare Signal für
+    // den Client, die Plan-Auswahl (Paywall) zu öffnen.
+    if (!isActiveSubFromKunde(kunde)) {
+      return NextResponse.json(
+        { error: "Zum Herunterladen brauchst du ein aktives Abo.", needsSubscription: true },
+        { status: 402 },
+      );
     }
 
     if (needsCopyGen) {

@@ -17,6 +17,8 @@ import {
 } from "@/lib/sheets";
 import { isValidDocument } from "@/lib/theme-compile";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
+import { countNamedDesigns, maxActiveDesignsFor } from "@/lib/editor-designs";
+import { AUTO_LIVE_NAME, AUTO_SNAP_PREFIX } from "@/lib/design-autosave";
 import type { ThemeDocument } from "@/lib/theme-doc";
 
 export const runtime = "nodejs";
@@ -48,6 +50,12 @@ export async function POST(req: NextRequest) {
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 60) : "";
   if (!doc || !doc.productId) return NextResponse.json({ error: "Ungültiges Theme-Dokument." }, { status: 400 });
   if (!name) return NextResponse.json({ error: "Name fehlt." }, { status: 400 });
+  // Reservierte Auto-Namen ("Aktueller Shop-Stand" / "Download …") sperren:
+  // sie werden aus der Aktive-Designs-Zählung gefiltert — sonst könnte man
+  // damit das Design-Limit umgehen (beliebig viele „unsichtbare" Designs).
+  if (name === AUTO_LIVE_NAME || name.startsWith(AUTO_SNAP_PREFIX)) {
+    return NextResponse.json({ error: "Dieser Name ist reserviert — bitte wähle einen anderen." }, { status: 400 });
+  }
 
   const user = sessionUser(session);
 
@@ -59,6 +67,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Design nicht gefunden." }, { status: 404 });
     }
   } else {
+    // NEUES benanntes Design → Aktive-Designs-Limit des Plans prüfen
+    // (nur Nicht-Admins; ein Update per Code zählt nicht dagegen).
+    if (!session.isAdmin) {
+      const kunde = await findKundeByKey(session.lizenzschluessel || "");
+      const limit = kunde ? await maxActiveDesignsFor(kunde) : 0;
+      if (limit !== -1) {
+        const used = await countNamedDesigns(user);
+        if (used >= limit) {
+          return NextResponse.json(
+            { error: "design_limit", limit, used, needsUpgrade: true },
+            { status: 403 },
+          );
+        }
+      }
+    }
     code = generateSyncCode();
   }
 

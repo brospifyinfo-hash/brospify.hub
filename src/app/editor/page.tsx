@@ -31,6 +31,7 @@ import FullPreviewOverlay from "@/components/theme-editor/FullPreviewOverlay";
 import AiCopilot from "@/components/theme-editor/AiCopilot";
 import StartChoiceOverlay from "@/components/theme-editor/StartChoiceOverlay";
 import EditorLoginModal from "@/components/theme-editor/EditorLoginModal";
+import AccountOverlay from "@/components/theme-editor/AccountOverlay";
 import ProductIntakeOverlay, { type IntakeResult } from "@/components/theme-editor/ProductIntakeOverlay";
 import GenerationTheater, { type GenesisJob } from "@/components/theme-editor/GenerationTheater";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
@@ -240,6 +241,7 @@ export default function ThemeEditorPage() {
   const [styleOpen, setStyleOpen] = useState(false);
   const [buyboxGalleryOpen, setBuyboxGalleryOpen] = useState(false);
   const [designsOpen, setDesignsOpen] = useState(false);
+  const [accountOverlay, setAccountOverlay] = useState<null | "account" | "paywall">(null);
   /** Aktuell geladener/gespeicherter Speicherstand (Code = Live-Sync-Code). */
   const [activeDesign, setActiveDesign] = useState<{ code: string; name: string } | null>(null);
   const [viewMode, setViewMode] = useState<"desktop" | "mobile">("desktop");
@@ -568,6 +570,11 @@ export default function ThemeEditorPage() {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
+        // Abo-Paywall: statt Fehlermeldung die Plan-Auswahl öffnen.
+        if (res.status === 402 && data?.needsSubscription) {
+          setAccountOverlay("paywall");
+          return;
+        }
         const text = res.status === 402 ? data?.error || t.themes.builderNotEnough : data?.error || t.themes.builderErr;
         setMsg({ kind: "err", text });
         return;
@@ -1020,14 +1027,15 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
               )}
 
               <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                {/* Credits — reine Anzeige (kein Link mehr in den Hub) */}
-                <span
-                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3]"
+                {/* Credits → öffnet Konto/Abo-Overlay (Plan, Credits, Designs) */}
+                <button
+                  onClick={() => setAccountOverlay("account")}
+                  title="Konto & Abo öffnen"
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3] hover:border-[#95BF47]/55 transition cursor-pointer"
                 >
                   <span className="text-[12px] leading-none">{credits.creditIcon}</span>
                   <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </span>
+                </button>
                 {/* Gesamt-Stil jederzeit änderbar */}
                 {doc.productId && (
                   <button
@@ -1123,13 +1131,14 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                     <span className="truncate">{t.themes.editorTitle}</span>
                   </div>
                 )}
-                <span
-                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3]"
+                <button
+                  onClick={() => setAccountOverlay("account")}
+                  title="Konto & Abo öffnen"
+                  className="shrink-0 inline-flex items-center gap-1 rounded-lg border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1.5 text-[12px] font-bold text-[#cfe9a3] cursor-pointer"
                 >
                   <span className="leading-none">{credits.creditIcon}</span>
                   <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </span>
+                </button>
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
                     onClick={() => dispatch({ type: "undo" })}
@@ -1879,6 +1888,14 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
       {loginChoice !== null && (
         <EditorLoginModal next={`/editor?start=${loginChoice}`} onClose={() => setLoginChoice(null)} />
       )}
+
+      {/* Konto/Abo-Overlay: „account" (Klick auf Credits) oder „paywall"
+          (Download ohne aktives Abo). Beide zeigen die 3 Editor-Pläne. */}
+      <AccountOverlay
+        open={accountOverlay !== null}
+        mode={accountOverlay || "account"}
+        onClose={() => setAccountOverlay(null)}
+      />
 
       {/* „Eigenes Produkt": min. 3 Bilder + Name + Beschreibung (Pflicht) */}
       <ProductIntakeOverlay
