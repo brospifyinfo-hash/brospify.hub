@@ -38,6 +38,15 @@ function ShopifyIcon() {
   );
 }
 
+function HubKeyIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="8" cy="8" r="4.4" stroke="#7c3aed" strokeWidth="1.7" />
+      <path d="M11 11l7.2 7.2M15.6 15.6l1.8-1.8M18 18l1.8-1.8" stroke="#7c3aed" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 const secondaryBtn: React.CSSProperties = {
   width: "100%",
   display: "flex",
@@ -83,8 +92,9 @@ const VERIFY_ERROR_TEXT: Record<string, string> = {
 };
 
 export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: () => void }) {
-  const [view, setView] = useState<"choose" | "register" | "shopify" | "email" | "emailSent">("choose");
+  const [view, setView] = useState<"choose" | "register" | "shopify" | "email" | "emailSent" | "hub">("choose");
   const [shop, setShop] = useState("");
+  const [hubKey, setHubKey] = useState("");
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -125,6 +135,31 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
     if (!v) { setErr("Bitte gib deine Shop-Adresse ein."); return; }
     setBusy(true);
     window.location.href = `/api/editor-auth/shopify/start?shop=${encodeURIComponent(v)}&next=${encodeURIComponent(next)}`;
+  };
+
+  // Anmeldung mit dem bestehenden HUB-Lizenzschlüssel → selbes Konto,
+  // gleiche Credits + gespeicherte Produkte. Nutzt die bestehende
+  // Hub-Login-Route (setzt die Session), danach direkt ins Editor-Ziel.
+  const hubLogin = async () => {
+    if (busy) return;
+    const v = hubKey.trim();
+    if (!v) { setErr("Bitte gib deinen Lizenzschlüssel ein."); return; }
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ lizenzschluessel: v, rememberMe: true }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { redirect?: string; error?: string };
+      if (res.ok && d.redirect) { window.location.href = next; return; }
+      setErr(d.error || "Lizenzschlüssel nicht erkannt.");
+      setBusy(false);
+    } catch {
+      setErr("Netzwerkfehler — bitte versuche es erneut.");
+      setBusy(false);
+    }
   };
 
   // withCreds=true → Registrierung mit Username+Passwort; sonst reiner
@@ -406,6 +441,16 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
               </button>
               <button onClick={() => { setView("choose"); setErr(null); }} disabled={busy} style={{ border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: INK_SOFT }}>← Zurück zum Login</button>
             </div>
+          ) : view === "hub" ? (
+            /* ── Im Hub anmelden — mit bestehendem Lizenzschlüssel ── */
+            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 18 }}>
+              <input value={hubKey} onChange={(e) => { setHubKey(e.target.value); setErr(null); }} onKeyDown={(e) => { if (e.key === "Enter") hubLogin(); }} placeholder="Dein Hub-Lizenzschlüssel" autoFocus autoComplete="off" spellCheck={false} disabled={busy} style={{ ...inputStyle, flex: "none", width: "100%" }} />
+              <button onClick={hubLogin} disabled={busy} style={{ width: "100%", padding: "14px 22px", borderRadius: 999, border: 0, cursor: busy ? "default" : "pointer", background: INK, color: "#fff", fontFamily: "inherit", fontSize: 14.5, fontWeight: 700, opacity: busy ? 0.7 : 1, boxShadow: "0 10px 26px rgba(20,18,26,0.22)" }}>
+                {busy ? "…" : "Anmelden →"}
+              </button>
+              <p style={{ margin: 0, fontSize: 11.5, color: INK_FAINT }}>Melde dich mit dem Lizenzschlüssel aus deinem Brospify-Hub-Konto an — du behältst deine Credits und gespeicherten Produkte.</p>
+              <button onClick={() => { setView("choose"); setErr(null); }} disabled={busy} style={{ margin: "2px auto 0", border: 0, background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12.5, fontWeight: 700, color: INK_SOFT }}>← Zurück zum Login</button>
+            </div>
           ) : (
             /* ── Standard: direkter Login mit Username/E-Mail + Passwort ── */
             <>
@@ -434,6 +479,7 @@ export function EditorLoginCard({ next, onCancel }: { next: string; onCancel?: (
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 <button onClick={startGoogle} disabled={busy} style={secondaryBtn}><GoogleIcon /> Mit Google anmelden</button>
                 <button onClick={() => { setView("shopify"); setErr(null); }} disabled={busy} style={secondaryBtn}><ShopifyIcon /> Mit Shopify anmelden</button>
+                <button onClick={() => { setView("hub"); setErr(null); }} disabled={busy} style={secondaryBtn}><HubKeyIcon /> Im Hub anmelden</button>
               </div>
             </>
           )}
