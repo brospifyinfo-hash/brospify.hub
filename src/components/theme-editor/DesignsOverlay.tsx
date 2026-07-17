@@ -87,7 +87,7 @@ export default function DesignsOverlay({
         // Aktive-Designs-Limit des Plans erreicht → verständlicher Hinweis.
         if (res.status === 403 && d?.error === "design_limit") {
           setErr(
-            `Design-Limit erreicht (${d.used}/${d.limit}). Für mehr aktive Designs brauchst du ein größeres Abo — öffne oben dein Konto.`,
+            `Projekt-Limit erreicht (${d.used}/${d.limit}). Für mehr aktive Projekte brauchst du ein größeres Abo — öffne oben dein Konto.`,
           );
           return;
         }

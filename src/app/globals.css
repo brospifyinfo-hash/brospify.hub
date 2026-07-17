@@ -761,6 +761,12 @@ html.theme-editor-light [class*=" border-white/"] { border-color: rgba(17, 17, 1
 html.theme-editor-light [class*="hover:bg-white/"]:hover { background-color: rgba(17, 17, 17, 0.09) !important; }
 html.theme-editor-light [class*="hover:border-white/"]:hover { border-color: rgba(17, 17, 17, 0.24) !important; }
 
+/* Hairline-Divider (h-px/w-px, z. B. AppRail/Titelleiste) brauchen wie
+   Borders den kräftigeren Wert — 0.05 wäre auf Weiß praktisch unsichtbar.
+   Zusätzliche Klasse = höhere Spezifität, schlägt die Wildcard darüber. */
+html.theme-editor-light .h-px[class*="bg-white/"],
+html.theme-editor-light .w-px[class*="bg-white/"] { background-color: rgba(17, 17, 17, 0.13) !important; }
+
 /* Schwarze Alpha-Flächen (Badges, Chips) — wort-verankert wie oben */
 html.theme-editor-light [class^="bg-black/2"], html.theme-editor-light [class*=" bg-black/2"],
 html.theme-editor-light [class^="bg-black/3"], html.theme-editor-light [class*=" bg-black/3"],

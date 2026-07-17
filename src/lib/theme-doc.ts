@@ -160,6 +160,10 @@ export type EditorAction =
   // als EIN History-Schritt (Ctrl+Z macht den ganzen AI-Lauf rückgängig).
   | { type: "aiApply"; doc: ThemeDocument }
   | { type: "aiBoundary" }
+  // „Neues Projekt" / „Projekt öffnen": Dokument (leer bzw. geladen) UND
+  // leere History in EINEM Schritt — kein Undo zurück ins alte Projekt
+  // (das wäre ein verstecktes, halb kaputtes Comeback fremder Stände).
+  | { type: "reset"; doc?: ThemeDocument }
   | { type: "undo" }
   | { type: "redo" };
 
@@ -356,6 +360,9 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
   // frischen History-Schritt.
   if (action.type === "aiBoundary") {
     return state.lastTextTarget === null ? state : { ...state, lastTextTarget: null };
+  }
+  if (action.type === "reset") {
+    return initialEditorState(action.doc);
   }
   if (action.type === "undo") {
     if (!state.past.length) return state;

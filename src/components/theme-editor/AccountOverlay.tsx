@@ -201,7 +201,7 @@ export default function AccountOverlay({
           <div style={{ display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" }}>
             <StatCard label="Plan" value={loading ? "…" : isAdmin ? "Admin" : active ? (data?.plan?.label || "Abo") : "Gratis-Vorschau"} accent={active || isAdmin} />
             <StatCard label="Credits" value={loading ? "…" : isAdmin ? "∞" : balance == null ? "–" : fmt(balance)} />
-            <StatCard label="Aktive Designs" value={loading ? "…" : designs ? (designs.limit === -1 ? `${designs.used} / ∞` : `${designs.used} / ${designs.limit}`) : "–"} />
+            <StatCard label="Aktive Projekte" value={loading ? "…" : designs ? (designs.limit === -1 ? `${designs.used} / ∞` : `${designs.used} / ${designs.limit}`) : "–"} />
           </div>
         )}
 
@@ -361,7 +361,7 @@ function PlanCard({ plan, current }: { plan: PlanSummary; current: boolean }) {
       </div>
       <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: 5 }}>
         <Li>{fmt(plan.credits)} Credits / Monat</Li>
-        <Li>{plan.activeDesigns} aktive{plan.activeDesigns === 1 ? "s" : ""} Design{plan.activeDesigns === 1 ? "" : "s"}</Li>
+        <Li>{plan.activeDesigns} aktive{plan.activeDesigns === 1 ? "s" : ""} Projekt{plan.activeDesigns === 1 ? "" : "e"}</Li>
         <Li>Download + Live-Updates</Li>
       </ul>
       <button onClick={go} disabled={!ready || current} title={ready ? "" : "Checkout-Link noch nicht hinterlegt"} style={{

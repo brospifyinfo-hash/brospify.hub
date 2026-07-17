@@ -12,10 +12,10 @@ import { motion, Reorder, useDragControls } from "framer-motion";
 import { gsap } from "gsap";
 import {
   ArrowLeft, Download, Monitor, Smartphone, Plus, Redo2, Undo2,
-  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette, Bookmark,
+  Sparkles, ShoppingCart, Package, ChevronRight, RefreshCw, Palette,
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
   SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, Trash2, UploadCloud, X,
-  Pencil, Target, ChevronDown, ArrowDownUp,
+  Pencil, Target, ChevronDown, ArrowDownUp, FileText, Save, FolderOpen,
   type LucideIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -34,6 +34,9 @@ import EditorLoginModal from "@/components/theme-editor/EditorLoginModal";
 import AccountOverlay from "@/components/theme-editor/AccountOverlay";
 import ProfileMenu from "@/components/theme-editor/ProfileMenu";
 import ProductIntakeOverlay, { type IntakeResult } from "@/components/theme-editor/ProductIntakeOverlay";
+import AppRail from "@/components/theme-editor/AppRail";
+import { SaveProjectDialog, ConfirmDialog } from "@/components/theme-editor/ProjectDialogs";
+import ShortcutsOverlay from "@/components/theme-editor/ShortcutsOverlay";
 import GenerationTheater, { type GenesisJob } from "@/components/theme-editor/GenerationTheater";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import { blankDocument, buildRevealTimeline, type RevealLabels } from "@/lib/theme-genesis";
@@ -329,6 +332,162 @@ export default function ThemeEditorPage() {
     };
   }, []);
 
+  // ── Projekt-System (App-Shell): Speichern, Speicherstatus, Neues Projekt ──
+  // „Projekt" = gespeichertes Design (theme-designs, eigener Sync-Code).
+  // dirty per REFERENZ-Vergleich: jeder Reducer-Schritt erzeugt ein neues
+  // Dokument-Objekt; Undo stellt exakt das alte Objekt wieder her — landet
+  // man per Strg+Z wieder auf dem gespeicherten Stand, ist dirty false.
+  const [saveDialog, setSaveDialog] = useState<null | "saveAs" | "rename">(null);
+  const [confirmNewOpen, setConfirmNewOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [savedAtLabel, setSavedAtLabel] = useState<string | null>(null);
+  const lastSavedDocRef = useRef<ThemeDocument | null>(null);
+  const dirty = !!doc.productId && doc !== lastSavedDocRef.current;
+  /** Frisch initialisiertes Projekt-Dokument (Stil-Komposition/leer): solange
+   *  der Nutzer nichts verändert hat, gibt es nichts zu verlieren — die
+   *  „Neues Projekt"-Abfrage und die Verlassen-Warnung greifen erst bei
+   *  echtem Arbeitsstand (doc weicht vom Start-Dokument ab). */
+  const projectStartDocRef = useRef<ThemeDocument | null>(null);
+  const unsavedWork = dirty && doc !== projectStartDocRef.current;
+  /** Save-Epoche: wechselt der Projekt-Kontext (Neues Projekt, Projekt
+   *  geöffnet, Produktwechsel), während ein Speichern-Fetch noch läuft,
+   *  darf dessen später Resolve activeDesign/lastSavedDocRef NICHT mehr
+   *  reanimieren — sonst überschreibt das nächste Ctrl+S einen fremden
+   *  Sync-Code mit dem Dokument eines anderen Projekts. */
+  const saveEpochRef = useRef(0);
+  /** Laufender pickProduct-Fetch: doNewProject invalidiert ihn, damit ein
+   *  später Resolve den frisch geleerten Editor nicht wieder befüllt. */
+  const pickRunRef = useRef(0);
+  const timeLabel = useCallback(
+    () => new Date().toLocaleTimeString(lang === "en" ? "en-GB" : "de-DE", { hour: "2-digit", minute: "2-digit" }),
+    [lang],
+  );
+
+  /** Projekt speichern — ohne code neu anlegen, mit code aktualisieren/
+   *  umbenennen. direct=true (Strg+S/Leiste ohne Dialog): Fehler landen als
+   *  sichtbare Meldung (setMsg) statt im — geschlossenen — Dialog. */
+  const saveProject = useCallback(async (name: string, code?: string, direct = false): Promise<boolean> => {
+    if (!doc.productId || savingProject) return false;
+    setSavingProject(true);
+    setSaveError("");
+    const docToSave = doc;
+    const epoch = saveEpochRef.current;
+    try {
+      const res = await fetch("/api/theme-designs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        cache: "no-store",
+        body: JSON.stringify({ name, document: docToSave, code }),
+      });
+      const d = await res.json().catch(() => ({}));
+      // Projekt-Kontext hat inzwischen gewechselt (Neues Projekt/Öffnen/
+      // Produktwechsel) → Resultat verwerfen, nichts reanimieren.
+      if (epoch !== saveEpochRef.current) return false;
+      if (!res.ok) {
+        // Aktive-Projekte-Limit des Plans → Plan-Auswahl statt Fehlermeldung.
+        if (res.status === 403 && d?.error === "design_limit") {
+          setSaveDialog(null);
+          setAccountOverlay("paywall");
+          return false;
+        }
+        const text = typeof d?.error === "string" && d.error ? d.error : t.themes.builderErr;
+        if (direct) setMsg({ kind: "err", text });
+        else setSaveError(text);
+        return false;
+      }
+      const newCode = typeof d.code === "string" && d.code ? d.code : code || "";
+      setActiveDesign({ code: newCode, name });
+      lastSavedDocRef.current = docToSave;
+      // Tipp-Serien-Koaleszenz beenden: Weitertippen im selben Feld pusht
+      // den soeben GESPEICHERTEN Stand in die History — Ctrl+Z kann exakt
+      // dorthin zurück und der grüne Punkt stimmt wieder.
+      dispatch({ type: "aiBoundary" });
+      setSavedAtLabel(timeLabel());
+      setSaveDialog(null);
+      setMsg({ kind: "ok", text: t.themes.editorDesignSaved.replace("{c}", newCode) });
+      return true;
+    } catch {
+      if (epoch !== saveEpochRef.current) return false;
+      if (direct) setMsg({ kind: "err", text: t.themes.builderErr });
+      else setSaveError(t.themes.builderErr);
+      return false;
+    } finally {
+      setSavingProject(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, savingProject, timeLabel, t.themes.builderErr, t.themes.editorDesignSaved]);
+
+  /** Speichern (Strg+S / Leiste): bekanntes Projekt direkt, sonst Dialog. */
+  const handleSaveClick = useCallback(() => {
+    if (!doc.productId || aiBusyRef.current || savingProject) return;
+    if (activeDesign) void saveProject(activeDesign.name, activeDesign.code, true);
+    else { setSaveError(""); setSaveDialog("saveAs"); }
+  }, [doc.productId, activeDesign, saveProject, savingProject]);
+
+  /** „Neues Projekt": Editor komplett auf Anfang (leere History) + Start-Fenster. */
+  const doNewProject = useCallback(() => {
+    // Laufende Save-/Preview-Fetches gehören zum ALTEN Projekt — invalidieren.
+    saveEpochRef.current++;
+    pickRunRef.current++;
+    setConfirmNewOpen(false);
+    dispatch({ type: "reset" });
+    lastSavedDocRef.current = null;
+    projectStartDocRef.current = null;
+    setSavedAtLabel(null);
+    setActiveDesign(null);
+    setPreviewData(null);
+    setBaseSections([]);
+    setHomeSections([]);
+    setCapabilities([]);
+    setSelected(null);
+    setAiFocus([]);
+    setFocusPick(false);
+    setBuyboxOpen(false);
+    setPage("product");
+    setPickerOpen(false);
+    setMsg(null);
+    setDemoProduct(null);
+    setGenesisJob(null);
+    setMobileTab("vorschau");
+    blankStartRef.current = false;
+    setStartOpen(true);
+  }, []);
+  const startNewProject = useCallback(() => {
+    if (aiBusyRef.current || savingProject) return;
+    if (unsavedWork) setConfirmNewOpen(true);
+    else doNewProject();
+  }, [unsavedWork, doNewProject, savingProject]);
+
+  // Strg+S speichert IMMER das Projekt (nie der Browser-„Seite speichern"-
+  // Dialog); „?" öffnet die Tastaturkürzel — nur außerhalb von Eingabefeldern.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = el?.tagName;
+      const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable;
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        if (!fullPreviewOpen && saveDialog === null && !confirmNewOpen && !shortcutsOpen) handleSaveClick();
+        return;
+      }
+      if (e.key === "?" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && saveDialog === null && !confirmNewOpen) {
+        setShortcutsOpen((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [handleSaveClick, fullPreviewOpen, saveDialog, confirmNewOpen, shortcutsOpen]);
+
+  // Echter ungesicherter Arbeitsstand: Browser-Warnung beim Verlassen/Schließen.
+  useEffect(() => {
+    if (!unsavedWork) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [unsavedWork]);
+
   // Klick auf eine Section/Baustein → auf schmalen Screens automatisch auf den
   // Einstellungen-Tab wechseln und ihn sanft in den Blick scrollen.
   useEffect(() => {
@@ -380,9 +539,13 @@ export default function ThemeEditorPage() {
     if (aiBusyRef.current) return;
     setPickerOpen(false);
     setPreviewLoading(true);
+    // Run-Guard: „Neues Projekt" (oder ein neuerer Pick) invalidiert diesen
+    // Fetch — sein später Resolve darf den geleerten Editor nicht befüllen.
+    const run = ++pickRunRef.current;
     fetch(`/api/theme-export/preview?productId=${encodeURIComponent(productId)}`, { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((d: PreviewResponse | null) => {
+        if (run !== pickRunRef.current) return;
         if (!d || typeof d.title !== "string") return;
         setPreviewData(d);
         const bs = Array.isArray(d.baseSections) ? d.baseSections : [];
@@ -395,21 +558,27 @@ export default function ThemeEditorPage() {
         // Platzhalter-/Produktbilder) statt der Stil-Komposition.
         const blank = blankStartRef.current;
         blankStartRef.current = false;
-        dispatch(
-          !keepDoc && (doc.sections.length === 0 || blank)
-            ? {
-                type: "replace",
-                doc: blank
-                  ? blankDocument(productId)
-                  : buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs),
-              }
-            : { type: "setProduct", productId },
-        );
-        // Speicherstände sind produktgebunden — bei Produktwechsel entkoppeln.
+        if (!keepDoc && (doc.sections.length === 0 || blank)) {
+          const startDoc = blank
+            ? blankDocument(productId)
+            : buildInitialDocument(productId, doc.global.styleId || DEFAULT_STYLE_ID, bs, caps, hs);
+          // Frischer Projekt-Start = Referenz für „gibt es etwas zu verlieren?".
+          projectStartDocRef.current = startDoc;
+          dispatch({ type: "replace", doc: startDoc });
+        } else {
+          dispatch({ type: "setProduct", productId });
+        }
+        // Speicherstände sind produktgebunden — bei Produktwechsel entkoppeln
+        // (inkl. Speicherstatus + laufender Save-Fetches des alten Produkts).
+        if (doc.productId && doc.productId !== productId) {
+          saveEpochRef.current++;
+          lastSavedDocRef.current = null;
+          setSavedAtLabel(null);
+        }
         setActiveDesign((prev) => (doc.productId && doc.productId !== productId ? null : prev));
       })
       .catch(() => {})
-      .finally(() => setPreviewLoading(false));
+      .finally(() => { if (run === pickRunRef.current) setPreviewLoading(false); });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc.sections.length, doc.global.styleId]);
 
@@ -532,7 +701,9 @@ export default function ThemeEditorPage() {
   // Ctrl+Z das Dokument dort unsichtbar mutieren.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (fullPreviewOpen || aiBusy) return;
+      // Bei offenem Modal (Speichern/Bestätigung/Kürzel) kein verstecktes
+      // Dokument-Undo hinter dem Dialog.
+      if (fullPreviewOpen || aiBusy || saveDialog !== null || confirmNewOpen || shortcutsOpen) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
@@ -549,7 +720,7 @@ export default function ThemeEditorPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullPreviewOpen, aiBusy]);
+  }, [fullPreviewOpen, aiBusy, saveDialog, confirmNewOpen, shortcutsOpen]);
 
   // Sanfter Einstieg des Editor-Shells (GSAP statt Layout-Sprung).
   useEffect(() => {
@@ -734,8 +905,11 @@ export default function ThemeEditorPage() {
         setCapabilities(Array.isArray(pv.capabilities) ? pv.capabilities : []);
         setDemoProduct({ id: targetDoc.productId, titel: pv.title, bildUrl: pv.images?.[0] });
         setActiveDesign(null);
-        // Leerer Shop sichtbar, während die „AI nachdenkt".
-        dispatch({ type: "replace", doc: blankDocument(targetDoc.productId) });
+        // Leerer Shop sichtbar, während die „AI nachdenkt". Baseline = leer —
+        // der fertige Demo-Aufbau zählt damit als ungesicherter Arbeitsstand.
+        const demoBlank = blankDocument(targetDoc.productId);
+        projectStartDocRef.current = demoBlank;
+        dispatch({ type: "replace", doc: demoBlank });
         return { steps: buildRevealTimeline(targetDoc, labels, genesisSectionLabel, genesisBlockLabel) };
       },
     });
@@ -775,6 +949,8 @@ export default function ThemeEditorPage() {
         setCapabilities(caps);
         setActiveDesign(null);
         const blank = blankDocument(r.productId);
+        // Baseline = leer — der AI-Aufbau ist danach echter Arbeitsstand.
+        projectStartDocRef.current = blank;
         dispatch({ type: "replace", doc: blank });
 
         // 2) Echter AI-Plan auf Basis von Bildern + Beschreibung (Standard-Modus).
@@ -1027,46 +1203,36 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                 </button>
               )}
 
-              <div className="flex items-center gap-1.5 ml-auto shrink-0">
-                {/* Credits — Anzeige */}
-                <span
-                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
-                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3]"
-                >
-                  <span className="text-[12px] leading-none">{credits.creditIcon}</span>
-                  <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
-                </span>
-                {/* Profil-Avatar mit Dropdown (Konto, Plan, Sprache, Logout) */}
-                <ProfileMenu
-                  isAdmin={isAdmin}
-                  onOpenSettings={() => setAccountOverlay("account")}
-                  onOpenPlans={() => setAccountOverlay("account")}
-                />
-                {/* Gesamt-Stil jederzeit änderbar */}
+              {/* Mitte: Projektname + Speicherstatus — wie die Dokument-Titel-
+                  Zeile eines Desktop-Programms. Klick = umbenennen (bzw. erstes
+                  Speichern, solange das Projekt noch keinen Namen hat). */}
+              <div className="flex-1 min-w-0 flex items-center justify-center px-2">
                 {doc.productId && (
                   <button
-                    onClick={() => setStyleOpen(true)}
-                    disabled={aiBusy}
-                    title={t.themes.editorStyleGallery}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
+                    onClick={() => { if (aiBusy || savingProject) return; setSaveError(""); setSaveDialog(activeDesign ? "rename" : "saveAs"); }}
+                    title={activeDesign ? t.themes.editorProjRename : t.themes.editorProjSave}
+                    className="group flex items-center gap-1.5 rounded-md border border-transparent hover:border-white/10 hover:bg-white/[0.04] px-2.5 py-1 min-w-0 transition"
                   >
-                    <Palette className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-                    <span className="hidden xl:inline">{t.themes.editorStyleGallery}</span>
+                    <FileText className="w-3.5 h-3.5 shrink-0 text-zinc-500" />
+                    <span className="text-[12px] font-semibold text-white truncate max-w-[240px]">
+                      {activeDesign?.name || t.themes.editorProjUntitled}
+                    </span>
+                    <span
+                      className={`shrink-0 w-1.5 h-1.5 rounded-full ${dirty ? "bg-amber-500" : "bg-[#95BF47]"}`}
+                      aria-hidden
+                    />
+                    <span className="text-[10px] text-zinc-500 hidden 2xl:inline whitespace-nowrap">
+                      {dirty
+                        ? (activeDesign ? t.themes.editorProjUnsaved : t.themes.editorProjNotSaved)
+                        : savedAtLabel
+                          ? t.themes.editorProjSavedAt.replace("{t}", savedAtLabel)
+                          : t.themes.editorProjNotSaved}
+                    </span>
                   </button>
                 )}
-                {/* Design-Speicherstände (mit Sync-Codes) */}
-                {doc.productId && (
-                  <button
-                    onClick={() => setDesignsOpen(true)}
-                    disabled={aiBusy}
-                    title={t.themes.editorDesigns}
-                    className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/[0.04] px-2.5 py-1 text-[11.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition disabled:opacity-40"
-                  >
-                    <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-                    <span className="hidden xl:inline">{t.themes.editorDesigns}</span>
-                    {activeDesign && <span className="text-[10px] text-zinc-500 hidden 2xl:inline truncate max-w-[100px]">· {activeDesign.name}</span>}
-                  </button>
-                )}
+              </div>
+
+              <div className="flex items-center gap-1.5 shrink-0">
                 {/* Undo / Redo */}
                 <div className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5">
                   <button
@@ -1105,6 +1271,22 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                   <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
                   <span className="hidden xl:inline">{t.themes.editorSyncUpdate}</span>
                 </button>
+                <span className="w-px h-5 bg-white/10 mx-0.5 shrink-0" aria-hidden />
+                {/* Credits — Anzeige */}
+                <span
+                  title={`${isAdmin ? "∞" : credits.loading ? "…" : credits.balance} Credits`}
+                  className="shrink-0 inline-flex items-center gap-1 rounded-md border border-[#95BF47]/25 bg-[#95BF47]/[0.06] px-2 py-1 text-[11.5px] font-bold text-[#cfe9a3]"
+                >
+                  <span className="text-[12px] leading-none">{credits.creditIcon}</span>
+                  <span className="tabular-nums">{isAdmin ? "∞" : credits.loading ? "…" : credits.balance}</span>
+                </span>
+                {/* Profil — wie in jedem Programm ganz außen in der Ecke */}
+                <ProfileMenu
+                  isAdmin={isAdmin}
+                  onOpenSettings={() => setAccountOverlay("account")}
+                  onOpenPlans={() => setAccountOverlay("account")}
+                  onOpenShortcuts={() => setShortcutsOpen(true)}
+                />
               </div>
             </div>
 
@@ -1149,6 +1331,7 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                   isAdmin={isAdmin}
                   onOpenSettings={() => setAccountOverlay("account")}
                   onOpenPlans={() => setAccountOverlay("account")}
+                  onOpenShortcuts={() => setShortcutsOpen(true)}
                 />
                 <div className="shrink-0 inline-flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
                   <button
@@ -1182,11 +1365,20 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                       {t.themes.editorStyleGallery}
                     </button>
                     <button
+                      onClick={handleSaveClick}
+                      disabled={aiBusy || savingProject}
+                      className="shrink-0 relative flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap disabled:opacity-40"
+                    >
+                      <Save className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                      {t.themes.editorDesignSaveNew}
+                      {dirty && <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500" aria-hidden />}
+                    </button>
+                    <button
                       onClick={() => setDesignsOpen(true)}
                       disabled={aiBusy}
                       className="shrink-0 flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-[12px] font-semibold text-zinc-300 hover:text-white transition whitespace-nowrap disabled:opacity-40"
                     >
-                      <Bookmark className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                      <FolderOpen className="w-3.5 h-3.5" style={{ color: ACCENT }} />
                       {t.themes.editorDesigns}
                     </button>
                   </div>
@@ -1409,10 +1601,44 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
             </div>
             )
           ) : (
-            /* ── Split-Pane-Editor ── */
-            /* Rechte Leiste bewusst schmal (300/316px) — der gewonnene Platz
-               geht komplett an die Live-Vorschau in der Mitte. */
-            <div ref={shellRef} className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_300px] xl:grid-cols-[320px_minmax(0,1fr)_316px] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0">
+            /* ── App-Shell: linke Programm-Leiste + Split-Pane-Editor ──
+               Die AppRail (Neues Projekt / Öffnen / Speichern / …) sitzt wie
+               in Word/Figma als schmale Spalte ganz links; rechts daneben das
+               bekannte Dreier-Grid. Rechte Leiste bewusst schmal (300/316px) —
+               der gewonnene Platz geht komplett an die Live-Vorschau. */
+            <div ref={shellRef} className="flex flex-col lg:flex-row lg:gap-3 lg:flex-1 lg:min-h-0">
+              <div className="hidden lg:block lg:h-full lg:min-h-0 shrink-0">
+                <AppRail
+                  dirty={dirty}
+                  busy={aiBusy}
+                  hasProject={!!doc.productId}
+                  onNew={startNewProject}
+                  onOpen={() => setDesignsOpen(true)}
+                  onSave={handleSaveClick}
+                  onSaveAs={() => { setSaveError(""); setSaveDialog("saveAs"); }}
+                  onStyle={() => setStyleOpen(true)}
+                  onRandomize={randomize}
+                  onFullPreview={() => setFullPreviewOpen(true)}
+                  onShortcuts={() => setShortcutsOpen(true)}
+                  onAccount={() => setAccountOverlay("account")}
+                  t={{
+                    groupProject: t.themes.editorRailProject,
+                    groupDesign: t.themes.editorRailDesign,
+                    newProject: t.themes.editorProjNew,
+                    openProjects: t.themes.editorProjOpen,
+                    save: t.themes.editorProjSave,
+                    saveAs: t.themes.editorProjSaveAs,
+                    style: t.themes.editorStyleGallery,
+                    randomize: t.themes.builderRandom,
+                    fullPreview: t.themes.editorFullPreview,
+                    shortcuts: t.themes.editorShortcuts,
+                    account: t.themes.editorRailAccount,
+                    unsavedHint: t.themes.editorProjUnsaved,
+                    ctrl: t.themes.editorKeyCtrl,
+                  }}
+                />
+              </div>
+              <div className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_300px] xl:grid-cols-[320px_minmax(0,1fr)_316px] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0 lg:min-w-0">
 
               {/* Mobil: sticky 3-Tab-Leiste (Vorschau · Aufbau · Einstellungen) —
                   klebt unter der App-Navigation, damit man jederzeit umschalten
@@ -1753,6 +1979,7 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                   />
                 </div>
               </aside>
+              </div>
             </div>
           )}
         </div>
@@ -1768,13 +1995,23 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
           activeCode={activeDesign?.code || null}
           lang={lang}
           onLoaded={(loadedDoc, code, name) => {
-            dispatch({ type: "replace", doc: loadedDoc });
+            // Kontextwechsel: laufende Save-Fetches des vorherigen Stands
+            // verwerfen; History leeren (kein Undo in fremde Projekt-Stände).
+            saveEpochRef.current++;
+            dispatch({ type: "reset", doc: loadedDoc });
             setActiveDesign({ code, name });
+            // Frisch geladen = exakt der gespeicherte Stand.
+            lastSavedDocRef.current = loadedDoc;
+            projectStartDocRef.current = loadedDoc;
+            setSavedAtLabel(timeLabel());
             setSelected(null);
-            setMsg({ kind: "ok", text: `${t.themes.editorDesignLoaded} „${name}"` });
+            setMsg({ kind: "ok", text: t.themes.editorDesignLoaded.replace("{n}", name) });
           }}
           onSaved={(code, name) => {
             setActiveDesign({ code, name });
+            // Das Overlay hat das AKTUELLE Dokument gespeichert.
+            lastSavedDocRef.current = doc;
+            setSavedAtLabel(timeLabel());
             setMsg({ kind: "ok", text: t.themes.editorDesignSaved.replace("{c}", code) });
           }}
           t={{
@@ -1970,6 +2207,54 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
           }}
         />
       )}
+
+      {/* Projekt speichern („Speichern unter") bzw. umbenennen */}
+      <SaveProjectDialog
+        open={saveDialog !== null}
+        onClose={() => setSaveDialog(null)}
+        onSave={(name) => {
+          if (saveDialog === "rename" && activeDesign) void saveProject(name, activeDesign.code);
+          else void saveProject(name);
+        }}
+        busy={savingProject}
+        error={saveError}
+        initialName={saveDialog === "rename" ? activeDesign?.name : ""}
+        title={saveDialog === "rename" ? t.themes.editorProjRename : t.themes.editorProjSaveTitle}
+        hint={saveDialog === "rename" ? t.themes.editorProjRenameHint : t.themes.editorProjSaveHint}
+        placeholder={t.themes.editorDesignName}
+        saveLabel={t.themes.editorDesignSaveNew}
+        cancelLabel={t.themes.editorCancel}
+      />
+
+      {/* „Neues Projekt" trotz ungespeicherter Änderungen? */}
+      <ConfirmDialog
+        open={confirmNewOpen}
+        onClose={() => setConfirmNewOpen(false)}
+        onConfirm={doNewProject}
+        title={t.themes.editorProjNewConfirmTitle}
+        text={t.themes.editorProjNewConfirmText}
+        confirmLabel={t.themes.editorProjNewConfirmGo}
+        cancelLabel={t.themes.editorCancel}
+      />
+
+      {/* Tastaturkürzel — über die Leiste, das Profil-Menü oder „?" */}
+      <ShortcutsOverlay
+        open={shortcutsOpen}
+        onClose={() => setShortcutsOpen(false)}
+        t={{
+          title: t.themes.editorShortcuts,
+          sub: t.themes.editorShortcutsSub,
+          ctrl: t.themes.editorKeyCtrl,
+          undo: t.themes.editorShortcutUndo,
+          redo: t.themes.editorShortcutRedo,
+          save: t.themes.editorShortcutSave,
+          help: t.themes.editorShortcutHelp,
+          esc: t.themes.editorShortcutEsc,
+          tipsTitle: t.themes.editorShortcutTipsTitle,
+          tips: [t.themes.editorShortcutTip1, t.themes.editorShortcutTip2, t.themes.editorShortcutTip3],
+          close: t.themes.editorClose,
+        }}
+      />
 
       {/* Inszenierter Shop-Aufbau (Demo = simuliert · Eigenes Produkt = echte AI) */}
       <GenerationTheater

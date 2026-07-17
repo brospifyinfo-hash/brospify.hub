@@ -168,6 +168,15 @@ export default function AiCopilot({
   const [drag, setDrag] = useState(false);
   const docRef = useRef(doc);
   docRef.current = doc;
+  // Unmount-Guard: „Neues Projekt" unmountet den Editor-Shell samt Copilot,
+  // während ein Plan-Fetch noch laufen kann. Sein später Resolve darf dann
+  // weder confirmPlan starten noch onBusyChange(true) am Parent setzen.
+  // (Im Effect-Body auf true setzen — StrictMode mountet doppelt.)
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
   const fileRef = useRef<HTMLInputElement>(null);
   // Done-Anzeige-Timer: wird bei jedem neuen Flow gecleart, sonst würde ein
   // alter Timer den frisch erstellten Folge-Plan wieder löschen.
@@ -233,6 +242,7 @@ export default function AiCopilot({
         }),
       });
       const d = await res.json().catch(() => ({}));
+      if (!aliveRef.current) return;
       if (!res.ok) {
         setError(res.status === 402 ? d?.error || t.themes.aiNoCredits : d?.error || t.themes.aiErr);
         setPhase("idle");
@@ -256,7 +266,7 @@ export default function AiCopilot({
   }
 
   async function confirmPlan(explicitPlan?: PlanResponse) {
-    if (locked) return;
+    if (locked || !aliveRef.current) return;
     const p = explicitPlan || plan;
     if (!p || phase === "applying") return;
     clearDoneTimer();
