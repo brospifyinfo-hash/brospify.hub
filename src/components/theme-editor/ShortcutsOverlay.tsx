@@ -1,13 +1,20 @@
 "use client";
 
 // ─── Tastaturkürzel-Overlay ─────────────────────────────────────────────
-// Kleines Hilfe-Fenster wie in Profi-Programmen: Kürzel-Liste mit <kbd>-
-// Kacheln + „Gut zu wissen"-Tipps. Öffnet über die linke Leiste oder „?".
+// Hilfe-Fenster im EXPLIZIT HELLEN Premium-Look des Editors: echte helle
+// Keycaps (wie Tasten einer Tastatur), klare Zeilen, „Gut zu wissen"-Karte.
+// Öffnet über die linke Leiste, das Profil-Menü oder „?". Esc läuft in der
+// CAPTURE-Phase (schließt NUR dieses Overlay), Fokus kehrt zurück.
 
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Keyboard, Lightbulb } from "lucide-react";
-import { ACCENT } from "@/components/theme-editor/editor-ui";
+
+const INK = "#1c1b22";
+const INK_SOFT = "#5c5a66";
+const INK_FAINT = "#8c8a96";
+const LINE = "#ecece9";
+const GREEN = "#95BF47";
 
 export interface ShortcutsT {
   title: string;
@@ -26,7 +33,15 @@ export interface ShortcutsT {
 
 function Key({ children }: { children: string }) {
   return (
-    <kbd className="inline-flex items-center justify-center min-w-[26px] h-[24px] px-1.5 rounded-md border border-white/15 bg-white/[0.06] text-[11px] font-bold text-white shadow-[0_1px_0_rgba(0,0,0,0.25)]">
+    <kbd
+      className="inline-flex items-center justify-center"
+      style={{
+        minWidth: 28, height: 26, padding: "0 8px",
+        borderRadius: 8, border: "1px solid #d9d9d4", borderBottomWidth: 2.5, borderBottomColor: "#c9c9c3",
+        background: "linear-gradient(180deg, #ffffff, #f4f4f1)",
+        fontSize: 11, fontWeight: 800, color: INK, fontFamily: "inherit",
+      }}
+    >
       {children}
     </kbd>
   );
@@ -34,31 +49,27 @@ function Key({ children }: { children: string }) {
 
 function Row({ keys, label }: { keys: string[][]; label: string }) {
   return (
-    <div className="flex items-center gap-3 py-1.5">
-      <span className="flex items-center gap-1.5 shrink-0">
+    <div className="flex items-center gap-3" style={{ padding: "7px 0" }}>
+      <span className="flex items-center gap-1.5 shrink-0" style={{ minWidth: 168 }}>
         {keys.map((combo, i) => (
-          <span key={i} className="flex items-center gap-0.5">
-            {i > 0 && <span className="text-[10px] text-zinc-500 mx-0.5">/</span>}
+          <span key={i} className="flex items-center gap-1">
+            {i > 0 && <span style={{ fontSize: 10, color: INK_FAINT, margin: "0 2px" }}>/</span>}
             {combo.map((k, j) => (
-              <span key={j} className="flex items-center gap-0.5">
-                {j > 0 && <span className="text-[10px] text-zinc-500">+</span>}
+              <span key={j} className="flex items-center gap-1">
+                {j > 0 && <span style={{ fontSize: 10, color: INK_FAINT }}>+</span>}
                 <Key>{k}</Key>
               </span>
             ))}
           </span>
         ))}
       </span>
-      <span className="text-[12.5px] text-zinc-300 min-w-0">{label}</span>
+      <span className="min-w-0" style={{ fontSize: 12.5, color: INK_SOFT, fontWeight: 600 }}>{label}</span>
     </div>
   );
 }
 
 export default function ShortcutsOverlay({ open, onClose, t }: { open: boolean; onClose: () => void; t: ShortcutsT }) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  // Esc in der CAPTURE-Phase: läuft VOR den Bubble-Listenern darunter
-  // liegender Overlays (Start-Fenster, Vollbild-Vorschau) — Esc schließt so
-  // NUR dieses Overlay, nicht den ganzen Stapel. Fokus wandert beim Öffnen
-  // auf den Schließen-Knopf und beim Schließen zurück zum Auslöser.
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
@@ -87,39 +98,62 @@ export default function ShortcutsOverlay({ open, onClose, t }: { open: boolean; 
         >
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
           <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.98 }}
+            initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.99 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="relative w-full max-w-md rounded-2xl border border-white/[0.1] bg-[#101014]/95 backdrop-blur-xl shadow-2xl overflow-hidden"
+            transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            className="relative w-full max-w-md overflow-hidden"
+            style={{
+              background: "#ffffff",
+              borderRadius: 22,
+              border: `1px solid ${LINE}`,
+              boxShadow: "0 8px 24px -12px rgba(20,18,26,0.18), 0 40px 90px -24px rgba(20,18,26,0.38)",
+            }}
           >
-            <div className="flex items-center gap-2.5 px-5 pt-4 pb-3 border-b border-white/[0.07]">
-              <Keyboard className="w-4 h-4 shrink-0" style={{ color: ACCENT }} />
+            <div className="flex items-center gap-3" style={{ padding: "18px 20px 14px", borderBottom: `1px solid ${LINE}` }}>
+              <span
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: 38, height: 38, borderRadius: 12,
+                  background: `linear-gradient(135deg, ${GREEN}, #6f9a30)`,
+                  boxShadow: "0 6px 16px -6px rgba(149,191,71,0.55)",
+                }}
+              >
+                <Keyboard style={{ width: 18, height: 18, color: "#ffffff" }} strokeWidth={2} />
+              </span>
               <div className="min-w-0 flex-1">
-                <h2 id="shortcuts-title" className="text-[15px] font-bold text-white">{t.title}</h2>
-                <p className="text-[11px] text-zinc-500">{t.sub}</p>
+                <h2 id="shortcuts-title" style={{ fontSize: 16, fontWeight: 800, color: INK }}>{t.title}</h2>
+                <p style={{ fontSize: 11.5, color: INK_FAINT }}>{t.sub}</p>
               </div>
-              <button ref={closeRef} onClick={onClose} className="w-8 h-8 rounded-lg border border-white/10 bg-white/[0.04] text-zinc-300 hover:text-white flex items-center justify-center transition" aria-label={t.close}>
-                <X className="w-4 h-4" />
+              <button
+                ref={closeRef}
+                onClick={onClose}
+                aria-label={t.close}
+                className="bspx-rail-slim flex items-center justify-center shrink-0"
+                style={{ width: 32, height: 32, borderRadius: 10, border: `1px solid ${LINE}`, background: "#fff", cursor: "pointer" }}
+              >
+                <X style={{ width: 15, height: 15 }} strokeWidth={2} />
               </button>
             </div>
-            <div className="px-5 py-3.5">
+            <div style={{ padding: "12px 20px 6px" }}>
               <Row keys={[[t.ctrl, "Z"]]} label={t.undo} />
               <Row keys={[[t.ctrl, "Shift", "Z"], [t.ctrl, "Y"]]} label={t.redo} />
               <Row keys={[[t.ctrl, "S"]]} label={t.save} />
               <Row keys={[["?"]]} label={t.help} />
               <Row keys={[["Esc"]]} label={t.esc} />
             </div>
-            <div className="px-5 pb-4">
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] px-3.5 py-3">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Lightbulb className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-                  <span className="text-[11px] uppercase tracking-[0.12em] font-bold text-zinc-400">{t.tipsTitle}</span>
+            <div style={{ padding: "10px 20px 18px" }}>
+              <div style={{ borderRadius: 14, border: `1px solid ${LINE}`, background: "#fafaf8", padding: "12px 14px" }}>
+                <div className="flex items-center gap-1.5" style={{ marginBottom: 7 }}>
+                  <Lightbulb style={{ width: 13, height: 13, color: "#6f9a30" }} strokeWidth={2.2} />
+                  <span className="uppercase" style={{ fontSize: 10, letterSpacing: "0.14em", fontWeight: 800, color: INK_FAINT }}>
+                    {t.tipsTitle}
+                  </span>
                 </div>
-                <ul className="space-y-1">
+                <ul className="space-y-1.5">
                   {t.tips.map((tip, i) => (
-                    <li key={i} className="text-[12px] text-zinc-400 leading-snug flex gap-1.5">
-                      <span className="shrink-0 mt-[7px] w-1 h-1 rounded-full" style={{ background: ACCENT }} aria-hidden />
+                    <li key={i} className="flex gap-2" style={{ fontSize: 12, color: INK_SOFT, lineHeight: 1.5 }}>
+                      <span className="shrink-0 rounded-full" style={{ marginTop: 6, width: 4, height: 4, background: GREEN }} aria-hidden />
                       {tip}
                     </li>
                   ))}

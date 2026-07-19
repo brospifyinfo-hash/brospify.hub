@@ -817,4 +817,16 @@ html.theme-light [data-section="admin"] * {
 /* Horizontale Aktions-Reihen (z. B. Theme-Editor-Toolbar mobil): scrollbar
    unsichtbar, Inhalt bleibt per Wisch erreichbar. */
 .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* ── AppRail (Editor-Programm-Leiste, fest hell) ─────────────────────────
+   Explizite Hover-Politur — bewusst eigene Klassen statt der theme-light-
+   Wildcards, damit die Leiste unabhängig vom Remap sauber aussieht. */
+.bspx-rail-label { color: #5c5a66; }
+.bspx-rail-btn[data-tone="neutral"]:hover .bspx-rail-tile { background: #f3f4ef; }
+.bspx-rail-btn:hover .bspx-rail-label { color: #1c1b22; }
+.bspx-rail-btn .bspx-rail-tile { transition: background 0.15s ease, transform 0.15s ease; }
+.bspx-rail-btn:hover .bspx-rail-tile { transform: translateY(-1px); }
+.bspx-rail-btn:active .bspx-rail-tile { transform: translateY(0) scale(0.97); }
+.bspx-rail-slim { color: #5c5a66; transition: background 0.15s ease, color 0.15s ease; }
+.bspx-rail-slim:hover { background: #f3f4ef; color: #1c1b22; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
