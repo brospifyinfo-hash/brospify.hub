@@ -8,13 +8,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import {
-  getAllProdukte,
   findKundeByKey,
   listThemeDesigns,
   getThemeDesign,
   saveThemeDesign,
   saveBuyboxPlan,
 } from "@/lib/sheets";
+import { resolveEditorProduct } from "@/lib/custom-products";
 import { isValidDocument } from "@/lib/theme-compile";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { countNamedDesigns, maxActiveDesignsFor } from "@/lib/editor-designs";
@@ -85,18 +85,17 @@ export async function POST(req: NextRequest) {
     code = generateSyncCode();
   }
 
-  // Nur gezogene Produkte (Admins frei).
+  // Produkt auflösen wie beim Download: Katalog UND eigene Produkte
+  // (resolveEditorProduct). Vorher wurde nur der Katalog durchsucht —
+  // Speichern mit einem EIGENEN Produkt scheiterte deshalb IMMER mit
+  // „Produkt nicht gefunden".
   let themeCopy: Record<string, string> | undefined;
   try {
-    const produkt = (await getAllProdukte()).find((p) => p.id === doc.productId);
-    if (!produkt) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
-    themeCopy = produkt.extra?.themeCopy;
-    if (!session.isAdmin) {
-      const kunde = await findKundeByKey(session.lizenzschluessel || "");
-      const drawn = Array.isArray(kunde?.profile?.drawnProducts) ? kunde.profile.drawnProducts : [];
-      if (!drawn.includes(doc.productId)) {
-        return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
-      }
+    const resolved = await resolveEditorProduct(session, doc.productId);
+    if (!resolved) return NextResponse.json({ error: "Produkt nicht gefunden." }, { status: 404 });
+    themeCopy = resolved.produkt.extra?.themeCopy;
+    if (!session.isAdmin && !resolved.owned) {
+      return NextResponse.json({ error: "Dieses Produkt hast du noch nicht gezogen." }, { status: 403 });
     }
   } catch (err) {
     console.error("[theme-designs] Produktprüfung fehlgeschlagen:", err);
