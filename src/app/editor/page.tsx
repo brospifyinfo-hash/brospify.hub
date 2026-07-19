@@ -1184,9 +1184,11 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
   const runChoice = useCallback((choice: "own" | "demo" | "blank") => {
     if (choice === "own") { setStartOpen(false); setIntakeOpen(true); }
     else if (choice === "demo") { startDemo(); }
-    else if (pickerEnabled) { blankStartRef.current = true; setStartOpen(false); }
+    // „Von 0" öffnet IMMER direkt den leeren Editor — ohne Produkt-Grid.
+    // (Im Hintergrund wird ein leeres eigenes Produkt angelegt/wieder-
+    // verwendet, damit Speichern/Download/Live-Sync normal funktionieren.)
     else { startBlankDirect(); }
-  }, [startDemo, startBlankDirect, pickerEnabled]);
+  }, [startDemo, startBlankDirect]);
   const gateChoice = useCallback((choice: "own" | "demo" | "blank") => {
     // Nur bei EINDEUTIG eingeloggtem Status sofort ausführen. Solange der
     // Session-Fetch läuft (loggedIn === null) wie einen Gast behandeln und
@@ -1506,6 +1508,25 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                 <h1 className="text-[22px] sm:text-[30px] font-bold tracking-tight text-white font-sf-display">{t.themes.editorStepProduct}</h1>
                 <p className="mt-1.5 text-[12.5px] sm:text-sm text-zinc-400 max-w-md mx-auto">{t.themes.editorStepProductSub}</p>
               </header>
+
+              {/* Ohne Produkt weiter — nur beim Erst-Einstieg (Schritt 1),
+                  NICHT beim Produkt-Wechsel: dort würde der Direktstart den
+                  aktuellen Arbeitsstand durch ein leeres Dokument ersetzen. */}
+              {!doc.productId && (
+                <div className="text-center -mt-2 mb-7">
+                  <button
+                    onClick={startBlankDirect}
+                    disabled={aiBusy}
+                    className="inline-flex flex-col items-center gap-0.5 rounded-2xl border border-white/[0.14] bg-white/[0.04] px-5 py-3 hover:border-[#95BF47]/50 hover:bg-white/[0.07] transition disabled:opacity-50"
+                  >
+                    <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-white">
+                      <Sparkles className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+                      {t.themes.editorNoProductStart}
+                    </span>
+                    <span className="text-[11px] text-zinc-400">{t.themes.editorNoProductStartSub}</span>
+                  </button>
+                </div>
+              )}
 
               {products === null ? (
                 <div className="glass-strong rounded-2xl border border-white/[0.08] p-10 text-center text-sm text-zinc-400">{t.themes.loading}</div>
