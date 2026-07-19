@@ -10,6 +10,7 @@ import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIconAny } from "@/lib/theme-icon-resolver";
 import { COPY_BINDINGS } from "@/lib/theme-copy-bindings";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
+import { ensureLicenseGate, stripThemeComments } from "@/lib/theme-license";
 
 const BUYBOX_TYPES = new Set(BUYBOX_BLOCKS.map((b) => b.type));
 
@@ -40,6 +41,7 @@ export interface InjectOptions {
   buyboxOrder?: string[]; // Reihenfolge der main-product-Bausteine (Block-Typen)
   hiddenBlocks?: string[]; // ausgeblendete main-product-Bausteine (Block-Typen)
   benefitIcons?: string[]; // gewählte Icons (Bibliotheks-IDs) für die 4 Vorteile
+  licenseKey?: string; // Kunden-Lizenzschlüssel → wird in settings_data vorbefüllt
 }
 
 export function isValidHex(color: string): boolean {
@@ -72,6 +74,9 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
   // Section-Dateien beim Upload ab und die Templates kippen mit (→ 404).
   sanitizeSectionSchemas(zip);
 
+  // Lizenz-Gate frisch einsetzen (Snippet + Settings-Gruppe ganz oben).
+  ensureLicenseGate(zip);
+
   // Texte + Palette injizieren; vom Style ausgeblendete Sections disablen.
   // Pro Template defensiv — ein kaputtes/fremdes Template darf den Build nicht
   // abbrechen (Ziel: läuft auf JEDEM hochgeladenen Theme).
@@ -101,13 +106,16 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
   if (settingsEntry) {
     try {
       const data = JSON.parse(settingsEntry.getData().toString("utf8"));
-      injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font, opts.settingOverrides);
+      injectSettingsData(data, opts.colors, opts.font, opts.headingFont || opts.font, opts.settingOverrides, opts.licenseKey);
       sanitizeSettingsData(data, zip);
       zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(data, null, 2), "utf8"));
     } catch (e) {
       console.warn("[theme-inject] settings_data.json übersprungen:", e);
     }
   }
+
+  // Liquid-Kommentare aus dem Kunden-Export entfernen (Code-Schutz light).
+  stripThemeComments(zip);
 
   return zip.toBuffer();
 }
@@ -380,10 +388,17 @@ export function injectSettingsData(
   font: string,
   headingFont: string,
   settingOverrides?: Record<string, number | string>,
+  licenseKey?: string | null,
 ): void {
   const current = (data.current = (data.current || {}) as Record<string, unknown>);
   current.type_header_font = headingFont;
   current.type_body_font = font;
+  // Lizenz-Feld vorbefüllen (Site-Token des Kunden). Ohne eigenen Wert
+  // wird das Feld GELÖSCHT: ein in der Basis eingebackener Fremd-Key
+  // (z. B. aus einer Admin-Upload-Basis oder der Master-Schablone) darf
+  // NIE in ein ausgeliefertes ZIP wandern.
+  if (licenseKey && licenseKey.trim()) current.license_key = licenseKey.trim();
+  else delete current.license_key;
   // Style-Overrides (Radius/Spacing/…) nur setzen, wenn das Theme den Key kennt
   // ODER es ein bekannter Standard-Key ist — schadet sonst nicht, kann aber bei
   // exotischen Themes ignoriert werden. Wir setzen sie tolerant immer.

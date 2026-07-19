@@ -218,6 +218,13 @@ export interface KundeProfile {
   tierCanceledAt?: string;
   /** Vom Kunden bei der Kündigung gewählter Grund (aus der Liste). */
   tierCancelReason?: string;
+  /** SKU-Spaltenwert vor einem Admin-„Plan entfernen" (Audit-Spur). */
+  skuBeforeRemove?: string;
+  /** Storefront-Site-Token (SITE-…) fürs Theme-Lizenz-Gate. Steht im
+   *  öffentlichen Shop-HTML statt des echten Lizenzschlüssels — der
+   *  Schlüssel ist zugleich das Hub-Login und darf dort nie auftauchen.
+   *  Wird beim ersten Theme-Export erzeugt und wiederverwendet. */
+  licenseSiteToken?: string;
   /** ISO timestamp of the last successful subscription credit refill.
    *  Updated by applySubscriptionRefill() on every paid renewal. Used
    *  by the settings UI to display "Letzte Aufladung: X Tage her". */
@@ -1000,6 +1007,19 @@ export function generateLicenseKey(): string {
   let body = "";
   for (let i = 3; i < 9; i += 1) body += KEY_ALPHABET[bytes[i] % 32];
   return `${prefix}-${body}`;
+}
+
+/** Storefront-Site-Token (SITE-XXXXXXXXXXXXXXXXXXXX). Öffentlicher
+ *  Stellvertreter des Lizenzschlüssels fürs Theme-Gate: /api/license/
+ *  validate akzeptiert ihn, das Hub-Login NICHT. 20 Zeichen aus dem
+ *  32er-Alphabet (~100 Bit) — nicht ratbar. */
+export function generateSiteToken(): string {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const crypto = require("crypto") as typeof import("crypto");
+  const bytes = crypto.randomBytes(20);
+  let body = "";
+  for (let i = 0; i < 20; i += 1) body += KEY_ALPHABET[bytes[i] % 32];
+  return `SITE-${body}`;
 }
 
 export async function updateKundeField(
@@ -3313,18 +3333,24 @@ export async function setUserRole(
 }
 
 // Set or change a user's tier. Records `tierSince` when the tier
-// actually changes and clears any prior cancellation marker.
+// actually changes and clears any prior cancellation marker. Ein
+// Admin-Grant REAKTIVIERT: eine bereits abgelaufene Laufzeit würde den
+// frisch gesetzten Plan sofort wieder aushebeln (resolvePlan prüft
+// subscriptionEndsAt) — darum wird sie hier entfernt.
 export async function setUserTier(
   rowIndex: number,
   profile: KundeProfile,
   tier: TierKey,
 ): Promise<KundeProfile> {
   const isChange = (profile.tier || "") !== tier;
+  const endsAt = profile.subscriptionEndsAt ? Date.parse(profile.subscriptionEndsAt) : NaN;
+  const isExpired = Number.isFinite(endsAt) && endsAt < Date.now();
   const next: KundeProfile = {
     ...profile,
     tier,
-    tierSince: isChange ? new Date().toISOString() : profile.tierSince,
+    tierSince: isChange ? new Date().toISOString() : profile.tierSince || new Date().toISOString(),
     tierCanceledAt: "",
+    ...(isExpired ? { subscriptionEndsAt: undefined } : {}),
   };
   await updateKundeProfile(rowIndex, next);
   return next;
@@ -3339,6 +3365,27 @@ export async function cancelUserTier(
   const next: KundeProfile = {
     ...profile,
     tierCanceledAt: new Date().toISOString(),
+  };
+  await updateKundeProfile(rowIndex, next);
+  return next;
+}
+
+// Plan KOMPLETT entfernen („Kein Plan" im Admin). Anders als der Soft-
+// Cancel wird der Tier selbst gelöscht; die SKU-Spalte muss der Aufrufer
+// zusätzlich leeren (updateKundeField "I"), sonst greift der SKU-Fallback
+// von resolvePlan weiter. Die bisherige SKU wird fürs Audit im Profil
+// archiviert.
+export async function removeUserTier(
+  rowIndex: number,
+  profile: KundeProfile,
+  prevSku?: string,
+): Promise<KundeProfile> {
+  const next: KundeProfile = {
+    ...profile,
+    tier: undefined,
+    tierSince: undefined,
+    tierCanceledAt: new Date().toISOString(),
+    ...(prevSku ? { skuBeforeRemove: prevSku } : {}),
   };
   await updateKundeProfile(rowIndex, next);
   return next;

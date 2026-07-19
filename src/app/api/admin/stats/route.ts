@@ -13,8 +13,8 @@ import {
   type TierKey,
 } from "@/lib/sheets";
 import { CREDIT_PRICE_EUR, costForReason } from "@/lib/ai-costs";
-import { getTierConfig, isActiveSubFromKunde, resolveTier, tierFromSku } from "@/lib/tiers";
-import { TIER_KEYS } from "@/lib/tiers-shared";
+import { getTierConfig, isActiveSubFromKunde } from "@/lib/tiers";
+import { TIER_KEYS, resolvePlan } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -223,11 +223,14 @@ export async function GET() {
       if (k.profile.role === "admin") admins++;
 
       // ── Subscription / tier roll-up ──
-      // Sheets SKU column is authoritative (all aliases collapse to the
-      // one membership tier); profile.tier is only a fallback override.
-      const tier = tierFromSku(k.sku) || resolveTier(k.profile.tier);
+      // Gleiche Wahrheit wie Users-Tab und alle Gates: resolvePlan.
+      // Nur WIRKSAME Pläne zählen als aktive Abos/MRR — gekündigte,
+      // abgelaufene und blockierte nicht mehr (vorher zählte hier jedes
+      // Plan-Signal, die KPI widersprach der Users-Tabelle).
+      const plan = resolvePlan(k);
+      const tier = plan.tier;
       if (tier) subsByTier[tier]++;
-      if (isActiveSubFromKunde(k) && tier) {
+      if (tier) {
         mrrEur += tierPriceMap.get(tier) || 0;
         const since = Date.parse(k.profile.tierSince || "");
         if (Number.isFinite(since) && since >= t30d) newPaid30d++;

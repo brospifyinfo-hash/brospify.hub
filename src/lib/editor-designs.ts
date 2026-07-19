@@ -9,8 +9,7 @@ import { listThemeDesigns } from "@/lib/sheets";
 import { AUTO_LIVE_NAME, AUTO_SNAP_PREFIX } from "@/lib/design-autosave";
 import { getTierConfig } from "@/lib/tiers";
 import {
-  tierFromSku,
-  resolveTier,
+  resolveEffectiveTier,
   isActiveSubFromKunde,
   FREE_MAX_ACTIVE_DESIGNS,
   type TierKey,
@@ -34,7 +33,9 @@ export async function countNamedDesigns(user: string): Promise<number> {
  *  Tier-Config) oder Free-Default. */
 export async function maxActiveDesignsFor(kunde: KundeLike): Promise<number> {
   if (!isActiveSubFromKunde(kunde)) return FREE_MAX_ACTIVE_DESIGNS;
-  const key: TierKey | null = tierFromSku(kunde.sku) || resolveTier(kunde.profile?.tier) || null;
+  // Gleiche Prioritäten wie resolvePlan (profile.tier vor SKU) — sonst
+  // greifen Admin-Plan-Overrides im Editor-Limit nicht.
+  const key: TierKey | null = resolveEffectiveTier(kunde);
   if (!key) return FREE_MAX_ACTIVE_DESIGNS;
   const tiers = await getTierConfig();
   const max = tiers.find((t) => t.key === key)?.limits.maxActiveDesigns;

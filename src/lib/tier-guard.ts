@@ -15,7 +15,7 @@ import {
   type LimitKey,
   type TierDefinition,
   hasFeature,
-  tierFromSku,
+  resolveEffectiveTier,
 } from "./tiers-shared";
 
 interface SessionLike {
@@ -63,13 +63,12 @@ export async function getCurrentTier(session: SessionLike): Promise<TierDefiniti
   try {
     const kunde = await findKundeByKey(lk);
     if (!kunde) return null;
-    // SKU column is the source of truth. Any legacy Bronze/Silber/Gold
-    // SKU still maps to the single membership.
-    const fromSku = tierFromSku(kunde.sku);
-    if (fromSku) return findByKey(fromSku) || null;
-    const raw = kunde.profile?.tier;
-    if (!raw) return null;
-    return findByKey(raw as TierKey) || null;
+    // EIN Resolver für alle Gates (resolvePlan): profile.tier vor SKU
+    // (Admin-Overrides wirken), und Kündigung/Ablauf/Status/Block sperren
+    // hier jetzt wirklich — vorher ignorierte dieser Pfad das alles.
+    const effective = resolveEffectiveTier(kunde);
+    if (!effective) return null;
+    return findByKey(effective) || null;
   } catch {
     return null;
   }

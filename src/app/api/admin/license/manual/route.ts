@@ -20,6 +20,7 @@ import {
   upsertKundeByKey,
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
+import { resolveTier, tierFromSku } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,7 +48,10 @@ export async function POST(req: NextRequest) {
   }
 
   const email = String(body.email || "").trim();
-  const sku = String(body.sku || "").trim() || "abo";
+  // requestedSku = vom Admin BEWUSST gewählt; ohne Angabe gilt "abo" nur
+  // für NEUE Zeilen — bei Bestandskunden bleibt deren Plan erhalten.
+  const requestedSku = String(body.sku || "").trim();
+  const sku = requestedSku || "abo";
   const orderNumber = String(body.orderNumber || "").trim() || stamp();
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Gültige E-Mail erforderlich." }, { status: 400 });
@@ -63,14 +67,32 @@ export async function POST(req: NextRequest) {
   try {
     // De-Dup: existiert für die E-Mail schon eine Lizenz → reaktivieren
     // + Laufzeit setzen, gleichen Key behalten (keine zweite Zeile).
+    // Plan-Felder wie der Shopify-Webhook mitschreiben — sonst hat eine
+    // manuell ausgestellte Lizenz zwar SKU/Status, aber keinen profile.tier
+    // und taucht im Admin als „Kein Plan" auf.
+    const nowIso = new Date().toISOString();
     const existing = await findKundeByEmail(email);
     if (existing) {
+      // Bestehenden Plan NICHT stillschweigend überschreiben: nur eine
+      // explizit mitgegebene SKU ändert den Plan (z. B. editor-pro →
+      // hub-membership); sonst bleibt der eingetragene Plan bestehen.
+      const keepTier =
+        resolveTier(existing.profile.tier) || tierFromSku(existing.sku) || null;
+      const tierKey = requestedSku
+        ? tierFromSku(requestedSku) || "pro"
+        : keepTier || "pro";
       licenseKey = existing.lizenzschluessel;
       action = "renewed";
       await upsertKundeByKey({
         lizenzschluessel: licenseKey,
         status: "aktiv",
         subscriptionEndsAt: endsAt,
+        profilePatch: {
+          tier: tierKey,
+          tierSince: existing.profile.tierSince || nowIso,
+          tierCanceledAt: undefined,
+          blocked: undefined,
+        },
       });
       sheetWritten = true;
     } else {
@@ -88,6 +110,10 @@ export async function POST(req: NextRequest) {
         bestellnummer: orderNumber,
         sku,
         subscriptionEndsAt: endsAt,
+        profilePatch: {
+          tier: tierFromSku(sku) || "pro",
+          tierSince: nowIso,
+        },
       });
       sheetWritten = true;
     }

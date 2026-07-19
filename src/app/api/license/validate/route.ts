@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAllKunden } from "@/lib/sheets";
+import { CANCEL_STATUS, INACTIVE_STATUS } from "@/lib/tiers-shared";
 
 // ─── GET /api/license/validate ───────────────────────────────────
 // Public-ish licence check for the Shopify theme.
@@ -33,13 +34,18 @@ const MASTER_KEYS = ["Hat-Jonas"];
 
 // Explicit kill words. Anything else (incl. "aktiv", "active", empty)
 // counts as valid — never lock on a typo or blank cell.
-const INACTIVE = new Set([
-  "gesperrt", "blocked", "inaktiv", "inactive", "abgelaufen", "expired",
-  "deaktiviert", "disabled", "gekündigt", "gekuendigt", "cancelled",
-  "canceled", "ungültig", "ungueltig", "invalid", "false", "0", "nein", "no",
-]);
+// Geteilte Liste mit resolvePlan() (tiers-shared) — Theme-Gate und
+// Hub-Gates dürfen nie auseinanderlaufen.
+const INACTIVE = INACTIVE_STATUS;
 
 const norm = (s: string) => (s || "").normalize("NFKC").trim().toLowerCase();
+
+// Per-Lambda-Micro-Cache: jeder Storefront-Seitenaufruf ohne Client-Cache
+// triggert sonst einen kompletten Kunden-Sheet-Read (Google-Quota!). 60 s
+// Verdikt-Cache ist unkritisch: das Theme cached positive Antworten eh
+// 10 min lokal; eine Sperrung greift damit in ≤ ~1 min.
+const VERDICT_TTL_MS = 60_000;
+const verdictCache = new Map<string, { t: number; body: Record<string, unknown> }>();
 
 function json(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status, headers: CORS });
@@ -76,23 +82,54 @@ export async function GET(req: NextRequest) {
     return json({ valid: true, message: "Master-Lizenz." });
   }
 
+  const wanted = norm(key);
+  const hit = verdictCache.get(wanted);
+  if (hit && Date.now() - hit.t < VERDICT_TTL_MS) {
+    return json(hit.body);
+  }
+
   try {
     // Tolerant lookup: trim + case-fold so a stray space or a typo'd
     // case in the hand-edited sheet cannot lock a paying shop.
+    // Zwei akzeptierte Werte je Kunde: der echte Lizenzschlüssel (Alt-
+    // Installationen, Hand-Eingabe) ODER der Storefront-Site-Token
+    // (SITE-…), den der Export seit dem Lizenz-Gate v2 vorbefüllt. Der
+    // Token steht im öffentlichen Shop-HTML, taugt aber NICHT als
+    // Hub-Login — der echte Schlüssel bleibt so privat.
     const kunden = await getAllKunden();
-    const wanted = norm(key);
-    const kunde = kunden.find((k) => norm(k.lizenzschluessel) === wanted);
+    const kunde = kunden.find(
+      (k) =>
+        norm(k.lizenzschluessel) === wanted ||
+        (k.profile?.licenseSiteToken && norm(k.profile.licenseSiteToken) === wanted),
+    );
+
+    // Verdikt cachen (nur echte Verdikte — der Fail-open-Catch unten
+    // cached bewusst NICHT, sonst würde ein Sheets-Schluckauf 60 s lang
+    // als „gültig" festgeschrieben).
+    const verdict = (body: Record<string, unknown>) => {
+      if (verdictCache.size > 500) verdictCache.clear();
+      verdictCache.set(wanted, { t: Date.now(), body });
+      return json(body);
+    };
 
     if (!kunde) {
-      return json({ valid: false, message: "Lizenzschlüssel nicht gefunden." });
+      return verdict({ valid: false, message: "Lizenzschlüssel nicht gefunden." });
     }
 
-    if (INACTIVE.has(norm(kunde.status))) {
-      return json({ valid: false, message: "Lizenz ist nicht aktiv." });
+    const statusNorm = norm(kunde.status);
+    if (INACTIVE.has(statusNorm)) {
+      // Kündigungs-Status: bezahlte Periode respektieren — der Shop
+      // bleibt bis subscriptionEndsAt online („Kündigung zum Perioden-
+      // ende"). Harte Kill-Words (gesperrt/inaktiv/…) sperren sofort.
+      const graceTs = kunde.profile?.subscriptionEndsAt ? Date.parse(kunde.profile.subscriptionEndsAt) : NaN;
+      const paidUntilFuture = Number.isFinite(graceTs) && graceTs > Date.now();
+      if (!(CANCEL_STATUS.has(statusNorm) && paidUntilFuture)) {
+        return verdict({ valid: false, message: "Lizenz ist nicht aktiv." });
+      }
     }
 
     if (kunde.profile?.blocked === true) {
-      return json({ valid: false, message: "Lizenz wurde gesperrt." });
+      return verdict({ valid: false, message: "Lizenz wurde gesperrt." });
     }
 
     // Time-based subscription gate. Make stamps profile.subscriptionEndsAt
@@ -103,11 +140,11 @@ export async function GET(req: NextRequest) {
     if (endsAt) {
       const t = Date.parse(endsAt);
       if (Number.isFinite(t) && t < Date.now()) {
-        return json({ valid: false, message: "Abo ist abgelaufen." });
+        return verdict({ valid: false, message: "Abo ist abgelaufen." });
       }
     }
 
-    return json({
+    return verdict({
       valid: true,
       message: "Lizenz aktiv.",
       shop: domain || kunde.shopDomain,

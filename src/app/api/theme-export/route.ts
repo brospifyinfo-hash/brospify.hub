@@ -28,7 +28,7 @@ import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
 import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
-import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
+import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign, generateSiteToken } from "@/lib/sheets";
 import { upsertLiveDesign, snapshotDesign } from "@/lib/design-autosave";
 import { BUYBOX_CSS } from "@/lib/buybox-css";
 
@@ -249,6 +249,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Lizenz-Vorbefüllung in den Theme-Einstellungen (Gruppe „🔑 Brospify
+  // Lizenz" ganz oben): NICHT der echte Lizenzschlüssel (der ist zugleich
+  // das Hub-Login und stünde sonst im öffentlichen Shop-HTML), sondern ein
+  // eigener Site-Token je Kunde (SITE-…), den /api/license/validate genauso
+  // akzeptiert. Einmal erzeugt, wird er über alle Exporte wiederverwendet.
+  // Admin-Downloads bleiben leer — injectSettingsData löscht dann auch
+  // einen ggf. in der Basis eingebackenen Fremd-Key.
+  let licenseKey = "";
+  if (!session.isAdmin && kunde) {
+    licenseKey = (kunde.profile.licenseSiteToken || "").trim();
+    if (!licenseKey) {
+      licenseKey = generateSiteToken();
+      kunde.profile.licenseSiteToken = licenseKey;
+      try {
+        await updateKundeProfile(kunde.rowIndex, kunde.profile);
+      } catch (e) {
+        // Ohne persistierten Token nicht vorbefüllen — ein nur lokal
+        // erzeugter Token würde bei validate ins Leere laufen.
+        console.warn("[theme-export] Site-Token-Persist fehlgeschlagen — Feld bleibt leer:", e);
+        licenseKey = "";
+      }
+    }
+  }
+
   // Basis-Theme laden (hochgeladenes Theme bevorzugt) + injizieren.
   let zip: Buffer;
   try {
@@ -261,8 +285,10 @@ export async function POST(req: NextRequest) {
           themeCopy || {},
           key,
           syncCode ? { syncCode, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: await getRuntimeJs() } : null,
+          licenseKey,
         )
       : buildThemeZip(master, {
+      licenseKey,
       themeCopy: { ...themeCopy, ...headingCopy },
       colors: colors as ThemeColors,
       font,

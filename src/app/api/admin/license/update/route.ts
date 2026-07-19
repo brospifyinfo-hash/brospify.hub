@@ -74,17 +74,38 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Reaktivierungs-Falle: setzt der Admin den Status zurück auf aktiv,
+  // ohne selbst ein Datum mitzuschicken, würde ein ABGELAUFENES
+  // subscriptionEndsAt die Lizenz (Theme + resolvePlan) weiter sperren —
+  // der Admin sieht „aktiv", der Shop bleibt zu. Darum in dem Fall die
+  // abgelaufene Frist und einen Kündigungs-Marker mit aufräumen.
+  // NUR bei explizit aktiven Status-Werten — „pausiert" o. Ä. ist KEINE
+  // Reaktivierung und darf nichts aufräumen.
+  const statusNorm = typeof body.status === "string" ? body.status.normalize("NFKC").trim().toLowerCase() : "";
+  const reactivating = ["aktiv", "active"].includes(statusNorm);
+  const storedEndsAt = kunde.profile?.subscriptionEndsAt ? Date.parse(kunde.profile.subscriptionEndsAt) : NaN;
+  const autoClearExpired =
+    reactivating &&
+    endsAtIso === undefined &&
+    !clearEndsAt &&
+    Number.isFinite(storedEndsAt) &&
+    storedEndsAt < Date.now();
+  const autoClearCancel = reactivating && !!kunde.profile?.tierCanceledAt;
+
   try {
     if (typeof body.status === "string") {
       await updateKundeField(kunde.rowIndex, "C", body.status);
     }
 
-    if (endsAtIso !== undefined || clearEndsAt || typeof body.blocked === "boolean") {
+    if (endsAtIso !== undefined || clearEndsAt || typeof body.blocked === "boolean" || autoClearExpired || autoClearCancel) {
       const nextProfile = { ...kunde.profile };
       if (endsAtIso !== undefined) {
         nextProfile.subscriptionEndsAt = endsAtIso;
-      } else if (clearEndsAt) {
+      } else if (clearEndsAt || autoClearExpired) {
         delete nextProfile.subscriptionEndsAt;
+      }
+      if (autoClearCancel) {
+        nextProfile.tierCanceledAt = "";
       }
       if (typeof body.blocked === "boolean") {
         nextProfile.blocked = body.blocked;
@@ -107,8 +128,10 @@ export async function POST(req: NextRequest) {
       details: {
         rowIndex: kunde.rowIndex,
         status: body.status,
-        subscriptionEndsAt: endsAtIso ?? (clearEndsAt ? "(cleared)" : undefined),
+        subscriptionEndsAt: endsAtIso ?? (clearEndsAt || autoClearExpired ? "(cleared)" : undefined),
         blocked: body.blocked,
+        ...(autoClearExpired ? { autoClearedExpiredEndsAt: true } : {}),
+        ...(autoClearCancel ? { autoClearedTierCancel: true } : {}),
       },
     });
 

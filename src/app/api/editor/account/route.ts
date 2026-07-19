@@ -45,8 +45,10 @@ export async function GET() {
 
   const kunde = session.lizenzschluessel ? await findKundeByKey(session.lizenzschluessel) : null;
   const active = kunde ? isActiveSubFromKunde(kunde) : false;
+  // Gleiche Prioritäten wie resolvePlan (profile.tier vor SKU) — sonst
+  // zeigt das Konto-Overlay einen anderen Plan als die Gates nutzen.
   const tierKey: TierKey | null = kunde
-    ? tierFromSku(kunde.sku) || resolveTier(kunde.profile?.tier) || null
+    ? resolveTier(kunde.profile?.tier) || tierFromSku(kunde.sku) || null
     : null;
   const tierDef = tierKey ? DEFAULT_TIERS.find((t) => t.key === tierKey) : null;
   const balance = kunde ? getCreditsState(kunde.profile).balance : 0;

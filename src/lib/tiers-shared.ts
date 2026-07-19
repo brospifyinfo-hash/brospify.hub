@@ -364,18 +364,105 @@ export function isActiveSub(profile: { tier?: TierKey | string; tierSince?: stri
   return true;
 }
 
-/** SKU-aware variant: a customer counts as actively subscribed when the
- *  Kunden-sheet SKU column maps to the tier, even if the profile JSON
- *  has nothing — the admin entering an SKU is the authoritative grant.
- *  Profile-level cancellation still applies. */
-export function isActiveSubFromKunde(k: {
+// ─── EIN Plan-Resolver für alle Gates ────────────────────────────
+// Historisch gab es ZWEI widersprüchliche Leseppfade (getCurrentTier las
+// nur SKU/tier und ignorierte Kündigung/Ablauf/Status/Block; die
+// isActiveSub*-Helfer prüften anderes) — dadurch war ein gekündigter/
+// abgelaufener Kunde je nach Endpoint mal gesperrt, mal voll freigeschaltet,
+// und Admin-Änderungen am Plan wirkten scheinbar nicht. resolvePlan() ist
+// jetzt die EINZIGE Wahrheit; alle Helfer und tier-guard bauen darauf auf.
+
+/** Status-Kill-Words (Spalte C) — identisch mit /api/license/validate.
+ *  Alles andere (inkl. "aktiv", Tippfehler, leer) zählt als aktiv. */
+export const INACTIVE_STATUS = new Set([
+  "gesperrt", "blocked", "inaktiv", "inactive", "abgelaufen", "expired",
+  "deaktiviert", "disabled", "gekündigt", "gekuendigt", "cancelled",
+  "canceled", "ungültig", "ungueltig", "invalid", "false", "0", "nein", "no",
+]);
+
+export function isInactiveStatus(status: string | null | undefined): boolean {
+  return INACTIVE_STATUS.has((status || "").normalize("NFKC").trim().toLowerCase());
+}
+
+/** Teilmenge der Kill-Words, die eine KÜNDIGUNG ausdrücken. Hier gilt
+ *  die BEZAHLTE Periode weiter: solange subscriptionEndsAt in der
+ *  Zukunft liegt, bleibt der Zugang aktiv (Kündigung zum Periodenende —
+ *  das verspricht auch /api/subscription/cancel dem Kunden). Alle
+ *  übrigen Kill-Words (gesperrt/inaktiv/abgelaufen/…) sperren sofort. */
+export const CANCEL_STATUS = new Set(["gekündigt", "gekuendigt", "cancelled", "canceled"]);
+
+export interface KundeLike {
+  status?: string | null;
   sku?: string | null;
-  profile?: { tier?: TierKey | string; tierSince?: string; tierCanceledAt?: string };
-}): boolean {
-  if (k.profile?.tierCanceledAt) return false;
-  if (tierFromSku(k.sku)) return true;
-  if (k.profile) return isActiveSub(k.profile);
-  return false;
+  profile?: {
+    tier?: TierKey | string;
+    tierSince?: string;
+    tierCanceledAt?: string;
+    subscriptionEndsAt?: string;
+    blocked?: boolean;
+  } | null;
+}
+
+export type PlanState = "active" | "none" | "canceled" | "expired" | "blocked" | "inactive";
+
+export const PLAN_STATE_LABEL: Record<PlanState, string> = {
+  active: "aktiv",
+  none: "kein Plan",
+  canceled: "gekündigt",
+  expired: "Abo abgelaufen",
+  blocked: "blockiert",
+  inactive: "Lizenz inaktiv",
+};
+
+/** Effektiven Plan eines Kunden auflösen.
+ *  - baseTier: der EINGETRAGENE Plan (profile.tier vor SKU — so wirken
+ *    Admin-Overrides auch, wenn die SKU-Spalte noch einen Alt-Wert hat).
+ *  - tier: der WIRKSAME Plan (null, wenn gekündigt/abgelaufen/blockiert/
+ *    Status-Kill-Word) — das, was jedes Gate benutzen muss.
+ *  - state: warum (für Admin-UI und Fehlermeldungen).
+ *  - pendingCancel: gekündigt, aber bezahlte Periode läuft noch —
+ *    Zugang bleibt bis subscriptionEndsAt bestehen. */
+export function resolvePlan(k: KundeLike): {
+  tier: TierKey | null;
+  baseTier: TierKey | null;
+  state: PlanState;
+  pendingCancel: boolean;
+} {
+  const p = k.profile || {};
+  const baseTier = resolveTier(p.tier) || tierFromSku(k.sku);
+  if (!baseTier) return { tier: null, baseTier: null, state: "none", pendingCancel: false };
+  if (p.blocked === true) return { tier: null, baseTier, state: "blocked", pendingCancel: false };
+
+  const status = (k.status || "").normalize("NFKC").trim().toLowerCase();
+  const endsAtTs = p.subscriptionEndsAt ? Date.parse(p.subscriptionEndsAt) : NaN;
+  const paidUntilFuture = Number.isFinite(endsAtTs) && endsAtTs > Date.now();
+
+  // Harte Kill-Words (gesperrt/inaktiv/abgelaufen/…) sperren sofort.
+  if (INACTIVE_STATUS.has(status) && !CANCEL_STATUS.has(status)) {
+    return { tier: null, baseTier, state: "inactive", pendingCancel: false };
+  }
+
+  // Kündigung (Marker ODER Kündigungs-Status): bezahlte Periode läuft
+  // weiter, danach ist Schluss. Ohne hinterlegte Laufzeit sofort aus.
+  const canceled = !!p.tierCanceledAt || CANCEL_STATUS.has(status);
+  if (canceled) {
+    if (paidUntilFuture) return { tier: baseTier, baseTier, state: "active", pendingCancel: true };
+    return { tier: null, baseTier, state: "canceled", pendingCancel: false };
+  }
+
+  if (Number.isFinite(endsAtTs) && endsAtTs < Date.now()) {
+    return { tier: null, baseTier, state: "expired", pendingCancel: false };
+  }
+  return { tier: baseTier, baseTier, state: "active", pendingCancel: false };
+}
+
+export function resolveEffectiveTier(k: KundeLike): TierKey | null {
+  return resolvePlan(k).tier;
+}
+
+/** Aktives Abo (egal welcher Plan) — z. B. für die Editor-Download-Paywall. */
+export function isActiveSubFromKunde(k: KundeLike): boolean {
+  return resolveEffectiveTier(k) !== null;
 }
 
 /** HUB-Abonnent (echte Membership) — NICHT die Editor-Website-Abos.
@@ -383,12 +470,8 @@ export function isActiveSubFromKunde(k: {
  *  zwar als aktives Abo (für die Editor-Download-Paywall), schalten aber
  *  KEINE Hub-Premium-Tools frei. Hub-Tool-Endpunkte müssen deshalb diesen
  *  Check statt isActiveSubFromKunde verwenden. */
-export function isHubSubscriber(k: {
-  sku?: string | null;
-  profile?: { tier?: TierKey | string; tierSince?: string; tierCanceledAt?: string };
-}): boolean {
-  if (!isActiveSubFromKunde(k)) return false;
-  const key: TierKey | null = tierFromSku(k.sku) || resolveTier(k.profile?.tier) || null;
+export function isHubSubscriber(k: KundeLike): boolean {
+  const key = resolveEffectiveTier(k);
   return !!key && !isEditorTier(key);
 }
 

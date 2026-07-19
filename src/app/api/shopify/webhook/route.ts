@@ -42,7 +42,7 @@ import {
 } from "@/lib/sheets";
 import { sendLicenseEmail } from "@/lib/email";
 import { writeOrderMetafield } from "@/lib/shopify";
-import { tierFromSku, isEditorTier, DEFAULT_TIERS, TIER_DISPLAY_LABEL, type TierKey } from "@/lib/tiers-shared";
+import { tierFromSku, isEditorTier, CANCEL_STATUS, DEFAULT_TIERS, TIER_DISPLAY_LABEL, type TierKey } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -450,6 +450,10 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
     await updateKundeProfile(existing.rowIndex, {
       ...existing.profile,
       subscriptionEndsAt: newEndsAt,
+      // Eine bezahlte Verlängerung hebt eine schwebende Kündigung auf —
+      // sonst bliebe der Kunde trotz Zahlung nach Periodenende gesperrt
+      // (resolvePlan prüft tierCanceledAt).
+      tierCanceledAt: undefined,
       shopifyCustomerId: existing.profile.shopifyCustomerId || customerId || undefined,
     });
     // ── Monthly credits refill ──────────────────────────────────
@@ -480,8 +484,11 @@ async function handleOrderPaid(payload: ShopifyOrder, shopDomain: string): Promi
         console.error("[shopify/webhook] refill failed on renewal:", e);
       }
     }
-    // Keep the status column live — a renewal un-expires a lapsed row.
-    if (["abgelaufen", "expired"].includes((existing.status || "").trim().toLowerCase())) {
+    // Keep the status column live — a renewal un-expires a lapsed row
+    // und hebt auch einen Kündigungs-Status auf (der Kunde zahlt ja
+    // weiter). Harte Sperren (gesperrt/deaktiviert) bleiben bestehen.
+    const renewStatus = (existing.status || "").normalize("NFKC").trim().toLowerCase();
+    if (["abgelaufen", "expired"].includes(renewStatus) || CANCEL_STATUS.has(renewStatus)) {
       await updateKundeField(existing.rowIndex, "C", "aktiv");
     }
     if (orderId) {

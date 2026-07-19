@@ -31,6 +31,7 @@ import {
 } from "@/lib/theme-inject";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
 import { ensureDesignSchema, setZipFile, buildFrameSnippet, buildIconSnippet, collectDocIconIds } from "@/lib/theme-liquid-gen";
+import { ensureLicenseGate, stripThemeComments } from "@/lib/theme-license";
 
 // ─────────────────────────────────────────────────────────────────
 // Compile-Engine v2: ThemeDocument → fertiges Shopify-Theme-ZIP.
@@ -718,6 +719,7 @@ export function compileDocumentZip(
   themeCopy: ThemeCopy,
   cacheKey = "base",
   dyn: DynamicBuyboxOpts | null = null,
+  licenseKey: string | null = null,
 ): Buffer {
   const zip = new AdmZip(baseZip);
   const values = getPlaceholderValues(themeCopy);
@@ -739,6 +741,10 @@ export function compileDocumentZip(
   ensureDesignSchema(zip);
   setZipFile(zip, "snippets/bspx-section-frame.liquid", buildFrameSnippet());
   setZipFile(zip, "snippets/bspx-icon.liquid", buildIconSnippet(collectDocIconIds(doc)));
+
+  // 0c) Lizenz-Gate bei JEDEM Export frisch einsetzen (Snippet + Settings-
+  // Gruppe ganz oben + render-Aufruf) — auch auf Admin-Upload-Basen.
+  ensureLicenseGate(zip);
 
   // 1) templates/product.json — Struktur + Presets + Texte + Kaufbox.
   const productEntry = findEntry(zip, "templates/product.json");
@@ -800,13 +806,16 @@ export function compileDocumentZip(
         card_shadow_opacity: [0, 10, 20][Math.max(0, Math.min(2, d.shadow))],
         card_border_thickness: d.border,
         buttons_border_thickness: d.border,
-      });
+      }, licenseKey);
       sanitizeSettingsData(settingsData, zip);
       zip.updateFile(settingsEntry.entryName, Buffer.from(JSON.stringify(settingsData, null, 2), "utf8"));
     } catch (e) {
       console.warn("[theme-compile] settings_data.json übersprungen:", e);
     }
   }
+
+  // 4) Liquid-Kommentare aus dem Kunden-Export entfernen (Code-Schutz light).
+  stripThemeComments(zip);
 
   return zip.toBuffer();
 }

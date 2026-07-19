@@ -24,7 +24,7 @@ import {
   type Kunde,
   type KundeProfile,
 } from "@/lib/sheets";
-import { isActiveSubFromKunde } from "@/lib/tiers-shared";
+import { isActiveSubFromKunde, resolvePlan } from "@/lib/tiers-shared";
 import { EDITOR_STARTER_CREDITS } from "@/lib/credit-costs";
 
 export type EditorAuthProvider = "google" | "shopify" | "email";
@@ -36,7 +36,10 @@ export type EditorAuthProvider = "google" | "shopify" | "email";
 // (Google) oder den Lizenzschlüssel-Login des Hubs.
 export function isProtectedAccount(k: Kunde): boolean {
   if (k.profile.role === "admin") return true;
-  return isActiveSubFromKunde({ sku: k.sku, profile: k.profile });
+  // JEDES Plan-Signal schützt — auch gekündigt/abgelaufen/blockiert.
+  // Ein zahlender Kunde, dessen Abo gerade ausgelaufen ist, darf nicht
+  // plötzlich über den schwachen E-Mail-/Shopify-Weg übernehmbar sein.
+  return resolvePlan({ status: k.status, sku: k.sku, profile: k.profile }).baseTier !== null;
 }
 
 export interface EditorAccountInput {

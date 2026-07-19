@@ -24,10 +24,12 @@ import {
   type TierKey,
   type FeatureFlag,
   type LimitKey,
+  type PlanState,
   FEATURE_FLAGS,
   FEATURE_LABELS,
   LIMIT_KEYS,
   LIMIT_LABELS,
+  PLAN_STATE_LABEL,
 } from "@/lib/tiers-shared";
 import {
   type CreditConfig,
@@ -234,6 +236,9 @@ interface AdminUserRow {
   sku: string;
   role: AdminUserRole;
   tier: AdminTierKey | "";
+  effectiveTier: AdminTierKey | "";
+  planState: PlanState;
+  pendingCancel: boolean;
   tierSince: string;
   tierCanceledAt: string;
   signupAt: string;
@@ -785,8 +790,30 @@ export default function AdminPage() {
     finally { setUserBusyKey(null); }
   }
 
+  async function handleRemoveTier(key: string) {
+    if (!confirm("Plan wirklich KOMPLETT entfernen? Der User verliert sofort den Zugang zu allen Plan-Features (SKU-Spalte wird geleert).")) return;
+    setUserBusyKey(key);
+    try {
+      const res = await fetch("/api/admin/users/tier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, remove: true }),
+      });
+      if (res.ok) {
+        setSuccess("Plan entfernt.");
+        setTimeout(() => setSuccess(""), 2500);
+        await loadUsers();
+        await loadStats();
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Plan-Entfernen fehlgeschlagen.");
+      }
+    } catch { setError("Verbindungsfehler."); }
+    finally { setUserBusyKey(null); }
+  }
+
   async function handleCancelTier(key: string) {
-    if (!confirm("Tier wirklich kündigen? Der User behält den Zugang bis zum Periodenende.")) return;
+    if (!confirm("Plan wirklich kündigen? Der Zugang bleibt bis zum bezahlten Periodenende bestehen (ohne hinterlegte Laufzeit: sofort aus). Reaktivieren: im Dropdown wieder einen Plan setzen.")) return;
     setUserBusyKey(key);
     try {
       const res = await fetch("/api/admin/users/tier", {
@@ -2272,6 +2299,7 @@ export default function AdminPage() {
                   onSetRole={handleSetRole}
                   onSetTier={handleSetTier}
                   onCancelTier={handleCancelTier}
+                  onRemoveTier={handleRemoveTier}
                   onImpersonate={handleImpersonate}
                   onAdjustCredits={handleQuickAdjustCredits}
                 />
@@ -6178,7 +6206,7 @@ function GodModeKpis({ stats, onJumpTab }: {
 function UsersView({
   users, loading, search, setSearch, busyKey, tierConfig,
   autoRefresh, setAutoRefresh,
-  onRefresh, onSetRole, onSetTier, onCancelTier, onImpersonate, onAdjustCredits,
+  onRefresh, onSetRole, onSetTier, onCancelTier, onRemoveTier, onImpersonate, onAdjustCredits,
 }: {
   users: AdminUserRow[];
   loading: boolean;
@@ -6192,6 +6220,7 @@ function UsersView({
   onSetRole: (key: string, role: AdminUserRole) => void | Promise<void>;
   onSetTier: (key: string, tier: AdminTierKey) => void | Promise<void>;
   onCancelTier: (key: string) => void | Promise<void>;
+  onRemoveTier: (key: string) => void | Promise<void>;
   onImpersonate: (key: string, email: string) => void | Promise<void>;
   onAdjustCredits: (key: string) => void | Promise<void>;
 }) {
@@ -6288,7 +6317,10 @@ function UsersView({
               const busy = busyKey === u.lizenzschluessel;
               const tierLabel = u.tier ? (tierLabelMap.get(u.tier as AdminTierKey) || u.tier) : "";
               const isAdmin = u.role === "admin";
-              const subActive = !!u.tier && !u.tierCanceledAt;
+              // Wirksamer Plan laut Server-Resolver — NICHT mehr aus rohen
+              // Feldern raten (das zeigte „Pro", obwohl längst gekündigt).
+              const subActive = !!u.effectiveTier;
+              const planBroken = !!u.tier && !u.effectiveTier;
               return (
                 <div
                   key={u.lizenzschluessel}
@@ -6319,17 +6351,24 @@ function UsersView({
                     </span>
                   </div>
 
-                  {/* Tier */}
+                  {/* Tier — Badge zeigt den WIRKSAMEN Zustand */}
                   <div>
                     <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      u.tier === "pro"
+                      subActive && u.effectiveTier === "pro"
                         ? "bg-amber-500/15 border border-amber-500/30 text-amber-200"
-                        : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
+                        : subActive
+                          ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-200"
+                          : planBroken
+                            ? "bg-red-500/15 border border-red-500/30 text-red-300"
+                            : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
                     }`}>
-                      {u.tier ? tierLabel : "Kein Plan"}
+                      {subActive ? tierLabel : planBroken ? `${tierLabel} · aus` : "Kein Plan"}
                     </span>
-                    {u.tierCanceledAt && (
-                      <span className="block text-[9px] text-red-400 mt-0.5">gekündigt</span>
+                    {planBroken && (
+                      <span className="block text-[9px] text-red-400 mt-0.5">{PLAN_STATE_LABEL[u.planState]}</span>
+                    )}
+                    {subActive && u.pendingCancel && (
+                      <span className="block text-[9px] text-amber-400 mt-0.5">gekündigt · läuft aus</span>
                     )}
                   </div>
 
@@ -6349,31 +6388,45 @@ function UsersView({
                     {/* Tier dropdown */}
                     <select
                       disabled={busy || tierConfig.length === 0}
-                      value={u.tier || ""}
+                      value={u.effectiveTier || ""}
                       onChange={(e) => {
                         const v = e.target.value;
-                        if (!v) onCancelTier(u.lizenzschluessel);
+                        // „Kein Plan" = wirklich entfernen (vorher: Soft-Cancel,
+                        // der den Plan behielt — Admins hielten das für einen Bug).
+                        if (!v) onRemoveTier(u.lizenzschluessel);
                         else onSetTier(u.lizenzschluessel, v as AdminTierKey);
                       }}
                       className="bg-white/[0.04] border border-white/[0.08] rounded text-[10px] px-1.5 py-1 outline-none focus:border-white/25"
                     >
                       <option value="">Kein Plan</option>
                       {tierConfig.length === 0 ? (
-                        u.tier ? <option value={u.tier}>{u.tier}</option> : null
+                        u.effectiveTier ? <option value={u.effectiveTier}>{u.effectiveTier}</option> : null
                       ) : (
                         tierConfig.map((t) => (
                           <option key={t.key} value={t.key}>{t.label} {t.priceMonthlyEur > 0 ? `· ${t.priceMonthlyEur}€` : ""}</option>
                         ))
                       )}
                     </select>
-                    {subActive && (
+                    {subActive && !u.pendingCancel && (
                       <button
                         onClick={() => onCancelTier(u.lizenzschluessel)}
                         disabled={busy}
-                        title="Tier kündigen"
+                        title="Plan kündigen (Zugang bis zum bezahlten Periodenende, ohne Laufzeit sofort aus)"
                         className="p-1 rounded hover:bg-red-500/10 text-red-400 transition disabled:opacity-40"
                       >
                         <X className="w-3 h-3" />
+                      </button>
+                    )}
+                    {/* planBroken: Dropdown zeigt schon „Kein Plan" — ohne
+                        change-Event wäre Entfernen sonst unerreichbar. */}
+                    {!subActive && !!u.tier && (
+                      <button
+                        onClick={() => onRemoveTier(u.lizenzschluessel)}
+                        disabled={busy}
+                        title="Plan-Eintrag komplett entfernen (Tier + SKU leeren)"
+                        className="p-1 rounded hover:bg-red-500/10 text-red-400 transition disabled:opacity-40"
+                      >
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     )}
                     {/* Role toggle */}

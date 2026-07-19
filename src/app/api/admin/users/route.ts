@@ -16,6 +16,7 @@ import {
   type TierKey,
   type UserRole,
 } from "@/lib/sheets";
+import { resolvePlan, type PlanState } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +30,12 @@ interface UserRow {
   sku: string;
   role: UserRole;
   tier: TierKey | "";
+  /** WIRKSAMER Plan laut resolvePlan (leer bei gekündigt/abgelaufen/…). */
+  effectiveTier: TierKey | "";
+  /** Warum der Plan (nicht) wirkt — für ehrliche Badges im Admin. */
+  planState: PlanState;
+  /** Gekündigt, aber bezahlte Periode läuft noch (Zugang bis endsAt). */
+  pendingCancel: boolean;
   tierSince: string;
   tierCanceledAt: string;
   signupAt: string;
@@ -54,6 +61,7 @@ export async function GET(req: NextRequest) {
 function rowFor(k: Awaited<ReturnType<typeof getAllKunden>>[number]): UserRow {
   const credits = getCreditsState(k.profile);
   const log = Array.isArray(k.profile.credits?.log) ? k.profile.credits!.log! : [];
+  const plan = resolvePlan(k);
   return {
     rowIndex: k.rowIndex,
     lizenzschluessel: k.lizenzschluessel,
@@ -62,7 +70,11 @@ function rowFor(k: Awaited<ReturnType<typeof getAllKunden>>[number]): UserRow {
     email: k.kundenEmail,
     sku: k.sku,
     role: (k.profile.role as UserRole) || "user",
-    tier: (k.profile.tier as TierKey) || "",
+    // tier = eingetragener Plan (auch via SKU), effectiveTier = wirksam.
+    tier: plan.baseTier || "",
+    effectiveTier: plan.tier || "",
+    planState: plan.state,
+    pendingCancel: plan.pendingCancel,
     tierSince: k.profile.tierSince || "",
     tierCanceledAt: k.profile.tierCanceledAt || "",
     signupAt: k.profile.signupAt || "",
