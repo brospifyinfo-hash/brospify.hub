@@ -83,7 +83,11 @@ function setFile(zip: AdmZip, name: string, content: string): void {
  *  in der Editor-Vorschau mit und leerte dort die Produktseite
  *  („kein Produkt vorhanden"). Ein leeres Snippet kann nichts kaputt machen. */
 export function buildLicenseSnippet(_opts?: { hubUrl?: string; apiKey?: string }): string {
-  return `{%- comment -%} Brospify — Lizenz-Gate (wird durch Server-Rendering ersetzt). {%- endcomment -%}\n`;
+  // WICHTIG: KEIN reiner {% comment %}-Block — stripThemeComments() würde
+  // ihn entfernen, die Datei wäre leer, und Shopify meldet dann
+  // „Could not find asset snippets/license-check.liquid" auf JEDER Seite.
+  // Ein HTML-Kommentar bleibt erhalten und rendert unsichtbar.
+  return `<!-- Brospify: Lizenzprüfung läuft serverseitig (Sektionen werden nur mit gültigem Key ausgeliefert). -->\n`;
 }
 
 /** Alte Gate-Implementierung (Overlay) — vorerst deaktiviert, siehe oben.
@@ -296,10 +300,14 @@ export function stripThemeComments(zip: AdmZip): number {
     if (/\{%-?\s*raw\s*-?%\}/.test(raw)) continue;
     if (!COMMENT_RE.test(raw)) continue;
     COMMENT_RE.lastIndex = 0;
-    const next = raw
+    let next = raw
       .replace(COMMENT_RE, "")
       .replace(/\n{3,}/g, "\n\n")
       .replace(/^\s*\n/, "");
+    // NIEMALS eine leere Datei hinterlassen: Shopify behandelt ein leeres
+    // Snippet/Section-File wie „nicht vorhanden" und wirft bei jedem
+    // {% render %} einen Liquid-Fehler auf der Storefront.
+    if (!next.trim()) next = `<!-- Brospify -->\n`;
     zip.updateFile(entry.entryName, Buffer.from(next, "utf8"));
     stripped += 1;
   }
