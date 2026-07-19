@@ -72,8 +72,24 @@
       }
       slot.innerHTML = html;
       runScripts(slot);
+
+      // Kaufbox: das server-gerenderte HTML enthält den Kaufbox-Host mit
+      // einem PLATZHALTER-Produkt. Das ECHTE Shopify-Produkt kommt aus dem
+      // Theme-Liquid (#bspx-real-product) — hier reinkopieren, damit die
+      // Kaufbox-Runtime (bspx-runtime.js) mit den echten Varianten/Preisen
+      // den Kaufen-Button korrekt füllt.
+      var real = document.getElementById("bspx-real-product");
+      if (real) {
+        var hostProductScript = slot.querySelector(".bspx-host script[data-bspx-product]");
+        if (hostProductScript) hostProductScript.textContent = real.textContent;
+      }
+
       var sk = document.getElementById("bspx-sections-skeleton");
       if (sk) sk.style.display = "none";
+
+      // Kaufbox-Runtime anstoßen (sie bootet auf dieses Event neu gesetzte
+      // Hosts) — sonst füllt sie erst nach ihrem 1,5s-Fallback.
+      try { document.dispatchEvent(new Event("shopify:section:load")); } catch (e) { /* alte Browser */ }
     });
     return true;
   }

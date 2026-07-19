@@ -110,18 +110,17 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     const isMaster = MASTER_KEYS.includes(owner);
     if (!isMaster && owner !== "admin") {
       let kunde: Awaited<ReturnType<typeof findKundeByKey>> = null;
+      let lookupOk = true;
       try {
         kunde = await findKundeByKey(owner);
       } catch {
-        // Sheets-Ausfall → fail-open (Shop bleibt online).
-        kunde = null;
+        // Sheets-Ausfall → NICHT sperren (fail-open): ein Shop geht nie
+        // wegen einer Störung aus. Wir überspringen das Gate und rendern.
+        lookupOk = false;
       }
-      // kunde===null NUR bei echtem „nicht gefunden" sperren; bei Fehler
-      // oben haben wir kunde=null gesetzt — unterscheidbar über einen
-      // zweiten, toleranten Versuch wäre Overkill. Wir sperren, wenn ein
-      // Kunde existiert und inaktiv ist; existiert keiner, ebenfalls sperren
-      // (unbekannter Owner = kein gültiges Abo).
-      if (!licenseActive(kunde)) {
+      // Nur sperren, wenn der Lookup GEKLAPPT hat und die Lizenz inaktiv
+      // (oder der Owner definitiv unbekannt) ist.
+      if (lookupOk && !licenseActive(kunde)) {
         return json({ locked: true, message: "Lizenz ist nicht aktiv." }, 200, "public, s-maxage=30");
       }
     }
