@@ -770,7 +770,10 @@ export default function AdminPage() {
     finally { setUserBusyKey(null); }
   }
 
-  async function handleSetTier(key: string, tier: AdminTierKey) {
+  // Rückgabewert für den Plan-Editor: true = gespeichert, false = Fehler
+  // (Meldung steht dann zusätzlich in error) — so kann das Modal direkt
+  // am Klickort Feedback zeigen statt nur als Toast weit oben.
+  async function handleSetTier(key: string, tier: AdminTierKey): Promise<boolean> {
     setUserBusyKey(key);
     try {
       const res = await fetch("/api/admin/users/tier", {
@@ -779,20 +782,20 @@ export default function AdminPage() {
         body: JSON.stringify({ key, tier }),
       });
       if (res.ok) {
-        setSuccess(`Tier auf ${tier} gesetzt.`);
+        setSuccess(`Plan gesetzt.`);
         setTimeout(() => setSuccess(""), 2500);
         await loadUsers();
         await loadStats();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Tier-Update fehlgeschlagen.");
+        return true;
       }
-    } catch { setError("Verbindungsfehler."); }
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Plan-Update fehlgeschlagen.");
+      return false;
+    } catch { setError("Verbindungsfehler."); return false; }
     finally { setUserBusyKey(null); }
   }
 
-  async function handleRemoveTier(key: string) {
-    if (!confirm("Plan wirklich KOMPLETT entfernen? Der User verliert sofort den Zugang zu allen Plan-Features (SKU-Spalte wird geleert).")) return;
+  async function handleRemoveTier(key: string): Promise<boolean> {
     setUserBusyKey(key);
     try {
       const res = await fetch("/api/admin/users/tier", {
@@ -805,16 +808,16 @@ export default function AdminPage() {
         setTimeout(() => setSuccess(""), 2500);
         await loadUsers();
         await loadStats();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Plan-Entfernen fehlgeschlagen.");
+        return true;
       }
-    } catch { setError("Verbindungsfehler."); }
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Plan-Entfernen fehlgeschlagen.");
+      return false;
+    } catch { setError("Verbindungsfehler."); return false; }
     finally { setUserBusyKey(null); }
   }
 
-  async function handleCancelTier(key: string) {
-    if (!confirm("Plan wirklich kündigen? Der Zugang bleibt bis zum bezahlten Periodenende bestehen (ohne hinterlegte Laufzeit: sofort aus). Reaktivieren: im Dropdown wieder einen Plan setzen.")) return;
+  async function handleCancelTier(key: string): Promise<boolean> {
     setUserBusyKey(key);
     try {
       const res = await fetch("/api/admin/users/tier", {
@@ -823,15 +826,16 @@ export default function AdminPage() {
         body: JSON.stringify({ key, cancel: true }),
       });
       if (res.ok) {
-        setSuccess("Tier gekündigt.");
+        setSuccess("Plan gekündigt.");
         setTimeout(() => setSuccess(""), 2500);
         await loadUsers();
         await loadStats();
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setError(data.error || "Kündigung fehlgeschlagen.");
+        return true;
       }
-    } catch { setError("Verbindungsfehler."); }
+      const data = await res.json().catch(() => ({}));
+      setError(data.error || "Kündigung fehlgeschlagen.");
+      return false;
+    } catch { setError("Verbindungsfehler."); return false; }
     finally { setUserBusyKey(null); }
   }
 
@@ -6221,9 +6225,9 @@ function UsersView({
   setAutoRefresh: (v: boolean) => void;
   onRefresh: () => void;
   onSetRole: (key: string, role: AdminUserRole) => void | Promise<void>;
-  onSetTier: (key: string, tier: AdminTierKey) => void | Promise<void>;
-  onCancelTier: (key: string) => void | Promise<void>;
-  onRemoveTier: (key: string) => void | Promise<void>;
+  onSetTier: (key: string, tier: AdminTierKey) => Promise<boolean>;
+  onCancelTier: (key: string) => Promise<boolean>;
+  onRemoveTier: (key: string) => Promise<boolean>;
   onImpersonate: (key: string, email: string) => void | Promise<void>;
   onAdjustCredits: (key: string) => void | Promise<void>;
 }) {
@@ -6238,11 +6242,46 @@ function UsersView({
     );
   });
 
-  // Fallback auf die eingebauten Standard-Pläne: Das Dropdown darf NIE
+  // Fallback auf die eingebauten Standard-Pläne: Die Plan-Auswahl darf NIE
   // tot sein, nur weil /api/admin/tiers (noch) nicht geladen/erreichbar
   // ist — sonst „passiert beim Klick exakt nichts".
   const tierOptions: AdminTier[] = tierConfig.length > 0 ? tierConfig : (DEFAULT_TIERS as AdminTier[]);
   const tierLabelMap = new Map(tierOptions.map((t) => [t.key, t.label]));
+
+  // ── Plan-Editor (Modal): EINE klare Stelle für alles rund um den Plan.
+  // Badge UND „Plan"-Button öffnen ihn; Speichern/Kündigen/Entfernen mit
+  // Rückmeldung direkt im Fenster (kein verstecktes Toast, kein confirm()).
+  const [planEditorKey, setPlanEditorKey] = useState<string | null>(null);
+  const [planMsg, setPlanMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [planConfirm, setPlanConfirm] = useState<"" | "remove" | "cancel">("");
+  const planUser = planEditorKey ? users.find((x) => x.lizenzschluessel === planEditorKey) || null : null;
+  const planBusy = !!planUser && busyKey === planUser.lizenzschluessel;
+  const openPlanEditor = (key: string) => { setPlanEditorKey(key); setPlanMsg(null); setPlanConfirm(""); };
+  const closePlanEditor = () => { setPlanEditorKey(null); setPlanMsg(null); setPlanConfirm(""); };
+  const doSetPlan = async (tier: AdminTierKey) => {
+    if (!planUser || planBusy) return;
+    setPlanMsg(null); setPlanConfirm("");
+    const ok = await onSetTier(planUser.lizenzschluessel, tier);
+    setPlanMsg(ok
+      ? { ok: true, text: `Gespeichert — ${tierLabelMap.get(tier) || tier} ist jetzt aktiv.` }
+      : { ok: false, text: "Speichern fehlgeschlagen — bitte gleich nochmal versuchen." });
+  };
+  const doRemovePlan = async () => {
+    if (!planUser || planBusy) return;
+    setPlanMsg(null); setPlanConfirm("");
+    const ok = await onRemoveTier(planUser.lizenzschluessel);
+    setPlanMsg(ok
+      ? { ok: true, text: "Plan komplett entfernt — der User hat jetzt keinen Plan mehr." }
+      : { ok: false, text: "Entfernen fehlgeschlagen — bitte gleich nochmal versuchen." });
+  };
+  const doCancelPlan = async () => {
+    if (!planUser || planBusy) return;
+    setPlanMsg(null); setPlanConfirm("");
+    const ok = await onCancelTier(planUser.lizenzschluessel);
+    setPlanMsg(ok
+      ? { ok: true, text: "Gekündigt — der Zugang läuft zum bezahlten Periodenende aus (ohne Laufzeit: sofort)." }
+      : { ok: false, text: "Kündigung fehlgeschlagen — bitte gleich nochmal versuchen." });
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
@@ -6358,19 +6397,27 @@ function UsersView({
                     </span>
                   </div>
 
-                  {/* Tier — Badge zeigt den WIRKSAMEN Zustand */}
+                  {/* Tier — Badge zeigt den WIRKSAMEN Zustand und öffnet
+                      per Klick den Plan-Editor (die Stelle, auf die jeder
+                      instinktiv klickt). */}
                   <div>
-                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                      subActive && u.effectiveTier === "pro"
-                        ? "bg-amber-500/15 border border-amber-500/30 text-amber-200"
-                        : subActive
-                          ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-200"
-                          : planBroken
-                            ? "bg-red-500/15 border border-red-500/30 text-red-300"
-                            : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
-                    }`}>
+                    <button
+                      onClick={() => openPlanEditor(u.lizenzschluessel)}
+                      disabled={busy}
+                      title="Plan verwalten"
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer transition hover:ring-1 hover:ring-white/30 disabled:opacity-40 ${
+                        subActive && u.effectiveTier === "pro"
+                          ? "bg-amber-500/15 border border-amber-500/30 text-amber-200"
+                          : subActive
+                            ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-200"
+                            : planBroken
+                              ? "bg-red-500/15 border border-red-500/30 text-red-300"
+                              : "bg-white/[0.04] border border-white/[0.08] text-zinc-400"
+                      }`}
+                    >
                       {subActive ? tierLabel : planBroken ? `${tierLabel} · aus` : "Kein Plan"}
-                    </span>
+                      <ChevronDown className="w-2.5 h-2.5 opacity-70" />
+                    </button>
                     {planBroken && (
                       <span className="block text-[9px] text-red-400 mt-0.5">{PLAN_STATE_LABEL[u.planState]}</span>
                     )}
@@ -6393,45 +6440,17 @@ function UsersView({
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-1 lg:justify-end">
                     {/* Tier dropdown */}
-                    <select
+                    {/* EIN klarer Weg für alles rund um den Plan: Button
+                        öffnet den Plan-Editor (Setzen/Kündigen/Entfernen
+                        mit Bestätigung + Feedback direkt im Fenster). */}
+                    <button
+                      onClick={() => openPlanEditor(u.lizenzschluessel)}
                       disabled={busy}
-                      value={u.effectiveTier || ""}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        // „Kein Plan" = wirklich entfernen (vorher: Soft-Cancel,
-                        // der den Plan behielt — Admins hielten das für einen Bug).
-                        if (!v) onRemoveTier(u.lizenzschluessel);
-                        else onSetTier(u.lizenzschluessel, v as AdminTierKey);
-                      }}
-                      className="bg-white/[0.04] border border-white/[0.08] rounded text-[10px] px-1.5 py-1 outline-none focus:border-white/25"
+                      className="flex items-center gap-1 bg-white/[0.06] border border-white/[0.12] rounded-md text-[10px] font-semibold px-2 py-1 hover:bg-white/[0.12] hover:border-white/30 transition disabled:opacity-40"
                     >
-                      <option value="">Kein Plan</option>
-                      {tierOptions.map((t) => (
-                        <option key={t.key} value={t.key}>{t.label} {t.priceMonthlyEur > 0 ? `· ${t.priceMonthlyEur}€` : ""}</option>
-                      ))}
-                    </select>
-                    {subActive && !u.pendingCancel && (
-                      <button
-                        onClick={() => onCancelTier(u.lizenzschluessel)}
-                        disabled={busy}
-                        title="Plan kündigen (Zugang bis zum bezahlten Periodenende, ohne Laufzeit sofort aus)"
-                        className="p-1 rounded hover:bg-red-500/10 text-red-400 transition disabled:opacity-40"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                    {/* planBroken: Dropdown zeigt schon „Kein Plan" — ohne
-                        change-Event wäre Entfernen sonst unerreichbar. */}
-                    {!subActive && !!u.tier && (
-                      <button
-                        onClick={() => onRemoveTier(u.lizenzschluessel)}
-                        disabled={busy}
-                        title="Plan-Eintrag komplett entfernen (Tier + SKU leeren)"
-                        className="p-1 rounded hover:bg-red-500/10 text-red-400 transition disabled:opacity-40"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
+                      Plan
+                      <ChevronDown className="w-3 h-3 opacity-70" />
+                    </button>
                     {/* Role toggle */}
                     <button
                       onClick={() => onSetRole(u.lizenzschluessel, isAdmin ? "user" : "admin")}
@@ -6471,6 +6490,116 @@ function UsersView({
           </div>
         )}
       </div>
+
+      {/* ── Plan-Editor ── */}
+      {planUser && (
+        <div className="fixed inset-0 z-[300] flex items-end sm:items-center justify-center p-3" onClick={closePlanEditor}>
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="relative w-full max-w-md max-h-[85vh] overflow-y-auto rounded-2xl border border-white/12 bg-[#101014] p-4 shadow-2xl"
+          >
+            {/* Kopf */}
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div className="min-w-0">
+                <div className="text-sm font-bold text-white">Plan verwalten</div>
+                <div className="text-[11px] text-zinc-400 truncate">{planUser.email || "—"}</div>
+                <div className="text-[10px] text-zinc-500 font-mono truncate">{planUser.lizenzschluessel}</div>
+              </div>
+              <button onClick={closePlanEditor} className="p-1.5 rounded-lg hover:bg-white/[0.08] text-zinc-400 shrink-0">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Aktueller Zustand in einem Satz */}
+            <div className={`rounded-lg border px-3 py-2 text-[11px] mb-3 ${
+              planUser.effectiveTier
+                ? "border-emerald-500/30 bg-emerald-500/[0.06] text-emerald-200"
+                : planUser.tier
+                  ? "border-red-500/30 bg-red-500/[0.06] text-red-300"
+                  : "border-white/[0.08] bg-white/[0.03] text-zinc-400"
+            }`}>
+              {planUser.effectiveTier
+                ? <>Aktiv: <b>{tierLabelMap.get(planUser.effectiveTier) || planUser.effectiveTier}</b>{planUser.pendingCancel ? " — gekündigt, läuft zum Periodenende aus" : ""}</>
+                : planUser.tier
+                  ? <>Plan <b>{tierLabelMap.get(planUser.tier) || planUser.tier}</b> ist AUS: {PLAN_STATE_LABEL[planUser.planState]}. Einen Plan anklicken reaktiviert das Konto komplett.</>
+                  : <>Kein Plan aktiv. Einfach unten einen Plan anklicken.</>}
+            </div>
+
+            {/* Plan-Karten — 1 Klick = Plan gesetzt */}
+            <div className="grid gap-1.5">
+              {tierOptions.map((t) => {
+                const isCurrent = planUser.effectiveTier === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => doSetPlan(t.key)}
+                    disabled={planBusy}
+                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition disabled:opacity-50 ${
+                      isCurrent
+                        ? "border-emerald-500/50 bg-emerald-500/[0.08]"
+                        : "border-white/[0.1] bg-white/[0.03] hover:border-white/30 hover:bg-white/[0.06]"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-bold text-white">
+                        {t.label}
+                        {t.priceMonthlyEur > 0 && <span className="text-zinc-400 font-normal"> · {t.priceMonthlyEur}€/Monat</span>}
+                      </div>
+                      {t.tagline && <div className="text-[10px] text-zinc-500 truncate">{t.tagline}</div>}
+                    </div>
+                    {isCurrent && <Check className="w-4 h-4 text-emerald-300 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Kündigen / Entfernen — mit Zwei-Klick-Bestätigung im Fenster */}
+            {(planUser.effectiveTier || planUser.tier) && (
+              <div className="grid grid-cols-2 gap-1.5 mt-3">
+                {planUser.effectiveTier && !planUser.pendingCancel && (
+                  <button
+                    onClick={() => (planConfirm === "cancel" ? doCancelPlan() : setPlanConfirm("cancel"))}
+                    disabled={planBusy}
+                    className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition disabled:opacity-50 ${
+                      planConfirm === "cancel"
+                        ? "border-amber-400 bg-amber-500/20 text-amber-100"
+                        : "border-amber-500/30 bg-amber-500/[0.06] text-amber-300 hover:bg-amber-500/[0.12]"
+                    }`}
+                  >
+                    {planConfirm === "cancel" ? "Sicher? Nochmal klicken" : "Kündigen (Periodenende)"}
+                  </button>
+                )}
+                <button
+                  onClick={() => (planConfirm === "remove" ? doRemovePlan() : setPlanConfirm("remove"))}
+                  disabled={planBusy}
+                  className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition disabled:opacity-50 ${
+                    planConfirm === "remove"
+                      ? "border-red-400 bg-red-500/20 text-red-100"
+                      : "border-red-500/30 bg-red-500/[0.06] text-red-300 hover:bg-red-500/[0.12]"
+                  } ${planUser.effectiveTier && !planUser.pendingCancel ? "" : "col-span-2"}`}
+                >
+                  {planConfirm === "remove" ? "Sicher? Nochmal klicken" : "Plan komplett entfernen"}
+                </button>
+              </div>
+            )}
+
+            {/* Feedback direkt hier — kein Suchen nach Toasts */}
+            <div className="mt-3 min-h-[20px]">
+              {planBusy ? (
+                <div className="flex items-center gap-2 text-[11px] text-zinc-300">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Speichere…
+                </div>
+              ) : planMsg ? (
+                <div className={`flex items-center gap-2 text-[11px] font-semibold ${planMsg.ok ? "text-emerald-300" : "text-red-300"}`}>
+                  {planMsg.ok ? <Check className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                  {planMsg.text}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }
