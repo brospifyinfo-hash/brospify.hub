@@ -73,8 +73,22 @@ function setFile(zip: AdmZip, name: string, content: string): void {
   else zip.addFile(name, buf);
 }
 
-/** Das komplette snippets/license-check.liquid (Gate v2). */
-export function buildLicenseSnippet(opts?: { hubUrl?: string; apiKey?: string }): string {
+/** snippets/license-check.liquid.
+ *
+ *  STOPGAP (19.07.2026): Das Overlay-Gate (Sektionen per Skript ausblenden)
+ *  wird durch das server-gerenderte Sektions-Modell ersetzt (Sektionen
+ *  kommen wie die Kaufbox nur mit gültigem API-Key vom Hub; ohne Key gibt
+ *  es kein Section-HTML — der Code liegt dann gar nicht mehr im Theme).
+ *  Bis das steht, ist das alte Overlay-Gate INERT geschaltet: es lief auch
+ *  in der Editor-Vorschau mit und leerte dort die Produktseite
+ *  („kein Produkt vorhanden"). Ein leeres Snippet kann nichts kaputt machen. */
+export function buildLicenseSnippet(_opts?: { hubUrl?: string; apiKey?: string }): string {
+  return `{%- comment -%} Brospify — Lizenz-Gate (wird durch Server-Rendering ersetzt). {%- endcomment -%}\n`;
+}
+
+/** Alte Gate-Implementierung (Overlay) — vorerst deaktiviert, siehe oben.
+ *  Bleibt als Referenz erhalten, bis das Server-Render-Modell live ist. */
+function buildLegacyOverlaySnippet(opts?: { hubUrl?: string; apiKey?: string }): string {
   const cfg = licenseGateConfig();
   const hubUrl = (opts?.hubUrl || cfg.hubUrl).replace(/\/+$/, "");
   const apiKey = opts?.apiKey || cfg.apiKey;
