@@ -425,6 +425,126 @@ export interface RenderPageOpts {
   settingOverrides?: Record<string, unknown>; // globale settings-Overrides (Style)
 }
 
+// ─── Server-Render fürs Storefront-Sektions-Modell ─────────────────
+// Rendert die Sektionen EINER Vorlage (product/index) aus einem bereits
+// KOMPILIERTEN Theme-Zip (compileDocumentZip → Doc ist eingebacken) zu
+// reinem Body-HTML + CSS. Die Storefront-Runtime injiziert das; der
+// Sektions-Code liegt so NIE im Kunden-Theme, sondern nur hier auf dem
+// Server. Anders als renderThemePage wird KEIN theme.liquid-Rahmen
+// (Header/Footer) mitgerendert — nur der Inhalt für #MainContent.
+export interface SectionsPayload {
+  product: string; // Body-HTML der Produktseiten-Sektionen
+  index: string; // Body-HTML der Startseiten-Sektionen
+  css: string; // Theme-CSS (base.css + Farbschema-Variablen)
+  fontHref: string; // Google-Fonts-Stylesheet-URL für die Schriften
+}
+
+async function renderTemplateBody(
+  env: ThemeEnv,
+  template: "index.json" | "product.json",
+  ctxBase: Record<string, unknown>,
+  values: ThemeCopy,
+  palette: ColorPalette,
+  product: RenderProduct,
+): Promise<string> {
+  const tplJson = JSON.parse(readEntry(env.zip, `templates/${template}`) || "{}");
+  const order: string[] = Array.isArray(tplJson.order) ? tplJson.order : [];
+  const prodImgs = product.images.length ? product.images : [PLACEHOLDER_IMG];
+  let imgIdx = 0;
+  const pickImg = () => prodImgs[imgIdx++ % prodImgs.length];
+  const idxRef = { n: 0 };
+  let body = "";
+  for (const id of order) {
+    const sec = tplJson.sections?.[id];
+    if (!sec || sec.disabled === true) continue;
+    const liquidSrc = readEntry(env.zip, `sections/${sec.type}.liquid`);
+    if (!liquidSrc || !liquidSrc.trim()) continue;
+    /* eslint-disable @typescript-eslint/no-explicit-any */
+    const secClone: any = JSON.parse(JSON.stringify(sec));
+    transformDeep(secClone, values, palette);
+    const schema = getSchema(sec.type, liquidSrc);
+    if (schema) {
+      if (!secClone.settings) secClone.settings = {};
+      fillSettings(secClone.settings, schema.settings, pickImg, env.translate, idxRef);
+      if (secClone.blocks) {
+        for (const bid of Object.keys(secClone.blocks)) {
+          const bl = secClone.blocks[bid];
+          if (!bl) continue;
+          if (!bl.settings) bl.settings = {};
+          const bdef = (schema.blocks || []).find((x: any) => x.type === bl.type);
+          if (bdef) fillSettings(bl.settings, bdef.settings || [], pickImg, env.translate, idxRef);
+        }
+      }
+    }
+    /* eslint-enable @typescript-eslint/no-explicit-any */
+    try {
+      const html = await env.engine.parseAndRender(liquidSrc, { ...ctxBase, section: buildSectionObj(id, secClone) });
+      body += `<div class="shopify-section">${html}</div>\n`;
+    } catch {
+      /* einzelne Section überspringen statt alles zu brechen */
+    }
+  }
+  return body.replace(/\[\[[A-Z0-9_]+\]\]/g, "");
+}
+
+export async function renderSectionsPayload(
+  compiledZip: Buffer,
+  opts: { themeCopy: ThemeCopy; product: RenderProduct; palette: ColorPalette; font: string; headingFont?: string; settingOverrides?: Record<string, unknown> },
+): Promise<SectionsPayload> {
+  // Frisches Env (KEIN gemeinsamer Cache — der kompilierte Zip ist pro
+  // Doc verschieden; sonst würde ein Shop den Stand eines anderen sehen).
+  const env = buildEnv(compiledZip);
+  env.productImagesRef.current = opts.product.images;
+
+  const bodyMeta = RENDER_FONTS[opts.font] || RENDER_FONTS.work_sans_n4;
+  const headMeta = RENDER_FONTS[opts.headingFont || ""] || bodyMeta;
+  const fontParam = headMeta.param === bodyMeta.param ? bodyMeta.param : `${headMeta.param}&family=${bodyMeta.param}`;
+  const settings = buildSettings(env.settingsData, opts.palette, bodyMeta.family, headMeta.family);
+  if (opts.settingOverrides) Object.assign(settings, opts.settingOverrides);
+  const product = buildProductObj(opts.product);
+
+  const values: ThemeCopy = getPlaceholderValues(opts.themeCopy);
+  const imgs = opts.product.images;
+  if (imgs.length) for (let i = 1; i <= 7; i++) values[`IMAGE_URL_${i}`] = imgs[(i - 1) % imgs.length];
+
+  const mkCtx = (template: "index.json" | "product.json"): Record<string, unknown> => ({
+    settings,
+    product,
+    shop: { name: "Dein Shop", url: "", permanent_domain: "", currency: "EUR", money_format: "{{amount}} €", enabled_payment_types: [] },
+    routes: { root_url: "/", cart_url: "/cart", account_url: "/account", search_url: "/search", all_products_collection_url: "/collections/all", predictive_search_url: "/search/suggest", cart_add_url: "/cart/add" },
+    request: { design_mode: false, visual_preview_mode: false, page_type: template === "product.json" ? "product" : "index", locale: { iso_code: "de" } },
+    cart: { item_count: 0, items: [], total_price: 0 },
+    collection: { products: [], all_products_count: 0, title: "Kollektion" },
+    collections: {},
+    recommendations: { products: [], performed: false },
+    predictive_search: { performed: false, resources: {} },
+    template: { name: template.replace(".json", "") },
+    canonical_url: "/",
+    blank: false,
+    content_for_header: "",
+    localization: { available_countries: [], available_languages: [], country: {}, language: {} },
+  });
+
+  const productBody = await renderTemplateBody(env, "product.json", mkCtx("product.json"), values, opts.palette, opts.product);
+  const indexBody = await renderTemplateBody(env, "index.json", mkCtx("index.json"), values, opts.palette, opts.product);
+
+  // CSS: base.css + Farbschema-Variablen (Style-Block aus theme.liquid).
+  let styleCss = "";
+  try {
+    styleCss = String(await env.engine.parseAndRender(env.styleBlock, mkCtx("index.json")));
+  } catch {
+    /* Style-Block optional */
+  }
+  const css = `${styleCss}\n<style>${env.baseCss}</style>`;
+
+  return {
+    product: productBody,
+    index: indexBody,
+    css,
+    fontHref: `https://fonts.googleapis.com/css2?family=${fontParam}&display=swap`,
+  };
+}
+
 export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts, cacheKey = "bundled"): Promise<string> {
   const env = getEnv(masterZip, cacheKey);
   env.productImagesRef.current = opts.product.images;
