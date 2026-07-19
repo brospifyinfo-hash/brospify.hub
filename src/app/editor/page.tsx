@@ -37,6 +37,7 @@ import ProductIntakeOverlay, { type IntakeResult } from "@/components/theme-edit
 import AppRail from "@/components/theme-editor/AppRail";
 import { SaveProjectDialog, ConfirmDialog } from "@/components/theme-editor/ProjectDialogs";
 import ShortcutsOverlay from "@/components/theme-editor/ShortcutsOverlay";
+import ShopCheckOverlay from "@/components/theme-editor/ShopCheckOverlay";
 import GenerationTheater, { type GenesisJob } from "@/components/theme-editor/GenerationTheater";
 import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import { blankDocument, buildRevealTimeline, type RevealLabels } from "@/lib/theme-genesis";
@@ -340,6 +341,22 @@ export default function ThemeEditorPage() {
   const [saveDialog, setSaveDialog] = useState<null | "saveAs" | "rename">(null);
   const [confirmNewOpen, setConfirmNewOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [shopCheckOpen, setShopCheckOpen] = useState(false);
+  /** Fokus-Modus: Aufbau + Einstellungen ausgeblendet, Vorschau maximal. */
+  const [focusMode, setFocusMode] = useState(false);
+  /** Linke Programm-Leiste eingeklappt (bleibt über Besuche erhalten).
+   *  Lazy-Init ist SSR-sicher: die Rail rendert erst nach Produkt-Wahl,
+   *  also nie im Server-HTML — kein Hydration-Mismatch. */
+  const [railCollapsed, setRailCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try { return localStorage.getItem("bspx-rail-collapsed") === "1"; } catch { return false; }
+  });
+  const toggleRail = useCallback(() => {
+    setRailCollapsed((v) => {
+      try { localStorage.setItem("bspx-rail-collapsed", v ? "0" : "1"); } catch { /* Speichern optional */ }
+      return !v;
+    });
+  }, []);
   const [savingProject, setSavingProject] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [savedAtLabel, setSavedAtLabel] = useState<string | null>(null);
@@ -426,6 +443,61 @@ export default function ThemeEditorPage() {
     else { setSaveError(""); setSaveDialog("saveAs"); }
   }, [doc.productId, activeDesign, saveProject, savingProject]);
 
+  /** Projekt als Datei sichern (Backup) — rein clientseitig, kostenlos. */
+  const exportProject = useCallback(() => {
+    if (!doc.productId) return;
+    const payload = {
+      app: "brospify-editor",
+      kind: "project",
+      version: 1,
+      name: activeDesign?.name || t.themes.editorProjUntitled,
+      exportedAt: new Date().toISOString(),
+      document: doc,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const base = (activeDesign?.name || "projekt").replace(/[^\w\säöüÄÖÜß-]+/g, "").trim().replace(/\s+/g, "-") || "projekt";
+    a.download = `${base}.brospify.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc, activeDesign, t.themes.editorProjUntitled]);
+
+  /** Projekt-Datei laden — validiert die Struktur und bindet das Dokument
+   *  ans AKTUELLE Produkt (Bilder/Titel kommen vom Produkt). Läuft über
+   *  „replace", damit Strg+Z den Import rückgängig machen kann. */
+  const importProjectFile = useCallback((file: File) => {
+    if (aiBusyRef.current || !doc.productId) return;
+    file.text()
+      .then((txt) => {
+        let parsed: unknown;
+        try { parsed = JSON.parse(txt); } catch {
+          setMsg({ kind: "err", text: t.themes.editorProjImportErr });
+          return;
+        }
+        const obj = parsed as { app?: string; document?: ThemeDocument };
+        const docIn = obj?.document;
+        if (
+          obj?.app !== "brospify-editor" || !docIn ||
+          !Array.isArray(docIn.sections) ||
+          typeof docIn.buybox !== "object" || docIn.buybox === null ||
+          typeof docIn.global !== "object" || docIn.global === null
+        ) {
+          setMsg({ kind: "err", text: t.themes.editorProjImportErr });
+          return;
+        }
+        dispatch({ type: "replace", doc: { ...docIn, productId: doc.productId } });
+        setSelected(null);
+        setMsg({ kind: "ok", text: t.themes.editorProjImportOk });
+      })
+      .catch(() => setMsg({ kind: "err", text: t.themes.editorProjImportErr }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.productId, t.themes.editorProjImportErr, t.themes.editorProjImportOk]);
+
   /** „Neues Projekt": Editor komplett auf Anfang (leere History) + Start-Fenster. */
   const doNewProject = useCallback(() => {
     // Laufende Save-/Preview-Fetches gehören zum ALTEN Projekt — invalidieren.
@@ -445,6 +517,8 @@ export default function ThemeEditorPage() {
     setAiFocus([]);
     setFocusPick(false);
     setBuyboxOpen(false);
+    setFocusMode(false);
+    setShopCheckOpen(false);
     setPage("product");
     setPickerOpen(false);
     setMsg(null);
@@ -469,16 +543,16 @@ export default function ThemeEditorPage() {
       const typing = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el?.isContentEditable;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        if (!fullPreviewOpen && saveDialog === null && !confirmNewOpen && !shortcutsOpen) handleSaveClick();
+        if (!fullPreviewOpen && saveDialog === null && !confirmNewOpen && !shortcutsOpen && !shopCheckOpen) handleSaveClick();
         return;
       }
-      if (e.key === "?" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && saveDialog === null && !confirmNewOpen) {
+      if (e.key === "?" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && saveDialog === null && !confirmNewOpen && !shopCheckOpen) {
         setShortcutsOpen((v) => !v);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [handleSaveClick, fullPreviewOpen, saveDialog, confirmNewOpen, shortcutsOpen]);
+  }, [handleSaveClick, fullPreviewOpen, saveDialog, confirmNewOpen, shortcutsOpen, shopCheckOpen]);
 
   // Echter ungesicherter Arbeitsstand: Browser-Warnung beim Verlassen/Schließen.
   useEffect(() => {
@@ -701,9 +775,9 @@ export default function ThemeEditorPage() {
   // Ctrl+Z das Dokument dort unsichtbar mutieren.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      // Bei offenem Modal (Speichern/Bestätigung/Kürzel) kein verstecktes
-      // Dokument-Undo hinter dem Dialog.
-      if (fullPreviewOpen || aiBusy || saveDialog !== null || confirmNewOpen || shortcutsOpen) return;
+      // Bei offenem Modal (Speichern/Bestätigung/Kürzel/Shop-Check) kein
+      // verstecktes Dokument-Undo hinter dem Dialog.
+      if (fullPreviewOpen || aiBusy || saveDialog !== null || confirmNewOpen || shortcutsOpen || shopCheckOpen) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const el = e.target as HTMLElement | null;
       const tag = el?.tagName;
@@ -720,7 +794,7 @@ export default function ThemeEditorPage() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [fullPreviewOpen, aiBusy, saveDialog, confirmNewOpen, shortcutsOpen]);
+  }, [fullPreviewOpen, aiBusy, saveDialog, confirmNewOpen, shortcutsOpen, shopCheckOpen]);
 
   // Sanfter Einstieg des Editor-Shells (GSAP statt Layout-Sprung).
   useEffect(() => {
@@ -1612,33 +1686,47 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                   dirty={dirty}
                   busy={aiBusy}
                   hasProject={!!doc.productId}
+                  saving={savingProject}
+                  collapsed={railCollapsed}
+                  focusMode={focusMode}
                   onNew={startNewProject}
                   onOpen={() => setDesignsOpen(true)}
                   onSave={handleSaveClick}
                   onSaveAs={() => { setSaveError(""); setSaveDialog("saveAs"); }}
-                  onStyle={() => setStyleOpen(true)}
-                  onRandomize={randomize}
-                  onFullPreview={() => setFullPreviewOpen(true)}
-                  onShortcuts={() => setShortcutsOpen(true)}
-                  onAccount={() => setAccountOverlay("account")}
+                  onShopCheck={() => setShopCheckOpen(true)}
+                  onToggleFocus={() => setFocusMode((v) => !v)}
+                  onExport={exportProject}
+                  onImportFile={importProjectFile}
+                  onToggleCollapse={toggleRail}
                   t={{
                     groupProject: t.themes.editorRailProject,
-                    groupDesign: t.themes.editorRailDesign,
+                    groupTools: t.themes.editorRailTools,
                     newProject: t.themes.editorProjNew,
                     openProjects: t.themes.editorProjOpen,
                     save: t.themes.editorProjSave,
                     saveAs: t.themes.editorProjSaveAs,
-                    style: t.themes.editorStyleGallery,
-                    randomize: t.themes.builderRandom,
-                    fullPreview: t.themes.editorFullPreview,
-                    shortcuts: t.themes.editorShortcuts,
-                    account: t.themes.editorRailAccount,
+                    shopCheck: t.themes.editorShopCheck,
+                    shopCheckHint: t.themes.editorShopCheckHint,
+                    focus: t.themes.editorFocusMode,
+                    focusHint: t.themes.editorFocusModeHint,
+                    exportFile: t.themes.editorProjExport,
+                    exportHint: t.themes.editorProjExportHint,
+                    importFile: t.themes.editorProjImport,
+                    importHint: t.themes.editorProjImportHint,
+                    collapse: t.themes.editorRailCollapse,
+                    expand: t.themes.editorRailExpand,
                     unsavedHint: t.themes.editorProjUnsaved,
                     ctrl: t.themes.editorKeyCtrl,
                   }}
                 />
               </div>
-              <div className="flex flex-col lg:grid lg:grid-cols-[300px_minmax(0,1fr)_300px] xl:grid-cols-[320px_minmax(0,1fr)_316px] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0 lg:min-w-0">
+              {/* Aufbau-Spalte bewusst schmaler (256/272 statt 300/320) — der
+                  Platz geht an die Vorschau. Fokus-Modus: nur die Vorschau. */}
+              <div className={`flex flex-col ${
+                focusMode
+                  ? "lg:grid lg:grid-cols-[minmax(0,1fr)]"
+                  : "lg:grid lg:grid-cols-[256px_minmax(0,1fr)_300px] xl:grid-cols-[272px_minmax(0,1fr)_316px]"
+              } lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:items-stretch lg:flex-1 lg:min-h-0 lg:min-w-0`}>
 
               {/* Mobil: sticky 3-Tab-Leiste (Vorschau · Aufbau · Einstellungen) —
                   klebt unter der App-Navigation, damit man jederzeit umschalten
@@ -1665,7 +1753,7 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
                   scrollt intern. Sektionsliste + Kaufbox-Dropdown; während der
                   AI-Umsetzung gesperrt. Der AI Co-Pilot sitzt jetzt als Leiste
                   MITTIG unter der Vorschau (nicht mehr hier). */}
-              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} lg:flex lg:flex-col`}>
+              <aside className={`order-3 lg:order-1 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "aufbau" ? "" : "hidden"} ${focusMode ? "lg:hidden" : "lg:flex"} lg:flex-col`}>
                 <div className={`glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                   {/* Allgemeines Design (global) — kein „Sektion", aber zentral
                       erreichbar; ohne Auswahl bleibt links alles leer. */}
@@ -1966,7 +2054,7 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
               </div>
 
               {/* Inspector/Einstellungen (rechts) — Desktop: volle Höhe bis ganz unten, scrollt intern */}
-              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} lg:flex lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
+              <aside ref={inspectorRef} className={`order-4 lg:order-3 scroll-mt-28 lg:h-full lg:min-h-0 ${mobileTab === "einstellungen" ? "" : "hidden"} ${focusMode ? "lg:hidden" : "lg:flex"} lg:flex-col ${aiBusy ? "pointer-events-none opacity-60" : ""}`}>
                 <div className="glass-strong rounded-xl border border-white/[0.08] p-2.5 lg:flex-1 lg:min-h-0 lg:overflow-y-auto">
                   <Inspector
                     doc={doc}
@@ -2235,6 +2323,35 @@ PFLICHT für diesen Neubau: (1) Stil, Palette und Schriften aus den Produktfotos
         text={t.themes.editorProjNewConfirmText}
         confirmLabel={t.themes.editorProjNewConfirmGo}
         cancelLabel={t.themes.editorCancel}
+      />
+
+      {/* Shop-Check — kostenlose Qualitäts-Checkliste (linke Leiste) */}
+      <ShopCheckOverlay
+        open={shopCheckOpen}
+        onClose={() => setShopCheckOpen(false)}
+        doc={doc}
+        t={{
+          title: t.themes.editorShopCheck,
+          sub: t.themes.editorShopCheckSub,
+          scoreLabel: t.themes.editorShopCheckScore,
+          close: t.themes.editorClose,
+          hero: t.themes.editorCheckHero,
+          heroTip: t.themes.editorCheckHeroTip,
+          count: t.themes.editorCheckCount,
+          countTip: t.themes.editorCheckCountTip,
+          proof: t.themes.editorCheckProof,
+          proofTip: t.themes.editorCheckProofTip,
+          faq: t.themes.editorCheckFaq,
+          faqTip: t.themes.editorCheckFaqTip,
+          home: t.themes.editorCheckHome,
+          homeTip: t.themes.editorCheckHomeTip,
+          benefits: t.themes.editorCheckBenefits,
+          benefitsTip: t.themes.editorCheckBenefitsTip,
+          trust: t.themes.editorCheckTrust,
+          trustTip: t.themes.editorCheckTrustTip,
+          urgency: t.themes.editorCheckUrgency,
+          urgencyTip: t.themes.editorCheckUrgencyTip,
+        }}
       />
 
       {/* Tastaturkürzel — über die Leiste, das Profil-Menü oder „?" */}
