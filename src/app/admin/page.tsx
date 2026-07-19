@@ -25,6 +25,7 @@ import {
   type FeatureFlag,
   type LimitKey,
   type PlanState,
+  DEFAULT_TIERS,
   FEATURE_FLAGS,
   FEATURE_LABELS,
   LIMIT_KEYS,
@@ -945,7 +946,9 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (activeTab === "settings" || activeTab === "tiers") loadTierConfig();
+    // "users" braucht die Config für das Plan-Dropdown — ohne Laden war
+    // das Dropdown dort disabled und ein Klick tat exakt nichts.
+    if (activeTab === "settings" || activeTab === "tiers" || activeTab === "users") loadTierConfig();
   }, [activeTab, loadTierConfig]);
 
   useEffect(() => {
@@ -6235,7 +6238,11 @@ function UsersView({
     );
   });
 
-  const tierLabelMap = new Map(tierConfig.map((t) => [t.key, t.label]));
+  // Fallback auf die eingebauten Standard-Pläne: Das Dropdown darf NIE
+  // tot sein, nur weil /api/admin/tiers (noch) nicht geladen/erreichbar
+  // ist — sonst „passiert beim Klick exakt nichts".
+  const tierOptions: AdminTier[] = tierConfig.length > 0 ? tierConfig : (DEFAULT_TIERS as AdminTier[]);
+  const tierLabelMap = new Map(tierOptions.map((t) => [t.key, t.label]));
 
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
@@ -6387,7 +6394,7 @@ function UsersView({
                   <div className="flex flex-wrap items-center gap-1 lg:justify-end">
                     {/* Tier dropdown */}
                     <select
-                      disabled={busy || tierConfig.length === 0}
+                      disabled={busy}
                       value={u.effectiveTier || ""}
                       onChange={(e) => {
                         const v = e.target.value;
@@ -6399,13 +6406,9 @@ function UsersView({
                       className="bg-white/[0.04] border border-white/[0.08] rounded text-[10px] px-1.5 py-1 outline-none focus:border-white/25"
                     >
                       <option value="">Kein Plan</option>
-                      {tierConfig.length === 0 ? (
-                        u.effectiveTier ? <option value={u.effectiveTier}>{u.effectiveTier}</option> : null
-                      ) : (
-                        tierConfig.map((t) => (
-                          <option key={t.key} value={t.key}>{t.label} {t.priceMonthlyEur > 0 ? `· ${t.priceMonthlyEur}€` : ""}</option>
-                        ))
-                      )}
+                      {tierOptions.map((t) => (
+                        <option key={t.key} value={t.key}>{t.label} {t.priceMonthlyEur > 0 ? `· ${t.priceMonthlyEur}€` : ""}</option>
+                      ))}
                     </select>
                     {subActive && !u.pendingCancel && (
                       <button
