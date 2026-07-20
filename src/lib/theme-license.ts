@@ -90,9 +90,13 @@ export function buildLicenseSnippet(_opts?: { hubUrl?: string; apiKey?: string }
   return `<!-- Brospify: Lizenzprüfung läuft serverseitig (Sektionen werden nur mit gültigem Key ausgeliefert). -->\n`;
 }
 
-/** Alte Gate-Implementierung (Overlay) — vorerst deaktiviert, siehe oben.
- *  Bleibt als Referenz erhalten, bis das Server-Render-Modell live ist. */
-function buildLegacyOverlaySnippet(opts?: { hubUrl?: string; apiKey?: string }): string {
+/** Globales Overlay-Gate — läuft auf JEDER Seite (aus theme.liquid head):
+ *  Key fehlt/ungültig/Abo inaktiv → ALLES außer Footer verschwindet,
+ *  Außer-Betrieb-Karte + brospify.ai-Watermark erscheinen. Wird NUR ins
+ *  GESCHÜTZTE Theme (theme-thin) gebaut — im normalen Export und im
+ *  Master-Zip bleibt das inerte Snippet (sonst sperrt es die Editor-
+ *  Vorschau, das war der „kein Produkt vorhanden"-Bug). */
+export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: string }): string {
   const cfg = licenseGateConfig();
   const hubUrl = (opts?.hubUrl || cfg.hubUrl).replace(/\/+$/, "");
   const apiKey = opts?.apiKey || cfg.apiKey;

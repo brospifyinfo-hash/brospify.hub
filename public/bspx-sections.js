@@ -98,6 +98,13 @@
   function showOffline(message) {
     onReady(function () {
       if (document.getElementById("bspx-sec-offline")) return;
+      // Das GLOBALE Gate (license-check.liquid) zeigt dieselbe Karte auf
+      // jeder Seite — wenn es schon gesperrt hat, keine zweite Karte bauen.
+      if (document.getElementById("bspx-lic-offline")) return;
+      // Header/Announcement/Countdown ebenfalls verbergen — ohne Key soll
+      // die KOMPLETTE Website weg sein, nur der Footer (Impressum) bleibt.
+      var headerGroups = document.querySelectorAll(".shopify-section-group-header-group");
+      for (var h = 0; h < headerGroups.length; h++) headerGroups[h].style.display = "none";
       // Alle bereits vorhandenen Inhalte in #MainContent verbergen (der
       // Footer liegt außerhalb und bleibt sichtbar → Impressum garantiert).
       var kids = mount.children;

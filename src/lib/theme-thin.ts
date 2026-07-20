@@ -4,7 +4,7 @@ import type { ThemeDocument } from "@/lib/theme-doc";
 import type { ThemeCopy } from "@/lib/theme-placeholders";
 import { compileDocumentZip, type DynamicBuyboxOpts } from "@/lib/theme-compile";
 import { setZipFile } from "@/lib/theme-liquid-gen";
-import { ensureLicenseSchema } from "@/lib/theme-license";
+import { ensureLicenseSchema, buildOverlayGateSnippet } from "@/lib/theme-license";
 import { injectSettingsData } from "@/lib/theme-inject";
 import { getThemeStyle } from "@/lib/theme-styles";
 
@@ -87,6 +87,13 @@ export function compileThinDocumentZip(
   // 4) Host-Baustein + Sektions-Runtime einbauen.
   setZipFile(zip, "sections/bspx-host.liquid", buildHostSection(syncCode, hubUrl));
   setZipFile(zip, "assets/bspx-sections.js", sectionsRuntimeJs);
+
+  // 4b) GLOBALES Gate auf jeder Seite (license-check wird aus theme.liquid
+  //     gerendert): Key fehlt/ungültig/Abo aus → die KOMPLETTE Website
+  //     (Header, Warenkorb, Kategorien, …) verschwindet bis auf den Footer,
+  //     Außer-Betrieb-Karte + brospify.ai erscheinen. Nur im geschützten
+  //     Theme — der normale Export behält das inerte Snippet.
+  setZipFile(zip, "snippets/license-check.liquid", buildOverlayGateSnippet({ hubUrl }));
 
   // 5) ALLE nicht mehr referenzierten Sektions-Dateien entfernen — das ist
   //    der geschützte Code. „Referenziert" = von einem verbleibenden Template
