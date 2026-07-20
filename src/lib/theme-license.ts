@@ -144,55 +144,52 @@ export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: strin
 })();
 </script>
 {%- else -%}
+<style>
+  html.bspx-lic-locked #MainContent > :not(#bspx-lic-offline){display:none !important}
+  html.bspx-lic-locked .shopify-section-group-header-group{display:none !important}
+  html.bspx-lic-locked cart-drawer,html.bspx-lic-locked cart-notification{display:none !important}
+  html.bspx-lic-locked body{background:#f6f6f4 !important}
+  #bspx-lic-offline{display:none}
+  html.bspx-lic-locked #bspx-lic-offline{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;padding:48px 24px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  .bspx-lic-card{max-width:560px;background:#fff;border:1px solid #e8e8e4;border-radius:20px;padding:48px 40px;box-shadow:0 20px 60px rgba(0,0,0,.06)}
+  .bspx-lic-card .bspx-lic-ico{font-size:40px;margin-bottom:16px}
+  .bspx-lic-card h1{font-size:26px;line-height:1.25;margin:0 0 12px;color:#111;font-weight:700}
+  .bspx-lic-card p{font-size:15px;line-height:1.6;color:#555;margin:0}
+  .bspx-lic-mark{margin-top:32px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;text-decoration:none;border:1px solid #e2e2de;border-radius:999px;padding:9px 16px;background:#fff}
+  .bspx-lic-mark b{color:#111;font-weight:700}
+</style>
+{%- assign bspx_key = settings.license_key | strip -%}
+{%- if bspx_key == blank -%}
+  {%- comment -%} KEIN Key → server-seitig sofort hart sperren (kein JS nötig, kein Aufblitzen). {%- endcomment -%}
+  <script>document.documentElement.classList.add("bspx-lic-locked");</script>
+{%- endif -%}
 <script>
 (function () {
-  // Hub-Vorschau/Localhost: Gate komplett überspringen (nie die eigene
-  // Editor-Vorschau sperren). srcdoc/blob-iframes haben leeren Hostname.
-  var h = (location.hostname || "").toLowerCase();
-  if (!h || h === "localhost" || h === "127.0.0.1" || /(^|\\.)brospifyhub\\.com$/.test(h) || /\\.vercel\\.app$/.test(h)) return;
+  var d = document.documentElement;
+  // STANDARD = GESPERRT: Inhalt wird erst freigeschaltet, wenn der Key
+  // nachweislich gültig ist. So kann OHNE gültigen Key nie Inhalt
+  // durchrutschen (auch nicht kurz beim Laden).
+  d.classList.add("bspx-lic-locked");
 
-  var key = ({{ settings.license_key | json }} || "").trim();
+  // Ausnahme: Hub-Vorschau/Localhost nie sperren (leerer Hostname bei
+  // srcdoc/blob-iframes, brospifyhub.com, *.vercel.app).
+  var h = (location.hostname || "").toLowerCase();
+  if (!h || h === "localhost" || h === "127.0.0.1" || /(^|\\.)brospifyhub\\.com$/.test(h) || /\\.vercel\\.app$/.test(h)) {
+    d.classList.remove("bspx-lic-locked");
+    return;
+  }
+
+  var key = ({{ settings.license_key | json }} || "").replace(/^\\s+|\\s+$/g, "");
   var domain = {{ shop.domain | json }};
   var CACHE_KEY = "bspxLicV2";
-  var VALID_TTL = 10 * 60 * 1000;      // gültig: max. 1 Check / 10 min / Gerät
-  var INVALID_TTL = 24 * 60 * 60 * 1000; // gesperrt: nach 24 h ohne Hub-Antwort wieder öffnen
-
-  // Styles sofort ins <head> — greifen erst mit .bspx-lic-locked auf <html>.
-  var css = "" +
-    ".bspx-lic-locked #MainContent > :not(#bspx-lic-offline){display:none !important}" +
-    ".bspx-lic-locked .shopify-section-group-header-group{display:none !important}" +
-    ".bspx-lic-locked cart-drawer,.bspx-lic-locked cart-notification{display:none !important}" +
-    ".bspx-lic-locked body{background:#f6f6f4 !important}" +
-    "#bspx-lic-offline{display:none}" +
-    ".bspx-lic-locked #bspx-lic-offline{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:70vh;padding:48px 24px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}" +
-    ".bspx-lic-card{max-width:560px;background:#fff;border:1px solid #e8e8e4;border-radius:20px;padding:48px 40px;box-shadow:0 20px 60px rgba(0,0,0,.06)}" +
-    ".bspx-lic-card .bspx-lic-ico{font-size:40px;margin-bottom:16px}" +
-    ".bspx-lic-card h1{font-size:26px;line-height:1.25;margin:0 0 12px;color:#111;font-weight:700}" +
-    ".bspx-lic-card p{font-size:15px;line-height:1.6;color:#555;margin:0}" +
-    ".bspx-lic-mark{margin-top:32px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#888;text-decoration:none;border:1px solid #e2e2de;border-radius:999px;padding:9px 16px;background:#fff}" +
-    ".bspx-lic-mark b{color:#111;font-weight:700}";
-  var st = document.createElement("style");
-  st.id = "bspx-lic-style";
-  st.textContent = css;
-  (document.head || document.documentElement).appendChild(st);
+  var VALID_TTL = 10 * 60 * 1000;
+  var INVALID_TTL = 24 * 60 * 60 * 1000;
 
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
     else fn();
   }
-  function readCache() {
-    try {
-      var c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-      if (!c || typeof c.t !== "number" || c.key !== key) return null;
-      if (Date.now() - c.t > (c.valid ? VALID_TTL : INVALID_TTL)) return null;
-      return c;
-    } catch (e) { return null; }
-  }
-  function writeCache(valid) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ key: key, valid: valid, t: Date.now() })); } catch (e) {}
-  }
-  function lock() {
-    document.documentElement.classList.add("bspx-lic-locked");
+  function showCard() {
     onReady(function () {
       if (document.getElementById("bspx-lic-offline")) return;
       var main = document.getElementById("MainContent") || document.body;
@@ -205,30 +202,43 @@ export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: strin
       main.appendChild(box);
     });
   }
+  function lock() { d.classList.add("bspx-lic-locked"); showCard(); }
   function unlock() {
-    document.documentElement.classList.remove("bspx-lic-locked");
+    d.classList.remove("bspx-lic-locked");
     var box = document.getElementById("bspx-lic-offline");
     if (box && box.parentNode) box.parentNode.removeChild(box);
   }
+  function readCache() {
+    try {
+      var c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (!c || typeof c.t !== "number" || c.key !== key) return null;
+      if (Date.now() - c.t > (c.valid ? VALID_TTL : INVALID_TTL)) return null;
+      return c;
+    } catch (e) { return null; }
+  }
+  function writeCache(valid) {
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ key: key, valid: valid, t: Date.now() })); } catch (e) {}
+  }
 
-  // 1) Sofort-Zustand: fehlender Key oder frischer Negativ-Cache → sperren
-  //    (kein Aufblitzen der Inhalte beim Navigieren durch den Shop).
+  // Kein Key → gesperrt bleiben (Karte zeigen), niemals entsperren.
+  if (!key) { lock(); return; }
+
+  // Cache: gültig → sofort entsperren (kein Aufblitzen); ungültig → gesperrt.
   var cached = readCache();
-  if (!key || (cached && cached.valid === false)) lock();
-  if (!key) return; // ohne Key gibt es nichts zu validieren
-
-  // 2) Frischer Positiv-Cache → kein API-Call nötig.
-  if (cached && cached.valid === true) return;
+  if (cached) { if (cached.valid) unlock(); else lock(); return; }
 
   var url = "${hubUrl}/api/license/validate?apikey=${encodeURIComponent(apiKey)}" +
     "&key=" + encodeURIComponent(key) + "&domain=" + encodeURIComponent(domain) + "&t=" + Date.now();
   fetch(url)
     .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.json(); })
-    .then(function (d) {
-      if (d && d.valid === false) { writeCache(false); lock(); }
+    .then(function (d2) {
+      if (d2 && d2.valid === false) { writeCache(false); lock(); }
       else { writeCache(true); unlock(); }
     })
-    .catch(function () { /* Fail-open: Hub nicht erreichbar → Shop bleibt online (bzw. letzter Cache-Zustand). */ });
+    .catch(function () {
+      // Hub nicht erreichbar → fail-open (Shop nie wegen Störung sperren).
+      unlock();
+    });
 })();
 </script>
 {%- endif -%}
