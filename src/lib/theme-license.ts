@@ -131,14 +131,14 @@ export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: strin
     else fn();
   }
   if (!key) {
-    onReady(function () { notice("Es ist noch kein Lizenzschlüssel hinterlegt. Trage ihn links oben in den Theme-Einstellungen unter „🔑 Brospify Lizenz“ ein — sonst zeigt dein Live-Shop nur die Außer-Betrieb-Seite. Hier im Editor bleibt alles bearbeitbar."); });
+    onReady(function () { notice("Es ist noch kein API-Key hinterlegt. Am einfachsten: Theme im Brospify-Editor neu herunterladen — dann ist der Key automatisch gesetzt. (Hier im Editor bleibt alles bearbeitbar; dein Live-Shop zeigt ohne Key die Außer-Betrieb-Seite.)"); });
     return;
   }
   var url = "${hubUrl}/api/license/validate?apikey=${encodeURIComponent(apiKey)}" +
     "&key=" + encodeURIComponent(key) + "&domain=" + encodeURIComponent(domain) + "&t=" + Date.now();
   fetch(url).then(function (r) { if (!r.ok) throw new Error("http"); return r.json(); }).then(function (d) {
     if (d && d.valid === false) {
-      onReady(function () { notice("Deine Lizenz ist aktuell nicht aktiv (" + (d.message || "inaktiv") + "). Bitte passe deine Lizenz an bzw. verlängere dein Abo — dein Live-Shop zeigt sonst nur die Außer-Betrieb-Seite. Hier im Editor bleibt alles bearbeitbar."); });
+      onReady(function () { notice("Dein API-Key wird nicht erkannt. Das passiert bei Themes aus einem älteren Download. Lade das Theme im Brospify-Editor einmal NEU herunter und ersetze das Theme — dann stimmt der Key automatisch. (Ist dein Abo abgelaufen, verlängere es.)"); });
     }
   }).catch(function () { /* Hub nicht erreichbar → kein Banner */ });
 })();
