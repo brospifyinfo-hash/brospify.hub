@@ -38,19 +38,19 @@ export function licenseGateConfig(): { hubUrl: string; apiKey: string } {
 // Settings-Gruppe „Lizenz" — wird an Position 1 (direkt nach theme_info)
 // eingesetzt, damit sie im Shopify-Customizer links GANZ OBEN steht.
 export const LICENSE_SETTINGS_GROUP = {
-  name: "🔑 Brospify API-Key",
+  name: "🔑 Brospify Sync-Code",
   settings: [
     {
       type: "paragraph",
       content:
-        "Dein Brospify API-Key lädt alle Brospify-Sektionen dieses Themes. Ohne gültigen Key werden KEINE Sektionen angezeigt (Footer & Impressum bleiben sichtbar).",
+        "Dieser Sync-Code lädt deinen kompletten Shop (alle Sektionen) live von Brospify. Ohne gültigen Code oder bei inaktivem Abo wird NICHTS angezeigt (Footer & Impressum bleiben sichtbar). Einen anderen Code einfügen = anderes Design im Shop.",
     },
     {
       type: "text",
       id: "license_key",
-      label: "API-Key",
-      placeholder: "SITE-XXXXXXXXXXXXXXXXXXXX",
-      info: "Wird beim Theme-Download automatisch eingetragen. Bei abgelaufenem Abo einfach verlängern — die Sektionen erscheinen automatisch wieder.",
+      label: "Sync-Code",
+      placeholder: "bspx_xxxxxxxxxxxxxxxxxxxxxx",
+      info: "Wird beim Theme-Download automatisch eingetragen. Du findest deine Codes im Brospify-Editor unter „Projekte“.",
     },
   ],
 } as const;
@@ -96,28 +96,26 @@ export function buildLicenseSnippet(_opts?: { hubUrl?: string; apiKey?: string }
  *  GESCHÜTZTE Theme (theme-thin) gebaut — im normalen Export und im
  *  Master-Zip bleibt das inerte Snippet (sonst sperrt es die Editor-
  *  Vorschau, das war der „kein Produkt vorhanden"-Bug). */
-export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: string }): string {
+export function buildOverlayGateSnippet(opts?: { hubUrl?: string }): string {
   const cfg = licenseGateConfig();
   const hubUrl = (opts?.hubUrl || cfg.hubUrl).replace(/\/+$/, "");
-  const apiKey = opts?.apiKey || cfg.apiKey;
 
   return `{%- comment -%}
-  Brospify Lizenz-Gate v2 — settings.license_key steuert die komplette Website.
+  Brospify Gate — settings.license_key (Sync-Code) steuert die komplette Website.
   Editor (request.design_mode): nie sperren, nur Hinweis-Banner.
-  Live: Lizenz inaktiv/fehlt → Außer-Betrieb-Seite, Footer bleibt sichtbar.
+  Live: Code fehlt / Abo inaktiv → Außer-Betrieb-Seite, Footer bleibt sichtbar.
 {%- endcomment -%}
 {%- if request.design_mode -%}
 <script>
 (function () {
-  var key = ({{ settings.license_key | json }} || "").trim();
-  var domain = {{ shop.domain | json }};
+  var code = ({{ settings.license_key | json }} || "").trim();
   function notice(text) {
     try { if (sessionStorage.getItem("bspxLicNoticeAway") === "1") return; } catch (e) {}
     if (document.getElementById("bspx-lic-notice")) return;
     var el = document.createElement("div");
     el.id = "bspx-lic-notice";
     el.setAttribute("style", "position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:2147483647;max-width:min(640px,calc(100vw - 32px));background:#fff;color:#111;border:1px solid #f1c5c5;border-left:4px solid #e74c3c;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:14px 44px 14px 16px;font:13px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;");
-    el.innerHTML = '<b>Brospify Lizenz:</b> ' + text +
+    el.innerHTML = '<b>Brospify:</b> ' + text +
       ' <a href="${hubUrl}" target="_blank" rel="noopener" style="color:#e74c3c;font-weight:600;">Zum Brospify Hub</a>' +
       '<button type="button" aria-label="Hinweis schließen" style="position:absolute;top:8px;right:8px;border:0;background:transparent;font-size:16px;line-height:1;cursor:pointer;color:#999;">\\u00d7</button>';
     el.querySelector("button").addEventListener("click", function () {
@@ -130,17 +128,17 @@ export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: strin
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
     else fn();
   }
-  if (!key) {
-    onReady(function () { notice("Es ist noch kein API-Key hinterlegt. Am einfachsten: Theme im Brospify-Editor neu herunterladen — dann ist der Key automatisch gesetzt. (Hier im Editor bleibt alles bearbeitbar; dein Live-Shop zeigt ohne Key die Außer-Betrieb-Seite.)"); });
+  if (!code) {
+    onReady(function () { notice("Es ist noch kein Sync-Code hinterlegt. Lade dein Theme im Brospify-Editor herunter — der Code ist dann automatisch gesetzt. (Hier im Editor bleibt alles bearbeitbar; dein Live-Shop zeigt ohne Code die Außer-Betrieb-Seite.)"); });
     return;
   }
-  var url = "${hubUrl}/api/license/validate?apikey=${encodeURIComponent(apiKey)}" +
-    "&key=" + encodeURIComponent(key) + "&domain=" + encodeURIComponent(domain) + "&t=" + Date.now();
-  fetch(url).then(function (r) { if (!r.ok) throw new Error("http"); return r.json(); }).then(function (d) {
-    if (d && d.valid === false) {
-      onReady(function () { notice("Dein API-Key wird nicht erkannt. Das passiert bei Themes aus einem älteren Download. Lade das Theme im Brospify-Editor einmal NEU herunter und ersetze das Theme — dann stimmt der Key automatisch. (Ist dein Abo abgelaufen, verlängere es.)"); });
-    }
-  }).catch(function () { /* Hub nicht erreichbar → kein Banner */ });
+  fetch("${hubUrl}/api/storefront/status/" + encodeURIComponent(code) + "?t=" + Date.now())
+    .then(function (r) { if (!r.ok) throw new Error("http"); return r.json(); })
+    .then(function (d) {
+      if (d && d.locked === true) {
+        onReady(function () { notice("Dein Shop ist aktuell gesperrt (" + (d.message || "Abo nicht aktiv") + "). Verlängere dein Abo im Hub — sonst zeigt dein Live-Shop nur die Außer-Betrieb-Seite. Hier im Editor bleibt alles bearbeitbar."); });
+      }
+    }).catch(function () { /* Hub nicht erreichbar → kein Banner */ });
 })();
 </script>
 {%- else -%}
@@ -179,8 +177,7 @@ export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: strin
     return;
   }
 
-  var key = ({{ settings.license_key | json }} || "").replace(/^\\s+|\\s+$/g, "");
-  var domain = {{ shop.domain | json }};
+  var code = ({{ settings.license_key | json }} || "").replace(/^\\s+|\\s+$/g, "");
   var CACHE_KEY = "bspxLicV2";
   var VALID_TTL = 10 * 60 * 1000;
   var INVALID_TTL = 24 * 60 * 60 * 1000;
@@ -211,28 +208,26 @@ export function buildOverlayGateSnippet(opts?: { hubUrl?: string; apiKey?: strin
   function readCache() {
     try {
       var c = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
-      if (!c || typeof c.t !== "number" || c.key !== key) return null;
+      if (!c || typeof c.t !== "number" || c.key !== code) return null;
       if (Date.now() - c.t > (c.valid ? VALID_TTL : INVALID_TTL)) return null;
       return c;
     } catch (e) { return null; }
   }
   function writeCache(valid) {
-    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ key: key, valid: valid, t: Date.now() })); } catch (e) {}
+    try { localStorage.setItem(CACHE_KEY, JSON.stringify({ key: code, valid: valid, t: Date.now() })); } catch (e) {}
   }
 
-  // Kein Key → gesperrt bleiben (Karte zeigen), niemals entsperren.
-  if (!key) { lock(); return; }
+  // Kein Code → gesperrt bleiben (Karte zeigen), niemals entsperren.
+  if (!code) { lock(); return; }
 
   // Cache: gültig → sofort entsperren (kein Aufblitzen); ungültig → gesperrt.
   var cached = readCache();
   if (cached) { if (cached.valid) unlock(); else lock(); return; }
 
-  var url = "${hubUrl}/api/license/validate?apikey=${encodeURIComponent(apiKey)}" +
-    "&key=" + encodeURIComponent(key) + "&domain=" + encodeURIComponent(domain) + "&t=" + Date.now();
-  fetch(url)
+  fetch("${hubUrl}/api/storefront/status/" + encodeURIComponent(code) + "?t=" + Date.now())
     .then(function (r) { if (!r.ok) throw new Error("http " + r.status); return r.json(); })
     .then(function (d2) {
-      if (d2 && d2.valid === false) { writeCache(false); lock(); }
+      if (d2 && d2.locked === true) { writeCache(false); lock(); }
       else { writeCache(true); unlock(); }
     })
     .catch(function () {

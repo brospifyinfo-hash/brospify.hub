@@ -26,11 +26,14 @@ function findEntry(zip: AdmZip, wanted: string): AdmZip.IZipEntry | null {
 /** Der einzige „Sektions"-Baustein im Thin-Theme: rendert den Mount-Punkt
  *  + lädt die Runtimes. Enthält KEINE Design-Logik. */
 function buildHostSection(syncCode: string, hubUrl: string): string {
+  // Der Code kommt aus dem Feld „🔑 Brospify Sync-Code" (settings.license_key)
+  // — so kann der Händler das Design im Shop wechseln, indem er einen anderen
+  // Code einträgt. Ist das Feld leer, greift der beim Download eingebackene
+  // Code als Fallback.
   return `<div
   id="bspx-sections"
-  data-bspx-code="${syncCode}"
+  data-bspx-code="{% if settings.license_key != blank %}{{ settings.license_key | strip | escape }}{% else %}${syncCode}{% endif %}"
   data-bspx-hub="${hubUrl}"
-  data-bspx-key="{{ settings.license_key | strip | escape }}"
   data-bspx-template="{{ template.name }}"
 ></div>
 <div id="bspx-sections-skeleton" style="min-height:60vh"></div>

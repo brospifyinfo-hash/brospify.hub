@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
     const sectionsRuntime = await readAsset("bspx-sections.js");
 
     const { zip: master, key } = await getEditorBaseThemeZip();
-    const licenseKey = session.isAdmin ? "" : session.lizenzschluessel || "";
+    // Feld = der Sync-Code selbst (identifiziert Design + gatet via Besitzer).
+    const licenseKey = code;
 
     const zip = compileThinDocumentZip(
       master,

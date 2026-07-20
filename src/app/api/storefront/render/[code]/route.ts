@@ -16,7 +16,6 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   getThemeDesign,
   getAllProdukte,
-  getAllKunden,
   findKundeByKey,
   type Produkt,
 } from "@/lib/sheets";
@@ -97,56 +96,30 @@ async function resolveStorefrontProduct(user: string, productId: string): Promis
   return null;
 }
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
   const cleanCode = (code || "").trim();
-  if (!cleanCode) return json({ locked: false, error: "Kein Code." }, 400, "no-store");
-
-  // ── API-KEY IST PFLICHT ──────────────────────────────────────────
-  // Der Key aus den Theme-Einstellungen („🔑 Brospify API-Key") ist der
-  // Schalter für die komplette Website: ohne Key → keine Sektionen,
-  // Punkt. Akzeptiert: Site-Token (SITE-…) oder Lizenzschlüssel.
-  const apiKey = (req.nextUrl.searchParams.get("key") || "").trim();
-  if (!apiKey) {
-    return json({ locked: true, message: "Kein API-Key eingetragen." }, 200, "public, s-maxage=30");
-  }
+  if (!cleanCode) return json({ locked: true, error: "Kein Code." }, 400, "no-store");
 
   try {
     const design = await getThemeDesign(cleanCode);
-    if (!design) return json({ locked: false, error: "Design nicht gefunden." }, 404, "no-store");
+    if (!design) return json({ locked: true, error: "Code nicht gefunden." }, 404, "no-store");
 
-    // ── Key-Gate: Key muss zu einem AKTIVEN Kunden gehören, und der
-    // muss der Besitzer des Designs sein (Master-Key übersteuert). ──
+    // ── Gate: der Sync-Code IST der Schlüssel. Er gehört zu einem
+    // Kunden; dessen Abo-Status entscheidet. Kein zweiter Token nötig. ──
     const owner = design.user || "";
-    if (!MASTER_KEYS.includes(apiKey)) {
+    if (owner !== "admin" && !MASTER_KEYS.includes(owner)) {
       let kunde: Awaited<ReturnType<typeof findKundeByKey>> | null = null;
       let lookupOk = true;
       try {
-        const wanted = norm(apiKey);
-        const kunden = await getAllKunden();
-        kunde =
-          kunden.find(
-            (k) =>
-              norm(k.lizenzschluessel) === wanted ||
-              (k.profile?.licenseSiteToken && norm(k.profile.licenseSiteToken) === wanted),
-          ) || null;
+        kunde = await findKundeByKey(owner);
       } catch {
         // Sheets-Ausfall → NICHT sperren (fail-open): ein Shop geht nie
         // wegen einer Störung aus. Wir überspringen das Gate und rendern.
         lookupOk = false;
       }
-      if (lookupOk) {
-        if (!kunde) {
-          return json({ locked: true, message: "API-Key ungültig." }, 200, "public, s-maxage=30");
-        }
-        if (!licenseActive(kunde)) {
-          return json({ locked: true, message: "Lizenz ist nicht aktiv." }, 200, "public, s-maxage=30");
-        }
-        // Fremder (aktiver) Key schaltet kein fremdes Design frei —
-        // Admin-Designs (Demo) sind für jeden aktiven Key ok.
-        if (owner !== "admin" && norm(kunde.lizenzschluessel) !== norm(owner)) {
-          return json({ locked: true, message: "API-Key passt nicht zu diesem Theme." }, 200, "public, s-maxage=30");
-        }
+      if (lookupOk && !licenseActive(kunde)) {
+        return json({ locked: true, message: "Abo nicht aktiv." }, 200, "public, s-maxage=30");
       }
     }
 

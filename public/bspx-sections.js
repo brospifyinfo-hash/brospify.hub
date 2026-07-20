@@ -17,12 +17,11 @@
   if (!host || host.__bspx) return;
   host.__bspx = true;
 
-  var code = host.getAttribute("data-bspx-code") || "";
+  var code = (host.getAttribute("data-bspx-code") || "").replace(/^\s+|\s+$/g, "");
   var hub = (host.getAttribute("data-bspx-hub") || "").replace(/\/+$/, "");
-  var key = (host.getAttribute("data-bspx-key") || "").replace(/^\s+|\s+$/g, "");
   var template = host.getAttribute("data-bspx-template") || "index";
   var mount = document.getElementById("MainContent") || host.parentNode || document.body;
-  var CACHE_KEY = "bspxSections:" + code + ":" + key + ":" + template;
+  var CACHE_KEY = "bspxSections:" + code + ":" + template;
 
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
@@ -149,10 +148,9 @@
     } catch (e) { return false; }
   }
 
-  // OHNE API-Key (Theme-Einstellungen, Gruppe „🔑 Brospify API-Key") werden
+  // OHNE Code (Theme-Einstellungen, Feld „🔑 Brospify Sync-Code") werden
   // grundsätzlich KEINE Sektionen geladen — auch nicht aus dem Cache.
-  if (!key) { showOffline(); return; }
-  if (!code || !hub) { fromCache() || showOffline(); return; }
+  if (!code || !hub) { showOffline(); return; }
 
   // www↔Apex probieren (Redirects tragen keine CORS-Header).
   var candidates = [hub];
@@ -164,7 +162,7 @@
     var base = candidates[i];
     var ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
     var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, FETCH_TIMEOUT);
-    fetch(base + "/api/storefront/render/" + encodeURIComponent(code) + "?key=" + encodeURIComponent(key), { signal: ctrl ? ctrl.signal : undefined })
+    fetch(base + "/api/storefront/render/" + encodeURIComponent(code), { signal: ctrl ? ctrl.signal : undefined })
       .then(function (r) {
         clearTimeout(timer);
         if (!r.ok) { if (!fromCache()) showOffline(); return null; }
