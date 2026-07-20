@@ -25,7 +25,8 @@ import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
-import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
+import { isValidDocument } from "@/lib/theme-compile";
+import { compileThinDocumentZip } from "@/lib/theme-thin";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign, generateSiteToken } from "@/lib/sheets";
@@ -57,6 +58,26 @@ async function getRuntimeJs(): Promise<string> {
     }
   }
   console.warn("[theme-export] bspx-runtime.js nicht gefunden — ZIP ohne Asset-Runtime (Hub-Script bleibt).");
+  return "";
+}
+
+// Sektions-Runtime (assets/bspx-sections.js) fürs geschützte Theme.
+let sectionsJsCache: string | null = null;
+async function getSectionsRuntimeJs(): Promise<string> {
+  if (sectionsJsCache) return sectionsJsCache;
+  const candidates = [
+    path.join(process.cwd(), "public", "bspx-sections.js"),
+    path.join(process.cwd(), "..", "public", "bspx-sections.js"),
+  ];
+  for (const p of candidates) {
+    try {
+      sectionsJsCache = await fsp.readFile(p, "utf8");
+      return sectionsJsCache;
+    } catch {
+      /* nächsten Kandidaten probieren */
+    }
+  }
+  console.warn("[theme-export] bspx-sections.js nicht gefunden.");
   return "";
 }
 
@@ -233,9 +254,13 @@ export async function POST(req: NextRequest) {
       // Download eines gespeicherten Designs hält den Speicherstand synchron;
       // ohne aktives Design wird der Stand rollend als „Aktueller Shop-Stand"
       // gesichert (nur beim stabilen Kunden-Produkt-Code).
+      // WICHTIG fürs geschützte Theme: Das DOKUMENT muss unter dem Sync-
+      // Code in ThemeDesigns liegen — der Storefront-Render-Endpoint holt
+      // es von dort (getThemeDesign). Darum IMMER speichern (auch Admin),
+      // nicht nur wenn ein Kunde existiert.
       if (designName) {
         await saveThemeDesign(syncCode, owner, produkt.id, designName, JSON.stringify(doc));
-      } else if (kunde) {
+      } else {
         await upsertLiveDesign(syncCode, owner, produkt.id, doc);
       }
       // JEDER Download legt zusätzlich automatisch eine datierte
@@ -279,13 +304,17 @@ export async function POST(req: NextRequest) {
     const { zip: master, source, key } = await getEditorBaseThemeZip();
     console.log(`[theme-export] Basis-Theme: ${source} (${doc ? "v2-Dokument" : "Legacy"})`);
     zip = doc
-      ? compileDocumentZip(
+      ? compileThinDocumentZip(
+          // GESCHÜTZTES Theme: die Design-Sektionen liegen NICHT als Liquid
+          // im ZIP, sondern werden live vom Hub gerendert (nur mit gültigem
+          // API-Key). Der Sektions-Code verlässt so nie den Server.
           master,
           doc,
           themeCopy || {},
           key,
-          syncCode ? { syncCode, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: await getRuntimeJs() } : null,
+          { syncCode, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: await getRuntimeJs() },
           licenseKey,
+          await getSectionsRuntimeJs(),
         )
       : buildThemeZip(master, {
       licenseKey,
