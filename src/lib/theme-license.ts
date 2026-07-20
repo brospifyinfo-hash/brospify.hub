@@ -38,19 +38,19 @@ export function licenseGateConfig(): { hubUrl: string; apiKey: string } {
 // Settings-Gruppe „Lizenz" — wird an Position 1 (direkt nach theme_info)
 // eingesetzt, damit sie im Shopify-Customizer links GANZ OBEN steht.
 export const LICENSE_SETTINGS_GROUP = {
-  name: "🔑 Brospify Lizenz",
+  name: "🔑 Brospify API-Key",
   settings: [
     {
       type: "paragraph",
       content:
-        "Dein Brospify-Lizenzschlüssel schaltet alle Sektionen dieses Themes frei. Ohne aktive Lizenz zeigt dein Live-Shop nur eine „Außer Betrieb“-Seite (Footer & Impressum bleiben sichtbar). Bearbeiten kannst du dein Theme hier immer.",
+        "Dein Brospify API-Key lädt alle Brospify-Sektionen dieses Themes. Ohne gültigen Key werden KEINE Sektionen angezeigt (Footer & Impressum bleiben sichtbar).",
     },
     {
       type: "text",
       id: "license_key",
-      label: "Lizenzschlüssel",
-      placeholder: "XXX-XXXXXX",
-      info: "Du findest deinen Schlüssel im Brospify Hub. Bei abgelaufenem Abo einfach verlängern — der Shop schaltet sich automatisch wieder frei.",
+      label: "API-Key",
+      placeholder: "SITE-XXXXXXXXXXXXXXXXXXXX",
+      info: "Wird beim Theme-Download automatisch eingetragen. Bei abgelaufenem Abo einfach verlängern — die Sektionen erscheinen automatisch wieder.",
     },
   ],
 } as const;

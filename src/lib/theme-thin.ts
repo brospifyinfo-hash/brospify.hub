@@ -30,6 +30,7 @@ function buildHostSection(syncCode: string, hubUrl: string): string {
   id="bspx-sections"
   data-bspx-code="${syncCode}"
   data-bspx-hub="${hubUrl}"
+  data-bspx-key="{{ settings.license_key | strip | escape }}"
   data-bspx-template="{{ template.name }}"
 ></div>
 <div id="bspx-sections-skeleton" style="min-height:60vh"></div>
