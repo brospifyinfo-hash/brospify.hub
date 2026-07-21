@@ -141,7 +141,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
 
     const style = getThemeStyle(doc.global.styleId);
     const { zip: master, key } = await getEditorBaseThemeZip();
-    const compiled = compileDocumentZip(master, doc, themeCopy, key);
+    // WICHTIG: dyn mitgeben — sonst fehlt der Kaufbox-Host (.bspx-host)
+    // im gerenderten main-product und der Shop hat KEINE Kaufbox. Die
+    // Runtime im Shop ersetzt das Platzhalter-Produkt durch das echte
+    // und bspx-runtime.js füllt den Host mit dem Live-Plan.
+    const compiled = compileDocumentZip(master, doc, themeCopy, key, {
+      syncCode: cleanCode,
+      hubUrl: "https://brospifyhub.com",
+    });
 
     const payload = await renderSectionsPayload(compiled, {
       themeCopy,
