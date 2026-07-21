@@ -28,12 +28,50 @@
     else fn();
   }
 
+  // Echte Asset-Basis des Themes (CDN) — abgeleitet aus der eigenen
+  // Script-URL (…/assets/bspx-sections.js?v=…). Der Server rendert
+  // Asset-Referenzen als __BSPX_ASSET__/name; hier werden sie auf die
+  // echten Theme-Dateien umgeschrieben (CSS/JS/Bilder liegen im Theme).
+  var assetBase = (function () {
+    var el = document.querySelector('script[src*="bspx-sections"]');
+    var src = el ? el.getAttribute("src") || "" : "";
+    var m = src.match(/^(.*\/)[^/]*$/);
+    return m ? m[1] : "";
+  })();
+  function rewriteAssets(container) {
+    if (!assetBase) return;
+    var nodes = container.querySelectorAll('[src*="__BSPX_ASSET__/"],[href*="__BSPX_ASSET__/"]');
+    for (var i = 0; i < nodes.length; i++) {
+      var el = nodes[i];
+      ["src", "href"].forEach(function (attr) {
+        var v = el.getAttribute(attr);
+        if (v && v.indexOf("__BSPX_ASSET__/") >= 0) {
+          el.setAttribute(attr, v.replace(/.*__BSPX_ASSET__\//, assetBase));
+        }
+      });
+    }
+  }
+  function rewriteCssAssets(css) {
+    return assetBase ? css.split("__BSPX_ASSET__/").join(assetBase) : css;
+  }
+
   // Injiziertes HTML kann <script>-Tags enthalten (Dawn-Custom-Elements
-  // etc.). innerHTML führt die NICHT aus — deshalb neu erzeugen.
+  // etc.). innerHTML führt die NICHT aus — deshalb neu erzeugen. Bereits
+  // geladene Dateien (gleicher Dateiname) NICHT doppelt ausführen —
+  // Custom-Element-Doppelregistrierung würde werfen.
   function runScripts(container) {
+    var loaded = {};
+    var existing = document.querySelectorAll("script[src]");
+    for (var e = 0; e < existing.length; e++) {
+      var n = (existing[e].getAttribute("src") || "").split("?")[0].split("/").pop();
+      if (n) loaded[n] = true;
+    }
     var scripts = container.querySelectorAll("script");
     for (var i = 0; i < scripts.length; i++) {
       var old = scripts[i];
+      var srcName = (old.getAttribute("src") || "").split("?")[0].split("/").pop();
+      if (srcName && loaded[srcName]) { old.parentNode.removeChild(old); continue; }
+      if (srcName) loaded[srcName] = true;
       var s = document.createElement("script");
       for (var a = 0; a < old.attributes.length; a++) {
         s.setAttribute(old.attributes[a].name, old.attributes[a].value);
@@ -54,7 +92,7 @@
     if (css && !document.getElementById("bspx-sec-style")) {
       var st = document.createElement("style");
       st.id = "bspx-sec-style";
-      st.innerHTML = css;
+      st.innerHTML = rewriteCssAssets(css);
       document.head.appendChild(st);
     }
   }
@@ -71,6 +109,7 @@
         mount.appendChild(slot);
       }
       slot.innerHTML = html;
+      rewriteAssets(slot);
       runScripts(slot);
 
       // Kaufbox: das server-gerenderte HTML enthält den Kaufbox-Host mit

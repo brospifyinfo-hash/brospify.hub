@@ -139,6 +139,25 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
       ? buildRenderProduct(produkt)
       : { title: "Produkt", priceCents: 2999, compareCents: 0, images: [], descriptionHtml: "" };
 
+    // Diagnose (?debug=1): NUR Metadaten, kein HTML — um Produkt-/Bild-
+    // Auflösung live prüfen zu können, ohne in die Sheets zu schauen.
+    if (_req.nextUrl.searchParams.get("debug") === "1") {
+      return json({
+        locked: false,
+        debug: {
+          owner,
+          designProductId: design.productId || null,
+          docProductId: doc.productId || null,
+          produktGefunden: !!produkt,
+          produktTitel: produkt?.titel || null,
+          bildUrl: produkt?.bildUrl ? produkt.bildUrl.slice(0, 100) : null,
+          extraImages: produkt?.extra?.images?.length || 0,
+          themeCopyKeys: Object.keys(themeCopy).length,
+          renderImages: product.images.length,
+        },
+      }, 200, "no-store");
+    }
+
     const style = getThemeStyle(doc.global.styleId);
     const { zip: master, key } = await getEditorBaseThemeZip();
     // WICHTIG: dyn mitgeben — sonst fehlt der Kaufbox-Host (.bspx-host)

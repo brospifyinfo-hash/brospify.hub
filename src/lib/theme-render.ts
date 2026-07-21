@@ -183,7 +183,11 @@ function buildEnv(masterZip: Buffer): ThemeEnv {
     money_with_currency: money,
     money_without_currency: (v) => money(v).replace(" €", ""),
     t: (key) => tLookup(String(key)) || String(key).split(".").pop()!.replace(/_/g, " "),
-    asset_url: (v) => String(v),
+    // Marker statt kaputter relativer URL: Die Storefront-Runtime
+    // (bspx-sections.js) ersetzt __BSPX_ASSET__/x durch die echte
+    // CDN-Asset-Basis des Shops — die Dateien liegen ja im Theme.
+    // (Hub-Preview: inlineScripts nimmt weiter nur den Dateinamen.)
+    asset_url: (v) => `__BSPX_ASSET__/${String(v)}`,
     asset_img_url: (v) => assetImg(v),
     file_url: (v) => String(v),
     image_url: (v) => assetImg(v),
