@@ -379,7 +379,21 @@ function fillSettings(settings: Record<string, unknown>, schemaSettings: any[], 
       // Icons/Logos/SVGs NICHT durch Beispielbilder ersetzen — die sollen so
       // bleiben wie im Theme. Nur „echte" Bild-Slots füllen.
       if (/icon|logo|svg|badge/i.test(id)) continue;
-      settings[id] = imageObject(pickImg()); // leere/Shopify-Bilder → echtes Beispielbild
+      // Vom Nutzer gesetzte Bild-URLs (Editor-Upload) IMMER behalten —
+      // vorher wurden sie hier durch Beispielbilder ÜBERSCHRIEBEN.
+      const cur = settings[id];
+      const curUrl =
+        typeof cur === "string" && /^https?:\/\//i.test(cur)
+          ? cur
+          : cur && typeof cur === "object" && typeof (cur as { src?: unknown }).src === "string" && /^https?:\/\//i.test((cur as { src: string }).src)
+            ? (cur as { src: string }).src
+            : "";
+      const img = curUrl || pickImg();
+      if (img) settings[id] = imageObject(img);
+      // Kein Bild verfügbar → Setting LEER lassen: die Section rendert dann
+      // ihren sauberen Leer-Zustand (Farbfläche/Verlauf) — exakt wie die
+      // Editor-Vorschau. Vorher: graue Platzhalter-Kachel in jedem Slot.
+      else delete settings[id];
       continue;
     }
     const cur = settings[id];
@@ -453,9 +467,12 @@ async function renderTemplateBody(
 ): Promise<string> {
   const tplJson = JSON.parse(readEntry(env.zip, `templates/${template}`) || "{}");
   const order: string[] = Array.isArray(tplJson.order) ? tplJson.order : [];
-  const prodImgs = product.images.length ? product.images : [PLACEHOLDER_IMG];
+  // KEIN Platzhalter-Fallback (anders als die Hub-Preview): ohne Produkt-
+  // bilder bleibt pickImg leer → Sections rendern ihre Leer-Zustände,
+  // exakt wie die Editor-Vorschau (statt grauer Kacheln überall).
+  const prodImgs = product.images;
   let imgIdx = 0;
-  const pickImg = () => prodImgs[imgIdx++ % prodImgs.length];
+  const pickImg = () => (prodImgs.length ? prodImgs[imgIdx++ % prodImgs.length] : "");
   const idxRef = { n: 0 };
   let body = "";
   for (const id of order) {
