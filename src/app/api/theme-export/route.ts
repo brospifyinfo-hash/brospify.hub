@@ -25,7 +25,8 @@ import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
-import { compileDocumentZip, isValidDocument } from "@/lib/theme-compile";
+import { isValidDocument } from "@/lib/theme-compile";
+import { compileThinDocumentZip } from "@/lib/theme-thin";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
@@ -284,19 +285,20 @@ export async function POST(req: NextRequest) {
   try {
     const { zip: master, source, key } = await getEditorBaseThemeZip();
     console.log(`[theme-export] Basis-Theme: ${source} (${doc ? "v2-Dokument" : "Legacy"})`);
-    // NORMALER Download = bewährtes volles Theme (compileDocumentZip): sieht
-    // 1:1 wie die Editor-Vorschau aus und funktioniert komplett (Kaufbox live).
-    // Das GESCHÜTZTE, server-gerenderte Theme (Sektions-Code nicht im ZIP)
-    // gibt es getrennt unter /api/storefront/thin-theme?code=… — bis dessen
-    // Optik-Parität mit einem echten Shop finalisiert ist.
+    // GESCHÜTZTES Theme: die Design-Sektionen liegen NICHT als Liquid im ZIP,
+    // sondern werden live vom Hub gerendert (nur mit gültigem Code/Abo). Der
+    // Sektions-Code verlässt so nie den Server. Die CSS-Isolation
+    // (#bspx-sections-slot-Scoping) sorgt dafür, dass es im Shop aussieht wie
+    // in der Editor-Vorschau, unabhängig vom bestehenden Shop-Theme.
     zip = doc
-      ? compileDocumentZip(
+      ? compileThinDocumentZip(
           master,
           doc,
           themeCopy || {},
           key,
           { syncCode, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: await getRuntimeJs() },
           licenseKey,
+          await getSectionsRuntimeJs(),
         )
       : buildThemeZip(master, {
       licenseKey,
