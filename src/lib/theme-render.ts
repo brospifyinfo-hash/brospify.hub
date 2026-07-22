@@ -556,7 +556,32 @@ export async function renderSectionsPayload(
   } catch {
     /* Style-Block optional */
   }
-  const css = `${styleCss}\n<style>${env.baseCss}</style>`;
+  // ── CSS-ISOLATION ──────────────────────────────────────────────
+  // Das dunkle Theme-CSS des Kunden-Shops darf NICHT in die eingefügten
+  // Sektionen durchgreifen (sonst: alles schwarz statt Palette). Deshalb
+  // wird das komplette Sektions-CSS unter #bspx-sections-slot gescopet
+  // (höhere Spezifität als die globalen Shop-Regeln) und die Farb-/Schrift-
+  // Basis der Palette direkt auf den Container gesetzt.
+  const rawCss = `${styleCss}\n${env.baseCss}`;
+  const c = opts.palette;
+  const rgb = (hex: string) => {
+    const h = hex.replace("#", "");
+    const f = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
+    const n = parseInt(f, 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+  };
+  const baseVars =
+    `#bspx-sections-slot{` +
+    `background:${c.background};color:${c.text};` +
+    `--color-background:${rgb(c.background)};--color-foreground:${rgb(c.text)};` +
+    `--gradient-background:${c.background};` +
+    `--color-button:${rgb(c.button)};--color-button-text:${rgb(c.buttonText)};` +
+    `--pv-bg:${c.background};--pv-text:${c.text};--pv-btn:${c.button};--pv-btnText:${c.buttonText};--pv-accent:${c.accent};` +
+    `}`;
+  // RAW-CSS (ohne <style>-Wrapper) — die Runtime steckt es in ein
+  // <style>-Element; ein verschachteltes <style> würde die CSS-Parsing
+  // sprengen.
+  const css = `${baseVars}\n${scopeCss(rawCss, "#bspx-sections-slot")}`;
 
   return {
     product: productBody,
@@ -564,6 +589,61 @@ export async function renderSectionsPayload(
     css,
     fontHref: `https://fonts.googleapis.com/css2?family=${fontParam}&display=swap`,
   };
+}
+
+// ── CSS unter einen Scope-Selektor hängen (Isolation gegen Shop-Theme) ──
+function readBraces(css: string, openIdx: number): { inner: string; end: number } {
+  let depth = 0;
+  for (let i = openIdx; i < css.length; i++) {
+    if (css[i] === "{") depth++;
+    else if (css[i] === "}") {
+      depth--;
+      if (depth === 0) return { inner: css.slice(openIdx + 1, i), end: i + 1 };
+    }
+  }
+  return { inner: css.slice(openIdx + 1), end: css.length };
+}
+function scopeSelector(sel: string, scope: string): string {
+  const s = sel.trim();
+  if (!s) return s;
+  if (s.startsWith("%") || s.startsWith("&")) return s; // Vorsichtsfall
+  if (/^(:root|html|body)\b/i.test(s)) return scope + s.replace(/^(:root|html|body)/i, "");
+  return `${scope} ${s}`;
+}
+function scopeCss(raw: string, scope: string): string {
+  const css = raw.replace(/<\/?style[^>]*>/gi, "").replace(/\/\*[\s\S]*?\*\//g, "");
+  let out = "";
+  let i = 0;
+  const n = css.length;
+  while (i < n) {
+    while (i < n && /\s/.test(css[i])) i++;
+    if (i >= n) break;
+    if (css[i] === "@") {
+      let j = i;
+      while (j < n && css[j] !== "{" && css[j] !== ";") j++;
+      const prelude = css.slice(i, j).trim();
+      const atName = (prelude.match(/^@([a-z-]+)/i) || [, ""])[1].toLowerCase();
+      if (j >= n || css[j] === ";") { out += prelude + ";\n"; i = j + 1; continue; }
+      const block = readBraces(css, j);
+      i = block.end;
+      if (atName === "media" || atName === "supports" || atName === "container") {
+        out += `${prelude}{\n${scopeCss(block.inner, scope)}}\n`;
+      } else {
+        out += `${prelude}{${block.inner}}\n`; // keyframes/font-face/page → nicht scopen
+      }
+      continue;
+    }
+    let j = i;
+    while (j < n && css[j] !== "{") j++;
+    if (j >= n) break;
+    const selector = css.slice(i, j).trim();
+    const block = readBraces(css, j);
+    i = block.end;
+    if (!selector) continue;
+    const scoped = selector.split(",").map((s) => scopeSelector(s, scope)).join(", ");
+    out += `${scoped}{${block.inner}}\n`;
+  }
+  return out;
 }
 
 export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts, cacheKey = "bundled"): Promise<string> {
