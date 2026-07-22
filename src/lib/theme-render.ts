@@ -563,25 +563,13 @@ export async function renderSectionsPayload(
   // (höhere Spezifität als die globalen Shop-Regeln) und die Farb-/Schrift-
   // Basis der Palette direkt auf den Container gesetzt.
   const rawCss = `${styleCss}\n${env.baseCss}`;
-  const c = opts.palette;
-  const rgb = (hex: string) => {
-    const h = hex.replace("#", "");
-    const f = h.length === 3 ? h.split("").map((x) => x + x).join("") : h;
-    const n = parseInt(f, 16);
-    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
-  };
-  const baseVars =
-    `#bspx-sections-slot{` +
-    `background:${c.background};color:${c.text};` +
-    `--color-background:${rgb(c.background)};--color-foreground:${rgb(c.text)};` +
-    `--gradient-background:${c.background};` +
-    `--color-button:${rgb(c.button)};--color-button-text:${rgb(c.buttonText)};` +
-    `--pv-bg:${c.background};--pv-text:${c.text};--pv-btn:${c.button};--pv-btnText:${c.buttonText};--pv-accent:${c.accent};` +
-    `}`;
-  // RAW-CSS (ohne <style>-Wrapper) — die Runtime steckt es in ein
-  // <style>-Element; ein verschachteltes <style> würde die CSS-Parsing
-  // sprengen.
-  const css = `${baseVars}\n${scopeCss(rawCss, "#bspx-sections-slot")}`;
+  // Das komplette Sektions-CSS (inkl. der theme-eigenen :root/body-Farb-
+  // schemata) wird unter #bspx-sections-slot gescopet. Dadurch gewinnen die
+  // EIGENEN Farben/Schemata der Sektionen (aus dem Design) über die globalen
+  // Regeln des Kunden-Shop-Themes — aber NICHTS wird auf eine Einheitsfarbe
+  // gezwungen (mehrfarbige Designs bleiben erhalten). Raw-CSS, kein
+  // verschachteltes <style>.
+  const css = scopeCss(rawCss, "#bspx-sections-slot");
 
   return {
     product: productBody,
