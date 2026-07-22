@@ -4,7 +4,7 @@
 // { locked:true }. Kein Rendering, nur Status → schnell + gut cachebar.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getThemeDesign, findKundeByKey } from "@/lib/sheets";
+import { getThemeDesignStrict, findKundeByKey } from "@/lib/sheets";
 import { CANCEL_STATUS, INACTIVE_STATUS } from "@/lib/tiers-shared";
 
 export const runtime = "nodejs";
@@ -43,7 +43,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
   if (!clean) return json({ locked: true, message: "Kein Code." }, 200, "no-store");
 
   try {
-    const design = await getThemeDesign(clean);
+    // Strict-Variante: getThemeDesign() schluckt Sheets-Fehler zu null —
+    // ein Ausfall würde sonst als „Code nicht gefunden" → locked:true
+    // enden und im Overlay-Gate 24h negativ gecacht. Der Throw landet im
+    // catch unten (fail-open).
+    const design = await getThemeDesignStrict(clean);
     if (!design) return json({ locked: true, message: "Code nicht gefunden." });
 
     const owner = design.user || "";

@@ -23,25 +23,42 @@ function findEntry(zip: AdmZip, wanted: string): AdmZip.IZipEntry | null {
   return zip.getEntries().find((e) => e.entryName.replace(/\\/g, "/").replace(/^\.?\//, "") === norm) || null;
 }
 
+// Cache-Buster für die abo-gegateten Remote-Assets. Bei Änderungen an
+// public/bspx-sections.js / bspx-runtime.js / BUYBOX_CSS hochzählen —
+// NEUE Exporte bekommen dann sofort frische Dateien; bereits installierte
+// Themes revalidieren über die CDN-s-maxage von selbst.
+const BSPX_ASSET_V = "6";
+
 /** Der einzige „Sektions"-Baustein im Thin-Theme: rendert den Mount-Punkt
- *  + lädt die Runtimes. Enthält KEINE Design-Logik. */
+ *  + lädt CSS/JS ABO-GEGATET vom Hub (/api/storefront/asset/…). Das
+ *  Liquid enthält NUR Struktur + Variablen — kein kritisches CSS/JS mehr
+ *  im Kunden-Theme. */
 function buildHostSection(syncCode: string, hubUrl: string): string {
   // Der Code kommt aus dem Feld „🔑 Brospify Sync-Code" (settings.license_key)
   // — so kann der Händler das Design im Shop wechseln, indem er einen anderen
   // Code einträgt. Ist das Feld leer, greift der beim Download eingebackene
-  // Code als Fallback.
-  return `<div
+  // Code als Fallback. data-bspx-assets liefert der Runtime die echte
+  // Theme-CDN-Basis fürs __BSPX_ASSET__-Rewriting (die Scripts kommen jetzt
+  // vom Hub — ihre eigene URL taugt nicht mehr als Basis!).
+  const assetUrl = (name: string) =>
+    `${hubUrl}/api/storefront/asset/${name}{{ bspx_q }}`;
+  return `{%- assign bspx_code = settings.license_key | strip -%}
+{%- if bspx_code == blank -%}{%- assign bspx_code = '${syncCode}' -%}{%- endif -%}
+{%- capture bspx_q -%}?code={{ bspx_code | url_encode }}&shop={{ shop.permanent_domain }}&v=${BSPX_ASSET_V}{%- endcapture -%}
+<div
   id="bspx-sections"
-  data-bspx-code="{% if settings.license_key != blank %}{{ settings.license_key | strip | escape }}{% else %}${syncCode}{% endif %}"
+  data-bspx-code="{{ bspx_code | escape }}"
   data-bspx-hub="${hubUrl}"
   data-bspx-template="{{ template.name }}"
+  data-bspx-assets="{{ 'base.css' | asset_url }}"
 ></div>
 <div id="bspx-sections-skeleton" style="min-height:60vh"></div>
 {%- if template.name == 'product' -%}
 <script id="bspx-real-product" type="application/json">{{ product | json }}</script>
 {%- endif -%}
-<script src="{{ 'bspx-sections.js' | asset_url }}" defer></script>
-<script src="{{ 'bspx-runtime.js' | asset_url }}" defer></script>
+<link rel="stylesheet" href="${assetUrl("bspx-core.css")}">
+<script src="${assetUrl("bspx-sections.js")}" defer></script>
+<script src="${assetUrl("bspx-runtime.js")}" defer></script>
 {% schema %}
 {
   "name": "Brospify Host",
@@ -63,8 +80,10 @@ const HOST_TEMPLATE = () =>
   );
 
 /**
- * Baut das Thin-Theme.
- * @param sectionsRuntimeJs Inhalt von public/bspx-sections.js
+ * Baut das Thin-Theme. Kritisches CSS/JS (Sektions-Loader, Kaufbox-
+ * Runtime, Kaufbox-CSS, Offline-Plan) liegt NICHT im ZIP — es kommt
+ * abo-gegated vom Hub (/api/storefront/asset/…). dyn daher OHNE
+ * payloadJson/runtimeJs aufrufen.
  */
 export function compileThinDocumentZip(
   baseZip: Buffer,
@@ -73,7 +92,6 @@ export function compileThinDocumentZip(
   cacheKey: string,
   dyn: DynamicBuyboxOpts,
   licenseKey: string,
-  sectionsRuntimeJs: string,
 ): Buffer {
   // 1) Voll kompilieren (korrekte Templates inkl. Kaufbox-Host + gebackene
   //    bspx-runtime.js). Daraus leiten wir ab, welche Section-Typen der
@@ -87,9 +105,17 @@ export function compileThinDocumentZip(
   setZipFile(zip, "templates/product.json", HOST_TEMPLATE());
   setZipFile(zip, "templates/index.json", HOST_TEMPLATE());
 
-  // 4) Host-Baustein + Sektions-Runtime einbauen.
+  // 4) Host-Baustein einbauen (lädt CSS/JS abo-gegated vom Hub).
   setZipFile(zip, "sections/bspx-host.liquid", buildHostSection(syncCode, hubUrl));
-  setZipFile(zip, "assets/bspx-sections.js", sectionsRuntimeJs);
+
+  // 4a) Kritisches JS + Design-Daten dürfen NICHT im Kunden-ZIP liegen —
+  //     auch Reste aus Admin-Upload-Basen oder dem Voll-Compile entfernen.
+  //     (Die Runtimes kommen remote über /api/storefront/asset/…, der
+  //     Kaufbox-Plan live über /api/buybox/<code>.)
+  for (const asset of ["assets/bspx-sections.js", "assets/bspx-runtime.js", "assets/bspx-plan.json"]) {
+    const entry = findEntry(zip, asset);
+    if (entry) zip.deleteFile(entry.entryName);
+  }
 
   // 4b) GLOBALES Gate auf jeder Seite (license-check wird aus theme.liquid
   //     gerendert): Key fehlt/ungültig/Abo aus → die KOMPLETTE Website

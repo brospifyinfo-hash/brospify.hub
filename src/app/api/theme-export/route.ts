@@ -31,55 +31,16 @@ import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
 import { upsertLiveDesign, snapshotDesign } from "@/lib/design-autosave";
-import { BUYBOX_CSS } from "@/lib/buybox-css";
 
 // Öffentliche Hub-URL für die Storefront-Fetches der Kunden-Shops.
 // BEWUSST der Apex (nicht www): der www→Apex-Redirect trägt keine
 // CORS-Header — ein Fetch über www würde im Browser geblockt.
 const BSPX_HUB_URL = "https://brospifyhub.com";
-import { promises as fsp } from "fs";
-import path from "path";
 
-// Storefront-Runtime fürs Einbacken ins ZIP (assets/bspx-runtime.js) —
-// pro Lambda gecached; Pfad-Kandidaten wegen Vercel-File-Tracing.
-let runtimeJsCache: string | null = null;
-async function getRuntimeJs(): Promise<string> {
-  if (runtimeJsCache) return runtimeJsCache;
-  const candidates = [
-    path.join(process.cwd(), "public", "bspx-runtime.js"),
-    path.join(process.cwd(), "..", "public", "bspx-runtime.js"),
-  ];
-  for (const p of candidates) {
-    try {
-      runtimeJsCache = await fsp.readFile(p, "utf8");
-      return runtimeJsCache;
-    } catch {
-      /* nächsten Kandidaten probieren */
-    }
-  }
-  console.warn("[theme-export] bspx-runtime.js nicht gefunden — ZIP ohne Asset-Runtime (Hub-Script bleibt).");
-  return "";
-}
-
-// Sektions-Runtime (assets/bspx-sections.js) fürs geschützte Theme.
-let sectionsJsCache: string | null = null;
-async function getSectionsRuntimeJs(): Promise<string> {
-  if (sectionsJsCache) return sectionsJsCache;
-  const candidates = [
-    path.join(process.cwd(), "public", "bspx-sections.js"),
-    path.join(process.cwd(), "..", "public", "bspx-sections.js"),
-  ];
-  for (const p of candidates) {
-    try {
-      sectionsJsCache = await fsp.readFile(p, "utf8");
-      return sectionsJsCache;
-    } catch {
-      /* nächsten Kandidaten probieren */
-    }
-  }
-  console.warn("[theme-export] bspx-sections.js nicht gefunden.");
-  return "";
-}
+// HINWEIS: Die Runtimes (bspx-sections.js / bspx-runtime.js) werden NICHT
+// mehr ins ZIP gebacken — das geschützte Theme lädt sie abo-gegated vom
+// Hub (/api/storefront/asset/…). Der Kaufbox-Plan kommt live über
+// /api/buybox/<code> (ebenfalls abo-gegated).
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -216,7 +177,6 @@ export async function POST(req: NextRequest) {
   // unter dem Code speichern. MUSS vor dem Build klappen — sonst würde ein
   // ZIP mit totem Code ausgeliefert.
   let syncCode = "";
-  let payloadJson = "";
   let designName = "";
   if (doc) {
     // Aktives GESPEICHERTES Design? → dessen Code verwenden (Besitz prüfen).
@@ -249,9 +209,6 @@ export async function POST(req: NextRequest) {
     }
     try {
       const plan = buildBuyboxPlan(doc, themeCopy);
-      // Gleiches Payload-Format wie GET /api/buybox/[code] — wird ZUSÄTZLICH
-      // als assets/bspx-plan.json ins ZIP gebacken (Offline-Fallback).
-      payloadJson = JSON.stringify({ v: 1, css: BUYBOX_CSS, plan });
       const owner = session.isAdmin ? "admin" : session.lizenzschluessel || "";
       await saveBuyboxPlan(syncCode, owner, produkt.id, JSON.stringify(plan));
       // Download eines gespeicherten Designs hält den Speicherstand synchron;
@@ -270,10 +227,21 @@ export async function POST(req: NextRequest) {
       // Design-Vorlage an (History — ältere Stände bleiben abrufbar).
       await snapshotDesign(owner, produkt.id, doc, JSON.stringify(plan));
     } catch (err) {
-      // Sheet-Ausfall blockiert den Download NICHT mehr — der eingebackene
-      // Plan rendert die Buy Box auch ohne Live-Sync; Sync greift beim
-      // nächsten „Live aktualisieren".
-      console.error("[theme-export] Buybox-Plan speichern fehlgeschlagen (Download läuft mit Offline-Plan weiter):", err);
+      // Seit dem CDN-Remote-Loading gibt es KEINEN eingebackenen Offline-
+      // Plan mehr im ZIP: Ein Thin-Theme, dessen Design nie in ThemeDesigns
+      // gespeichert wurde, kann NIE rendern (Render-Endpoint findet den
+      // Code nicht). Nur weiterlaufen, wenn unter dem Code bereits ein
+      // Design liegt (Re-Download: Shop rendert den letzten Stand weiter) —
+      // sonst klarer Fehler statt eines toten ZIPs.
+      const existing = await getThemeDesign(syncCode);
+      if (!existing) {
+        console.error("[theme-export] Design-Speichern fehlgeschlagen, kein bestehendes Design — Download abgebrochen:", err);
+        return NextResponse.json(
+          { error: "Speichern beim Hub ist gerade gestört — bitte versuche den Download in ein paar Minuten erneut. (Es wurden keine Credits abgezogen.)" },
+          { status: 503 },
+        );
+      }
+      console.error("[theme-export] Plan/Design-Speichern fehlgeschlagen (bestehendes Design bleibt aktiv, Sync beim naechsten Live-Aktualisieren):", err);
     }
   }
 
@@ -299,9 +267,8 @@ export async function POST(req: NextRequest) {
           doc,
           themeCopy || {},
           key,
-          { syncCode, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: await getRuntimeJs() },
+          { syncCode, hubUrl: BSPX_HUB_URL },
           licenseKey,
-          await getSectionsRuntimeJs(),
         )
       : buildThemeZip(master, {
       licenseKey,

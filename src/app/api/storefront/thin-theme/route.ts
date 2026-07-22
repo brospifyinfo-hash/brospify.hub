@@ -12,25 +12,14 @@ import { getThemeDesign, getAllProdukte, type Produkt } from "@/lib/sheets";
 import { listCustomProductsOfOwner, customToProdukt } from "@/lib/custom-products";
 import { isValidDocument } from "@/lib/theme-compile";
 import { compileThinDocumentZip } from "@/lib/theme-thin";
-import { buildBuyboxPlan } from "@/lib/buybox-plan";
-import { BUYBOX_CSS } from "@/lib/buybox-css";
 import { getEditorBaseThemeZip } from "@/lib/theme-master";
 import type { ThemeDocument } from "@/lib/theme-doc";
-import { promises as fsp } from "fs";
-import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 const BSPX_HUB_URL = "https://brospifyhub.com";
-
-async function readAsset(name: string): Promise<string> {
-  for (const p of [path.join(process.cwd(), "public", name), path.join(process.cwd(), "..", "public", name)]) {
-    try { return await fsp.readFile(p, "utf8"); } catch { /* nächster Kandidat */ }
-  }
-  return "";
-}
 
 async function resolveProduct(user: string, productId: string): Promise<Produkt | null> {
   try {
@@ -72,23 +61,19 @@ export async function GET(req: NextRequest) {
     const produkt = await resolveProduct(design.user, design.productId || doc.productId);
     const themeCopy = produkt?.extra?.themeCopy || {};
 
-    const plan = buildBuyboxPlan(doc, themeCopy);
-    const payloadJson = JSON.stringify({ v: 1, css: BUYBOX_CSS, plan });
-    const buyboxRuntime = await readAsset("bspx-runtime.js");
-    const sectionsRuntime = await readAsset("bspx-sections.js");
-
     const { zip: master, key } = await getEditorBaseThemeZip();
     // Feld = der Sync-Code selbst (identifiziert Design + gatet via Besitzer).
     const licenseKey = code;
 
+    // Runtimes/Plan werden NICHT mehr eingebacken — das Theme lädt sie
+    // abo-gegated vom Hub (/api/storefront/asset/…, /api/buybox/<code>).
     const zip = compileThinDocumentZip(
       master,
       doc,
       themeCopy,
       key,
-      { syncCode: code, hubUrl: BSPX_HUB_URL, payloadJson, runtimeJs: buyboxRuntime },
+      { syncCode: code, hubUrl: BSPX_HUB_URL },
       licenseKey,
-      sectionsRuntime,
     );
 
     return new Response(new Uint8Array(zip), {

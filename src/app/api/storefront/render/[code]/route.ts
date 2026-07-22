@@ -14,7 +14,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import {
-  getThemeDesign,
+  getThemeDesignStrict,
   getAllProdukte,
   findKundeByKey,
   type Produkt,
@@ -102,7 +102,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
   if (!cleanCode) return json({ locked: true, error: "Kein Code." }, 400, "no-store");
 
   try {
-    const design = await getThemeDesign(cleanCode);
+    // Strict-Variante: ein Sheets-Ausfall darf nicht wie „Code nicht
+    // gefunden" (locked:true) aussehen — der Throw fällt in den äußeren
+    // catch → 500 { locked:false } no-store, die Shop-Runtime nutzt dann
+    // ihren letzten Cache (fail-open).
+    const design = await getThemeDesignStrict(cleanCode);
     if (!design) return json({ locked: true, error: "Code nicht gefunden." }, 404, "no-store");
 
     // ── Gate: der Sync-Code IST der Schlüssel. Er gehört zu einem

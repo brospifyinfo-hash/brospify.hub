@@ -188,6 +188,15 @@
         })
         .then(function (data) {
           if (!data) return;
+          if (data.locked === true) {
+            // Abo inaktiv — GÜLTIGES Verdikt (kein Netzfehler): NICHT in den
+            // Cache-/Asset-Fallback laufen, gecachten Plan verwerfen. Die
+            // native Fallback-Form bleibt kaufbar (der Kauf gehört dem Shop,
+            // nur das Brospify-Design ist gesperrt).
+            try { localStorage.removeItem(cacheKey); } catch (e) { /* egal */ }
+            showFallback();
+            return;
+          }
           try { localStorage.setItem(cacheKey, JSON.stringify({ plan: data.plan, css: data.css, ts: Date.now() })); } catch (e) { /* voll */ }
           if (!useData(data)) offline();
         })

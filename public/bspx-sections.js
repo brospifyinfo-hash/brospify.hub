@@ -28,15 +28,26 @@
     else fn();
   }
 
-  // Echte Asset-Basis des Themes (CDN) — abgeleitet aus der eigenen
-  // Script-URL (…/assets/bspx-sections.js?v=…). Der Server rendert
-  // Asset-Referenzen als __BSPX_ASSET__/name; hier werden sie auf die
-  // echten Theme-Dateien umgeschrieben (CSS/JS/Bilder liegen im Theme).
+  // Echte Asset-Basis des Themes (CDN). Der Server rendert Asset-
+  // Referenzen als __BSPX_ASSET__/name; hier werden sie auf die echten
+  // Theme-Dateien umgeschrieben (CSS/JS/Bilder liegen im Theme).
+  // BEVORZUGT: data-bspx-assets am Host (per Liquid asset_url berechnet) —
+  // diese Runtime wird abo-gegated vom HUB geladen, ihre eigene Script-URL
+  // zeigt also NICHT mehr auf die Theme-CDN. Fallback für alte Themes
+  // (Runtime als Theme-Asset): Verzeichnis der eigenen Script-URL, dabei
+  // Hub-URLs (/api/storefront/asset/…) überspringen.
   var assetBase = (function () {
-    var el = document.querySelector('script[src*="bspx-sections"]');
-    var src = el ? el.getAttribute("src") || "" : "";
-    var m = src.match(/^(.*\/)[^/]*$/);
-    return m ? m[1] : "";
+    var attr = host.getAttribute("data-bspx-assets") || "";
+    var m0 = attr.match(/^(.*\/)[^/]*$/);
+    if (m0) return m0[1];
+    var els = document.querySelectorAll('script[src*="bspx-sections"]');
+    for (var i = 0; i < els.length; i++) {
+      var src = els[i].getAttribute("src") || "";
+      if (src.indexOf("/api/storefront/asset/") >= 0) continue;
+      var m = src.match(/^(.*\/)[^/]*$/);
+      if (m) return m[1];
+    }
+    return "";
   })();
   function rewriteAssets(container) {
     if (!assetBase) return;

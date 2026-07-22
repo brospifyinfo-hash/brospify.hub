@@ -4,10 +4,16 @@
 // KEIN Login, CORS offen, aggressiv CDN-gecacht (Design ändert sich nur,
 // wenn der Kunde im Editor speichert; stale-while-revalidate überbrückt).
 // Enthält KEINE personenbezogenen Daten — nur Design/Texte/Farben.
+//
+// ABO-GATE: Ist das Abo des Plan-Besitzers (Spalte B) inaktiv, kommt
+// 200 { locked:true } — ein GÜLTIGES Verdikt, das die Runtime NICHT in
+// den Cache-/Asset-Fallback laufen lässt (die native Fallback-Form bleibt
+// kaufbar). Sheets-Ausfall beim Kunden-Lookup → fail-open ausliefern.
 
 import { NextRequest, NextResponse } from "next/server";
-import { getBuyboxPlanByCode } from "@/lib/sheets";
+import { getBuyboxPlanByCodeStrict } from "@/lib/sheets";
 import { BUYBOX_CSS } from "@/lib/buybox-css";
+import { storefrontOwnerVerdict } from "@/lib/storefront-gate";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,10 +27,27 @@ const CORS_HEADERS: Record<string, string> = {
 // Pro Lambda kurz cachen — schützt die Sheets-Quota vor Traffic-Spitzen
 // der Kunden-Shops; die eigentliche Lastabwehr macht der CDN-Cache.
 // KURZ halten, damit „Live aktualisieren" im Hub schnell im Shop ankommt.
-const memCache = new Map<string, { json: string | null; ts: number }>();
+type BuyboxRow = Awaited<ReturnType<typeof getBuyboxPlanByCodeStrict>>;
+const memCache = new Map<string, { row: BuyboxRow; ts: number }>();
 const MEM_TTL_MS = 10_000;
 
+// Abo-Verdikt pro Besitzer etwas länger cachen (wie /api/license/validate);
+// fail-open wird NIE gecacht.
+const verdictCache = new Map<string, { active: boolean; ts: number }>();
+const VERDICT_TTL_MS = 60_000;
+
 const CODE_RE = /^bspx_[a-z0-9]{10,40}$/;
+
+async function ownerActive(owner: string): Promise<boolean> {
+  const hit = verdictCache.get(owner);
+  if (hit && Date.now() - hit.ts < VERDICT_TTL_MS) return hit.active;
+  const verdict = await storefrontOwnerVerdict(owner);
+  if (!verdict.failOpen) {
+    verdictCache.set(owner, { active: verdict.active, ts: Date.now() });
+    if (verdictCache.size > 500) verdictCache.clear();
+  }
+  return verdict.active;
+}
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS });
@@ -36,29 +59,48 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ cod
     return NextResponse.json({ error: "invalid code" }, { status: 404, headers: CORS_HEADERS });
   }
 
-  let planJson: string | null;
+  let row: BuyboxRow;
   const hit = memCache.get(code);
   if (hit && Date.now() - hit.ts < MEM_TTL_MS) {
-    planJson = hit.json;
+    row = hit.row;
   } else {
-    planJson = await getBuyboxPlanByCode(code);
-    memCache.set(code, { json: planJson, ts: Date.now() });
+    try {
+      // Strict-Variante: ein Sheets-Ausfall darf nicht wie „unbekannter
+      // Code" enden (cachebare 404 vergiftet das CDN 60s; Memcache 10s).
+      row = await getBuyboxPlanByCodeStrict(code);
+    } catch {
+      // Fail-open-Signal: 503 no-store — die Runtime fällt auf ihren
+      // localStorage-Cache bzw. die native Fallback-Form zurück.
+      return NextResponse.json(
+        { error: "temporarily unavailable" },
+        { status: 503, headers: { ...CORS_HEADERS, "Cache-Control": "no-store" } },
+      );
+    }
+    memCache.set(code, { row, ts: Date.now() });
     if (memCache.size > 500) {
       const oldest = memCache.keys().next().value;
       if (oldest) memCache.delete(oldest);
     }
   }
 
-  if (!planJson) {
+  if (!row) {
     return NextResponse.json(
       { error: "unknown or inactive code" },
       { status: 404, headers: { ...CORS_HEADERS, "Cache-Control": "public, s-maxage=60" } },
     );
   }
 
+  // Abo-Gate über den Plan-Besitzer — gleiche Logik wie render/status.
+  if (!(await ownerActive(row.user))) {
+    return NextResponse.json(
+      { v: 1, locked: true, message: "Abo nicht aktiv." },
+      { headers: { ...CORS_HEADERS, "Cache-Control": "public, s-maxage=30" } },
+    );
+  }
+
   let plan: unknown;
   try {
-    plan = JSON.parse(planJson);
+    plan = JSON.parse(row.planJson);
   } catch {
     return NextResponse.json({ error: "corrupt plan" }, { status: 500, headers: CORS_HEADERS });
   }

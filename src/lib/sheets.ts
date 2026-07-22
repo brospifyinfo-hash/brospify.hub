@@ -2151,21 +2151,30 @@ export async function addToScoutCache(productId: string, videos: ScoutVideo[]): 
 //   A=Code, B=User, C=ProductId, D=PlanJson, E=UpdatedAt, F=Active
 const BUYBOX_HEADERS = ["Code", "User", "ProductId", "PlanJson", "UpdatedAt", "Active"];
 
-/** Render-Plan zu einem Sync-Code (JSON-String) — null wenn unbekannt/inaktiv. */
-export async function getBuyboxPlanByCode(code: string): Promise<string | null> {
+/** Render-Plan + Besitzer zu einem Sync-Code — null wenn unbekannt/inaktiv.
+ *  `user` (Spalte B) braucht der öffentliche Buybox-Endpoint fürs Abo-Gate. */
+/** WIRFT bei Infrastruktur-Fehlern (Quota/Netz/Auth) statt sie zu
+ *  schlucken — für Storefront-Gates, die „Sheets-Ausfall" von „Code
+ *  existiert nicht" unterscheiden MÜSSEN: ein Ausfall darf nie als
+ *  cachebares 404-Verdikt enden (fail-open-Invariante). */
+export async function getBuyboxPlanByCodeStrict(code: string): Promise<{ planJson: string; user: string } | null> {
   if (!code) return null;
   const sheets = getSheets();
+  await ensureSheet("BuyboxConfigs", BUYBOX_HEADERS);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: "BuyboxConfigs!A2:F",
+  });
+  const rows = res.data.values || [];
+  const hit = rows.find((r) => (r[0] || "") === code);
+  if (!hit || !hit[3]) return null;
+  if (String(hit[5] ?? "1") === "0") return null; // deaktiviert
+  return { planJson: String(hit[3]), user: String(hit[1] || "") };
+}
+
+export async function getBuyboxPlanByCode(code: string): Promise<{ planJson: string; user: string } | null> {
   try {
-    await ensureSheet("BuyboxConfigs", BUYBOX_HEADERS);
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID(),
-      range: "BuyboxConfigs!A2:F",
-    });
-    const rows = res.data.values || [];
-    const hit = rows.find((r) => (r[0] || "") === code);
-    if (!hit || !hit[3]) return null;
-    if (String(hit[5] ?? "1") === "0") return null; // deaktiviert
-    return String(hit[3]);
+    return await getBuyboxPlanByCodeStrict(code);
   } catch {
     return null;
   }
@@ -2236,19 +2245,28 @@ export async function listThemeDesigns(user: string, productId?: string): Promis
   }
 }
 
-export async function getThemeDesign(code: string): Promise<{ user: string; productId: string; name: string; docJson: string } | null> {
+/** WIRFT bei Infrastruktur-Fehlern (Quota/Netz/Auth) — siehe
+ *  getBuyboxPlanByCodeStrict: die Storefront-Gates (asset/status/render)
+ *  brauchen den Unterschied „Ausfall" vs. „Code nicht gefunden", sonst
+ *  sperrt ein Sheets-Schluckauf zahlende Shops (24h-Negativ-Cache im
+ *  Overlay-Gate, cachebare 404 am CDN). */
+export async function getThemeDesignStrict(code: string): Promise<{ user: string; productId: string; name: string; docJson: string } | null> {
   if (!code) return null;
   const sheets = getSheets();
+  await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID(),
+    range: "ThemeDesigns!A2:F",
+  });
+  const rows = res.data.values || [];
+  const hit = rows.find((r) => (r[0] || "") === code);
+  if (!hit || !hit[4]) return null;
+  return { user: String(hit[1] || ""), productId: String(hit[2] || ""), name: String(hit[3] || ""), docJson: String(hit[4]) };
+}
+
+export async function getThemeDesign(code: string): Promise<{ user: string; productId: string; name: string; docJson: string } | null> {
   try {
-    await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
-    const res = await sheets.spreadsheets.values.get({
-      spreadsheetId: SHEET_ID(),
-      range: "ThemeDesigns!A2:F",
-    });
-    const rows = res.data.values || [];
-    const hit = rows.find((r) => (r[0] || "") === code);
-    if (!hit || !hit[4]) return null;
-    return { user: String(hit[1] || ""), productId: String(hit[2] || ""), name: String(hit[3] || ""), docJson: String(hit[4]) };
+    return await getThemeDesignStrict(code);
   } catch {
     return null;
   }
