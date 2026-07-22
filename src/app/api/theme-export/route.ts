@@ -202,9 +202,12 @@ export async function POST(req: NextRequest) {
       themeCopy = result.copy;
       await resolved.saveThemeCopy(result.copy);
     } catch (err) {
-      console.error("[theme-export] on-demand generation failed:", err);
-      const msg = err instanceof Error ? err.message : "Theme-Texte konnten nicht erstellt werden.";
-      return NextResponse.json({ error: `Texterstellung fehlgeschlagen: ${msg}` }, { status: 502 });
+      // Der Download darf NIEMALS an der KI-Texterstellung scheitern
+      // (z. B. fehlender DEEPSEEK_API_KEY). Fallback: ohne generierte
+      // Texte weiterbauen — die Sektionen nutzen dann ihre bewährten
+      // Standard-Texte. Und in dem Fall KEINE Credits abziehen.
+      console.warn("[theme-export] KI-Texterstellung übersprungen (Fallback auf Standard-Texte):", err);
+      cost = 0;
     }
   }
 
