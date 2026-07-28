@@ -94,12 +94,13 @@ const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as c
  *  (neutral), rohe Hex-Hintergründe (sec_bg/sec_bg2) und Formen-Kanten
  *  (sec_divider*) sind für die AI abgeschafft. */
 const SECTION_SETTING_KEYS = new Set(["icon_1", "icon_2", "icon_3", "icon_4"]);
-// MUSS mit dem System-Prompt übereinstimmen („Max. 36 Operationen",
+// MUSS mit dem System-Prompt übereinstimmen („Max. 48 Operationen",
 // theme-ai.ts Regel 5)! Ein niedrigeres Validierungs-Limit würde die
 // ZULETZT generierten Ops still verwerfen — das sind bei Voll-Neubauten
 // typischerweise die Kaufbox-Personalisierungen (dünne Kaufbox als Symptom).
-// 36 statt 48: kompaktere Seiten, weniger „vollgeklatschtes" Theme.
-const MAX_OPS = 36;
+// 48: die Seite soll vollständig verkaufen — clean ist eine DESIGN-Regel
+// (neutrale Flächen), keine Inhalts-Bremse.
+const MAX_OPS = 48;
 const MAX_TEXT = 600;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
