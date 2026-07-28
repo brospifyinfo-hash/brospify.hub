@@ -8,8 +8,15 @@
  */
 (function () {
   "use strict";
-  if (window.__bspxLoaded) return;
-  window.__bspxLoaded = true;
+  // Version DIESER Runtime. Wichtig für Bestands-Shops: dort steckt evtl.
+  // noch eine ältere, ins Theme eingebackene Runtime, die das heutige
+  // Kaufbox-Markup nicht versteht und nur den Notfall-Fallback zeigt. Sie
+  // darf uns nicht blockieren — bei kleinerer (oder fehlender) Version
+  // übernehmen wir und rendern die Kaufbox neu.
+  var BSPX_V = 7;
+  if ((window.__bspxV || 0) >= BSPX_V) return;
+  window.__bspxV = BSPX_V;
+  window.__bspxLoaded = true; // Kompatibilität mit älteren Prüfungen
 
   var FETCH_TIMEOUT = 7000;
 
@@ -107,7 +114,10 @@
 
   // ── Boot je Host ─────────────────────────────────────────────────
   function initHost(host) {
-    if (host.__bspx) return;
+    // Von DIESER Version schon versorgt? Dann fertig. Ein Marker einer
+    // älteren Runtime wird bewusst überschrieben (Übernahme).
+    if (host.__bspxV === BSPX_V) return;
+    host.__bspxV = BSPX_V;
     host.__bspx = true;
     var code = host.getAttribute("data-bspx-code") || "";
     var hub = (host.getAttribute("data-bspx-hub") || "").replace(/\/$/, "");

@@ -42,10 +42,16 @@
   // NICHT mehr im ZIP — in solchen Shops bliebe die Kaufbox für immer leer.
   // Da diese Datei hier abo-gegatet vom Hub kommt (also immer aktuell ist),
   // holen wir die Runtime im Zweifel selbst nach.
-  function ensureBuyboxRuntime(container) {
-    if (!container.querySelector(".bspx-host")) return;
-    if (window.__bspxLoaded) return; // Runtime läuft bereits
+  // force = true: auch dann laden, wenn schon irgendeine Runtime im Theme
+  // steckt. Genau das ist der Bestands-Shop mit ALTER Runtime, die nur den
+  // Notfall-Fallback zeigt — die neue Version uebernimmt dann.
+  function ensureBuyboxRuntime(container, force) {
+    var host = container.querySelector(".bspx-host");
+    if (!host) return;
     if (document.querySelector("script[data-bspx-runtime]")) return;
+    var mount = host.querySelector(".bspx-mount");
+    if (mount && mount.children.length) return; // Kaufbox steht schon
+    if (!force && window.__bspxLoaded) return;  // Runtime laedt evtl. gerade
     var s = document.createElement("script");
     s.setAttribute("data-bspx-runtime", "1");
     s.src = usedHub + "/api/storefront/asset/bspx-runtime.js" + selfQuery;
@@ -169,8 +175,11 @@
       var sk = document.getElementById("bspx-sections-skeleton");
       if (sk) sk.style.display = "none";
 
-      // Fehlt die Kaufbox-Runtime im installierten Theme, hier nachladen.
+      // Fehlt die Kaufbox-Runtime im installierten Theme, hier nachladen …
       ensureBuyboxRuntime(slot);
+      // … und nachfassen, falls die Kaufbox nach ein paar Sekunden immer
+      // noch leer ist (alte Runtime im Theme, die aufgibt).
+      setTimeout(function () { ensureBuyboxRuntime(slot, true); }, 2500);
 
       // Kaufbox-Runtime anstoßen (sie bootet auf dieses Event neu gesetzte
       // Hosts) — sonst füllt sie erst nach ihrem 1,5s-Fallback.
