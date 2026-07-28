@@ -23,6 +23,38 @@
   var mount = document.getElementById("MainContent") || host.parentNode || document.body;
   var CACHE_KEY = "bspxSections:" + code + ":" + template;
 
+  // Welche Hub-Basis hat wirklich geantwortet (www↔Apex) — die nutzen wir
+  // auch fürs Nachladen der Kaufbox-Runtime.
+  var usedHub = hub;
+  // Eigene, bereits abo-gegatete Query (?code=…&shop=…&v=…) übernehmen.
+  var selfQuery = (function () {
+    var els = document.querySelectorAll('script[src*="bspx-sections.js"]');
+    for (var i = 0; i < els.length; i++) {
+      var src = els[i].getAttribute("src") || "";
+      var qi = src.indexOf("?");
+      if (qi >= 0) return src.slice(qi);
+    }
+    return "?code=" + encodeURIComponent(code) + "&shop=" + encodeURIComponent(location.hostname);
+  })();
+
+  // KAUFBOX-RETTUNG: Ältere Themes laden die Kaufbox-Runtime noch als
+  // Theme-Asset (assets/bspx-runtime.js). Die liegt seit dem Code-Schutz
+  // NICHT mehr im ZIP — in solchen Shops bliebe die Kaufbox für immer leer.
+  // Da diese Datei hier abo-gegatet vom Hub kommt (also immer aktuell ist),
+  // holen wir die Runtime im Zweifel selbst nach.
+  function ensureBuyboxRuntime(container) {
+    if (!container.querySelector(".bspx-host")) return;
+    if (window.__bspxLoaded) return; // Runtime läuft bereits
+    if (document.querySelector("script[data-bspx-runtime]")) return;
+    var s = document.createElement("script");
+    s.setAttribute("data-bspx-runtime", "1");
+    s.src = usedHub + "/api/storefront/asset/bspx-runtime.js" + selfQuery;
+    s.onload = function () {
+      try { document.dispatchEvent(new Event("shopify:section:load")); } catch (e) { /* alte Browser */ }
+    };
+    document.head.appendChild(s);
+  }
+
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
     else fn();
@@ -137,6 +169,9 @@
       var sk = document.getElementById("bspx-sections-skeleton");
       if (sk) sk.style.display = "none";
 
+      // Fehlt die Kaufbox-Runtime im installierten Theme, hier nachladen.
+      ensureBuyboxRuntime(slot);
+
       // Kaufbox-Runtime anstoßen (sie bootet auf dieses Event neu gesetzte
       // Hosts) — sonst füllt sie erst nach ihrem 1,5s-Fallback.
       try { document.dispatchEvent(new Event("shopify:section:load")); } catch (e) { /* alte Browser */ }
@@ -216,6 +251,7 @@
       .then(function (r) {
         clearTimeout(timer);
         if (!r.ok) { if (!fromCache()) showOffline(); return null; }
+        usedHub = base;
         return r.json();
       })
       .then(function (data) { if (data && !useData(data)) { if (!fromCache()) showOffline(); } })

@@ -27,7 +27,7 @@ function findEntry(zip: AdmZip, wanted: string): AdmZip.IZipEntry | null {
 // public/bspx-sections.js / bspx-runtime.js / BUYBOX_CSS hochzählen —
 // NEUE Exporte bekommen dann sofort frische Dateien; bereits installierte
 // Themes revalidieren über die CDN-s-maxage von selbst.
-const BSPX_ASSET_V = "6";
+const BSPX_ASSET_V = "7";
 
 /** Der einzige „Sektions"-Baustein im Thin-Theme: rendert den Mount-Punkt
  *  + lädt CSS/JS ABO-GEGATET vom Hub (/api/storefront/asset/…). Das
