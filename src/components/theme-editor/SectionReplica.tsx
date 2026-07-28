@@ -11,8 +11,8 @@ import type { CSSProperties, ReactNode } from "react";
 import type { SectionInstance } from "@/lib/theme-doc";
 import type { ColorPalette } from "@/lib/theme-placeholders";
 import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef, sectionSupportsDesign, isDarkColor } from "@/lib/theme-library";
+import { monoTokens, MONO } from "@/lib/theme-color";
 import { getIconAny, resolveIconId } from "@/lib/theme-icon-resolver";
-import { DIVIDER_PATHS, DIVIDER_TOP_PATHS } from "@/lib/theme-frame";
 
 /** SVG-Line-Icon aus der Icon-Bibliothek inkl. Lucide-Katalog
  *  (identische Pfade wie im beim Export generierten Liquid-Snippet). */
@@ -59,39 +59,18 @@ function str(v: unknown, fb: string): string {
   return typeof v === "string" && v ? v : fb;
 }
 
-// ─── Design-Frame: Hintergrund-Töne + Formen-Übergänge (Design-Layer) ──────
-// Liest die sec_*-Settings (Ton, 2-Farb-Verlauf, Divider-Formen oben/unten)
-// — 1:1-Pendant zum beim Export generierten bspx-section-frame-Snippet.
-// Die Pfade kommen aus theme-frame.ts (gleiche Quelle wie das Liquid).
-// Fades (sec_fade) werden nur noch für Alt-Designs gerendert.
+// ─── Design-Frame: EINE neutrale Fläche pro Section (Design-Layer) ─────────
+// Liest nur noch sec_bg — 1:1-Pendant zum beim Export generierten
+// bspx-section-frame-Snippet. Verläufe (sec_bg2), Fades und Formen-Kanten
+// sind seit dem Mono-Update abgeschafft und werden auch für Alt-Dokumente
+// NICHT mehr gerendert (Vorschau = Download bleibt garantiert).
 
 function DesignFrame({ s, children }: { s: Record<string, string | number | boolean>; children: ReactNode }) {
   const bg = typeof s.sec_bg === "string" ? s.sec_bg : "";
   if (!bg) return <>{children}</>;
-  const bg2 = typeof s.sec_bg2 === "string" ? s.sec_bg2 : "";
-  const pagebg = typeof s.sec_pagebg === "string" && s.sec_pagebg ? s.sec_pagebg : "var(--pv-bg)";
-  const fade = String(s.sec_fade || "none");
-  const divider = String(s.sec_divider || "none");
-  const dividerTop = String(s.sec_divider_top || "none");
-  const background = bg2 ? `linear-gradient(170deg, ${bg} 0%, ${bg2} 100%)` : bg;
   return (
-    <div className="te-frame" style={{ background }}>
-      {DIVIDER_TOP_PATHS[dividerTop] ? (
-        <svg className="te-frame-divider-top" viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden>
-          <path d={DIVIDER_TOP_PATHS[dividerTop]} fill={pagebg} />
-        </svg>
-      ) : (fade === "top" || fade === "both") ? (
-        <span className="te-frame-fade" style={{ top: 0, background: `linear-gradient(180deg, ${pagebg} 0%, transparent 100%)` }} />
-      ) : null}
+    <div className="te-frame" style={{ background: bg }}>
       <div className="te-frame-pad">{children}</div>
-      {(fade === "bottom" || fade === "both") && divider === "none" && (
-        <span className="te-frame-fade" style={{ bottom: 0, background: `linear-gradient(0deg, ${pagebg} 0%, transparent 100%)` }} />
-      )}
-      {DIVIDER_PATHS[divider] && (
-        <svg className="te-frame-divider" viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden>
-          <path d={DIVIDER_PATHS[divider]} fill={pagebg} />
-        </svg>
-      )}
     </div>
   );
 }
@@ -654,7 +633,9 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
       return (
         <div
           className={`te-stats te-stats--${layout}`}
-          style={layout === "band" ? { background: ac, color: "#fff" } : undefined}
+          // Mono: das Zahlen-Band ist ein NEUTRALES dunkles Panel (früher die
+          // Akzentfarbe als Vollfläche) — identisch im Liquid.
+          style={layout === "band" ? { background: MONO.ink, color: "#fff" } : undefined}
         >
           {t.heading && <h2 className="te-h" style={{ color: "inherit" }} data-ef="heading">{t.heading}</h2>}
           <div className="te-stats-grid" style={{ gridTemplateColumns: `repeat(${Math.min(stats.length, 4)},1fr)` }}>
@@ -802,7 +783,7 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
 
     case "bro-callouts": {
       const ac = str(s.accent_color, ctx.palette.accent);
-      const glow = str(s.layout, "hell") === "glow";
+
       const items = [1, 2, 3, 4].map((i) => ({ icon: str(s[`icon_${i}`], ["check", "bolt", "shield", "sparkle"][i - 1]), text: t[`c${i}`] })).filter((x) => x.text);
       const left = items.slice(0, Math.ceil(items.length / 2));
       const right = items.slice(Math.ceil(items.length / 2));
@@ -821,7 +802,6 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
           <div className="te-call-stage">
             <div className="te-call-col">{left.map((it, i) => callout(it, i, "l"))}</div>
             <div className="te-call-imgwrap">
-              {glow && <span className="te-call-glow" style={{ background: `radial-gradient(closest-side, color-mix(in srgb, ${ac} 32%, transparent), transparent)` }} />}
               {img(0) ? <img className="te-call-img" src={img(0)} alt="" /> : <span className="te-call-img te-noimg" />}
             </div>
             <div className="te-call-col">{right.map((it, i) => callout(it, left.length + i, "r"))}</div>
@@ -831,16 +811,12 @@ function SectionBody({ instance, ctx }: { instance: SectionInstance; ctx: Replic
     }
 
     case "bro-gradient-cta": {
-      const g1 = str(s.g1, ctx.palette.accent);
-      const g2 = str(s.g2, ctx.palette.button);
-      const g3 = str(s.g3, "");
+      // Mono: EIN ruhiges Panel statt Farbverlauf (g1/g2/g3 sind nach der
+      // Mono-Auflösung ohnehin identisch — genau wie im Liquid).
+      const panel = str(s.g1, monoTokens(ctx.palette).panel);
       const chips = [t.chip1, t.chip2, t.chip3].filter(Boolean);
-      const grad = g3
-        ? `linear-gradient(135deg, ${g1} 0%, ${g2} 55%, ${g3} 100%)`
-        : `linear-gradient(135deg, ${g1} 0%, ${g2} 100%)`;
       return (
-        <div className="te-gcta" style={{ background: grad, borderRadius: num(s.radius, 24) }}>
-          <span className="te-gcta-shine" />
+        <div className="te-gcta" style={{ background: panel, borderRadius: num(s.radius, 24) }}>
           <div className="te-gcta-inner">
             {t.eyebrow && <span className="te-eyebrow" style={{ color: "rgba(255,255,255,.85)" }} data-ef="eyebrow">{t.eyebrow}</span>}
             <h2 className="te-gcta-h" data-ef="heading">{t.heading}</h2>
@@ -1240,7 +1216,6 @@ export const REPLICA_CSS = `
 .te-call{padding:30px 8px}
 .te-call-stage{display:grid;grid-template-columns:1fr minmax(200px,300px) 1fr;align-items:center;gap:18px}
 .te-call-imgwrap{position:relative;display:flex;align-items:center;justify-content:center}
-.te-call-glow{position:absolute;inset:-14%;border-radius:50%}
 .te-call-img{position:relative;width:100%;aspect-ratio:1/1;object-fit:cover;border-radius:min(var(--pv-r),24px);box-shadow:var(--pv-shadow)}
 .te-call-col{display:flex;flex-direction:column;gap:22px}
 .te-call-item{position:relative;display:flex;align-items:center;gap:10px}
@@ -1254,7 +1229,6 @@ export const REPLICA_CSS = `
 
 /* ── Gradient-CTA ── */
 .te-gcta{position:relative;overflow:hidden;margin:26px 0;padding:44px 30px;color:#fff;text-align:center}
-.te-gcta-shine{position:absolute;top:-40%;left:-10%;width:60%;height:120%;background:radial-gradient(closest-side,rgba(255,255,255,.22),transparent);transform:rotate(18deg);pointer-events:none}
 .te-gcta-inner{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center}
 .te-gcta-h{font-family:var(--pv-h);font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1.1;margin:0 0 10px;color:#fff}
 .te-gcta-sub{font-size:13.5px;opacity:.88;max-width:480px;margin:0 0 16px;line-height:1.55}

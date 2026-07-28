@@ -8,6 +8,7 @@
 // Client-safe (kein server-only Import).
 
 import type { ColorPalette } from "@/lib/theme-placeholders";
+import { monoPalette } from "@/lib/theme-color";
 import { DEFAULT_DESIGN, type StyleDesign } from "@/lib/theme-styles";
 import { BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
@@ -354,6 +355,16 @@ function apply(doc: ThemeDocument, action: EditorAction): ThemeDocument {
   }
 }
 
+/** MONO-Klammer: das Dokument trägt IMMER eine Mono-Palette (weiße oder
+ *  schwarze Seite, neutraler Fließtext). Greift auch bei geladenen Alt-
+ *  Designs und AI-Ergebnissen. Ist schon alles mono, bleibt die Referenz
+ *  identisch — kein unnötiges Re-Render. */
+function withMonoPalette(doc: ThemeDocument): ThemeDocument {
+  const colors = monoPalette(doc.global.colors);
+  if (colors.background === doc.global.colors.background && colors.text === doc.global.colors.text) return doc;
+  return { ...doc, global: { ...doc.global, colors } };
+}
+
 export function editorReducer(state: EditorState, action: EditorAction): EditorState {
   // Grenze zwischen zwei AI-Läufen: beendet nur die Koaleszenz (kein Doc-
   // Change, kein History-Eintrag) — der nächste aiApply beginnt einen
@@ -362,7 +373,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     return state.lastTextTarget === null ? state : { ...state, lastTextTarget: null };
   }
   if (action.type === "reset") {
-    return initialEditorState(action.doc);
+    return initialEditorState(action.doc ? withMonoPalette(action.doc) : undefined);
   }
   if (action.type === "undo") {
     if (!state.past.length) return state;
@@ -376,7 +387,7 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
     return { present: next, past: [...state.past, state.present], future, lastTextTarget: null };
   }
 
-  const next = apply(state.present, action);
+  const next = withMonoPalette(apply(state.present, action));
   if (next === state.present) return state;
 
   // Tipp-Serien im selben Feld nicht als einzelne History-Schritte stapeln

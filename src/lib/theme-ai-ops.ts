@@ -24,10 +24,9 @@ import {
   buildInitialDocument,
   STYLE_GALLERY,
   SECTION_TONES,
-  SECTION_DIVIDERS,
   sectionToneSettings,
   sectionSupportsDesign,
-  harmonizeBackground,
+  monoPalette,
   type SectionTone,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
@@ -49,10 +48,10 @@ export type AiOp =
   | { op: "move_section"; uid: string; to: number }
   | { op: "set_section_preset"; uid: string; presetId: string }
   | { op: "set_section_text"; uid: string; field: string; value: string }
-  // Design-Layer: Hintergrund-Ton + Formen-Kanten EINER Section (aus der
-  // Palette abgeleitet — nie „AI-bunt") bzw. rohe Design-/Icon-Settings.
-  // Fades gibt es für die AI nicht mehr (direkte Kanten/Formen statt Verlauf).
-  | { op: "set_section_tone"; uid: string; tone: SectionTone; divider?: (typeof SECTION_DIVIDERS)[number]; dividerTop?: (typeof SECTION_DIVIDERS)[number] }
+  // Design-Layer: neutrale Fläche EINER Section. Seit dem Mono-Update gibt es
+  // für die AI weder Farbverläufe noch Formen-Kanten noch rohe Hex-Flächen —
+  // nur die Abstufung „Seite / dezent / Kontrast".
+  | { op: "set_section_tone"; uid: string; tone: SectionTone }
   | { op: "set_section_setting"; uid: string; key: string; value: string }
   // Produkt-passende Icons für die Vorteile-Liste der Kaufbox (4 Stück).
   // Werte dürfen freie englische Keywords sein — resolveIconId löst sie
@@ -90,14 +89,17 @@ const SECTION_TYPES = new Set(SECTION_LIBRARY.map((s) => s.type));
 const BLOCK_TYPES = new Set<string>([...BUYBOX_DEFAULT_ORDER, ...BUYBOX_RUNTIME_ONLY]);
 const GALLERY_IDS = new Set(GALLERY_PRESETS.map((p) => p.id));
 const COLOR_KEYS = ["button", "buttonText", "background", "text", "accent"] as const;
-/** Rohe Design-/Icon-Setting-Keys, die die AI direkt setzen darf.
- *  sec_fade absichtlich NICHT mehr dabei (keine Fades für neue Designs). */
-const SECTION_SETTING_KEYS = new Set(["sec_bg", "sec_bg2", "sec_divider", "sec_divider_top", "icon_1", "icon_2", "icon_3", "icon_4"]);
-// MUSS mit dem System-Prompt übereinstimmen („Max. 48 Operationen",
+/** Rohe Setting-Keys, die die AI direkt setzen darf — seit dem Mono-Update
+ *  NUR noch Icons. Flächen laufen ausschließlich über set_section_tone
+ *  (neutral), rohe Hex-Hintergründe (sec_bg/sec_bg2) und Formen-Kanten
+ *  (sec_divider*) sind für die AI abgeschafft. */
+const SECTION_SETTING_KEYS = new Set(["icon_1", "icon_2", "icon_3", "icon_4"]);
+// MUSS mit dem System-Prompt übereinstimmen („Max. 36 Operationen",
 // theme-ai.ts Regel 5)! Ein niedrigeres Validierungs-Limit würde die
 // ZULETZT generierten Ops still verwerfen — das sind bei Voll-Neubauten
 // typischerweise die Kaufbox-Personalisierungen (dünne Kaufbox als Symptom).
-const MAX_OPS = 48;
+// 36 statt 48: kompaktere Seiten, weniger „vollgeklatschtes" Theme.
+const MAX_OPS = 36;
 const MAX_TEXT = 600;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
@@ -237,29 +239,16 @@ export function validateAiOps(raw: unknown, doc: ThemeDocument, capabilities: st
         if (!uidOk(o.uid) || !isStr(o.tone) || !SECTION_TONES.includes(o.tone as SectionTone)) break;
         const inst = findInstance(doc, o.uid);
         if (inst && !sectionSupportsDesign(inst.type)) break; // "new:"-uids prüft die Anwendung
-        out.push({
-          op: "set_section_tone",
-          uid: o.uid,
-          tone: o.tone as SectionTone,
-          divider: isStr(o.divider) && (SECTION_DIVIDERS as readonly string[]).includes(o.divider) ? (o.divider as (typeof SECTION_DIVIDERS)[number]) : undefined,
-          dividerTop: isStr(o.dividerTop) && (SECTION_DIVIDERS as readonly string[]).includes(o.dividerTop) ? (o.dividerTop as (typeof SECTION_DIVIDERS)[number]) : undefined,
-        });
+        out.push({ op: "set_section_tone", uid: o.uid, tone: o.tone as SectionTone });
         break;
       }
       case "set_section_setting": {
         if (!uidOk(o.uid) || !isStr(o.key) || !SECTION_SETTING_KEYS.has(o.key)) break;
         const inst = findInstance(doc, o.uid);
         if (inst && !sectionSupportsDesign(inst.type)) break;
-        let value: string | undefined;
-        if (o.key.startsWith("icon_")) {
-          // Freie Keywords erlaubt — deterministisch gegen die Icon-
-          // Bibliothek aufgelöst (identisch in plan- und apply-Route).
-          value = isStr(o.value) ? resolveIconId(o.value) ?? undefined : undefined;
-        } else if (o.key === "sec_divider" || o.key === "sec_divider_top") {
-          value = isStr(o.value) && (SECTION_DIVIDERS as readonly string[]).includes(o.value) ? o.value : undefined;
-        } else {
-          value = isStr(o.value) && (o.value === "" || HEX_RE.test(o.value)) ? o.value.toLowerCase() : undefined;
-        }
+        // Nur noch Icon-Keys: freie Keywords erlaubt, deterministisch gegen
+        // die Icon-Bibliothek aufgelöst (identisch in plan- und apply-Route).
+        const value = isStr(o.value) ? resolveIconId(o.value) ?? undefined : undefined;
         if (value === undefined) break;
         out.push({ op: "set_section_setting", uid: o.uid, key: o.key, value });
         break;
@@ -385,11 +374,10 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       };
     }
     case "set_colors": {
-      // Harmonie-Garantie: ein gesättigter heller Hintergrund, der mit dem
-      // (evtl. gerade geänderten) Akzent beißt, wird auf ein sauberes Neutral
-      // gezogen — kein clashendes Beige/Sand mehr, egal was die KI ausgibt.
-      const merged = { ...doc.global.colors, ...op.colors };
-      merged.background = harmonizeBackground(merged.background, merged.accent);
+      // MONO-Garantie: egal was die KI vorschlägt — die Seite bleibt reines
+      // Weiß oder reines Schwarz mit neutralem Fließtext. Farbe darf die KI
+      // nur über Akzent/Button setzen (Sub-Texte, Buttons, Icons).
+      const merged = monoPalette({ ...doc.global.colors, ...op.colors });
       return { ...doc, global: { ...doc.global, colors: merged } };
     }
     case "set_fonts":
@@ -467,17 +455,7 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       const uid = resolveUid(op.uid);
       const inst = findInstance(doc, uid);
       if (!inst || !sectionSupportsDesign(inst.type)) return doc;
-      // Symmetrie-Garantie: schlägt die AI nur EINE Kante vor, bekommt die
-      // Section dieselbe Form oben UND unten — einseitige oder gemischte
-      // Übergänge wirken kaputt und sind per Design-Regel verboten.
-      const shape =
-        op.divider && op.divider !== "none" ? op.divider
-        : op.dividerTop && op.dividerTop !== "none" ? op.dividerTop
-        : undefined;
-      const toneSettings = sectionToneSettings(op.tone, doc.global.colors, {
-        divider: shape ?? op.divider,
-        dividerTop: shape ?? op.dividerTop,
-      });
+      const toneSettings = sectionToneSettings(op.tone, doc.global.colors);
       const mapList = (list: SectionInstance[]) =>
         list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), ...toneSettings } } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
@@ -486,13 +464,7 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       const uid = resolveUid(op.uid);
       const inst = findInstance(doc, uid);
       if (!inst || !sectionSupportsDesign(inst.type)) return doc;
-      // Divider-Keys wirken IMMER als Paar (gleiche Form oben+unten, "none"
-      // entfernt beide) — dieselbe Symmetrie-Garantie wie bei set_section_tone,
-      // sonst könnte die AI über diesen Op-Typ einseitige Kanten erzeugen.
-      const patch: Record<string, string> =
-        op.key === "sec_divider" || op.key === "sec_divider_top"
-          ? { sec_divider: op.value, sec_divider_top: op.value }
-          : { [op.key]: op.value };
+      const patch: Record<string, string> = { [op.key]: op.value };
       const mapList = (list: SectionInstance[]) =>
         list.map((s) => (s.uid === uid ? { ...s, settings: { ...(s.settings || {}), ...patch } } : s));
       return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };

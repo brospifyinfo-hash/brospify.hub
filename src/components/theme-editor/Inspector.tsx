@@ -27,7 +27,7 @@ import { THEME_STYLES } from "@/lib/theme-styles";
 import { getBuyboxMeta } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
 import { getIconAny, searchIcons } from "@/lib/theme-icon-resolver";
-import { DIVIDER_PATHS, DIVIDER_TOP_PATHS, DIVIDER_SHAPES, DIVIDER_LABELS } from "@/lib/theme-frame";
+import { MONO } from "@/lib/theme-color";
 import { useI18n } from "@/lib/i18n";
 import { EDITOR_FONTS, segCls, ACCENT } from "@/components/theme-editor/editor-ui";
 import { PresetPill, FieldLabel, TextField, Segmented, ColorField, SliderField } from "@/components/theme-editor/ui";
@@ -52,38 +52,6 @@ function IconSvg({ id, size = 16 }: { id: string; size?: number }) {
     <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
       {ic.paths.map((d, i) => <path key={i} d={d} />)}
     </svg>
-  );
-}
-
-// Divider-Formen-Auswahl mit Mini-Vorschau der SVG-Form (7 Optionen).
-// `top` zeigt die Oberkanten-Variante der Form (gespiegelte Pfade) — das
-// Thumbnail entspricht damit exakt dem, was gerendert wird.
-function DividerPicker({ value, onChange, lang, top }: { value: string; onChange: (v: string) => void; lang: string; top?: boolean }) {
-  const paths = top ? DIVIDER_TOP_PATHS : DIVIDER_PATHS;
-  const label = (k: string) =>
-    lang === "en"
-      ? ({ none: "Off", wave: "Wave", waves: "Waves", zigzag: "Zigzag", slant: "Slant", curve: "Curve", peaks: "Peaks" }[k] || k)
-      : (DIVIDER_LABELS[k] || k);
-  return (
-    <div className="grid grid-cols-4 gap-1">
-      {["none", ...DIVIDER_SHAPES].map((k) => (
-        <button
-          key={k}
-          type="button"
-          className={segCls(value === k)}
-          onClick={() => onChange(k)}
-          title={label(k)}
-        >
-          {k === "none" ? (
-            <span className="block text-center leading-[14px]">{label(k)}</span>
-          ) : (
-            <svg viewBox="0 0 1440 64" preserveAspectRatio="none" className="block h-[14px] w-full opacity-90" aria-label={label(k)}>
-              <path d={paths[k]} fill="currentColor" />
-            </svg>
-          )}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -324,50 +292,31 @@ export default function Inspector({
           </SecGroup>
         )}
 
-        {/* Hintergrund & Übergang (Design-Layer) mit Live-Vorschau */}
+        {/* Fläche der Section (Design-Layer) — nur neutrale Abstufungen */}
         {sectionSupportsDesign(section.type) && (
           <SecGroup icon={<Paintbrush className="w-3 h-3" />} title={t.themes.editorSecDesign} help={t.themes.editorSecDesignHelp}>
-            <div className="space-y-2.5">
-              <div>
-                <FieldLabel>{t.themes.editorSecTone}</FieldLabel>
-                <Segmented
-                  options={[["none", lang === "en" ? "Off" : "Aus"], ["tint", "Tint"], ["soft", "Soft"], ["wash", lang === "en" ? "Gray" : "Grau"], ["deep", lang === "en" ? "Dark" : "Dunkel"]]}
-                  value={toneVal}
-                  onChange={(tone) =>
-                    dispatch({
-                      type: "mergeSectionSettings",
-                      uid: section.uid,
-                      patch: sectionToneSettings(tone as SectionTone, doc.global.colors, {
-                        divider: (section.settings?.sec_divider as never) || undefined,
-                        dividerTop: (section.settings?.sec_divider_top as never) || undefined,
-                      }),
-                    })
-                  }
-                />
-                {(() => {
-                  const bg1 = String(section.settings?.sec_bg || "");
-                  const bg2 = String(section.settings?.sec_bg2 || "");
-                  const base = bg1 ? (bg2 ? `linear-gradient(150deg, ${bg1}, ${bg2})` : bg1) : doc.global.colors.background;
-                  return <div className="mt-1 h-4 rounded border border-white/10" style={{ background: base }} title={t.themes.editorSecTonePreview} />;
-                })()}
-              </div>
-              <div>
-                <FieldLabel>{t.themes.editorSecDividerTop}</FieldLabel>
-                <DividerPicker
-                  top
-                  value={String(section.settings?.sec_divider_top || "none")}
-                  onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_divider_top", value: v })}
-                  lang={lang}
-                />
-              </div>
-              <div>
-                <FieldLabel>{t.themes.editorSecDivider}</FieldLabel>
-                <DividerPicker
-                  value={String(section.settings?.sec_divider || "none")}
-                  onChange={(v) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "sec_divider", value: v })}
-                  lang={lang}
-                />
-              </div>
+            <div>
+              <FieldLabel>{t.themes.editorSecTone}</FieldLabel>
+              <Segmented
+                options={[
+                  ["none", lang === "en" ? "Page" : "Seite"],
+                  ["tint", lang === "en" ? "Subtle" : "Dezent"],
+                  ["deep", lang === "en" ? "Contrast" : "Kontrast"],
+                ]}
+                value={toneVal === "wash" ? "tint" : toneVal === "soft" ? "deep" : toneVal}
+                onChange={(tone) =>
+                  dispatch({
+                    type: "mergeSectionSettings",
+                    uid: section.uid,
+                    patch: sectionToneSettings(tone as SectionTone, doc.global.colors),
+                  })
+                }
+              />
+              <div
+                className="mt-1 h-4 rounded border border-white/10"
+                style={{ background: String(section.settings?.sec_bg || "") || doc.global.colors.background }}
+                title={t.themes.editorSecTonePreview}
+              />
             </div>
           </SecGroup>
         )}
@@ -579,11 +528,13 @@ export default function Inspector({
 
   // ── "Allgemeines Design" (__global) → globales Theme-Design ──
   const g = doc.global;
+  // MONO: Seite ist entweder weiß oder schwarz — deshalb ein Modus-Umschalter
+  // statt freier Hintergrund-/Textfarbe. Farbe tragen nur noch Button-,
+  // Button-Text- und Akzentfarbe (Sub-Texte, Icons, Badges).
+  const darkMode = g.colors.background.toLowerCase() === MONO.black;
   const COLOR_FIELDS: { key: keyof typeof g.colors; label: string }[] = [
     { key: "button", label: t.themes.builderColorButton },
     { key: "buttonText", label: t.themes.builderColorButtonText },
-    { key: "background", label: t.themes.builderColorBackground },
-    { key: "text", label: t.themes.builderColorText },
     { key: "accent", label: t.themes.builderColorAccent },
   ];
 
@@ -631,6 +582,26 @@ export default function Inspector({
       </Group>
 
       <Group id="farben" title={t.themes.builderColors} open={!!openG.farben} onToggle={toggleG}>
+        <div className="mb-2">
+          <FieldLabel>{t.themes.builderMode}</FieldLabel>
+          <div className="grid grid-cols-2 gap-1">
+            {([[false, t.themes.builderModeLight], [true, t.themes.builderModeDark]] as const).map(([v, l]) => (
+              <button
+                key={String(v)}
+                onClick={() =>
+                  dispatch({
+                    type: "setColors",
+                    patch: { background: v ? MONO.black : MONO.white, text: v ? MONO.textDark : MONO.textLight },
+                  })
+                }
+                className={segCls(darkMode === v)}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+          <HelpText>{t.themes.builderModeHelp}</HelpText>
+        </div>
         <div className="grid grid-cols-2 gap-x-2 gap-y-1.5">
           {COLOR_FIELDS.map((f) => (
             <div key={f.key}>

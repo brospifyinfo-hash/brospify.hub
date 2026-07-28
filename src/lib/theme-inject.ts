@@ -6,6 +6,7 @@ import {
   type ThemeCopy,
   type ColorPalette,
 } from "@/lib/theme-placeholders";
+import { monoSurfaceForKey } from "@/lib/theme-color";
 import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIconAny } from "@/lib/theme-icon-resolver";
 import { COPY_BINDINGS } from "@/lib/theme-copy-bindings";
@@ -285,6 +286,7 @@ function injectTemplateData(
     if (section.disabled === true) continue; // nur AKTIVE Sections
     replaceTokensDeep(section, values);
     recolorByRoleDeep(section, palette);
+    if (section.type !== "main-product") monoizeSectionDeep(section, palette);
   }
 }
 
@@ -307,6 +309,31 @@ function replaceTokens(str: string, values: ThemeCopy): string {
   return str.replace(TOKEN_RE, (match, key: string) =>
     Object.prototype.hasOwnProperty.call(values, key) && values[key] != null ? String(values[key]) : match,
   );
+}
+
+/**
+ * MONO-Regel für BASIS-Sections aus der Theme-Vorlage: jede Flächen-Farbe
+ * (bg/bg_color/color_bg/Karten/Verlaufs-Stopps) wird neutral — weiß, zartes
+ * Grau oder schwarz, je nach Ausgangs-Helligkeit. Text-, Icon- und Akzent-Keys
+ * bleiben unangetastet, damit heller Text auf dunklen Flächen lesbar bleibt.
+ * NICHT auf die Kaufbox (main-product) anwenden — dort sind Akzent-Flächen
+ * (Badges, Balken) ausdrücklich erlaubt.
+ */
+export function monoizeSectionDeep(node: unknown, palette: ColorPalette): void {
+  if (Array.isArray(node)) {
+    for (const item of node) monoizeSectionDeep(item, palette);
+  } else if (node && typeof node === "object") {
+    const obj = node as Record<string, unknown>;
+    for (const k of Object.keys(obj)) {
+      const v = obj[k];
+      if (typeof v === "string") {
+        const mono = monoSurfaceForKey(k, v, palette);
+        if (mono !== null) obj[k] = mono;
+      } else if (v && typeof v === "object") {
+        monoizeSectionDeep(v, palette);
+      }
+    }
+  }
 }
 
 /** Färbt Setting-Keys gemäß ihrer Palette-Rolle um (Akzent/Button/Button-Text).
@@ -406,14 +433,13 @@ export function injectSettingsData(
 
   // Farbschemata: NICHT auf scheme-1..5 festnageln — jedes Theme benennt sie
   // anders (Dawn: "scheme-1", neuere: "background-1"/"accent-1", custom: …).
-  // Wir laufen über ALLE vorhandenen Schemata und färben Buttons überall;
-  // Hintergrund/Text setzen wir nur im ERSTEN Schema (damit dunkle Schemata
-  // dunkel bleiben). So „funktioniert" die Farbanpassung auf jedem Theme.
+  // MONO-REGEL (2026-07-28): ALLE Schemata bekommen dieselbe Seiten-Farbe und
+  // dieselbe Textfarbe — sonst brächte ein Basis-Schema (z. B. Dawns blaues
+  // scheme-5 oder ein dunkles scheme-3) wieder eine bunte Section-Fläche ins
+  // Theme. Farbverläufe im Schema werden hart geleert.
   const schemes = current.color_schemes;
   if (schemes && typeof schemes === "object") {
-    const keys = Object.keys(schemes as Record<string, unknown>);
-    let isFirst = true;
-    for (const key of keys) {
+    for (const key of Object.keys(schemes as Record<string, unknown>)) {
       const scheme = (schemes as Record<string, { settings?: Record<string, unknown> }>)[key];
       if (!scheme || !scheme.settings || typeof scheme.settings !== "object") continue;
       const s = scheme.settings;
@@ -422,11 +448,9 @@ export function injectSettingsData(
       if ("button" in s) s.button = colors.button;
       if ("button_label" in s) s.button_label = colors.buttonText;
       if ("secondary_button_label" in s) s.secondary_button_label = colors.button;
-      if (isFirst) {
-        if ("background" in s) s.background = colors.background;
-        if ("text" in s) s.text = colors.text;
-        isFirst = false;
-      }
+      if ("background" in s) s.background = colors.background;
+      if ("text" in s) s.text = colors.text;
+      if ("background_gradient" in s) s.background_gradient = "";
     }
   }
 }

@@ -14,10 +14,12 @@ import {
   resolvePaletteRef,
   getBuyboxLib,
   resolveBlockSettings,
+  resolveSectionSetting,
   effectiveBuyboxPresetId,
   getGalleryPreset,
   type BaseSectionInfo,
 } from "@/lib/theme-library";
+import { monoPalette } from "@/lib/theme-color";
 import { getThemeStyle, radiusOverrides } from "@/lib/theme-styles";
 import { BUYBOX_BLOCKS } from "@/lib/theme-sections";
 import {
@@ -27,6 +29,7 @@ import {
   injectSettingsData,
   replaceTokensDeep,
   recolorByRoleDeep,
+  monoizeSectionDeep,
   findEntry,
 } from "@/lib/theme-inject";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
@@ -165,19 +168,23 @@ function applyInstanceToSection(section: any, instance: SectionInstance, palette
   const preset = instance.presetId ? getPresetDef(def, instance.presetId) : undefined;
   section.settings = section.settings && typeof section.settings === "object" ? section.settings : {};
 
-  // 1) Preset-Settings (Palette-Refs auflösen) — echte Schema-Keys.
+  // 1) Preset-Settings (Palette-Refs auflösen + Mono-Regel) — echte Schema-Keys.
   for (const [k, v] of Object.entries(preset?.settings || {})) {
-    section.settings[k] = resolvePaletteRef(v, palette);
+    section.settings[k] = resolveSectionSetting(k, v, palette);
   }
-  // 1b) Instanz-Feineinstellungen (Design-Layer: Töne/Fades/Divider, Icons)
-  //     liegen ÜBER den Preset-Werten — identisch zu resolvePresetSettings.
+  // 1b) Instanz-Feineinstellungen (Design-Layer: Ton, Icons) liegen ÜBER den
+  //     Preset-Werten — identisch zu resolvePresetSettings im Frontend.
   for (const [k, v] of Object.entries(instance.settings || {})) {
-    section.settings[k] = resolvePaletteRef(v, palette);
+    section.settings[k] = resolveSectionSetting(k, v, palette);
   }
-  // Design-Layer: Fades/Divider blenden zur SEITEN-Hintergrundfarbe — die
-  // Referenz automatisch mitgeben, falls ein Ton gesetzt wurde.
+  // Design-Layer: Seiten-Hintergrund als Referenz mitgeben, falls ein Ton
+  // gesetzt wurde. Verlaufs-/Formen-Reste aus Alt-Dokumenten fliegen raus —
+  // ein Export darf nie wieder einen Farbverlauf oder eine Wellen-Kante haben.
   if (typeof section.settings.sec_bg === "string" && section.settings.sec_bg && !section.settings.sec_pagebg) {
     section.settings.sec_pagebg = palette.background;
+  }
+  for (const legacy of ["sec_bg2", "sec_fade", "sec_divider", "sec_divider_top"]) {
+    if (legacy in section.settings) section.settings[legacy] = legacy === "sec_bg2" ? "" : "none";
   }
 
   // 2) Kuratierte Texte. Regel: NUTZER-Eingaben überschreiben immer;
@@ -214,6 +221,12 @@ function applyInstanceToSection(section: any, instance: SectionInstance, palette
     if (!raw) continue;
     target[f.target.key] = f.html ? ensureHtml(raw) : raw;
   }
+
+  // 3) MONO-Schlussklammer: frisch instanzierte Sections starten mit den
+  //    SCHEMA-Defaults ihres Liquids — dort steckt teils noch eine bunte oder
+  //    dunkle Fläche (z. B. bro-announce bg_color #111111). Ein letzter Lauf
+  //    über Section + Blocks zieht jede Fläche aufs neutrale System.
+  monoizeSectionDeep(section, palette);
 }
 
 /** Baut eine frische Section aus Schema-Defaults + Preset-Block-Rezepten. */
@@ -273,6 +286,9 @@ function compileProductTemplate(
     if (!sec || sec.disabled === true) continue;
     replaceTokensDeep(sec, values);
     recolorByRoleDeep(sec, palette);
+    // Mono: Basis-Sections dürfen keine bunten Flächen mehr mitbringen
+    // (Kaufbox ausgenommen — dort sind Akzent-Badges/Balken erlaubt).
+    if (sec.type !== "main-product") monoizeSectionDeep(sec, palette);
   }
 
   // Struktur: verwaltete Basis-Sections raus, Dokument-Sections rein.
@@ -541,6 +557,9 @@ function compileHomeTemplate(
     if (!sec || sec.disabled === true) continue;
     replaceTokensDeep(sec, values);
     recolorByRoleDeep(sec, palette);
+    // Mono: Basis-Sections dürfen keine bunten Flächen mehr mitbringen
+    // (Kaufbox ausgenommen — dort sind Akzent-Badges/Balken erlaubt).
+    if (sec.type !== "main-product") monoizeSectionDeep(sec, palette);
   }
 
   const isManaged = (sid: string) => MANAGED_TYPES.has(String(sections[sid]?.type || ""));
@@ -724,18 +743,20 @@ export function compileDocumentZip(
   const zip = new AdmZip(baseZip);
   const values = getPlaceholderValues(themeCopy);
   const style = getThemeStyle(doc.global.styleId);
-  const palette = doc.global.colors;
+  // MONO-Garantie: der Seiten-Hintergrund ist IMMER reines Weiß oder reines
+  // Schwarz, der Fließtext die passende neutrale Gegenfarbe — auch wenn ein
+  // Alt-Dokument noch eine getönte Palette mitbringt. Akzent/Button bleiben.
+  const palette = monoPalette(doc.global.colors);
 
   // 0) Schemas der Basis reparieren (leere Defaults → Shopify lehnt die
   // Section-Datei sonst beim Upload ab und die Templates kippen mit → 404).
   sanitizeSectionSchemas(zip);
 
-  // 0b) Design-Layer aktualisieren — MUSS vor sanitizeTemplateData laufen,
-  // sonst löscht der Select-Check neue Divider-Werte aus den Templates:
-  //  - Section-Schemas: neue Divider-Formen + sec_divider_top nachrüsten
-  //    (repariert auch ältere Admin-Upload-Basen),
-  //  - bspx-section-frame.liquid frisch generieren (gleiche Pfade wie die
-  //    Vorschau in theme-frame.ts),
+  // 0b) Design-Layer aktualisieren — MUSS vor sanitizeTemplateData laufen:
+  //  - Section-Schemas entrümpeln: Verlaufs-/Formen-Settings (sec_bg2,
+  //    sec_fade, sec_divider*) raus, auch aus älteren Admin-Upload-Basen,
+  //  - bspx-section-frame.liquid frisch generieren (EINE neutrale Fläche,
+  //    identisch zur Vorschau in SectionReplica),
   //  - bspx-icon.liquid mit Basis-Icons + allen im Dokument benutzten
   //    Katalog-Icons neu backen (nie der komplette 1700er-Katalog).
   ensureDesignSchema(zip);
@@ -779,6 +800,7 @@ export function compileDocumentZip(
           if (sec.disabled === true) continue;
           replaceTokensDeep(sec, values);
           recolorByRoleDeep(sec, palette);
+          if (sec.type !== "main-product") monoizeSectionDeep(sec, palette);
           stripStrayTokens(sec);
         }
       }

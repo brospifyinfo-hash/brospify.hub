@@ -14,6 +14,29 @@ import { newSectionUid, emptyDocument } from "@/lib/theme-doc";
 import { getThemeStyle } from "@/lib/theme-styles";
 import { BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import {
+  mixHex,
+  monoSurfaceForKey,
+  monoToneSurface,
+  SECTION_TONES,
+  type SectionTone,
+} from "@/lib/theme-color";
+
+// Farb-Mathe + Mono-System leben in theme-color.ts (eine Quelle für Vorschau,
+// Export und AI). Hier nur re-exportiert, damit bestehende Importe (Replica,
+// AI-Ops) unverändert weiterlaufen.
+export {
+  mixHex,
+  relLuminance,
+  isDarkColor,
+  ensureReadableBg,
+  monoPalette,
+  monoBackground,
+  monoTokens,
+  isDarkMode,
+  SECTION_TONES,
+  type SectionTone,
+} from "@/lib/theme-color";
 
 export type SectionCategory = "conversion" | "social" | "content" | "media" | "info";
 
@@ -113,6 +136,19 @@ export function resolveTexts(instance: SectionInstance): Record<string, string> 
   return out;
 }
 
+/** Löst EIN Section-Setting final auf: Palette-Ref → echte Farbe → Mono.
+ *  Der Mono-Schritt (theme-color) erzwingt die Design-Regel „keine bunten
+ *  Section-Flächen, keine Verläufe" an EINER Stelle — genutzt von der
+ *  Vorschau (resolvePresetSettings) UND vom Export (applyInstanceToSection). */
+export function resolveSectionSetting(
+  key: string,
+  value: string | number | boolean,
+  palette: ColorPalette,
+): string | number | boolean {
+  const resolved = resolvePaletteRef(value, palette);
+  return monoSurfaceForKey(key, resolved, palette) ?? resolved;
+}
+
 /** Effektive Preset-Settings einer Instanz (Palette-Refs aufgelöst).
  *  presetId "" = NEUTRAL: keine Preset-Overrides — die Section behält ihren
  *  Basis-Zustand (wichtig für übernommene Startseiten-Sections). Instanz-
@@ -123,23 +159,22 @@ export function resolvePresetSettings(instance: SectionInstance, palette: ColorP
   if (instance.presetId) {
     const def = getSectionDef(instance.type);
     const preset = getPresetDef(def, instance.presetId);
-    for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolvePaletteRef(v, palette);
+    for (const [k, v] of Object.entries(preset?.settings || {})) out[k] = resolveSectionSetting(k, v, palette);
   }
-  for (const [k, v] of Object.entries(instance.settings || {})) out[k] = resolvePaletteRef(v, palette);
+  for (const [k, v] of Object.entries(instance.settings || {})) out[k] = resolveSectionSetting(k, v, palette);
   return out;
 }
 
-// ─── Section-Design-Layer: Hintergrund-Töne + Übergänge (alle Sections) ──
+// ─── Section-Design-Layer: neutrale Hintergrund-Flächen ─────────────────
 // Jede eigene Section versteht dieselben Schema-Keys — Vorschau (Replica-
 // Frame) und Liquid (bspx-section-frame-Snippet, wird beim Export generiert)
 // rendern sie identisch:
-//   sec_bg / sec_bg2    Hintergrund (2. Farbe = vertikaler Verlauf)
-//   sec_divider         Formen-Kante am unteren Rand (Welle/Zacken/Bogen …)
-//   sec_divider_top     Formen-Kante am oberen Rand
-//   sec_fade            NUR NOCH Legacy (Alt-Designs) — neue Designs nutzen
-//                       direkte Kanten oder Formen-Übergänge, keine Fades
-//   sec_pagebg          Seiten-Hintergrund (auto mit @background gefüllt —
-//                       Füllfarbe der Divider-Formen)
+//   sec_bg              Fläche der Section — IMMER neutral (weiß/grau/schwarz)
+//   sec_pagebg          Seiten-Hintergrund (auto mit @background gefüllt)
+//   sec_bg2/sec_fade/   NUR NOCH Legacy: Verläufe, Fades und Formen-Kanten
+//   sec_divider*        werden nicht mehr erzeugt UND nicht mehr gerendert
+//                       (Design-Entscheidung 2026-07-28: alles clean, keine
+//                       Farbverläufe, keine bunten Flächen).
 export const SECTION_DESIGN_KEYS = ["sec_bg", "sec_bg2", "sec_fade", "sec_divider", "sec_divider_top", "sec_pagebg"] as const;
 /** Section-Typen, deren Liquid den Design-Layer versteht (eigene Sections —
  *  Dawn-Basis-Sections bringen eigene Farbschemata mit und bleiben außen vor,
@@ -159,154 +194,32 @@ export const SECTION_DESIGN_TYPES = new Set([
 export function sectionSupportsDesign(type: string): boolean {
   return SECTION_DESIGN_TYPES.has(type);
 }
-export const SECTION_FADES = ["none", "top", "bottom", "both"] as const;
-/** Divider-Formen — synchron mit DIVIDER_PATHS/DIVIDER_TOP_PATHS (theme-frame.ts). */
-export const SECTION_DIVIDERS = ["none", "wave", "waves", "zigzag", "slant", "curve", "peaks"] as const;
-export type SectionTone = "none" | "tint" | "soft" | "wash" | "deep";
-export const SECTION_TONES: SectionTone[] = ["none", "tint", "soft", "wash", "deep"];
-
-function mixHex(a: string, b: string, t: number): string {
-  const pa = /^#([0-9a-f]{6})$/i.exec(a)?.[1];
-  const pb = /^#([0-9a-f]{6})$/i.exec(b)?.[1];
-  if (!pa || !pb) return a;
-  const c = (o: number) => {
-    const va = parseInt(pa.slice(o, o + 2), 16);
-    const vb = parseInt(pb.slice(o, o + 2), 16);
-    return Math.round(va + (vb - va) * t).toString(16).padStart(2, "0");
-  };
-  return `#${c(0)}${c(2)}${c(4)}`;
-}
-
-/** WCAG-relative Luminanz (0 = schwarz, 1 = weiß). Ungültig → 1 (hell). */
-export function relLuminance(hex: string): number {
-  const m = /^#([0-9a-f]{6})$/i.exec(hex);
-  if (!m) return 1;
-  const chan = (o: number) => {
-    let c = parseInt(m[1].slice(o, o + 2), 16) / 255;
-    c = c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
-    return c;
-  };
-  return 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
-}
-
-/** True, wenn auf der Farbe HELLER Text besser lesbar ist als dunkler. */
-export function isDarkColor(hex: string): boolean {
-  return relLuminance(hex) < 0.4;
-}
-
-// Mindest-Luminanz eines Section-Hintergrunds, damit der von den Sections
-// hart gesetzte DUNKLE Text (#111) immer klar lesbar bleibt (≥ ~6:1). So kann
-// KEIN Ton je „dunkler Text auf dunklem Grund" erzeugen — egal welche Palette.
-const MIN_BG_LUM = 0.34;
-
-/** Hebt einen zu dunklen Hintergrund Richtung Weiß an, bis dunkler Text sicher
- *  lesbar ist. Helle Farben bleiben unverändert. Deterministisch. */
-export function ensureReadableBg(hex: string): string {
-  if (!/^#([0-9a-f]{6})$/i.test(hex)) return hex;
-  if (relLuminance(hex) >= MIN_BG_LUM) return hex;
-  for (let t = 0.12; t <= 1; t += 0.08) {
-    const lifted = mixHex(hex, "#ffffff", t);
-    if (relLuminance(lifted) >= MIN_BG_LUM) return lifted;
-  }
-  return "#f3f2ef";
-}
-
-/** Farbton (0–360) + Chroma (0–1, = max−min) eines Hex — für die Harmonie-
- *  Klammer. Chroma statt HSL-Sättigung: bei sehr hellen Farben ist die
- *  HSL-Sättigung irreführend hoch, Chroma misst „wie farbig" verlässlich. */
-function hueChroma(hex: string): { h: number; c: number } {
-  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex.trim());
-  if (!m) return { h: 0, c: 0 };
-  const r = parseInt(m[1], 16) / 255, g = parseInt(m[2], 16) / 255, b = parseInt(m[3], 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
-  let h = 0;
-  if (d !== 0) {
-    if (max === r) h = ((g - b) / d) % 6;
-    else if (max === g) h = (b - r) / d + 2;
-    else h = (r - g) / d + 4;
-    h = (h * 60 + 360) % 360;
-  }
-  return { h, c: d };
-}
 
 /**
- * PALETTE-HARMONIE-GARANTIE (deterministisch, palette-unabhängig): ein
- * GESÄTTIGTER, HELLER Seiten-Hintergrund (Beige/Sand/Creme/Oliv …), dessen
- * FARBTON dem Akzent WIDERSPRICHT, wird auf ein sauberes, fast-weißes Neutral
- * gezogen (minimal zum Akzent getönt). So clasht nie ein muddy Mid-Ton mit dem
- * Akzent, und die daraus gemischten Section-Töne bleiben stimmig + lesbar.
- * UNANGETASTET bleiben: dunkle Hintergründe (dunkle Themes), bereits neutrale
- * Hintergründe und farbton-GLEICHE (harmonische) Paletten (z. B. rosa BG + rosa
- * Akzent). Nur der klare Clash (heller, satter, gegensätzlicher Ton) wird gefixt.
- */
-export function harmonizeBackground(bg: string, accent: string): string {
-  if (!/^#([0-9a-f]{6})$/i.test(bg) || !/^#([0-9a-f]{6})$/i.test(accent)) return bg;
-  if (relLuminance(bg) < 0.42) return bg;   // dunkles Theme → bewusst, ok
-  const bs = hueChroma(bg);
-  if (bs.c < 0.06) return bg;               // (fast) neutrales Off-White/Grau → ok
-  const as = hueChroma(accent);
-  let dh = Math.abs(bs.h - as.h);
-  if (dh > 180) dh = 360 - dh;
-  if (dh < 45) return bg;                   // harmonisch (gleicher Farbton) → ok
-  // Heller, gesättigter Hintergrund, der mit dem Akzent beißt → sauberes Neutral.
-  return mixHex("#ffffff", accent, 0.05);
-}
-
-/**
- * Übersetzt einen benannten Hintergrund-Ton in konkrete Design-Settings —
- * deterministisch aus der Palette (Vorschau = Download; auch die AI nutzt
- * genau diese Auflösung, damit Töne immer stimmig statt „AI-bunt" sind).
- * Kontraste bewusst kräftig: mehrfarbige Seiten mit DIREKTEN Kanten bzw.
- * Formen-Übergängen (kein Fade — Design-Entscheidung 2026-07).
- *   tint  = deutlicher Akzent-Hauch (≈14 %)   soft = kräftiger Akzent-Verlauf
- *   wash  = ruhiger Grauton (≈10 %)           deep = sattes Akzent-Panel
- * KONTRAST-GARANTIE: Die Sections setzen ihren Text hart dunkel (#111) — jeder
- * hier erzeugte Hintergrund wird deshalb per ensureReadableBg auf eine sichere
- * Mindest-Helligkeit angehoben. „deep" ist ein SATTES, aber lesbares Panel
- * (kein Fast-Schwarz mehr) → nie wieder dunkler Text auf dunklem Grund.
+ * Übersetzt einen benannten Hintergrund-Ton in konkrete Design-Settings.
+ * MONO-REGEL (2026-07-28): Ein Ton ist nur noch eine NEUTRALE Fläche, die
+ * zum Modus passt — heller Modus → weiß/zartes Grau, Black-Modus → schwarz/
+ * fast-schwarz. Keine Akzent-Tönung, kein zweiter Farbstopp, kein Verlauf,
+ * keine Formen-Kante. Damit kann keine Section je bunt oder unlesbar werden.
+ *   none = Seitenfarbe · tint/wash = dezente Fläche · soft/deep = kräftigere
+ * Fläche (die vier Namen bleiben erhalten, damit Alt-Dokumente und die
+ * bestehenden Stil-Kompositionen unverändert weiterlaufen).
  */
 export function sectionToneSettings(
   tone: SectionTone,
   palette: ColorPalette,
-  opts: {
-    fade?: (typeof SECTION_FADES)[number];
-    divider?: (typeof SECTION_DIVIDERS)[number];
-    dividerTop?: (typeof SECTION_DIVIDERS)[number];
-  } = {},
 ): Record<string, string> {
-  const bg = palette.background;
-  const out: Record<string, string> = {
+  return {
     // Merker für UI/AI (im Liquid-Schema unbekannt → von Shopify ignoriert).
     sec_tone: tone,
-    sec_pagebg: bg,
-    // Fades nur noch explizit (Legacy) — Standard ist die direkte Kante.
-    sec_fade: opts.fade ?? "none",
-    sec_divider: opts.divider ?? "none",
-    sec_divider_top: opts.dividerTop ?? "none",
+    sec_pagebg: palette.background,
+    sec_bg: monoToneSurface(tone, palette),
+    // Alt-Dekoration hart abräumen (auch wenn ein Alt-Dokument sie mitbringt).
+    sec_bg2: "",
+    sec_fade: "none",
+    sec_divider: "none",
+    sec_divider_top: "none",
   };
-  let bg1 = "";
-  let bg2 = "";
-  switch (tone) {
-    case "tint":
-      bg1 = mixHex(bg, palette.accent, 0.14);
-      break;
-    case "soft":
-      bg1 = mixHex(bg, palette.accent, 0.18);
-      bg2 = mixHex(bg, palette.accent, 0.36);
-      break;
-    case "wash":
-      bg1 = mixHex(bg, palette.text, 0.1);
-      break;
-    case "deep":
-      // Sattes Akzent-Panel als Höhepunkt — kräftig, aber garantiert lesbar.
-      bg1 = mixHex(bg, palette.accent, 0.5);
-      bg2 = mixHex(bg, palette.accent, 0.7);
-      break;
-  }
-  // Kontrast-Klammer: hebt zu dunkle Ergebnisse an (palette-unabhängig).
-  out.sec_bg = bg1 ? ensureReadableBg(bg1) : "";
-  out.sec_bg2 = bg2 ? ensureReadableBg(bg2) : "";
-  return out;
 }
 
 // ─── Wiederkehrende Block-Rezepte ───────────────────────────────────
@@ -881,7 +794,7 @@ export const SECTION_LIBRARY: SectionDef[] = [
       { id: "note", label: "Fußnote (optional)", labelEn: "Footnote (optional)", kind: "text", target: { key: "note" }, def: "" },
     ],
     presets: [
-      { id: "band", label: "Akzent-Band", labelEn: "Accent band", hint: "Vollflächig in Akzentfarbe", settings: { layout: "band", accent_color: "@accent", countup: true } },
+      { id: "band", label: "Dunkles Band", labelEn: "Dark band", hint: "Vollflächig dunkel, weiße Zahlen", settings: { layout: "band", accent_color: "@accent", countup: true } },
       { id: "hell", label: "Hell", labelEn: "Light", hint: "Mit Trennlinien", settings: { layout: "light", accent_color: "@accent", countup: true } },
       { id: "karten", label: "Karten", labelEn: "Cards", hint: "4 Karten mit Rahmen", settings: { layout: "cards", accent_color: "@accent", countup: true } },
     ],
@@ -2035,7 +1948,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint" } },
     { type: "bro-logo-badges", presetId: "marquee" },
     { type: "bro-info-tabs", presetId: "mittig" },
-    { type: "bro-google-reviews", presetId: "google", settings: { sec_tone: "wash", sec_divider: "curve" } },
+    { type: "bro-google-reviews", presetId: "google", settings: { sec_tone: "wash" } },
     { type: "featured-collection", presetId: "galerie" },
     { type: "qanda", presetId: "glass" },
     { type: "bro-gradient-cta", presetId: "aurora" },
@@ -2052,7 +1965,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   ],
   bold: [
     { type: "bro-cta-banner", presetId: "vollbild" },
-    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep", sec_divider: "slant" } },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep" } },
     { type: "bro-feature-grid", presetId: "kacheln" },
     { type: "bro-stats", presetId: "band" },
     { type: "reviews2", presetId: "dunkel" },
@@ -2063,7 +1976,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   playful: [
     { type: "animatedtext", presetId: "stern" },
     { type: "bro-circle-gallery", presetId: "laufband" },
-    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave" } },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft" } },
     { type: "bro-feature-grid", presetId: "icons" },
     { type: "vids", presetId: "hell" },
     { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "tint" } },
@@ -2090,7 +2003,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   ],
   sunset: [
     { type: "image-with-text", presetId: "split" },
-    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", sec_divider: "wave" } },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint" } },
     { type: "multicolumn", presetId: "karten" },
     { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft" } },
     { type: "reviews", presetId: "fade" },
@@ -2101,7 +2014,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-feature-grid", presetId: "icons" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint" } },
     { type: "video", presetId: "standard" },
-    { type: "bro-callouts", presetId: "hell", settings: { sec_tone: "wash", sec_divider: "curve" } },
+    { type: "bro-callouts", presetId: "hell", settings: { sec_tone: "wash" } },
     { type: "reviews2", presetId: "hell" },
     { type: "collapsible-content", presetId: "reihen" },
     { type: "bro-gradient-cta", presetId: "aurora" },
@@ -2119,7 +2032,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-hero-split", presetId: "rosa" },
     { type: "animatedtext", presetId: "herz" },
     { type: "bro-circle-gallery", presetId: "verlauf" },
-    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave" } },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft" } },
     { type: "collage", presetId: "links" },
     { type: "reviews2", presetId: "getoent" },
     { type: "vids", presetId: "getoent" },
@@ -2169,7 +2082,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-steps", presetId: "kreise" },
     { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "tint", icon_1: "medic", icon_2: "shield", icon_3: "pulse", icon_4: "rotate" } },
     { type: "bro-guarantee", presetId: "siegel" },
-    { type: "bro-callouts", presetId: "hell", settings: { sec_tone: "wash", sec_divider: "curve" } },
+    { type: "bro-callouts", presetId: "hell", settings: { sec_tone: "wash" } },
     { type: "bro-feature-grid", presetId: "duo" },
     { type: "bro-compare-slider", presetId: "hell", settings: { sec_tone: "wash" } },
     { type: "qanda", presetId: "kompakt" },
@@ -2180,14 +2093,14 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "home", icon_2: "bed", icon_3: "heart", icon_4: "truck" } },
     { type: "bro-benefit-cards", presetId: "duo" },
     { type: "collage", presetId: "karten" },
-    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft", sec_divider: "wave" } },
+    { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft" } },
     { type: "benefits", presetId: "luftig" },
     { type: "bro-transformation", presetId: "creme", settings: { sec_tone: "soft" } },
     { type: "photo", presetId: "getoent" },
   ],
   sport: [
     { type: "bro-cta-banner", presetId: "vollbild" },
-    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep", sec_divider: "slant", icon_1: "bolt", icon_2: "pulse", icon_3: "battery", icon_4: "trophy" } },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "deep", icon_1: "bolt", icon_2: "pulse", icon_3: "battery", icon_4: "trophy" } },
     { type: "bro-stats", presetId: "hell" },
     { type: "vids", presetId: "dunkel" },
     { type: "bro-callouts", presetId: "glow", settings: { sec_tone: "wash" } },
@@ -2200,7 +2113,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "utensils", icon_2: "leaf", icon_3: "clock", icon_4: "smile" } },
     { type: "bro-benefit-cards", presetId: "quartett" },
     { type: "multicolumn", presetId: "karten" },
-    { type: "bro-chat-reviews", presetId: "whatsapp", settings: { sec_tone: "wash", sec_divider: "wave" } },
+    { type: "bro-chat-reviews", presetId: "whatsapp", settings: { sec_tone: "wash" } },
     { type: "image-with-text", presetId: "zentriert" },
     { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "soft" } },
     { type: "qanda", presetId: "offen" },
@@ -2208,7 +2121,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   family: [
     { type: "bro-hero-split", presetId: "creme" },
     { type: "bro-feature-grid", presetId: "icons" },
-    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", sec_divider: "wave", icon_1: "baby", icon_2: "heart", icon_3: "shield", icon_4: "smile" } },
+    { type: "bro-icon-benefits", presetId: "karten", settings: { sec_tone: "soft", icon_1: "baby", icon_2: "heart", icon_3: "shield", icon_4: "smile" } },
     { type: "bro-chat-reviews", presetId: "imessage" },
     { type: "image-with-text", presetId: "overlap" },
     { type: "bro-spotlight", presetId: "karte", settings: { sec_tone: "tint" } },
@@ -2237,7 +2150,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
   spa: [
     { type: "bro-hero-luxe", presetId: "glas" },
     { type: "image-with-text", presetId: "overlap" },
-    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", sec_divider: "wave", icon_1: "droplet", icon_2: "sun", icon_3: "sprout", icon_4: "smile" } },
+    { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "droplet", icon_2: "sun", icon_3: "sprout", icon_4: "smile" } },
     { type: "bro-steps", presetId: "timeline" },
     { type: "bro-benefit-cards", presetId: "duo" },
     { type: "bro-spotlight", presetId: "editorial", settings: { sec_tone: "soft" } },
@@ -2250,7 +2163,7 @@ export const STYLE_COMPOSITIONS: Record<string, CompositionEntry[]> = {
     { type: "scrollingbild", presetId: "panorama" },
     { type: "bro-icon-benefits", presetId: "band", settings: { sec_tone: "tint", icon_1: "mountain", icon_2: "compass", icon_3: "shield", icon_4: "feather" } },
     { type: "bro-feature-grid", presetId: "kacheln" },
-    { type: "bro-stats", presetId: "karten", settings: { sec_tone: "wash", sec_divider: "slant" } },
+    { type: "bro-stats", presetId: "karten", settings: { sec_tone: "wash" } },
     { type: "bro-image-cards", presetId: "breit" },
     { type: "reviews2", presetId: "sand" },
     { type: "map", presetId: "rechts" },
@@ -2747,42 +2660,18 @@ export function buildInitialDocument(
       : shuffleComposition(style.id, seededRnd(`${productId}|${style.id}`)),
   );
   const sections: SectionInstance[] = [];
-  // Formen-Kanten: pro Seite gilt EINE stil-stabile Form (nie gemischte
-  // Wellen/Zacken/Bögen auf einer Seite), und eine Kante kommt IMMER als
-  // Paar — oben UND unten dieselbe Form (nie einseitig angeschnitten).
-  const styleOffset = Array.from(style.id).reduce((a, c) => a + c.charCodeAt(0), 0);
-  const shapePool = SECTION_DIVIDERS.filter((d) => d !== "none");
-  const pageShape = shapePool[styleOffset % shapePool.length];
   for (const entry of composition) {
     if (caps.size && !caps.has(entry.type)) continue; // Basis kennt den Typ nicht
     const base = baseSections.find((b) => b.type === entry.type && !used.has(b.id));
     // Kompakte Ton-Marker ({ sec_tone: "tint", … }) in konkrete Design-
-    // Settings der Stil-Palette expandieren (Vorschau = Download).
+    // Settings der Stil-Palette expandieren (Vorschau = Download). Töne sind
+    // seit 2026-07-28 rein neutrale Flächen — Formen-Kanten/Fades aus alten
+    // Markern werden dabei verworfen (clean statt dekoriert).
     let settings = entry.settings ? { ...entry.settings } : undefined;
     if (settings && typeof settings.sec_tone === "string" && SECTION_TONES.includes(settings.sec_tone as SectionTone)) {
-      const { sec_tone, sec_fade, sec_divider, sec_divider_top, ...rest } = settings;
-      const tone = sec_tone as SectionTone;
-      let divider = typeof sec_divider === "string" ? (sec_divider as (typeof SECTION_DIVIDERS)[number]) : undefined;
-      let dividerTop = typeof sec_divider_top === "string" ? (sec_divider_top as (typeof SECTION_DIVIDERS)[number]) : undefined;
-      const hasExplicitEdge = divider !== undefined || dividerTop !== undefined || typeof sec_fade === "string";
-      if (!hasExplicitEdge && tone !== "none") {
-        divider = pageShape;
-        dividerTop = pageShape;
-      }
-      // Konsistenz-Garantie (auch für kuratierte Kompositions-Marker):
-      // irgendeine Form gesetzt → beide Kanten, immer die Seiten-Form.
-      if ((divider && divider !== "none") || (dividerTop && dividerTop !== "none")) {
-        divider = pageShape;
-        dividerTop = pageShape;
-      }
-      settings = {
-        ...sectionToneSettings(tone, style.palette, {
-          fade: typeof sec_fade === "string" ? (sec_fade as (typeof SECTION_FADES)[number]) : undefined,
-          divider,
-          dividerTop,
-        }),
-        ...rest,
-      };
+      const rest = { ...settings };
+      for (const k of ["sec_tone", "sec_fade", "sec_divider", "sec_divider_top"]) delete rest[k];
+      settings = { ...sectionToneSettings(settings.sec_tone as SectionTone, style.palette), ...rest };
     }
     if (base) {
       used.add(base.id);

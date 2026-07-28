@@ -1,49 +1,29 @@
 // ─── Export-Zeit-Generatoren (Server): Frame-Snippet, Icon-Snippet, Schema ──
 // Wird beim Compile aufgerufen und schreibt/aktualisiert Dateien im Theme-Zip.
-// Die Divider-Pfade kommen aus theme-frame.ts (gleiche Quelle wie die
-// Vorschau); der Schema-Patch rüstet auch alte Admin-Upload-Basen nach.
+// Der Frame trägt seit dem Mono-Update nur noch EINE neutrale Fläche; der
+// Schema-Patch räumt die alten Verlaufs-/Formen-Settings aus der Basis.
 
 import { getIcon, THEME_ICONS } from "@/lib/theme-icons";
 import { getIconAny, isKnownIconId } from "@/lib/theme-icon-resolver";
-import { DIVIDER_PATHS, DIVIDER_TOP_PATHS, DIVIDER_SHAPES, DIVIDER_LABELS } from "@/lib/theme-frame";
 
-function liquidCase(sourceVar: string, targetVar: string, paths: Record<string, string>): string {
-  const whens = DIVIDER_SHAPES.map(
-    (k) => `  {%- when '${k}' -%}{%- assign ${targetVar} = '${paths[k]}' -%}`,
-  ).join("\n");
-  return `{%- assign ${targetVar} = '' -%}\n{%- case ${sourceVar} -%}\n${whens}\n{%- endcase -%}`;
-}
-
-/** Liquid-Quelltext des Design-Frames — beim Export ins Zip geschrieben. */
+/** Liquid-Quelltext des Design-Frames — beim Export ins Zip geschrieben.
+ *  MONO (2026-07-28): eine EINZIGE neutrale Fläche, direkte Kante. Keine
+ *  Farbverläufe, keine Fades, keine Formen-Übergänge — auch dann nicht, wenn
+ *  ein Alt-Dokument noch sec_bg2/sec_fade/sec_divider mitbringt. */
 export function buildFrameSnippet(): string {
   return `{%- comment -%}
   Brospify Design-Layer (generiert beim Export — nicht von Hand editieren).
   Nutzung: {% render 'bspx-section-frame', section: section %} in Zeile 1.
-  Mehrfarbige Hintergründe mit direkten Kanten; Übergänge als SVG-Formen
-  (Welle/Zacken/…) oben und/oder unten. Fades nur noch für Alt-Designs.
+  Eine neutrale Fläche pro Section, direkte Kante — clean, ohne Verlauf.
 {%- endcomment -%}
 {%- assign fs = section.settings -%}
-{%- assign bspx_pagebg = fs.sec_pagebg -%}
-{%- if bspx_pagebg == blank -%}{%- assign bspx_pagebg = '#ffffff' -%}{%- endif -%}
 {%- if fs.sec_bg != blank -%}
 <style>
   #shopify-section-{{ section.id }} {
     position: relative;
-    {% if fs.sec_bg2 != blank %}background: linear-gradient(170deg, {{ fs.sec_bg }} 0%, {{ fs.sec_bg2 }} 100%);{% else %}background: {{ fs.sec_bg }};{% endif %}
+    background: {{ fs.sec_bg }};
   }
 </style>
-${liquidCase("fs.sec_divider_top", "bspx_dtop", DIVIDER_TOP_PATHS)}
-{%- if bspx_dtop != blank -%}
-<svg viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;top:-1px;width:100%;height:32px;display:block;z-index:2;pointer-events:none"><path d="{{ bspx_dtop }}" fill="{{ bspx_pagebg }}"/></svg>
-{%- elsif fs.sec_fade == 'top' or fs.sec_fade == 'both' -%}
-<span aria-hidden="true" style="position:absolute;left:0;right:0;top:0;height:72px;z-index:2;pointer-events:none;background:linear-gradient(180deg, {{ bspx_pagebg }} 0%, rgba(255,255,255,0) 100%)"></span>
-{%- endif -%}
-${liquidCase("fs.sec_divider", "bspx_dbot", DIVIDER_PATHS)}
-{%- if bspx_dbot != blank -%}
-<svg viewBox="0 0 1440 64" preserveAspectRatio="none" aria-hidden="true" style="position:absolute;left:0;right:0;bottom:-1px;width:100%;height:32px;display:block;z-index:2;pointer-events:none"><path d="{{ bspx_dbot }}" fill="{{ bspx_pagebg }}"/></svg>
-{%- elsif fs.sec_fade == 'bottom' or fs.sec_fade == 'both' -%}
-<span aria-hidden="true" style="position:absolute;left:0;right:0;bottom:0;height:72px;z-index:2;pointer-events:none;background:linear-gradient(0deg, {{ bspx_pagebg }} 0%, rgba(255,255,255,0) 100%)"></span>
-{%- endif -%}
 {%- endif -%}`;
 }
 
@@ -95,18 +75,15 @@ export function collectDocIconIds(doc: {
   return Array.from(out);
 }
 
-// ─── Schema-Patch: neue Divider-Optionen + sec_divider_top nachrüsten ──────
+// ─── Schema-Patch: Design-Layer der Basis aktuell halten ──────────────────
 // Läuft beim Compile über alle Section-Schemas, die den Design-Layer tragen
-// (erkennbar am sec_bg-Setting). Repariert damit auch alte Admin-Upload-
-// Basen. MUSS vor sanitizeTemplateData laufen, sonst löscht der Select-Check
-// die neuen Werte (waves/zigzag/peaks) wieder aus den Templates.
+// (erkennbar am sec_bg-Setting) — auch alte Admin-Upload-Basen. Seit dem
+// Mono-Update gibt es nur noch die Fläche: Übergangs-Formen (sec_divider,
+// sec_divider_top) werden aus den Schemas ENTFERNT, damit kein Shop-Betreiber
+// sie im Shopify-Editor versehentlich wieder einschaltet.
 
 const SCHEMA_RE = /(\{%-?\s*schema\s*-?%\})([\s\S]*?)(\{%-?\s*endschema\s*-?%\})/;
-
-const DIVIDER_OPTIONS = ["none", ...DIVIDER_SHAPES].map((v) => ({
-  value: v,
-  label: DIVIDER_LABELS[v] || v,
-}));
+const DROPPED_DESIGN_SETTINGS = new Set(["sec_divider", "sec_divider_top", "sec_fade", "sec_bg2"]);
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ensureDesignSchema(zip: any): number {
@@ -127,28 +104,9 @@ export function ensureDesignSchema(zip: any): number {
     }
     const settings: Record<string, unknown>[] = Array.isArray(schema.settings) ? schema.settings : [];
     if (!settings.some((s) => s.id === "sec_bg")) continue;
-    let changed = false;
-    // 1) sec_divider: Options-Liste auf die aktuellen Formen bringen
-    const div = settings.find((s) => s.id === "sec_divider");
-    if (div && JSON.stringify(div.options) !== JSON.stringify(DIVIDER_OPTIONS)) {
-      div.options = DIVIDER_OPTIONS;
-      changed = true;
-    }
-    // 2) sec_divider_top ergänzen (falls noch nicht vorhanden)
-    if (!settings.some((s) => s.id === "sec_divider_top")) {
-      const idx = settings.findIndex((s) => s.id === "sec_divider");
-      const setting = {
-        type: "select",
-        id: "sec_divider_top",
-        label: "Übergang oben",
-        options: DIVIDER_OPTIONS,
-        default: "none",
-      };
-      if (idx >= 0) settings.splice(idx + 1, 0, setting);
-      else settings.push(setting);
-      changed = true;
-    }
-    if (!changed) continue;
+    const kept = settings.filter((s) => !DROPPED_DESIGN_SETTINGS.has(String(s.id)));
+    if (kept.length === settings.length) continue;
+    schema.settings = kept;
     const replaced = raw.replace(SCHEMA_RE, () => `${m[1]}\n${JSON.stringify(schema, null, 2)}\n${m[3]}`);
     zip.updateFile(entry.entryName, Buffer.from(replaced, "utf8"));
     patched++;
