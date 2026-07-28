@@ -500,7 +500,12 @@ async function renderTemplateBody(
     /* eslint-enable @typescript-eslint/no-explicit-any */
     try {
       const html = await env.engine.parseAndRender(liquidSrc, { ...ctxBase, section: buildSectionObj(id, secClone) });
-      body += `<div class="shopify-section">${html}</div>\n`;
+      // Shopify wrappt JEDE Section als <div id="shopify-section-<id>">.
+      // Viele Sections scopen ihr komplettes CSS genau darauf
+      // (#shopify-section-{{ section.id }} .faq-item …) — ohne die ID war das
+      // CSS im Storefront-Render wirkungslos: Sections ohne Styles und eine
+      // unsichtbare Kaufbox (main-product scopet ebenso).
+      body += `<div id="shopify-section-${id}" class="shopify-section">${html}</div>\n`;
     } catch {
       /* einzelne Section überspringen statt alles zu brechen */
     }
@@ -712,7 +717,9 @@ export async function renderThemePage(masterZip: Buffer, opts: RenderPageOpts, c
     /* eslint-enable @typescript-eslint/no-explicit-any */
     try {
       const html = await env.engine.parseAndRender(liquidSrc, { ...ctxBase, section: buildSectionObj(id, secClone) });
-      body += `<div class="shopify-section">${html}</div>\n`;
+      // Gleiche Wrapper-ID wie bei Shopify — sonst greift das auf
+      // #shopify-section-{{ section.id }} gescopte CSS nicht (s. o.).
+      body += `<div id="shopify-section-${id}" class="shopify-section">${html}</div>\n`;
       if (sec.type !== "wave") contentCount++; // Wellen zählen nicht als „Section"
     } catch {
       /* einzelne Section überspringen statt alles zu brechen */
