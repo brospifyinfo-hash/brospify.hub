@@ -25,8 +25,7 @@ import { generateThemeCopy } from "@/lib/theme-copy";
 import { buildThemeZip, isValidColors, isValidFontHandle, type ThemeColors } from "@/lib/theme-inject";
 import { getThemeStyle, radiusOverrides, radiusForStyle } from "@/lib/theme-styles";
 import { sectionHeadingsToThemeCopy } from "@/lib/theme-sections";
-import { isValidDocument } from "@/lib/theme-compile";
-import { compileThinDocumentZip } from "@/lib/theme-thin";
+import { isValidDocument, compileDocumentZip } from "@/lib/theme-compile";
 import type { ThemeDocument } from "@/lib/theme-doc";
 import { buildBuyboxPlan, generateSyncCode } from "@/lib/buybox-plan";
 import { saveBuyboxPlan, updateKundeProfile, getThemeDesign, saveThemeDesign } from "@/lib/sheets";
@@ -261,8 +260,10 @@ export async function POST(req: NextRequest) {
     // Sektions-Code verlässt so nie den Server. Die CSS-Isolation
     // (#bspx-sections-slot-Scoping) sorgt dafür, dass es im Shop aussieht wie
     // in der Editor-Vorschau, unabhängig vom bestehenden Shop-Theme.
+    // Voll-Compile: Sektionen bleiben als Liquid IM Theme (self-contained),
+    // Schutz via injiziertem Gate (theme-gate-inject) statt Server-Rendering.
     zip = doc
-      ? compileThinDocumentZip(
+      ? compileDocumentZip(
           master,
           doc,
           themeCopy || {},
