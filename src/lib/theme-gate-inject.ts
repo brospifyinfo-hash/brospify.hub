@@ -30,11 +30,14 @@ function writeEntry(zip: AdmZip, name: string, content: string): void {
   if (e) zip.updateFile(e.entryName, buf);
   else zip.addFile(name, buf);
 }
-/** Idempotent: nur anhängen, wenn Marker noch nicht vorhanden (Doppel-Export-safe). */
-function appendOnce(zip: AdmZip, name: string, marker: string, block: string): void {
+/** Idempotent: stempelt einen eindeutigen Marker VOR den Block und prüft ihn —
+ *  der Marker MUSS im Geschriebenen stehen, sonst dupliziert ein 2. Export. */
+function appendOnce(zip: AdmZip, name: string, tag: string, block: string): void {
   const raw = readEntry(zip, name);
-  if (raw == null || raw.includes(marker)) return;
-  writeEntry(zip, name, raw + "\n" + block);
+  if (raw == null) return;
+  const stamp = `/* bspx-once:${tag} */`; // gültiger Kommentar in JS UND CSS
+  if (raw.includes(stamp)) return;
+  writeEntry(zip, name, `${raw}\n${stamp}\n${block}`);
 }
 function prependOnce(zip: AdmZip, name: string, marker: string, block: string): void {
   const raw = readEntry(zip, name);
@@ -125,20 +128,20 @@ export function injectBuyboxGate(zip: AdmZip, hubUrl: string): void {
   function neuter(){document.querySelectorAll('product-form [name="add"], .product-form__submit').forEach(function(b){b.setAttribute('aria-disabled','true');b.setAttribute('disabled','disabled');b.classList.add('bspx-disabled');});}
   bspxEnsure().then(function(l){if(!l)return;STATE.locked=true;document.documentElement.classList.add('bspx-lic-locked');if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',neuter);else neuter();});
 })();`;
-  appendOnce(zip, "assets/global.js", `${MARK} brospify Kaufbox`, block);
+  appendOnce(zip, "assets/global.js", "buybox", block);
 }
 
 // ── Modul 4: 3-fach-Redundanz — base.css / theme-editor.js / details-disclosure.js ──
 export function injectRedundancyLocks(zip: AdmZip, hubUrl: string): void {
   // 4.1 CSS-Sperre (#MainContent, NICHT .main-content)
-  appendOnce(zip, "assets/base.css", `${MARK} css-lock`, `
+  appendOnce(zip, "assets/base.css", "css-lock", `
 /* [${MARK}] Layout-Integrität. */
 html.bspx-lic-locked [data-bspx-guard]{display:none !important;height:0 !important;overflow:hidden !important;pointer-events:none !important;}
 html.bspx-lic-locked #MainContent > .shopify-section:not([data-bspx-keep]):not(:has(.product-form)){display:none !important;}
 .bspx-disabled{pointer-events:none !important;opacity:.5 !important;cursor:not-allowed !important;}`);
 
   // 4.2 DOM-Removal per Scroll-Listener (+ DOMContentLoaded/section:load) → theme-editor.js
-  appendOnce(zip, "assets/theme-editor.js", `${MARK} dom-removal`, `
+  appendOnce(zip, "assets/theme-editor.js", "dom", `
 /* [${MARK}] Integritäts-Wächter. Nur live (nie im Customizer). */
 (function(){
   ${bspxEnsure(hubUrl)}
@@ -157,7 +160,7 @@ html.bspx-lic-locked #MainContent > .shopify-section:not([data-bspx-keep]):not(:
   //     Blockt Klicks (pointer-events), aber SICHTBAR ("außer Betrieb") statt als
   //     unsichtbare Falle — ein transparenter Silent-Trap täuscht die Endkunden des
   //     Händlers (Dritte) und ist rechtlich heikler; Sperrwirkung ist identisch.
-  appendOnce(zip, "assets/details-disclosure.js", `${MARK} overlay-block`, `
+  appendOnce(zip, "assets/details-disclosure.js", "overlay", `
 /* [${MARK}] Interaktions-Wächter (2s-Intervall). Header/Footer bleiben sichtbar. */
 (function(){
   ${bspxEnsure(hubUrl)}
