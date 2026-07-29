@@ -10,10 +10,10 @@ const nextConfig: NextConfig = {
   // der Theme-Export-Route getraced werden, damit sie es zur Laufzeit per fs
   // lesen kann. Pfad relativ zum Projekt-Root.
   outputFileTracingIncludes: {
-    "/api/theme-export": ["./master-theme.zip"],
+    // theme-export backt die Kaufbox jetzt wieder self-contained ins Kunden-ZIP
+    // (bspx-runtime.js) → muss in die Serverless-Function getraced werden.
+    "/api/theme-export": ["./master-theme.zip", "./public/bspx-runtime.js"],
     "/api/theme-export/preview": ["./master-theme.zip"],
-    // Die Runtimes werden NICHT mehr in Kunden-ZIPs gebacken, sondern vom
-    // abo-gegateten Asset-Endpoint per fs gelesen — dorthin tracen.
     "/api/storefront/asset/[file]": ["./public/bspx-sections.js", "./public/bspx-runtime.js"],
   },
   // Das dynamische, vom Admin hochladbare Favicon kommt über /api/favicon.
