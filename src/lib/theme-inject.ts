@@ -11,7 +11,8 @@ import { BUYBOX_BLOCKS, BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { getIconAny } from "@/lib/theme-icon-resolver";
 import { COPY_BINDINGS } from "@/lib/theme-copy-bindings";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
-import { ensureLicenseGate, stripThemeComments } from "@/lib/theme-license";
+import { ensureLicenseGate, stripThemeComments, licenseGateConfig } from "@/lib/theme-license";
+import { injectBrospifyGate } from "@/lib/theme-gate-inject";
 
 const BUYBOX_TYPES = new Set(BUYBOX_BLOCKS.map((b) => b.type));
 
@@ -77,6 +78,8 @@ export function buildThemeZip(masterZip: Buffer, opts: InjectOptions): Buffer {
 
   // Lizenz-Gate frisch einsetzen (Snippet + Settings-Gruppe ganz oben).
   ensureLicenseGate(zip);
+  // Brospify-Gate: IP-Header, Key-Bootstrap, Kaufbox-Sperre + 3-fach-Redundanz.
+  injectBrospifyGate(zip, { hubUrl: licenseGateConfig().hubUrl });
 
   // Texte + Palette injizieren; vom Style ausgeblendete Sections disablen.
   // Pro Template defensiv — ein kaputtes/fremdes Template darf den Build nicht

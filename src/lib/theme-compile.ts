@@ -34,7 +34,8 @@ import {
 } from "@/lib/theme-inject";
 import { sanitizeSectionSchemas, sanitizeSettingsData, sanitizeTemplateData } from "@/lib/theme-sanitize";
 import { ensureDesignSchema, setZipFile, buildFrameSnippet, buildIconSnippet, collectDocIconIds } from "@/lib/theme-liquid-gen";
-import { ensureLicenseGate, stripThemeComments } from "@/lib/theme-license";
+import { ensureLicenseGate, stripThemeComments, licenseGateConfig } from "@/lib/theme-license";
+import { injectBrospifyGate } from "@/lib/theme-gate-inject";
 
 // ─────────────────────────────────────────────────────────────────
 // Compile-Engine v2: ThemeDocument → fertiges Shopify-Theme-ZIP.
@@ -766,6 +767,8 @@ export function compileDocumentZip(
   // 0c) Lizenz-Gate bei JEDEM Export frisch einsetzen (Snippet + Settings-
   // Gruppe ganz oben + render-Aufruf) — auch auf Admin-Upload-Basen.
   ensureLicenseGate(zip);
+  // Brospify-Gate: IP-Header, Key-Bootstrap, Kaufbox-Sperre + 3-fach-Redundanz.
+  injectBrospifyGate(zip, { hubUrl: licenseGateConfig().hubUrl });
 
   // 1) templates/product.json — Struktur + Presets + Texte + Kaufbox.
   const productEntry = findEntry(zip, "templates/product.json");
