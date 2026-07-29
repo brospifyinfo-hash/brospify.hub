@@ -10,6 +10,9 @@
 // Kostet CREDIT_COSTS.THEME_EXPORT Credits pro Build (Admins kostenlos).
 
 import { NextRequest, NextResponse } from "next/server";
+import fs from "fs";
+import path from "path";
+import { BUYBOX_CSS } from "@/lib/buybox-css";
 import { getSession } from "@/lib/session";
 import {
   getCreditsState,
@@ -268,7 +271,20 @@ export async function POST(req: NextRequest) {
           doc,
           themeCopy || {},
           key,
-          { syncCode, hubUrl: BSPX_HUB_URL },
+          {
+            syncCode,
+            hubUrl: BSPX_HUB_URL,
+            // Kaufbox self-contained backen: Plan + CSS + Runtime als lokale
+            // Assets (bspx-plan.json / bspx-runtime.js) → Kaufbox lädt OHNE Hub.
+            payloadJson: JSON.stringify({ v: 1, css: BUYBOX_CSS, plan: buildBuyboxPlan(doc, themeCopy) }),
+            runtimeJs: (() => {
+              try {
+                return fs.readFileSync(path.join(process.cwd(), "public", "bspx-runtime.js"), "utf8");
+              } catch {
+                return undefined;
+              }
+            })(),
+          },
           licenseKey,
         )
       : buildThemeZip(master, {
