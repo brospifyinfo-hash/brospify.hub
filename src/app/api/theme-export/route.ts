@@ -12,6 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import AdmZip from "adm-zip";
 import { BUYBOX_CSS } from "@/lib/buybox-css";
 import { getSession } from "@/lib/session";
 import {
@@ -38,6 +39,40 @@ import { upsertLiveDesign, snapshotDesign } from "@/lib/design-autosave";
 // BEWUSST der Apex (nicht www): der www→Apex-Redirect trägt keine
 // CORS-Header — ein Fetch über www würde im Browser geblockt.
 const BSPX_HUB_URL = "https://brospifyhub.com";
+
+// Nur die im Editor benutzten Sektionen behalten: alle sections/<type>.liquid
+// entfernen, die von keinem Template / keiner Section-Group / keinem Layout
+// referenziert werden. (Gleiche Referenz-Erkennung wie das Thin-Theme.)
+function pruneUnreferencedSections(zip: AdmZip): number {
+  const keep = new Set<string>();
+  for (const e of zip.getEntries()) {
+    const name = e.entryName.replace(/\\/g, "/");
+    if (/^(templates\/.*\.json|sections\/.*-group\.json)$/.test(name)) {
+      try {
+        const data = JSON.parse(e.getData().toString("utf8"));
+        for (const s of Object.values(data.sections || {}) as Array<{ type?: string }>) {
+          if (s?.type) keep.add(String(s.type));
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    if (/^layout\/.*\.liquid$/.test(name)) {
+      const src = e.getData().toString("utf8");
+      const re = /\{%-?\s*sections?\s+['"]([^'"]+)['"]/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(src))) keep.add(m[1]);
+    }
+  }
+  let removed = 0;
+  for (const e of zip.getEntries()) {
+    const m = e.entryName.replace(/\\/g, "/").match(/^sections\/([^/]+)\.liquid$/);
+    if (!m || keep.has(m[1])) continue;
+    zip.deleteFile(e.entryName);
+    removed += 1;
+  }
+  return removed;
+}
 
 // HINWEIS: Die Runtimes (bspx-sections.js / bspx-runtime.js) werden NICHT
 // mehr ins ZIP gebacken — das geschützte Theme lädt sie abo-gegated vom
@@ -304,6 +339,15 @@ export async function POST(req: NextRequest) {
       hiddenBlocks: Array.isArray(body.hiddenBlocks) ? body.hiddenBlocks.filter((s) => typeof s === "string") : undefined,
       benefitIcons: Array.isArray(body.benefitIcons) ? body.benefitIcons.filter((s) => typeof s === "string") : undefined,
     });
+
+    // Nur die im Editor benutzten Sektionen behalten — ungenutzte Master-
+    // Schablonen-Sektionen aus dem Kunden-ZIP entfernen.
+    if (doc) {
+      const az = new AdmZip(zip);
+      const removed = pruneUnreferencedSections(az);
+      console.log(`[theme-export] ${removed} ungenutzte Sektionen entfernt`);
+      zip = az.toBuffer();
+    }
   } catch (err) {
     console.error("[theme-export] build failed:", err);
     const msg = err instanceof Error ? err.message : "Theme-Erstellung fehlgeschlagen.";
