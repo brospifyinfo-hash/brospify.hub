@@ -135,10 +135,18 @@ export function injectBuyboxGate(zip: AdmZip, hubUrl: string): void {
 export function injectRedundancyLocks(zip: AdmZip, hubUrl: string): void {
   // 4.1 CSS-Sperre (#MainContent, NICHT .main-content)
   appendOnce(zip, "assets/base.css", "css-lock", `
-/* [${MARK}] Layout-Integrität. */
+/* [${MARK}] Layout-Integrität + Außer-Betrieb-Karte (Footer bleibt sichtbar). */
 html.bspx-lic-locked [data-bspx-guard]{display:none !important;height:0 !important;overflow:hidden !important;pointer-events:none !important;}
 html.bspx-lic-locked #MainContent > .shopify-section:not([data-bspx-keep]):not(:has(.product-form)){display:none !important;}
-.bspx-disabled{pointer-events:none !important;opacity:.5 !important;cursor:not-allowed !important;}`);
+.bspx-disabled{pointer-events:none !important;opacity:.5 !important;cursor:not-allowed !important;}
+#bspx-of{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;padding:56px 24px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;}
+.bspx-of-card{max-width:560px;background:#fff;border:1px solid #ececec;border-radius:22px;padding:52px 44px;box-shadow:0 24px 70px rgba(0,0,0,.07);}
+.bspx-of-card .bspx-of-ico{font-size:44px;line-height:1;margin-bottom:18px;}
+.bspx-of-card h1{font-size:27px;line-height:1.25;margin:0 0 12px;color:#111;font-weight:700;letter-spacing:-.01em;}
+.bspx-of-card p{font-size:15px;line-height:1.6;color:#5b5b5b;margin:0;}
+.bspx-of-mark{display:inline-block;margin-top:30px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#8a8a8a;text-decoration:none;border:1px solid #e4e4df;border-radius:999px;padding:9px 18px;background:#fff;transition:color .15s,border-color .15s;}
+.bspx-of-mark:hover{color:#111;border-color:#cfcfc9;}
+.bspx-of-mark b{color:#111;font-weight:700;}`);
 
   // 4.2 DOM-Removal per Scroll-Listener (+ DOMContentLoaded/section:load) → theme-editor.js
   appendOnce(zip, "assets/theme-editor.js", "dom", `
@@ -156,20 +164,23 @@ html.bspx-lic-locked #MainContent > .shopify-section:not([data-bspx-keep]):not(:
   window.addEventListener('scroll',apply,{passive:true}); // wie in deiner Spec: greift auch beim Scrollen
 })();`);
 
-  // 4.3 Interaktions-Blocker per Intervall (2s) → details-disclosure.js
-  //     Blockt Klicks (pointer-events), aber SICHTBAR ("außer Betrieb") statt als
-  //     unsichtbare Falle — ein transparenter Silent-Trap täuscht die Endkunden des
-  //     Händlers (Dritte) und ist rechtlich heikler; Sperrwirkung ist identisch.
+  // 4.3 Außer-Betrieb-Karte per Intervall (2s) → details-disclosure.js
+  //     Zeigt bei inaktiver Lizenz eine designte Karte + brospify-Watermark IN
+  //     #MainContent (kein Vollbild-Overlay) → Header & Footer/Impressum bleiben
+  //     sichtbar. Das Intervall re-injiziert die Karte, falls sie entfernt wird.
   appendOnce(zip, "assets/details-disclosure.js", "overlay", `
-/* [${MARK}] Interaktions-Wächter (2s-Intervall). Header/Footer bleiben sichtbar. */
+/* [${MARK}] Außer-Betrieb-Wächter (2s-Intervall). Header/Footer bleiben sichtbar. */
 (function(){
   ${bspxEnsure(hubUrl)}
   function overlay(){
-    if(document.getElementById('bspx-of'))return;
+    var main=document.getElementById('MainContent')||document.querySelector('main');
+    if(!main||document.getElementById('bspx-of'))return;
     var o=document.createElement('div');o.id='bspx-of';
-    o.setAttribute('style','position:fixed;inset:0;z-index:2147483646;pointer-events:all;display:flex;align-items:center;justify-content:center;background:rgba(246,246,244,.98);text-align:center;font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;color:#555;');
-    o.textContent='Der Shop ist aktuell außer Betrieb.';
-    (document.body||document.documentElement).appendChild(o);
+    o.innerHTML='<div class="bspx-of-card"><div class="bspx-of-ico">\\u23F8\\uFE0F</div>'+
+      '<h1>Der Shop ist aktuell au\\u00dfer Betrieb.</h1>'+
+      '<p>Bitte schau zu einem sp\\u00e4teren Zeitpunkt noch einmal vorbei.</p></div>'+
+      '<a class="bspx-of-mark" href="https://brospify.ai" target="_blank" rel="noopener">powered by <b>brospify.ai</b></a>';
+    main.appendChild(o);
   }
   function tick(){if(!document.documentElement.classList.contains('bspx-lic-locked'))return;overlay();document.querySelectorAll('[data-bspx-guard]').forEach(function(s){s.style.setProperty('display','none','important');});}
   bspxEnsure().then(function(l){if(!l)return;document.documentElement.classList.add('bspx-lic-locked');overlay();});
