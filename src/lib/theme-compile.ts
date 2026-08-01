@@ -606,11 +606,23 @@ function compileHomeTemplate(
     docIds.push(sid);
   }
 
-  for (const sid of origOrder) {
-    if (isManaged(sid) && !keptTemplateIds.has(sid)) delete sections[sid];
+  // Nur die im Editor gebauten Sektionen behalten. Standard-/Default-Sektionen
+  // der Basis, die der Nutzer NICHT hinzugefügt hat (unmanaged prefix/suffix +
+  // nicht behaltene managed), fliegen aus der Startseite.
+  if (docIds.length) {
+    const keep = new Set(docIds);
+    for (const sid of Object.keys(sections)) {
+      if (!keep.has(sid)) delete sections[sid];
+    }
+    data.order = [...docIds];
+  } else {
+    // Fallback: kein Dokument-Section aufgelöst → Basis-Stand behalten, damit
+    // die Startseite nicht leer/ungültig wird (Validierung wirft bei order=[]).
+    for (const sid of origOrder) {
+      if (isManaged(sid) && !keptTemplateIds.has(sid)) delete sections[sid];
+    }
+    data.order = [...unmanagedPrefix, ...docIds, ...unmanagedSuffix];
   }
-
-  data.order = [...unmanagedPrefix, ...docIds, ...unmanagedSuffix];
 
   for (const sid of data.order) {
     const sec = sections[sid];

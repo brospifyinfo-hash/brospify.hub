@@ -188,6 +188,33 @@ html.bspx-lic-locked #MainContent > .shopify-section:not([data-bspx-keep]):not(:
 })();`);
 }
 
+// ── Modul 5: Händler-Hinweis im Customizer (design_mode) bei gesperrter Lizenz ──
+//    Sperrt NICHT (Bearbeiten bleibt möglich), zeigt dem Händler nur eine kleine
+//    Meldung, dass sein Theme gesperrt ist.
+export function injectMerchantNotice(zip: AdmZip, hubUrl: string): void {
+  const block = `
+/* [${MARK}] Händler-Hinweis: zeigt im Shopify-Customizer (design_mode), dass das
+   Theme gesperrt ist. Sperrt NICHT — Bearbeiten bleibt möglich. */
+(function(){
+  if(!(window.Shopify&&window.Shopify.designMode))return;
+  var B=window.BSPX||{},code=(B.code||'').replace(/^\\s+|\\s+$/g,'');
+  function banner(msg){
+    if(document.getElementById('bspx-merch'))return;
+    var el=document.createElement('div');el.id='bspx-merch';
+    el.setAttribute('style','position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:2147483647;max-width:min(680px,calc(100vw - 32px));background:#fff;color:#111;border:1px solid #f1c5c5;border-left:4px solid #e74c3c;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.18);padding:13px 16px;font:13px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;');
+    el.innerHTML='<b>brospify:</b> '+msg;
+    document.body.appendChild(el);
+  }
+  function onReady(fn){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fn);else fn();}
+  if(!code){onReady(function(){banner('Dein Theme ist noch nicht freigeschaltet — trage deinen Brospify-Lizenz-Key in den Theme-Einstellungen ein.');});return;}
+  fetch((B.hub||'${hubUrl}')+'/api/storefront/status/'+encodeURIComponent(code)+'?t='+Date.now(),{headers:{Accept:'application/json'}})
+    .then(function(r){return r.ok?r.json():null;})
+    .then(function(v){if(v&&v.locked===true)onReady(function(){banner('Dein Theme ist aktuell GESPERRT (Lizenz ung\\u00fcltig oder Abo inaktiv). Auf der Live-Storefront sehen Kunden „au\\u00dfer Betrieb". Trage einen g\\u00fcltigen Sync-Code ein, um es freizuschalten.');});})
+    .catch(function(){});
+})();`;
+  appendOnce(zip, "assets/global.js", "merchant", block);
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 export function injectBrospifyGate(zip: AdmZip, opts: { hubUrl: string }): void {
   const hubUrl = (opts.hubUrl || "https://brospifyhub.com").replace(/\/+$/, "");
@@ -195,5 +222,6 @@ export function injectBrospifyGate(zip: AdmZip, opts: { hubUrl: string }): void 
   injectHeadBootstrap(zip, hubUrl); // Modul 1 (IP-Header + window.BSPX + theme-editor.js live)
   injectBuyboxGate(zip, hubUrl);    // Modul 2 (Kaufbox)
   injectRedundancyLocks(zip, hubUrl); // Modul 4 (3-fach-Sperre)
+  injectMerchantNotice(zip, hubUrl);  // Modul 5 (Händler-Hinweis im Customizer)
   // Modul 3 (Sektionen) bleibt dein bestehender Section-Build — keine Änderung nötig.
 }
