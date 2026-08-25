@@ -11,10 +11,10 @@ export default function sitemap(): MetadataRoute.Sitemap {
     // Die Terminseite ändert sich am häufigsten und ist das Ziel, auf das
     // alles hinausläuft — deshalb gleich hinter der Startseite.
     { path: "/termin", priority: 0.9, changeFrequency: "weekly" },
-    { path: "/arbeiten", priority: 0.8, changeFrequency: "monthly" },
+    { path: "/galerie", priority: 0.8, changeFrequency: "monthly" },
     { path: "/preise", priority: 0.8, changeFrequency: "monthly" },
+    { path: "/bewertungen", priority: 0.7, changeFrequency: "monthly" },
     { path: "/studio", priority: 0.7, changeFrequency: "monthly" },
-    { path: "/kontakt", priority: 0.7, changeFrequency: "monthly" },
     { path: "/fragen", priority: 0.6, changeFrequency: "monthly" },
     { path: "/pflege", priority: 0.6, changeFrequency: "yearly" },
     // Impressum und Datenschutz stehen bewusst weit unten: Pflichtseiten,

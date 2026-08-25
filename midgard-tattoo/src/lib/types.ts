@@ -96,13 +96,63 @@ export interface Booking {
   updatedAt: string;
 }
 
+// ─── Bilder ──────────────────────────────────────────────────────
+// Alles, was der Inhaber über das Dashboard hochlädt. Die fünf
+// mitgelieferten Motive stehen weiterhin in studio.ts und dienen als
+// Rückfall, solange nichts hochgeladen wurde — die Seite ist damit ab
+// der ersten Minute nicht leer.
+export interface MediaItem {
+  id: string;
+  /** Öffentliche Adresse des Bildes (Blob-URL oder /uploads/…). */
+  url: string;
+  width: number;
+  height: number;
+  /** Winziges WebP als Data-URI — steht sofort im HTML und verhindert
+   *  das graue Loch beim Nachladen. */
+  blur: string;
+  title: string;
+  style: string;
+  placement: string;
+  /** Bildbeschreibung für Screenreader und Suchmaschinen. */
+  alt: string;
+  /** In der Galerie zeigen. */
+  inGallery: boolean;
+  /** Als Bild in der Hero-Slideshow verwenden. */
+  inHero: boolean;
+  /** Reihenfolge, kleinste Zahl zuerst. */
+  sortIndex: number;
+  createdAt: string;
+}
+
+// ─── Bewertungen ─────────────────────────────────────────────────
+// Werden ausschließlich vom Inhaber eingetragen. Es gibt bewusst keine
+// mitgelieferten Beispiel-Bewertungen: erfundene Kundenstimmen sind
+// Irreführung, und eine leere Seite ist ehrlicher als eine erfundene.
+export interface Review {
+  id: string;
+  /** Name, wie er angezeigt werden soll — z. B. "Lena K.". */
+  name: string;
+  /** 1 bis 5. */
+  rating: number;
+  text: string;
+  /** "2026-03-14" — nur das Datum, keine Uhrzeit. */
+  date: string;
+  /** Woher die Bewertung stammt, z. B. "Google". Optional. */
+  source?: string;
+  /** Nicht veröffentlichte Bewertungen bleiben im Dashboard sichtbar. */
+  published: boolean;
+  createdAt: string;
+}
+
 /** Kompletter Datenbestand — genau das liegt als JSON im Store. */
 export interface TattooData {
   slots: Slot[];
   bookings: Booking[];
+  media: MediaItem[];
+  reviews: Review[];
 }
 
-export const EMPTY_DATA: TattooData = { slots: [], bookings: [] };
+export const EMPTY_DATA: TattooData = { slots: [], bookings: [], media: [], reviews: [] };
 
 // ─── Auswahl-Kataloge für das Anfrage-Formular ───────────────────
 // `value` landet in der Datenbank, `label` steht im Dropdown, `hint`

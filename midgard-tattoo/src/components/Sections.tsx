@@ -171,9 +171,9 @@ export function SiteFooter() {
               {[
                 { href: "/", label: "Start" },
                 { href: "/termin", label: "Termin buchen" },
-                { href: "/arbeiten", label: "Arbeiten" },
+                { href: "/galerie", label: "Galerie" },
                 { href: "/preise", label: "Preise" },
-                { href: "/studio", label: "Studio" },
+                { href: "/bewertungen", label: "Bewertungen" },
               ].map((item) => (
                 <li key={item.href}>
                   <Link href={item.href} className="underline-offset-4 hover:underline">
@@ -188,9 +188,9 @@ export function SiteFooter() {
             <p className="eyebrow mb-4">Mehr</p>
             <ul className="space-y-2 text-sm" style={{ color: "var(--bone-soft)" }}>
               {[
+                { href: "/studio", label: "Studio & Anfahrt" },
                 { href: "/pflege", label: "Tattoo-Pflege" },
                 { href: "/fragen", label: "Häufige Fragen" },
-                { href: "/kontakt", label: "Kontakt & Anfahrt" },
                 { href: "/impressum", label: "Impressum" },
                 { href: "/datenschutz", label: "Datenschutz" },
               ].map((item) => (

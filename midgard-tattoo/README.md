@@ -14,23 +14,23 @@ npm run dev                    # → http://localhost:3000
 
 | Route | Was |
 |---|---|
-| `/` | Startseite: bildschirmfüllender Hero, direkt darunter die Buchung |
+| `/` | Startseite: Hero-Slideshow, darunter je eine Vorschau auf jede Hauptseite |
+| `/galerie` | Alle Motive mit Leuchtkasten |
 | `/termin` | Kalender, Anfrageformular, die wichtigsten Fragen |
-| `/arbeiten` | Galerie aller Motive mit Leuchtkasten |
 | `/preise` | Richtwerte, Tagessatz, was den Preis beeinflusst |
-| `/studio` | Studio, Handschrift, Ablauf, Anfahrt |
+| `/bewertungen` | Kundenstimmen (nur echte, vom Inhaber eingetragen) |
+| `/studio` | Studio, Anfahrt mit Karte, Öffnungszeiten, Handschrift, Ablauf |
 | `/pflege` | Pflegeanleitung nach der Sitzung, inkl. Warnzeichen |
-| `/kontakt` | Adresse, Telefon, E-Mail, Öffnungszeiten (heutiger Tag markiert) |
 | `/fragen` | Häufige Fragen (mit FAQPage-Structured-Data) |
-| `/impressum` | Pflichtangaben nach § 5 DDG · `noindex` |
-| `/datenschutz` | Datenschutzerklärung · `noindex` |
-| `/admin` | Dashboard des Inhabers (Login-Pflicht) |
+| `/impressum` · `/datenschutz` | Pflichtseiten · `noindex` |
+| `/admin` | Dashboard: Kalender, Anfragen, Bilder, Bewertungen |
 | `/admin/login` | Passwort-Anmeldung |
-| `/api/slots` | `GET` — freie Termine für den Kundenkalender |
-| `/api/bookings` | `POST` — Terminanfrage abschicken |
-| `/api/admin/login`, `.../logout` | Session an/aus |
-| `/api/admin/slots` | `GET` `POST` `PATCH` `DELETE` — Termine verwalten |
-| `/api/admin/bookings` | `GET` `PATCH` `DELETE` — Anfragen verwalten |
+| `/api/slots` · `/api/bookings` | Öffentlich: freie Termine lesen, Anfrage abschicken |
+| `/api/admin/login` · `.../logout` | Session an/aus |
+| `/api/admin/slots` | Termine verwalten |
+| `/api/admin/bookings` | Anfragen verwalten |
+| `/api/admin/media` | Bilder hochladen, beschriften, sortieren, löschen |
+| `/api/admin/reviews` | Bewertungen pflegen |
 
 ## Tech-Stack und warum
 
@@ -55,6 +55,49 @@ Passwort und die Sperre nach acht Fehlversuchen, nicht ein versteckter
 Pfad.
 
 Das Passwort steht in `TATTOO_ADMIN_PASSWORD` (siehe `.env.example`).
+
+## Bilder pflegen
+
+Im Dashboard unter *Bilder*: hineinziehen oder auswählen, mehrere auf
+einmal. Die Seite macht daraus automatisch WebP mit höchstens 1400 px
+Kantenlänge und erzeugt den Unschärfe-Platzhalter — es muss nichts
+vorbereitet werden, ein Handyfoto reicht.
+
+Je Bild lassen sich Titel, Stil, Körperstelle und Bildbeschreibung
+setzen sowie zwei Haken: **In der Galerie** und **In der Slideshow**
+(das Hero oben auf der Startseite). Die Reihenfolge bestimmen die Pfeile.
+
+**Rückfall:** Solange kein eigenes Bild hochgeladen ist, zeigt die
+Website die fünf mitgelieferten Motive aus `src/lib/studio.ts`. Sobald
+das erste eigene Bild da ist, gilt ausschließlich der eigene Bestand —
+sonst ließen sich die Beispiele nie loswerden. Ist für die Slideshow
+nichts markiert, laufen dort die ersten Galeriebilder.
+
+Wo die Dateien landen: mit `BLOB_READ_WRITE_TOKEN` in Vercel Blob, sonst
+in `public/uploads/` (per `.gitignore` ausgeschlossen).
+
+## Bewertungen
+
+Ausschließlich vom Inhaber eingetragen, im Dashboard unter *Bewertungen*.
+Es gibt bewusst **keine** mitgelieferten Beispiele und keinen
+öffentlichen Schreibzugriff: erfundene Kundenstimmen sind Irreführung,
+und ein offenes Formular wäre eine Einladung an Spam. Solange nichts
+eingetragen ist, zeigt `/bewertungen` einen Hinweis statt einer leeren
+Liste, und der Anreißer auf der Startseite bleibt weg.
+
+Der Schalter *Auf der Website sichtbar* erlaubt, eine Bewertung
+vorzubereiten oder zurückzuziehen, ohne sie zu verlieren. Die
+Structured Data (`AggregateRating`) entsteht nur, wenn es wirklich
+Bewertungen gibt.
+
+## Karte
+
+Auf `/studio` steht eine Kartenvorschau, die **nichts** von außen lädt.
+Erst ein Klick auf „Karte laden" holt Google Maps — vorher verlässt kein
+einziger Request die eigene Domain. Das ist in Deutschland kein Detail:
+eine ungefragt eingebettete Karte überträgt IP-Adresse und Gerätedaten
+an Google und braucht eine Einwilligung. Der Datenschutztext beschreibt
+das entsprechend.
 
 ## Termine: erst Beratung, dann Sitzung
 

@@ -13,10 +13,10 @@
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GALLERY, type GalleryPiece } from "@/lib/studio";
+import type { DisplayImage } from "@/lib/gallery";
 import { Reveal } from "./motion";
 
-export function Gallery() {
+export function Gallery({ images }: { images: DisplayImage[] }) {
   const [index, setIndex] = useState<number | null>(null);
   const reduced = useReducedMotion();
   // Merkt sich die auslösende Kachel, um den Fokus zurückzugeben.
@@ -31,9 +31,9 @@ export function Gallery() {
   const step = useCallback((delta: number) => {
     setIndex((current) => {
       if (current === null) return current;
-      return (current + delta + GALLERY.length) % GALLERY.length;
+      return (current + delta + images.length) % images.length;
     });
-  }, []);
+  }, [images.length]);
 
   useEffect(() => {
     if (index === null) return;
@@ -52,13 +52,19 @@ export function Gallery() {
     };
   }, [index, close, step]);
 
-  const active = index === null ? null : GALLERY[index];
+  const active = index === null ? null : images[index];
 
   return (
     <section id="arbeiten" className="shell scroll-mt-24 py-8 md:py-10">
+      {images.length === 0 && (
+        <p className="py-16 text-center text-sm" style={{ color: "var(--bone-dim)" }}>
+          Aktuell sind keine Motive eingestellt. Schau bald wieder vorbei.
+        </p>
+      )}
+
       <div className="masonry">
-        {GALLERY.map((piece, i) => (
-          <Reveal key={piece.slug} delay={(i % 3) * 0.08} as="figure">
+        {images.map((piece, i) => (
+          <Reveal key={piece.id} delay={(i % 3) * 0.08} as="figure">
             <GalleryTile
               piece={piece}
               onOpen={(el) => { triggerRef.current = el; setIndex(i); }}
@@ -155,7 +161,7 @@ function GalleryTile({
   piece,
   onOpen,
 }: {
-  piece: GalleryPiece;
+  piece: DisplayImage;
   onOpen: (el: HTMLButtonElement) => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null);

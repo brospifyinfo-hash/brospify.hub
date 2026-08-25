@@ -260,6 +260,21 @@ select.field option {
   .masonry > * { margin-bottom: 1rem; }
 }
 
+/* ─── Bewertungen ───────────────────────────────────────────────── */
+/* Unterschiedlich lange Texte in Spalten statt in einem starren Raster —
+   sonst steht neben jeder kurzen Bewertung ein Loch. */
+.masonry-reviews {
+  column-count: 1;
+  column-gap: 1rem;
+}
+@media (min-width: 700px) { .masonry-reviews { column-count: 2; } }
+@media (min-width: 1100px) { .masonry-reviews { column-count: 3; } }
+
+.masonry-reviews > * {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+
 /* ─── Laufschrift ("ticker") ────────────────────────────────────── */
 .ticker-track {
   display: flex;

@@ -13,21 +13,26 @@ import { useEffect, useState } from "react";
 import { STUDIO } from "@/lib/studio";
 import { useScrollProgress } from "./motion";
 
-// Vier Punkte plus Knopf — mehr trägt eine Leiste nicht, ohne dass sie
-// zur Linkliste wird. Alles Weitere steht in der Fußzeile.
+// Vier Punkte plus den Knopf: Galerie, Preise, Bewertungen — und
+// „Termin buchen" als Handlung. Jeder Punkt führt auf eine eigene Seite
+// mit eigenem Inhalt, nicht auf einen Abschnitt derselben Seite.
+// Studio, Pflege und Fragen stehen in der Fußzeile.
 const NAV = [
-  { href: "/arbeiten", label: "Arbeiten" },
+  { href: "/galerie", label: "Galerie" },
   { href: "/preise", label: "Preise" },
-  { href: "/studio", label: "Studio" },
-  { href: "/fragen", label: "Fragen" },
+  { href: "/bewertungen", label: "Bewertungen" },
 ];
 
 // Auf dem Handy ist Platz — dort zeigt die Schublade alles.
 const NAV_MOBIL = [
   { href: "/", label: "Start" },
-  ...NAV,
+  { href: "/galerie", label: "Galerie" },
+  { href: "/termin", label: "Termin buchen" },
+  { href: "/preise", label: "Preise" },
+  { href: "/bewertungen", label: "Bewertungen" },
+  { href: "/studio", label: "Studio" },
   { href: "/pflege", label: "Pflege" },
-  { href: "/kontakt", label: "Kontakt" },
+  { href: "/fragen", label: "Fragen" },
 ];
 
 export function SiteHeader() {

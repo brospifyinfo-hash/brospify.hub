@@ -18,7 +18,10 @@
 // in docs/schema.sql, zu ersetzen ist nur `readRaw`/`writeRaw`.
 
 import { createHmac, randomUUID } from "node:crypto";
-import { EMPTY_DATA, type Booking, type Slot, type SlotKind, type TattooData } from "./types";
+import {
+  EMPTY_DATA,
+  type Booking, type MediaItem, type Review, type Slot, type SlotKind, type TattooData,
+} from "./types";
 
 // ─── Adapter-Wahl ────────────────────────────────────────────────
 // NICHT `useBlob` nennen: ESLint hielte das für einen React-Hook.
@@ -90,6 +93,9 @@ function normalize(raw: unknown): TattooData {
   return {
     slots: Array.isArray(data.slots) ? data.slots : [],
     bookings: Array.isArray(data.bookings) ? data.bookings : [],
+    // media und reviews kamen später dazu — ältere Dateien haben sie nicht.
+    media: Array.isArray(data.media) ? data.media : [],
+    reviews: Array.isArray(data.reviews) ? data.reviews : [],
   };
 }
 
@@ -271,5 +277,91 @@ export async function deleteBooking(id: string): Promise<boolean> {
       }
     }
     return true;
+  });
+}
+
+// ─── Bilder ──────────────────────────────────────────────────────
+export type MediaInput = Omit<MediaItem, "id" | "createdAt" | "sortIndex">;
+
+export async function addMedia(input: MediaInput): Promise<MediaItem> {
+  return mutate((data) => {
+    const item: MediaItem = {
+      ...input,
+      id: randomUUID(),
+      // Neue Bilder ans Ende — der Inhaber sortiert danach selbst.
+      sortIndex: data.media.reduce((max, m) => Math.max(max, m.sortIndex), -1) + 1,
+      createdAt: new Date().toISOString(),
+    };
+    data.media.push(item);
+    return item;
+  });
+}
+
+export async function updateMedia(
+  id: string,
+  patch: Partial<Pick<MediaItem, "title" | "style" | "placement" | "alt" | "inGallery" | "inHero" | "sortIndex">>,
+): Promise<MediaItem | null> {
+  return mutate((data) => {
+    const item = data.media.find((m) => m.id === id);
+    if (!item) return null;
+    Object.assign(item, patch);
+    return item;
+  });
+}
+
+/** Verschiebt ein Bild um eine Position. Arbeitet auf der sortierten
+ *  Liste und schreibt danach lückenlose Indizes zurück — sonst driften
+ *  die Zahlen nach ein paar Verschiebungen auseinander. */
+export async function moveMedia(id: string, direction: -1 | 1): Promise<boolean> {
+  return mutate((data) => {
+    const sorted = data.media.slice().sort((a, b) => a.sortIndex - b.sortIndex);
+    const index = sorted.findIndex((m) => m.id === id);
+    const target = index + direction;
+    if (index === -1 || target < 0 || target >= sorted.length) return false;
+    [sorted[index], sorted[target]] = [sorted[target], sorted[index]];
+    sorted.forEach((m, i) => { m.sortIndex = i; });
+    return true;
+  });
+}
+
+/** Entfernt den Eintrag und meldet zurück, welche Datei dazu gehörte —
+ *  der Aufrufer räumt den Speicher auf. */
+export async function deleteMedia(id: string): Promise<string | null> {
+  return mutate((data) => {
+    const item = data.media.find((m) => m.id === id);
+    if (!item) return null;
+    data.media = data.media.filter((m) => m.id !== id);
+    return item.url;
+  });
+}
+
+// ─── Bewertungen ─────────────────────────────────────────────────
+export type ReviewInput = Omit<Review, "id" | "createdAt">;
+
+export async function addReview(input: ReviewInput): Promise<Review> {
+  return mutate((data) => {
+    const review: Review = { ...input, id: randomUUID(), createdAt: new Date().toISOString() };
+    data.reviews.push(review);
+    return review;
+  });
+}
+
+export async function updateReview(
+  id: string,
+  patch: Partial<Omit<Review, "id" | "createdAt">>,
+): Promise<Review | null> {
+  return mutate((data) => {
+    const review = data.reviews.find((r) => r.id === id);
+    if (!review) return null;
+    Object.assign(review, patch);
+    return review;
+  });
+}
+
+export async function deleteReview(id: string): Promise<boolean> {
+  return mutate((data) => {
+    const before = data.reviews.length;
+    data.reviews = data.reviews.filter((r) => r.id !== id);
+    return data.reviews.length < before;
   });
 }

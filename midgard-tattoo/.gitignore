@@ -34,3 +34,7 @@ next-env.d.ts
 # Erzeugte Einzeldatei-Vorschau (Artifact). Baut sich aus dem Projekt
 # und gehoert nicht in die Versionsverwaltung.
 preview.html
+
+# Hochgeladene Bilder (lokale Ablage ohne Vercel Blob).
+# Gehoeren dem Studio, nicht dem Repository.
+/public/uploads/

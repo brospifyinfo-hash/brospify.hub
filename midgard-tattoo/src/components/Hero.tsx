@@ -1,30 +1,56 @@
 "use client";
 
-// ─── Hero ────────────────────────────────────────────────────────
-// Bildschirmfüllender Auftakt: ein Motiv über die ganze Breite, darüber
-// die Aussage in Versalien, unten die zwei Wege weiter. Erst darunter
-// folgt die Buchung — der Hero verkauft, der Kalender wickelt ab.
+// ─── Hero mit Slideshow ──────────────────────────────────────────
+// Bildschirmfüllender Auftakt. Die Bilder wechseln alle acht Sekunden
+// mit einer weichen Blende; welche gezeigt werden, bestimmt der Inhaber
+// im Dashboard über den Haken „Im Hero zeigen".
 //
-// Das Bild liegt als Hintergrund über die volle Fläche statt als Kachel
-// daneben: so ist es groß, ohne dass eine „Bilderwand" entsteht.
+// Drei Regeln, an denen die Umsetzung hängt:
+//  • Nur das aktive Bild ist sichtbar, alle liegen übereinander — so
+//    gibt es kein Nachladen beim Wechsel und keinen Sprung im Layout.
+//  • `prefers-reduced-motion` hält die Schau an und zeigt das erste
+//    Bild; automatisch wechselnde Inhalte sind für manche Menschen
+//    schlicht nicht benutzbar.
+//  • Die Punkte unten sind echte Knöpfe mit Beschriftung, nicht nur
+//    Dekoration — die Schau lässt sich damit steuern.
 
-import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { useRef } from "react";
-import { HERO_PIECE, STUDIO } from "@/lib/studio";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { DisplayImage } from "@/lib/gallery";
+import { STUDIO } from "@/lib/studio";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+const INTERVAL_MS = 8000;
 
-export function Hero({ openSlots }: { openSlots: number }) {
+export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots: number }) {
   const reduced = useReducedMotion();
   const ref = useRef<HTMLElement>(null);
+  const [index, setIndex] = useState(0);
+  const [paused, setPaused] = useState(false);
 
-  // Das Bild zieht beim Scrollen langsamer mit als der Text darüber.
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "18%"]);
+  const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "16%"]);
   const textY = useTransform(scrollYProgress, [0, 1], ["0%", "-12%"]);
   const fade = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
+
+  const count = images.length;
+  const advance = useCallback(() => setIndex((i) => (i + 1) % count), [count]);
+
+  useEffect(() => {
+    if (reduced || paused || count < 2) return;
+    const id = setInterval(advance, INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [advance, reduced, paused, count]);
+
+  // Weiterschalten anhalten, solange der Tab im Hintergrund liegt —
+  // sonst springt die Schau beim Zurückkommen um mehrere Bilder.
+  useEffect(() => {
+    const onVisibility = () => setPaused(document.visibilityState !== "visible");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
 
   const rise = (delay: number) => ({
     initial: reduced ? false : { opacity: 0, y: 34 },
@@ -32,33 +58,48 @@ export function Hero({ openSlots }: { openSlots: number }) {
     transition: { duration: 0.95, delay, ease: EASE },
   });
 
+  const active = images[index] ?? images[0];
+
   return (
     <section
       ref={ref}
       className="relative flex min-h-[100svh] flex-col justify-end"
-      // `isolate` hält die Ebenen dieses Abschnitts beisammen, damit der
-      // Verlauf unten nicht über die nächste Sektion läuft.
       style={{ isolation: "isolate" }}
     >
-      {/* ── Motiv ── */}
+      {/* ── Slideshow ── */}
       <motion.div
         aria-hidden
         className="absolute inset-0 overflow-hidden"
         style={reduced ? undefined : { y: imageY }}
       >
-        <Image
-          src={HERO_PIECE.src}
-          alt=""
-          fill
-          priority
-          placeholder="blur"
-          blurDataURL={HERO_PIECE.blur}
-          sizes="100vw"
-          className="object-cover object-[62%_22%]"
-        />
-        {/* Zwei Ebenen: eine allgemeine Abdunklung, damit Schrift überall
-            hält, und ein kräftiger Verlauf nach unten, aus dem die
-            Überschrift heraussteigt. */}
+        <AnimatePresence initial={false}>
+          <motion.div
+            key={active?.id ?? "leer"}
+            className="absolute inset-0"
+            initial={reduced ? false : { opacity: 0, scale: 1.06 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            // Lange Blende, langsamer Zoom: der Wechsel soll auffallen,
+            // ohne die Aufmerksamkeit vom Text zu ziehen.
+            transition={{ opacity: { duration: 1.4 }, scale: { duration: 9, ease: "linear" } }}
+          >
+            {active && (
+              <Image
+                src={active.src}
+                alt=""
+                fill
+                // Nur das erste Bild ist für den ersten Eindruck nötig;
+                // die übrigen holt der Browser nebenbei.
+                priority={index === 0}
+                placeholder="blur"
+                blurDataURL={active.blur}
+                sizes="100vw"
+                className="object-cover object-[62%_25%]"
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+
         <div className="absolute inset-0" style={{ background: "rgba(11,11,12,0.42)" }} />
         <div
           className="absolute inset-0"
@@ -108,21 +149,48 @@ export function Hero({ openSlots }: { openSlots: number }) {
           <Link href="/termin" className="btn btn-signal h-14 px-8 text-[0.8rem]">
             Termin buchen
           </Link>
-          <Link href="/arbeiten" className="btn btn-ghost h-14 px-7 text-[0.8rem]">
-            Arbeiten ansehen
+          <Link href="/galerie" className="btn btn-ghost h-14 px-7 text-[0.8rem]">
+            Galerie ansehen
           </Link>
         </motion.div>
+
+        {/* ── Steuerung der Schau ── */}
+        {count > 1 && (
+          <motion.div className="mt-10 flex items-center gap-4" {...rise(0.56)}>
+            <div className="flex items-center gap-2">
+              {images.map((image, i) => (
+                <button
+                  key={image.id}
+                  type="button"
+                  onClick={() => setIndex(i)}
+                  aria-label={`Bild ${i + 1} von ${count}: ${image.title}`}
+                  aria-current={i === index}
+                  className="h-9 px-1"
+                >
+                  <span
+                    className="block h-[3px] transition-all duration-500"
+                    style={{
+                      width: i === index ? "2.25rem" : "1rem",
+                      background: i === index ? "var(--signal)" : "var(--ink-hair-strong)",
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+            <span className="text-[0.7rem] uppercase tracking-[0.16em]" style={{ color: "var(--bone-dim)" }}>
+              {active?.title}
+            </span>
+          </motion.div>
+        )}
       </motion.div>
 
-      {/* ── Scroll-Hinweis ──
-          Blendet beim Scrollen aus, statt stur stehen zu bleiben. */}
       <motion.div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 bottom-5 z-10 hidden justify-center md:flex"
         style={reduced ? undefined : { opacity: fade }}
       >
         <span className="flex flex-col items-center gap-2 text-[0.62rem] uppercase tracking-[0.24em]" style={{ color: "var(--bone-dim)" }}>
-          Freie Termine
+          Mehr
           <span className="h-8 w-px" style={{ background: "linear-gradient(to bottom, var(--bone-dim), transparent)" }} />
         </span>
       </motion.div>

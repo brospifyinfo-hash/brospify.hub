@@ -167,3 +167,69 @@ create policy "Anfragen dürfen angelegt werden"
 
 -- Kein SELECT-Policy für anon auf `bookings` — bewusst. Ohne Policy
 -- ist die Tabelle für diese Rolle vollständig gesperrt.
+
+
+-- ═══════════════════════════════════════════════════════════════
+--  Bilder und Bewertungen
+-- ═══════════════════════════════════════════════════════════════
+
+-- Was der Inhaber ueber das Dashboard hochlaedt. Die Datei selbst liegt
+-- im Objektspeicher (Vercel Blob oder public/uploads); hier steht nur
+-- die Adresse plus alles, was zum Anzeigen noetig ist.
+create table media (
+  id          uuid        primary key default gen_random_uuid(),
+  url         text        not null,
+  width       int         not null check (width > 0),
+  height      int         not null check (height > 0),
+  -- Winziges WebP als Data-URI. Steht sofort im HTML und verhindert das
+  -- graue Loch beim Nachladen.
+  blur        text        not null,
+  title       text        not null,
+  style       text        not null default '',
+  placement   text        not null default '',
+  alt         text        not null default '',
+  in_gallery  boolean     not null default true,
+  in_hero     boolean     not null default false,
+  sort_index  int         not null default 0,
+  created_at  timestamptz not null default now()
+);
+
+create index media_gallery_idx on media (sort_index) where in_gallery;
+create index media_hero_idx    on media (sort_index) where in_hero;
+
+-- Bewertungen traegt ausschliesslich der Inhaber ein. Es gibt bewusst
+-- keinen oeffentlichen Schreibzugriff: eine Website, auf der jeder
+-- Bewertungen hinterlassen kann, ist eine Einladung an Spam.
+create table reviews (
+  id         uuid        primary key default gen_random_uuid(),
+  name       text        not null check (length(name) between 2 and 60),
+  rating     int         not null check (rating between 1 and 5),
+  body       text        not null check (length(body) between 10 and 1500),
+  review_date date       not null,
+  source     text,
+  published  boolean     not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index reviews_public_idx on reviews (review_date desc) where published;
+
+create trigger media_touch   before update on media
+  for each row execute function touch_updated_at();
+
+alter table media   enable row level security;
+alter table reviews enable row level security;
+
+-- Bilder der Galerie sind oeffentlich lesbar - sie gehoeren auf die Seite.
+create policy "Galeriebilder sind oeffentlich lesbar"
+  on media for select
+  to anon
+  using (in_gallery or in_hero);
+
+-- Veroeffentlichte Bewertungen ebenso; Entwuerfe bleiben unsichtbar.
+create policy "veroeffentlichte Bewertungen sind oeffentlich lesbar"
+  on reviews for select
+  to anon
+  using (published);
+
+-- Kein INSERT/UPDATE/DELETE fuer anon auf beiden Tabellen - bewusst.
+-- Der Inhaber arbeitet mit dem service_role-Key, der RLS umgeht.

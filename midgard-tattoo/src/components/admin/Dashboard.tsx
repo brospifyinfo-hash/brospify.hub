@@ -16,14 +16,26 @@ import { useCallback, useEffect, useState } from "react";
 import { todayKey } from "@/lib/types";
 import { AdminCalendar } from "./AdminCalendar";
 import { BookingInbox } from "./BookingInbox";
+import { MediaManager } from "./MediaManager";
+import { ReviewManager } from "./ReviewManager";
+import type { MediaItem, Review } from "@/lib/types";
 import type { AdminBooking, AdminSlot } from "./types";
 
-type Tab = "calendar" | "inbox";
+type Tab = "calendar" | "inbox" | "media" | "reviews";
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "calendar", label: "Kalender" },
+  { key: "inbox", label: "Anfragen" },
+  { key: "media", label: "Bilder" },
+  { key: "reviews", label: "Bewertungen" },
+];
 
 export function Dashboard({ studioName }: { studioName: string }) {
   const router = useRouter();
   const [slots, setSlots] = useState<AdminSlot[]>([]);
   const [bookings, setBookings] = useState<AdminBooking[]>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [tab, setTab] = useState<Tab>("calendar");
   const [selectedBooking, setSelectedBooking] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,20 +43,27 @@ export function Dashboard({ studioName }: { studioName: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [slotRes, bookingRes] = await Promise.all([
+      const [slotRes, bookingRes, mediaRes, reviewRes] = await Promise.all([
         fetch("/api/admin/slots", { cache: "no-store" }),
         fetch("/api/admin/bookings", { cache: "no-store" }),
+        fetch("/api/admin/media", { cache: "no-store" }),
+        fetch("/api/admin/reviews", { cache: "no-store" }),
       ]);
+      const antworten = [slotRes, bookingRes, mediaRes, reviewRes];
       // Session abgelaufen → zurück zum Login, statt leere Listen zu zeigen.
-      if (slotRes.status === 401 || bookingRes.status === 401) {
+      if (antworten.some((r) => r.status === 401)) {
         router.replace("/admin/login");
         return;
       }
-      if (!slotRes.ok || !bookingRes.ok) throw new Error("load failed");
+      if (antworten.some((r) => !r.ok)) throw new Error("load failed");
       const slotData = (await slotRes.json()) as { slots: AdminSlot[] };
       const bookingData = (await bookingRes.json()) as { bookings: AdminBooking[] };
+      const mediaData = (await mediaRes.json()) as { media: MediaItem[] };
+      const reviewData = (await reviewRes.json()) as { reviews: Review[] };
       setSlots(slotData.slots ?? []);
       setBookings(bookingData.bookings ?? []);
+      setMedia(mediaData.media ?? []);
+      setReviews(reviewData.reviews ?? []);
       setFailed(false);
     } catch {
       setFailed(true);
@@ -99,25 +118,23 @@ export function Dashboard({ studioName }: { studioName: string }) {
 
       <main className="shell py-8 md:py-12">
         {/* ── Kennzahlen ── */}
-        <div className="grid grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
           <Kpi label="Offene Anfragen" value={pending} highlight={pending > 0} />
           <Kpi label="Feste Termine" value={upcoming} />
           <Kpi label="Frei buchbar" value={free} />
+          <Kpi label="Bilder online" value={media.filter((m) => m.inGallery).length} />
         </div>
 
         {/* ── Reiter ── */}
-        <div className="mt-8 flex gap-2" role="tablist">
-          {([
-            { key: "calendar" as Tab, label: "Kalender" },
-            { key: "inbox" as Tab, label: "Anfragen" },
-          ]).map((item) => (
+        <div className="mt-8 flex flex-wrap gap-x-5 gap-y-1" role="tablist">
+          {TABS.map((item) => (
             <button
               key={item.key}
               type="button"
               role="tab"
               aria-selected={tab === item.key}
               onClick={() => setTab(item.key)}
-              className="relative min-h-[44px] px-1 pb-3 text-sm uppercase tracking-[0.12em] transition-colors"
+              className="relative min-h-[44px] px-1 pb-3 text-[0.8rem] uppercase tracking-[0.12em] transition-colors sm:text-sm"
               style={{ color: tab === item.key ? "var(--bone)" : "var(--bone-dim)" }}
             >
               {item.label}
@@ -164,9 +181,10 @@ export function Dashboard({ studioName }: { studioName: string }) {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22 }}
             >
-              {tab === "calendar" ? (
+              {tab === "calendar" && (
                 <AdminCalendar slots={slots} onChanged={load} onOpenBooking={openBooking} />
-              ) : (
+              )}
+              {tab === "inbox" && (
                 <BookingInbox
                   bookings={bookings}
                   selectedId={selectedBooking}
@@ -174,6 +192,8 @@ export function Dashboard({ studioName }: { studioName: string }) {
                   onChanged={load}
                 />
               )}
+              {tab === "media" && <MediaManager media={media} onChanged={load} />}
+              {tab === "reviews" && <ReviewManager reviews={reviews} onChanged={load} />}
             </motion.div>
           </AnimatePresence>
         )}

@@ -128,9 +128,17 @@ export const PRIVACY_SECTIONS: PrivacySection[] = [
     todo: true,
   },
   {
+    title: "Kartenanzeige (Google Maps)",
+    body: [
+      "Auf der Studio-Seite lässt sich eine Karte einblenden. Sie wird NICHT automatisch geladen: Zu sehen ist zunächst eine eigene Vorschau ohne jede Verbindung nach außen.",
+      "Erst wenn du auf „Karte laden\" klickst, stellt dein Browser eine Verbindung zu Google (Google Ireland Limited, Gordon House, Barrow Street, Dublin 4, Irland) her. Dabei werden deine IP-Adresse und Geräteinformationen an Google übertragen; Google kann dabei Cookies setzen. Rechtsgrundlage ist deine Einwilligung durch den Klick, Art. 6 Abs. 1 lit. a DSGVO.",
+      "Ohne diesen Klick findet keine Übertragung statt. Die Adresse des Studios steht auch als Text auf der Seite.",
+    ],
+  },
+  {
     title: "Cookies und Reichweitenmessung",
     body: [
-      "Diese Website setzt keine Cookies zu Werbe- oder Analysezwecken und bindet keine Dienste zur Reichweitenmessung ein. Schriften werden von der eigenen Domain ausgeliefert; es findet kein Aufruf externer Schriftanbieter statt.",
+      "Diese Website setzt keine Cookies zu Werbe- oder Analysezwecken und bindet keine Dienste zur Reichweitenmessung ein. Schriften werden von der eigenen Domain ausgeliefert; es findet kein Aufruf externer Schriftanbieter statt. Externe Inhalte werden ausschließlich nach ausdrücklichem Klick geladen (siehe Kartenanzeige).",
       "Im geschützten Studio-Bereich wird ein technisch notwendiges Cookie gesetzt, das ausschließlich der Anmeldung des Inhabers dient.",
     ],
   },
