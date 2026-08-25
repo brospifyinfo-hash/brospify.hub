@@ -632,7 +632,7 @@ export function BookingWidget({ variant = "page" }: { variant?: "page" | "hero" 
   if (asHero) return panel;
 
   return (
-    <section id="termin" className="scroll-mt-24">
+    <section id="termin" className="scroll-mt-24 hair-top">
       <div className="shell py-20 md:py-28">
         <Reveal className="mb-10 flex flex-wrap items-end justify-between gap-6">
           <div>

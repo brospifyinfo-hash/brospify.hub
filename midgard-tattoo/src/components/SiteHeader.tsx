@@ -13,10 +13,21 @@ import { useEffect, useState } from "react";
 import { STUDIO } from "@/lib/studio";
 import { useScrollProgress } from "./motion";
 
+// Vier Punkte plus Knopf — mehr trägt eine Leiste nicht, ohne dass sie
+// zur Linkliste wird. Alles Weitere steht in der Fußzeile.
 const NAV = [
   { href: "/arbeiten", label: "Arbeiten" },
+  { href: "/preise", label: "Preise" },
   { href: "/studio", label: "Studio" },
   { href: "/fragen", label: "Fragen" },
+];
+
+// Auf dem Handy ist Platz — dort zeigt die Schublade alles.
+const NAV_MOBIL = [
+  { href: "/", label: "Start" },
+  ...NAV,
+  { href: "/pflege", label: "Pflege" },
+  { href: "/kontakt", label: "Kontakt" },
 ];
 
 export function SiteHeader() {
@@ -135,7 +146,7 @@ export function SiteHeader() {
             transition={{ duration: 0.28 }}
           >
             <nav className="shell flex flex-col gap-1">
-              {[{ href: "/", label: "Start" }, ...NAV].map((item, i) => (
+              {NAV_MOBIL.map((item, i) => (
                 <motion.div
                   key={item.href}
                   initial={{ opacity: 0, x: -24 }}
@@ -145,7 +156,7 @@ export function SiteHeader() {
                   <Link
                     href={item.href}
                     onClick={() => setOpen(false)}
-                    className="display display-m block py-3"
+                    className="display block py-2 text-[1.6rem] leading-tight"
                     style={{ color: pathname === item.href ? "var(--signal)" : "var(--bone)" }}
                   >
                     {item.label}
@@ -157,13 +168,13 @@ export function SiteHeader() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.34, duration: 0.4 }}
               >
-                <Link href="/termin" onClick={() => setOpen(false)} className="btn btn-signal mt-8">
+                <Link href="/termin" onClick={() => setOpen(false)} className="btn btn-signal mt-6">
                   Termin buchen
                 </Link>
               </motion.div>
               <motion.a
                 href={STUDIO.phoneHref}
-                className="mt-6 text-sm"
+                className="mt-5 text-sm"
                 style={{ color: "var(--bone-dim)" }}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}

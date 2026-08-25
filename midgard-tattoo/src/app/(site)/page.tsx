@@ -1,9 +1,10 @@
 // ─── Startseite ──────────────────────────────────────────────────
-// Kopfbereich mit direkter Buchung, darunter nur kurze Anreißer, die
-// auf die eigenen Seiten führen. Der Rest der Inhalte lebt jetzt dort —
-// wer bloß einen Termin will, muss an nichts vorbeiscrollen.
+// Hero über den ganzen Bildschirm, direkt darunter die Buchung — wer
+// einen Termin will, ist nach einem Scroll da. Danach kurze Anreißer
+// auf die eigenen Seiten.
 
 import { Hero } from "@/components/Hero";
+import { BookingWidget } from "@/components/BookingWidget";
 import { GalleryTeaser, StudioTeaser } from "@/components/Teasers";
 import { readData } from "@/lib/store";
 import { todayKey } from "@/lib/types";
@@ -26,6 +27,7 @@ export default async function HomePage() {
   return (
     <>
       <Hero openSlots={openSlots} />
+      <BookingWidget />
       <GalleryTeaser />
       <StudioTeaser />
     </>

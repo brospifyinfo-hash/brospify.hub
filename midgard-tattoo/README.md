@@ -14,11 +14,16 @@ npm run dev                    # → http://localhost:3000
 
 | Route | Was |
 |---|---|
-| `/` | Startseite: großer Kopfbereich, in dem direkt gebucht wird — plus Anreißer |
-| `/termin` | Terminseite: Kalender, Anfrageformular, die wichtigsten Fragen |
+| `/` | Startseite: bildschirmfüllender Hero, direkt darunter die Buchung |
+| `/termin` | Kalender, Anfrageformular, die wichtigsten Fragen |
 | `/arbeiten` | Galerie aller Motive mit Leuchtkasten |
+| `/preise` | Richtwerte, Tagessatz, was den Preis beeinflusst |
 | `/studio` | Studio, Handschrift, Ablauf, Anfahrt |
+| `/pflege` | Pflegeanleitung nach der Sitzung, inkl. Warnzeichen |
+| `/kontakt` | Adresse, Telefon, E-Mail, Öffnungszeiten (heutiger Tag markiert) |
 | `/fragen` | Häufige Fragen (mit FAQPage-Structured-Data) |
+| `/impressum` | Pflichtangaben nach § 5 DDG · `noindex` |
+| `/datenschutz` | Datenschutzerklärung · `noindex` |
 | `/admin` | Dashboard des Inhabers (Login-Pflicht) |
 | `/admin/login` | Passwort-Anmeldung |
 | `/api/slots` | `GET` — freie Termine für den Kundenkalender |
@@ -39,6 +44,17 @@ npm run dev                    # → http://localhost:3000
 | Auth | **iron-session** | Verschlüsseltes Cookie, kein Nutzerkonto, keine Tabelle. Für genau einen Inhaber ist alles andere Overhead. |
 | Daten | **JSON-Store, Adapter-basiert** | Läuft sofort — lokal als Datei, auf Vercel als Blob. Der Umzug auf Postgres/Supabase ist vorbereitet, siehe unten. |
 | Mails | **Resend** (optional) | Ein `fetch`-Aufruf statt eines SDK. Ohne Konfiguration funktioniert die Buchung trotzdem. |
+
+## Ins Dashboard kommen
+
+`/admin` aufrufen — lokal `http://localhost:3000/admin`, live
+`deine-domain.de/admin`. In der Fußzeile jeder Seite steht unten rechts
+ein unauffälliger Link **Studio-Login**, damit die Adresse niemand
+auswendig braucht. Das ist kein Sicherheitsproblem: Der Schutz ist das
+Passwort und die Sperre nach acht Fehlversuchen, nicht ein versteckter
+Pfad.
+
+Das Passwort steht in `TATTOO_ADMIN_PASSWORD` (siehe `.env.example`).
 
 ## Termine: erst Beratung, dann Sitzung
 
@@ -160,9 +176,21 @@ Drei Wege, alle unter `/admin` → Reiter *Kalender*:
 
 ## Vor dem Live-Gang prüfen
 
-Adresse, Telefonnummer und Artist stammen vom Schaufenster-Foto des Studios.
-Die **Öffnungszeiten in `src/lib/studio.ts` sind angenommen** — auf der Scheibe
-steht nur „Termine nach Vereinbarung". Ebenso zu ergänzen:
+Vier Dinge stehen noch auf Platzhaltern. Sie sind im Code kommentiert und
+auf den betroffenen Seiten sichtbar markiert:
 
-* echte E-Mail-Adresse und Instagram-Profil in `STUDIO`
-* Impressum und Datenschutzerklärung (in Deutschland Pflicht)
+1. **Öffnungszeiten** (`src/lib/studio.ts`) sind angenommen — auf der
+   Schaufensterscheibe steht nur „Termine nach Vereinbarung".
+2. **E-Mail-Adresse und Instagram-Profil** in `STUDIO` sind erfunden.
+3. **Preise** (`PRICE_ROWS` in `src/lib/content.ts`) sind Platzhalter in
+   marktüblicher Größenordnung. Falsche Preise auf einer Website landen
+   direkt als Ärger am Empfang.
+4. **Impressum und Datenschutz** (`IMPRINT_FIELDS`, `PRIVACY_SECTIONS` in
+   `src/lib/content.ts`) sind ein ausgefülltes Gerüst, keine
+   Rechtsberatung. Alle offenen Stellen stehen in eckigen Klammern und
+   werden auf den Seiten selbst als Hinweis angezeigt, solange sie leer
+   sind. Ein unvollständiges Impressum ist in Deutschland abmahnfähig —
+   bitte den fertigen Text prüfen lassen.
+
+Adresse, Telefonnummer und der Artist-Name stammen vom Schaufenster-Foto
+des Studios und sollten gegengeprüft werden.

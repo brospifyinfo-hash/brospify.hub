@@ -151,7 +151,7 @@ export function SiteFooter() {
   return (
     <footer className="hair-top">
       <div className="shell py-16 md:py-20">
-        <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
+        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
           <div>
             <div className="flex items-baseline gap-2">
               <span className="display text-3xl">{STUDIO.name.split(" ")[0]}</span>
@@ -170,10 +170,29 @@ export function SiteFooter() {
             <ul className="space-y-2 text-sm" style={{ color: "var(--bone-soft)" }}>
               {[
                 { href: "/", label: "Start" },
-                { href: "/arbeiten", label: "Arbeiten" },
-                { href: "/studio", label: "Studio" },
-                { href: "/fragen", label: "Häufige Fragen" },
                 { href: "/termin", label: "Termin buchen" },
+                { href: "/arbeiten", label: "Arbeiten" },
+                { href: "/preise", label: "Preise" },
+                { href: "/studio", label: "Studio" },
+              ].map((item) => (
+                <li key={item.href}>
+                  <Link href={item.href} className="underline-offset-4 hover:underline">
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <p className="eyebrow mb-4">Mehr</p>
+            <ul className="space-y-2 text-sm" style={{ color: "var(--bone-soft)" }}>
+              {[
+                { href: "/pflege", label: "Tattoo-Pflege" },
+                { href: "/fragen", label: "Häufige Fragen" },
+                { href: "/kontakt", label: "Kontakt & Anfahrt" },
+                { href: "/impressum", label: "Impressum" },
+                { href: "/datenschutz", label: "Datenschutz" },
               ].map((item) => (
                 <li key={item.href}>
                   <Link href={item.href} className="underline-offset-4 hover:underline">
@@ -211,7 +230,16 @@ export function SiteFooter() {
 
         <div className="hair-top mt-12 flex flex-wrap items-center justify-between gap-4 pt-6 text-xs" style={{ color: "var(--bone-dim)" }}>
           <span>© {new Date().getFullYear()} {STUDIO.name} · Artist: {STUDIO.artist}</span>
-          <span>Tätowierungen erst ab 18 Jahren. Ausweis mitbringen.</span>
+          <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <span>Tätowierungen erst ab 18 Jahren. Ausweis mitbringen.</span>
+            <Link
+              href="/admin"
+              className="underline-offset-4 hover:underline"
+              style={{ color: "var(--bone-dim)" }}
+            >
+              Studio-Login
+            </Link>
+          </span>
         </div>
       </div>
     </footer>
