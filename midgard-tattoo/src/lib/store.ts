@@ -18,7 +18,7 @@
 // in docs/schema.sql, zu ersetzen ist nur `readRaw`/`writeRaw`.
 
 import { createHmac, randomUUID } from "node:crypto";
-import { EMPTY_DATA, type Booking, type Slot, type TattooData } from "./types";
+import { EMPTY_DATA, type Booking, type Slot, type SlotKind, type TattooData } from "./types";
 
 // ─── Adapter-Wahl ────────────────────────────────────────────────
 // NICHT `useBlob` nennen: ESLint hielte das für einen React-Hook.
@@ -131,6 +131,8 @@ export interface SlotInput {
   durationMinutes: number;
   note?: string;
   status?: Slot["status"];
+  /** Beratung (Standard) oder Sitzung. */
+  kind?: SlotKind;
 }
 
 export async function createSlots(inputs: SlotInput[]): Promise<Slot[]> {
@@ -151,6 +153,8 @@ export async function createSlots(inputs: SlotInput[]): Promise<Slot[]> {
         startTime: input.startTime,
         durationMinutes: input.durationMinutes,
         status: input.status ?? "open",
+        // Ohne Angabe ist es ein Beratungstermin — das ist der Regelfall.
+        kind: input.kind ?? "consultation",
         note: input.note?.trim() || undefined,
         createdAt: now,
         updatedAt: now,
@@ -164,7 +168,7 @@ export async function createSlots(inputs: SlotInput[]): Promise<Slot[]> {
 
 export async function updateSlot(
   id: string,
-  patch: Partial<Pick<Slot, "status" | "note" | "startTime" | "durationMinutes" | "date">>,
+  patch: Partial<Pick<Slot, "status" | "note" | "startTime" | "durationMinutes" | "date" | "kind">>,
 ): Promise<Slot | null> {
   return mutate((data) => {
     const slot = data.slots.find((s) => s.id === id);

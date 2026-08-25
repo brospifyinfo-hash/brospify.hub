@@ -16,6 +16,27 @@
 //   blocked   → vom Inhaber gesperrt (Urlaub, Konvent, privat)
 export type SlotStatus = "open" | "requested" | "booked" | "blocked";
 
+// ─── Art des Termins ─────────────────────────────────────────────
+// Der erste Termin ist grundsätzlich ein BERATUNGSTERMIN: Motiv, Größe,
+// Stelle und Preis werden besprochen, gestochen wird noch nicht. Erst
+// danach entsteht der eigentliche Sitzungstermin. Deshalb ist
+// "consultation" überall der Standard — auch wenn ein Slot ohne Angabe
+// aus einem älteren Datenbestand kommt.
+export type SlotKind = "consultation" | "session";
+
+export const SLOT_KINDS: SlotKind[] = ["consultation", "session"];
+
+export const SLOT_KIND_LABEL: Record<SlotKind, string> = {
+  consultation: "Beratung",
+  session: "Sitzung",
+};
+
+/** Wie der Termin auf der Kundenseite heißt. */
+export const SLOT_KIND_PUBLIC: Record<SlotKind, string> = {
+  consultation: "Beratungstermin",
+  session: "Tattoo-Sitzung",
+};
+
 export const SLOT_STATUSES: SlotStatus[] = ["open", "requested", "booked", "blocked"];
 
 export interface Slot {
@@ -30,6 +51,9 @@ export interface Slot {
   /** Dauer in Minuten — bestimmt die im Kalender angezeigte Endzeit. */
   durationMinutes: number;
   status: SlotStatus;
+  /** Beratung oder Sitzung. Fehlt der Wert (Datenbestand von vor der
+   *  Einführung), gilt "consultation" — siehe `slotKind()`. */
+  kind?: SlotKind;
   /** Interne Notiz des Inhabers, für Kunden NIE sichtbar. */
   note?: string;
   createdAt: string;
@@ -98,7 +122,7 @@ export const STYLE_OPTIONS: Option[] = [
   { value: "lettering", label: "Lettering & Schriftzüge" },
   { value: "old-school", label: "Old School / Traditional" },
   { value: "cover-up", label: "Cover-Up", hint: "Bestehendes Tattoo überarbeiten" },
-  { value: "unsure", label: "Weiß ich noch nicht", hint: "Wir finden das gemeinsam heraus" },
+  { value: "unsure", label: "Noch nicht sicher", hint: "Klären wir im Beratungsgespräch" },
 ];
 
 export const SIZE_OPTIONS: Option[] = [
@@ -108,6 +132,7 @@ export const SIZE_OPTIONS: Option[] = [
   { value: "l", label: "Groß — 20 bis 35 cm" },
   { value: "xl", label: "Sehr groß — ab 35 cm" },
   { value: "sleeve", label: "Sleeve / großflächig", hint: "Mehrere Sitzungen" },
+  { value: "unsure", label: "Noch nicht sicher", hint: "Klären wir im Beratungsgespräch" },
 ];
 
 export const PLACEMENT_OPTIONS: Option[] = [
@@ -122,13 +147,14 @@ export const PLACEMENT_OPTIONS: Option[] = [
   { value: "hand-foot", label: "Hand / Fuß" },
   { value: "neck-head", label: "Hals / Kopf" },
   { value: "other", label: "Andere Stelle" },
+  { value: "unsure", label: "Noch nicht sicher", hint: "Klären wir im Beratungsgespräch" },
 ];
 
 export const COLOR_OPTIONS: Option[] = [
   { value: "black-grey", label: "Schwarz & Grau" },
   { value: "color", label: "Farbig" },
   { value: "black-with-accents", label: "Schwarz mit Farbakzenten" },
-  { value: "unsure", label: "Noch offen" },
+  { value: "unsure", label: "Noch nicht sicher", hint: "Klären wir im Beratungsgespräch" },
 ];
 
 export const BUDGET_OPTIONS: Option[] = [
@@ -138,11 +164,17 @@ export const BUDGET_OPTIONS: Option[] = [
   { value: "600-1000", label: "600 – 1.000 €" },
   { value: "1000-plus", label: "über 1.000 €" },
   { value: "open", label: "Nach Absprache" },
+  { value: "unsure", label: "Noch nicht sicher", hint: "Klären wir im Beratungsgespräch" },
 ];
 
 // ─── Label-Auflösung (Admin-Ansicht, E-Mails) ────────────────────
 function labelFrom(options: Option[], value: string): string {
   return options.find((o) => o.value === value)?.label ?? value;
+}
+
+/** Art eines Termins, mit Beratung als Rückfallwert. */
+export function slotKind(slot: { kind?: SlotKind }): SlotKind {
+  return slot.kind === "session" ? "session" : "consultation";
 }
 
 export const styleLabel = (v: string) => labelFrom(STYLE_OPTIONS, v);

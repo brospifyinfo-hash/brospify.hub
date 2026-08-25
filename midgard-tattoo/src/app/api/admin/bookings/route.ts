@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isStudioAdmin } from "@/lib/auth";
 import { deleteBooking, readData, setBookingStatus } from "@/lib/store";
 import { notifyDecision } from "@/lib/notify";
-import { BOOKING_STATUSES, slotEndTime, type BookingStatus } from "@/lib/types";
+import { BOOKING_STATUSES, slotEndTime, slotKind, type BookingStatus } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -36,6 +36,7 @@ export async function GET() {
               startTime: slot.startTime,
               endTime: slotEndTime(slot),
               status: slot.status,
+              kind: slotKind(slot),
             }
           : null,
       };

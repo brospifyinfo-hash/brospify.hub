@@ -21,23 +21,17 @@ const FACTS = [
 
 export function StudioSection() {
   return (
-    <section id="studio" className="relative scroll-mt-24 overflow-hidden hair-top">
-      <div className="shell grid items-center gap-12 py-24 md:py-32 lg:grid-cols-2 lg:gap-20">
+    <section id="studio" className="relative scroll-mt-24 overflow-hidden">
+      <div className="shell grid items-center gap-10 py-10 md:py-14 lg:grid-cols-2 lg:gap-16">
         <Reveal>
-          <p className="eyebrow mb-4">Das Studio</p>
           {/* Geschütztes Leerzeichen vor der Hausnummer: in der sehr
               großen Versalschrift würde die „7" sonst allein in die
               nächste Zeile rutschen. */}
-          <h2 className="display display-l max-w-[14ch]">
+          <h2 className="display display-m max-w-[14ch]">
             {STUDIO.street.replace(/\s(\d+\w*)$/, "\u00A0$1")}
           </h2>
-          <p className="mt-6 max-w-[46ch] text-[1rem] leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Ein Platz, ein Artist, ein Termin nach dem anderen. Kein Durchlauf,
-            keine Hektik — wer hier auf der Liege liegt, hat den Raum für sich.
-            {" "}{STUDIO.doorNote}
-          </p>
 
-          <dl className="mt-10 grid gap-px" style={{ background: "var(--ink-hair)" }}>
+          <dl className="mt-8 grid gap-px" style={{ background: "var(--ink-hair)" }}>
             {FACTS.map((fact) => (
               <div
                 key={fact.label}

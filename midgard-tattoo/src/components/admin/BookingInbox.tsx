@@ -16,6 +16,7 @@ import {
   formatDateLong,
   formatTimestamp,
   placementLabel,
+  SLOT_KIND_LABEL,
   sizeLabel,
   styleLabel,
   type BookingStatus,
@@ -115,7 +116,7 @@ export function BookingInbox({
                     </div>
                     <p className="mt-1 text-xs" style={{ color: "var(--bone-dim)" }}>
                       {booking.slot
-                        ? `${formatDateLong(booking.slot.date)} · ${booking.slot.startTime} Uhr`
+                        ? `${formatDateLong(booking.slot.date)} · ${booking.slot.startTime} Uhr · ${SLOT_KIND_LABEL[booking.slot.kind ?? "consultation"]}`
                         : "Termin gelöscht"}
                     </p>
                     <p className="mt-1 truncate text-xs" style={{ color: "var(--bone-soft)" }}>
@@ -251,7 +252,7 @@ function BookingDetail({
           <h3 className="display text-2xl">{booking.name}</h3>
           <p className="mt-1 text-sm" style={{ color: "var(--signal)" }}>
             {booking.slot
-              ? `${formatDateLong(booking.slot.date)} · ${booking.slot.startTime} – ${booking.slot.endTime} Uhr`
+              ? `${SLOT_KIND_LABEL[booking.slot.kind ?? "consultation"]} · ${formatDateLong(booking.slot.date)} · ${booking.slot.startTime} – ${booking.slot.endTime} Uhr`
               : "Der zugehörige Termin wurde gelöscht"}
           </p>
         </div>

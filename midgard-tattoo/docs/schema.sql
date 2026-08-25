@@ -26,6 +26,11 @@ create extension if not exists "pgcrypto";   -- liefert gen_random_uuid()
 create type slot_status as enum ('open', 'requested', 'booked', 'blocked');
 create type booking_status as enum ('pending', 'confirmed', 'declined', 'cancelled');
 
+-- Art des Termins. Der erste Kontakt ist grundsaetzlich eine Beratung:
+-- Motiv, Groesse, Stelle und Preis werden besprochen, gestochen wird noch
+-- nicht. Deshalb ist 'consultation' der Vorgabewert.
+create type slot_kind as enum ('consultation', 'session');
+
 -- ─── Termine ─────────────────────────────────────────────────────
 -- Ein Slot ist ein vom Inhaber freigegebener Zeitraum. Datum und
 -- Uhrzeit stehen bewusst GETRENNT und ohne Zeitzone: der Kalender
@@ -37,6 +42,7 @@ create table slots (
   start_time       time        not null,
   duration_minutes int         not null check (duration_minutes between 15 and 720),
   status           slot_status not null default 'open',
+  kind             slot_kind   not null default 'consultation',
   note             text,                       -- intern, nie an Kunden
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now(),
@@ -50,6 +56,9 @@ create table slots (
 create index slots_open_upcoming_idx
   on slots (slot_date, start_time)
   where status = 'open';
+
+-- Auswertung im Dashboard: "wie viele Beratungen stehen an?"
+create index slots_kind_idx on slots (kind, slot_date);
 
 -- ─── Buchungsanfragen ────────────────────────────────────────────
 create table bookings (

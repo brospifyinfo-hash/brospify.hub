@@ -8,13 +8,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isStudioAdmin } from "@/lib/auth";
 import { createSlots, deleteSlot, readData, updateSlot, type SlotInput } from "@/lib/store";
-import { SLOT_STATUSES, slotEndTime, slotSortKey, type SlotStatus } from "@/lib/types";
+import {
+  SLOT_KINDS, SLOT_STATUSES, slotEndTime, slotKind, slotSortKey,
+  type SlotKind, type SlotStatus,
+} from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+const MIN_MINUTES = 15;
+const MAX_MINUTES = 720;
+
+/** "14:00" → 840 */
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** Dauer aus dem ermitteln, was geschickt wurde: entweder direkt als
+ *  Minutenzahl oder als Endzeit. Über Mitternacht wird bewusst NICHT
+ *  gerechnet — ein Termin, der am Folgetag endet, ist im Studioalltag
+ *  ein Tippfehler, kein gültiger Eintrag. */
+function resolveDuration(raw: { durationMinutes?: unknown; endTime?: unknown }, startTime: string): number | null {
+  if (typeof raw.endTime === "string" && TIME_RE.test(raw.endTime)) {
+    const minutes = toMinutes(raw.endTime) - toMinutes(startTime);
+    return minutes >= MIN_MINUTES && minutes <= MAX_MINUTES ? minutes : null;
+  }
+  const minutes = Math.round(Number(raw.durationMinutes));
+  if (!Number.isFinite(minutes)) return null;
+  return minutes >= MIN_MINUTES && minutes <= MAX_MINUTES ? minutes : null;
+}
+
+function parseKind(value: unknown): SlotKind | undefined {
+  return SLOT_KINDS.includes(value as SlotKind) ? (value as SlotKind) : undefined;
+}
 
 async function guard(): Promise<NextResponse | null> {
   if (await isStudioAdmin()) return null;
@@ -34,6 +64,7 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => slotSortKey(a).localeCompare(slotSortKey(b)))
     .map((s) => ({
       ...s,
+      kind: slotKind(s),
       endTime: slotEndTime(s),
       // Nur aktive Anfragen anhängen — abgelehnte Anfragen bleiben in der
       // Historie, sollen aber den Kalender nicht zumüllen.
@@ -50,7 +81,15 @@ export async function POST(req: NextRequest) {
   if (denied) return denied;
 
   const body = (await req.json().catch(() => null)) as
-    | { slots?: unknown[]; dates?: unknown[]; startTime?: string; durationMinutes?: number; note?: string }
+    | {
+        slots?: unknown[];
+        dates?: unknown[];
+        startTime?: string;
+        endTime?: string;
+        durationMinutes?: number;
+        note?: string;
+        kind?: string;
+      }
     | null;
   if (!body) return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
 
@@ -59,15 +98,16 @@ export async function POST(req: NextRequest) {
   // Variante A: fertige Slot-Objekte (Click-to-Add im Tagesraster).
   if (Array.isArray(body.slots)) {
     for (const raw of body.slots.slice(0, 200)) {
-      const s = raw as Partial<SlotInput>;
+      const s = raw as Partial<SlotInput> & { endTime?: string };
       if (typeof s.date !== "string" || !DATE_RE.test(s.date)) continue;
       if (typeof s.startTime !== "string" || !TIME_RE.test(s.startTime)) continue;
-      const duration = Number(s.durationMinutes);
-      if (!Number.isFinite(duration) || duration < 15 || duration > 720) continue;
+      const duration = resolveDuration(s, s.startTime);
+      if (duration === null) continue;
       inputs.push({
         date: s.date,
         startTime: s.startTime,
-        durationMinutes: Math.round(duration),
+        durationMinutes: duration,
+        kind: parseKind(s.kind),
         note: typeof s.note === "string" ? s.note.slice(0, 300) : undefined,
       });
     }
@@ -76,14 +116,15 @@ export async function POST(req: NextRequest) {
   // Variante B: eine Uhrzeit auf mehrere Tage verteilen (Serientermin).
   if (Array.isArray(body.dates)) {
     const startTime = typeof body.startTime === "string" ? body.startTime : "";
-    const duration = Number(body.durationMinutes);
-    if (TIME_RE.test(startTime) && Number.isFinite(duration) && duration >= 15 && duration <= 720) {
+    const duration = TIME_RE.test(startTime) ? resolveDuration(body, startTime) : null;
+    if (duration !== null) {
       for (const raw of body.dates.slice(0, 200)) {
         if (typeof raw !== "string" || !DATE_RE.test(raw)) continue;
         inputs.push({
           date: raw,
           startTime,
-          durationMinutes: Math.round(duration),
+          durationMinutes: duration,
+          kind: parseKind(body.kind),
           note: typeof body.note === "string" ? body.note.slice(0, 300) : undefined,
         });
       }
@@ -103,7 +144,10 @@ export async function PATCH(req: NextRequest) {
   if (denied) return denied;
 
   const body = (await req.json().catch(() => null)) as
-    | { id?: string; status?: string; note?: string; startTime?: string; durationMinutes?: number }
+    | {
+        id?: string; status?: string; note?: string;
+        startTime?: string; endTime?: string; durationMinutes?: number; kind?: string;
+      }
     | null;
   if (!body?.id) return NextResponse.json({ error: "Termin fehlt." }, { status: 400 });
 
@@ -138,9 +182,27 @@ export async function PATCH(req: NextRequest) {
   if (typeof body.startTime === "string" && TIME_RE.test(body.startTime)) {
     patch.startTime = body.startTime;
   }
-  if (Number.isFinite(Number(body.durationMinutes))) {
-    const d = Math.round(Number(body.durationMinutes));
-    if (d >= 15 && d <= 720) patch.durationMinutes = d;
+  const kind = parseKind(body.kind);
+  if (kind) patch.kind = kind;
+
+  // Eine Endzeit ergibt nur zusammen mit der Startzeit einen Zeitraum.
+  // Lieber eine klare Fehlermeldung als eine stillschweigend ignorierte
+  // Änderung, die der Inhaber erst im Kalender bemerkt.
+  if (body.endTime !== undefined && patch.startTime === undefined) {
+    return NextResponse.json(
+      { error: "Zu einer Endzeit gehört auch die Startzeit." },
+      { status: 400 },
+    );
+  }
+  if (body.endTime !== undefined || body.durationMinutes !== undefined) {
+    const duration = resolveDuration(body, patch.startTime ?? "00:00");
+    if (duration === null) {
+      return NextResponse.json(
+        { error: "Der Zeitraum muss zwischen 15 Minuten und 12 Stunden liegen." },
+        { status: 400 },
+      );
+    }
+    patch.durationMinutes = duration;
   }
 
   const slot = await updateSlot(body.id, patch);

@@ -6,7 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { readData } from "@/lib/store";
-import { slotEndTime, slotSortKey, todayKey } from "@/lib/types";
+import { slotEndTime, slotKind, slotSortKey, todayKey, type SlotKind } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +17,8 @@ export interface PublicSlot {
   startTime: string;
   endTime: string;
   durationMinutes: number;
+  /** Beratung oder Sitzung — der Kalender beschriftet den Termin danach. */
+  kind: SlotKind;
 }
 
 export async function GET() {
@@ -32,6 +34,7 @@ export async function GET() {
         startTime: s.startTime,
         endTime: slotEndTime(s),
         durationMinutes: s.durationMinutes,
+        kind: slotKind(s),
       }));
     return NextResponse.json({ slots: open });
   } catch (error) {

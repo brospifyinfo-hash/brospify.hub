@@ -14,7 +14,11 @@ npm run dev                    # → http://localhost:3000
 
 | Route | Was |
 |---|---|
-| `/` | Öffentliche Seite: Galerie, Handschrift, Ablauf, Buchung, Studio, FAQ |
+| `/` | Startseite: großer Kopfbereich, in dem direkt gebucht wird — plus Anreißer |
+| `/termin` | Terminseite: Kalender, Anfrageformular, die wichtigsten Fragen |
+| `/arbeiten` | Galerie aller Motive mit Leuchtkasten |
+| `/studio` | Studio, Handschrift, Ablauf, Anfahrt |
+| `/fragen` | Häufige Fragen (mit FAQPage-Structured-Data) |
 | `/admin` | Dashboard des Inhabers (Login-Pflicht) |
 | `/admin/login` | Passwort-Anmeldung |
 | `/api/slots` | `GET` — freie Termine für den Kundenkalender |
@@ -35,6 +39,22 @@ npm run dev                    # → http://localhost:3000
 | Auth | **iron-session** | Verschlüsseltes Cookie, kein Nutzerkonto, keine Tabelle. Für genau einen Inhaber ist alles andere Overhead. |
 | Daten | **JSON-Store, Adapter-basiert** | Läuft sofort — lokal als Datei, auf Vercel als Blob. Der Umzug auf Postgres/Supabase ist vorbereitet, siehe unten. |
 | Mails | **Resend** (optional) | Ein `fetch`-Aufruf statt eines SDK. Ohne Konfiguration funktioniert die Buchung trotzdem. |
+
+## Termine: erst Beratung, dann Sitzung
+
+Was im öffentlichen Kalender steht, ist standardmäßig ein
+**Beratungstermin** — kostenlos und unverbindlich. Dort werden Motiv,
+Größe, Stelle und Preis besprochen; gestochen wird an dem Tag nicht. Der
+eigentliche Tattoo-Termin entsteht erst im Anschluss.
+
+Im Dashboard wählt der Inhaber vor dem Anlegen die Art (`Beratung` oder
+`Sitzung`). Ohne Angabe — auch bei Datensätzen aus der Zeit vor dieser
+Unterscheidung — gilt Beratung; `slotKind()` in `src/lib/types.ts` ist die
+einzige Stelle, an der dieser Rückfallwert steht.
+
+Weil ein Beratungsgespräch genau der Ort ist, an dem offene Fragen geklärt
+werden, bietet **jedes** Auswahlfeld des Formulars „Noch nicht sicher" an.
+Wer sich nicht festlegen will, soll das sagen können, statt zu raten.
 
 ## Design
 
@@ -106,6 +126,23 @@ Ohne CMS, alles an einer Stelle:
 * **Auswahlfelder des Formulars** (Stil, Größe, Körperstelle, Farbe, Budget) →
   `src/lib/types.ts`. Der Server prüft jede Eingabe gegen genau diese Kataloge,
   Client und Validierung bleiben also automatisch synchron.
+* **Seitenstruktur** → `src/app/(site)/`. Die Route-Gruppe `(site)` taucht in
+  keiner Adresse auf; sie hält nur Kopf- und Fußzeile von `/admin` fern. Neue
+  Seite = neuer Ordner mit `page.tsx`, Eintrag in `NAV`
+  (`src/components/SiteHeader.tsx`) und in `src/app/sitemap.ts`.
+
+## Termine anlegen (Dashboard)
+
+Drei Wege, alle unter `/admin` → Reiter *Kalender*:
+
+1. **Uhrzeit antippen** — Tag wählen, Dauer wählen, eine der
+   Voreinstellungen (10:00 … 18:00) antippen. Der Termin ist sofort online.
+2. **Andere Uhrzeit eintragen** — aufklappen, *von* und *bis* frei eingeben.
+   Die Dauer rechnet der Server aus der Endzeit, damit Anzeige und
+   Datenbestand nicht auseinanderlaufen können. Grenzen: 15 Minuten bis
+   12 Stunden, kein Übertritt über Mitternacht.
+3. **Mehrere Tage** — Tage im Kalender sammeln, dann eine Uhrzeit antippen;
+   sie wird auf alle gesetzt.
 
 ## Sicherheit
 

@@ -6,6 +6,7 @@
 // src/lib/studio.ts, damit Änderungen an einer Stelle passieren.
 
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
 import { useState } from "react";
 import { FAQ, OPENING_HOURS, SPECIALTIES, STUDIO } from "@/lib/studio";
 import { Reveal, SplitHeadline } from "./motion";
@@ -92,20 +93,9 @@ export function FaqSection() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section id="fragen" className="hair-top scroll-mt-24">
-      <div className="shell grid gap-12 py-24 md:py-32 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+    <section id="fragen" className="scroll-mt-24">
+      <div className="shell max-w-[70ch] py-8 md:py-12">
         <Reveal>
-          <p className="eyebrow mb-4">Bevor du fragst</p>
-          <h2 className="display display-l max-w-[12ch]">Häufige Fragen</h2>
-          <p className="mt-6 max-w-[34ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Steht deine Frage nicht dabei? Ruf einfach an —{" "}
-            <a href={STUDIO.phoneHref} className="underline underline-offset-4" style={{ color: "var(--signal)" }}>
-              {STUDIO.phone}
-            </a>
-          </p>
-        </Reveal>
-
-        <Reveal delay={0.1}>
           <ul>
             {FAQ.map((item, i) => {
               const isOpen = open === i;
@@ -161,7 +151,7 @@ export function SiteFooter() {
   return (
     <footer className="hair-top">
       <div className="shell py-16 md:py-20">
-        <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr]">
+        <div className="grid gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
             <div className="flex items-baseline gap-2">
               <span className="display text-3xl">{STUDIO.name.split(" ")[0]}</span>
@@ -170,6 +160,28 @@ export function SiteFooter() {
             <p className="mt-4 max-w-[34ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
               {STUDIO.doorNote}
             </p>
+            <Link href="/termin" className="btn btn-signal mt-6 h-11 px-5 text-[0.7rem]">
+              Termin buchen
+            </Link>
+          </div>
+
+          <div>
+            <p className="eyebrow mb-4">Seiten</p>
+            <ul className="space-y-2 text-sm" style={{ color: "var(--bone-soft)" }}>
+              {[
+                { href: "/", label: "Start" },
+                { href: "/arbeiten", label: "Arbeiten" },
+                { href: "/studio", label: "Studio" },
+                { href: "/fragen", label: "Häufige Fragen" },
+                { href: "/termin", label: "Termin buchen" },
+              ].map((item) => (
+                <li key={item.href}>
+                  <Link href={item.href} className="underline-offset-4 hover:underline">
+                    {item.label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div>

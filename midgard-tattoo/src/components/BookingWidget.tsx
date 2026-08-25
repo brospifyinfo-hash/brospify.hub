@@ -32,6 +32,7 @@ import {
   formatDateLong,
   mondayIndex,
   parseDate,
+  SLOT_KIND_PUBLIC,
   toDateKey,
   todayKey,
   type Option,
@@ -63,7 +64,12 @@ const EMPTY_FORM: FormState = {
   isFirstTattoo: false, consent: false, website: "",
 };
 
-export function BookingWidget() {
+/** `page` rahmt die Buchung als eigene Sektion mit Überschrift ein,
+ *  `hero` liefert nur das nackte Panel — für den Kopfbereich der
+ *  Startseite, wo die Überschrift schon danebensteht. Die Logik ist in
+ *  beiden Fällen dieselbe; es gibt bewusst keine zweite Umsetzung. */
+export function BookingWidget({ variant = "page" }: { variant?: "page" | "hero" } = {}) {
+  const asHero = variant === "hero";
   const [slots, setSlots] = useState<PublicSlot[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -228,50 +234,46 @@ export function BookingWidget() {
 
   // ── Bestätigung ───────────────────────────────────────────────
   if (submitted && selectedSlot) {
+    const confirmation = (
+      <motion.div
+        className="card mx-auto max-w-xl p-8 text-center md:p-12"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, ease: EASE }}
+      >
+        <span className="marker text-3xl" style={{ color: "var(--signal)" }}>Danke!</span>
+        <h2 className="display display-m mt-4">Anfrage ist raus</h2>
+        <p className="mt-5 text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
+          Dein {SLOT_KIND_PUBLIC[selectedSlot.kind]} am{" "}
+          <strong style={{ color: "var(--bone)" }}>
+            {formatDateLong(selectedSlot.date)} um {selectedSlot.startTime} Uhr
+          </strong>{" "}
+          ist reserviert. {STUDIO.artist} meldet sich in der Regel innerhalb von
+          zwei Werktagen — danach ist der Termin fest.
+        </p>
+        <p className="mt-4 text-xs" style={{ color: "var(--bone-dim)" }}>
+          Eine Bestätigungsmail ist unterwegs. Nichts angekommen? Schau kurz im
+          Spam-Ordner oder ruf an: {STUDIO.phone}
+        </p>
+      </motion.div>
+    );
+
+    if (asHero) return confirmation;
     return (
-      <section id="termin" className="scroll-mt-24 hair-top">
-        <div className="shell py-24 md:py-32">
-          <motion.div
-            className="card mx-auto max-w-xl p-8 text-center md:p-12"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE }}
-          >
-            <span className="marker text-3xl" style={{ color: "var(--signal)" }}>Danke!</span>
-            <h2 className="display display-m mt-4">Anfrage ist raus</h2>
-            <p className="mt-5 text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-              Dein Wunschtermin am{" "}
-              <strong style={{ color: "var(--bone)" }}>
-                {formatDateLong(selectedSlot.date)} um {selectedSlot.startTime} Uhr
-              </strong>{" "}
-              ist reserviert. {STUDIO.artist} meldet sich in der Regel innerhalb von
-              zwei Werktagen — danach ist der Termin fest.
-            </p>
-            <p className="mt-4 text-xs" style={{ color: "var(--bone-dim)" }}>
-              Eine Bestätigungsmail ist unterwegs. Nichts angekommen? Schau kurz im
-              Spam-Ordner oder ruf an: {STUDIO.phone}
-            </p>
-          </motion.div>
-        </div>
+      <section id="termin" className="scroll-mt-24">
+        <div className="shell py-20 md:py-28">{confirmation}</div>
       </section>
     );
   }
 
-  return (
-    <section id="termin" className="scroll-mt-24 hair-top">
-      <div className="shell py-24 md:py-32">
-        <Reveal className="mb-12 flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <p className="eyebrow mb-4">Termin</p>
-            <h2 className="display display-l">Freie Termine</h2>
-          </div>
-          <p className="max-w-[38ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Hier stehen ausschließlich Termine, die {STUDIO.artist} freigegeben hat.
-            Wähl einen aus, erzähl kurz von deiner Idee — den Rest klären wir persönlich.
-          </p>
-        </Reveal>
-
-        <div className="grid gap-8 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-12">
+  const panel = (
+    <div
+      className={
+        asHero
+          ? "grid gap-5"
+          : "grid gap-8 lg:grid-cols-[minmax(0,420px)_1fr] lg:gap-12"
+      }
+    >
           {/* ── Schritt 1 + 2: Kalender ── */}
           <div>
             <div className="card p-4 sm:p-5">
@@ -424,6 +426,7 @@ export function BookingWidget() {
           <div ref={formRef} className="scroll-mt-24">
             <AnimatePresence mode="wait" initial={false}>
               {!selectedSlot ? (
+                asHero ? null : (
                 <motion.div
                   key="placeholder"
                   className="card flex h-full min-h-[280px] flex-col items-center justify-center p-8 text-center"
@@ -435,11 +438,15 @@ export function BookingWidget() {
                   <span className="marker text-2xl" style={{ color: "var(--signal)" }}>
                     Schritt 1
                   </span>
-                  <p className="mt-3 max-w-[30ch] text-sm" style={{ color: "var(--bone-soft)" }}>
-                    Wähl links einen gelb markierten Tag — danach öffnet sich hier das
+                  <p className="mt-3 max-w-[32ch] text-sm" style={{ color: "var(--bone-soft)" }}>
+                    Wähl einen gelb markierten Tag — danach öffnet sich hier das
                     Formular für deine Idee.
                   </p>
+                  <p className="mt-4 max-w-[32ch] text-xs" style={{ color: "var(--bone-dim)" }}>
+                    Es geht um einen Beratungstermin. Gestochen wird an dem Tag noch nicht.
+                  </p>
                 </motion.div>
+                )
               ) : (
                 <motion.form
                   key="form"
@@ -456,7 +463,7 @@ export function BookingWidget() {
                     style={{ borderBottom: "1px solid var(--ink-hair)" }}
                   >
                     <div>
-                      <p className="eyebrow mb-1">Dein Termin</p>
+                      <p className="eyebrow mb-1">{SLOT_KIND_PUBLIC[selectedSlot.kind]}</p>
                       <p className="text-[1.02rem] font-medium">
                         {formatDateLong(selectedSlot.date)}
                       </p>
@@ -610,16 +617,35 @@ export function BookingWidget() {
                   </AnimatePresence>
 
                   <button type="submit" disabled={submitting} className="btn btn-signal mt-6 w-full">
-                    {submitting ? "Wird gesendet …" : "Termin anfragen"}
+                    {submitting ? "Wird gesendet …" : "Beratungstermin anfragen"}
                   </button>
                   <p className="mt-3 text-center text-xs" style={{ color: "var(--bone-dim)" }}>
-                    Unverbindlich — fest wird der Termin erst mit der Bestätigung.
+                    Unverbindlich und kostenlos — fest wird der Termin erst mit der Bestätigung.
                   </p>
                 </motion.form>
               )}
             </AnimatePresence>
           </div>
-        </div>
+    </div>
+  );
+
+  if (asHero) return panel;
+
+  return (
+    <section id="termin" className="scroll-mt-24">
+      <div className="shell py-20 md:py-28">
+        <Reveal className="mb-10 flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <p className="eyebrow mb-4">Termin</p>
+            <h2 className="display display-l">Freie Termine</h2>
+          </div>
+          <p className="max-w-[42ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
+            Jeder Termin hier ist ein <strong style={{ color: "var(--bone)" }}>Beratungstermin</strong>:
+            Wir gehen Motiv, Größe, Stelle und Preis durch, gestochen wird an dem Tag
+            noch nicht. Den Termin fürs Tätowieren machen wir direkt im Anschluss aus.
+          </p>
+        </Reveal>
+        {panel}
       </div>
     </section>
   );

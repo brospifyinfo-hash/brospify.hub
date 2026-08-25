@@ -55,20 +55,7 @@ export function Gallery() {
   const active = index === null ? null : GALLERY[index];
 
   return (
-    <section id="arbeiten" className="shell scroll-mt-24 py-24 md:py-32">
-      <Reveal className="mb-12 flex flex-wrap items-end justify-between gap-6">
-        <div>
-          <p className="eyebrow mb-4">Ausgewählte Arbeiten</p>
-          <h2 className="display display-l max-w-[14ch]">
-            Motive aus dem <span style={{ color: "var(--skin)" }}>Studio</span>
-          </h2>
-        </div>
-        <p className="max-w-[38ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-          Frisch gestochen, direkt nach der Sitzung fotografiert — deshalb
-          die gerötete Haut. So sieht ein Tattoo am ersten Tag wirklich aus.
-        </p>
-      </Reveal>
-
+    <section id="arbeiten" className="shell scroll-mt-24 py-8 md:py-10">
       <div className="masonry">
         {GALLERY.map((piece, i) => (
           <Reveal key={piece.slug} delay={(i % 3) * 0.08} as="figure">
@@ -188,7 +175,7 @@ function GalleryTile({
         height={piece.height}
         placeholder="blur"
         blurDataURL={piece.blur}
-        sizes="(max-width: 639px) 92vw, (max-width: 1023px) 46vw, 31vw"
+        sizes="(max-width: 639px) 46vw, (max-width: 1023px) 31vw, 23vw"
         className="w-full transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
       />
       {/* Abdunklung, damit die Bildunterschrift immer lesbar bleibt */}
@@ -197,10 +184,10 @@ function GalleryTile({
         className="pointer-events-none absolute inset-0 opacity-70 transition-opacity duration-500 group-hover:opacity-95"
         style={{ background: "linear-gradient(to top, rgba(8,8,9,0.92) 0%, transparent 48%)" }}
       />
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 p-5">
-        <span className="display block text-[1.15rem] leading-tight">{piece.title}</span>
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 p-3 md:p-4">
+        <span className="display block text-[0.95rem] leading-tight md:text-[1.05rem]">{piece.title}</span>
         <span
-          className="mt-1 block translate-y-1 text-[0.72rem] uppercase tracking-[0.18em] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100"
+          className="mt-1 block translate-y-1 text-[0.65rem] uppercase tracking-[0.16em] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100"
           style={{ color: "var(--signal)" }}
         >
           {piece.style} · {piece.placement}

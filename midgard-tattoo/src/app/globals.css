@@ -100,6 +100,7 @@ select {
 
 /* Fluid — skaliert vom iPhone SE bis zum 27-Zöller ohne Breakpoints. */
 .display-xl { font-size: clamp(3rem, 13vw, 9.5rem); }
+.display-hero { font-size: clamp(3.25rem, 8.5vw, 6.5rem); }
 .display-l  { font-size: clamp(2.25rem, 7vw, 5rem); }
 .display-m  { font-size: clamp(1.75rem, 4.4vw, 3rem); }
 
@@ -245,18 +246,18 @@ select.field option {
    beim Resize, und das erste Bild ist sichtbar, bevor JS überhaupt
    geladen ist. */
 .masonry {
-  column-count: 1;
-  column-gap: 1rem;
+  column-count: 2;
+  column-gap: 0.75rem;
 }
-@media (min-width: 640px) { .masonry { column-count: 2; } }
-@media (min-width: 1024px) { .masonry { column-count: 3; column-gap: 1.25rem; } }
+@media (min-width: 640px) { .masonry { column-count: 3; column-gap: 1rem; } }
+@media (min-width: 1024px) { .masonry { column-count: 4; column-gap: 1rem; } }
 
 .masonry > * {
   break-inside: avoid;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
-@media (min-width: 1024px) {
-  .masonry > * { margin-bottom: 1.25rem; }
+@media (min-width: 640px) {
+  .masonry > * { margin-bottom: 1rem; }
 }
 
 /* ─── Laufschrift ("ticker") ────────────────────────────────────── */

@@ -16,6 +16,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   MONTH_NAMES,
+  SLOT_KIND_LABEL,
+  SLOT_KINDS,
   WEEKDAY_SHORT,
   daysInMonth,
   formatDateLong,
@@ -23,12 +25,14 @@ import {
   parseDate,
   toDateKey,
   todayKey,
+  type SlotKind,
 } from "@/lib/types";
 import type { AdminSlot } from "./types";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
-/** Uhrzeiten, die ein Studio-Tag üblicherweise hergibt. */
+/** Uhrzeiten, die ein Studio-Tag üblicherweise hergibt. Reine Abkürzung —
+ *  alles andere geht über die freie Eingabe darunter. */
 const TIME_PRESETS = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 const DURATIONS = [
   { minutes: 60, label: "1 Std" },
@@ -37,6 +41,26 @@ const DURATIONS = [
   { minutes: 240, label: "4 Std" },
   { minutes: 360, label: "6 Std" },
 ];
+
+/** "14:00" → 840 */
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** 840 → "14:00" (nur innerhalb eines Tages) */
+function toTime(minutes: number): string {
+  const m = Math.max(0, Math.min(23 * 60 + 59, minutes));
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+
+/** 150 → "2 Std 30 Min" */
+function durationLabel(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (!h) return `${m} Min`;
+  return m ? `${h} Std ${m} Min` : `${h} Std`;
+}
 
 const STATUS_STYLE: Record<AdminSlot["status"], { bg: string; fg: string; label: string }> = {
   open: { bg: "rgba(255,210,0,0.12)", fg: "var(--signal)", label: "frei" },
@@ -63,6 +87,13 @@ export function AdminCalendar({
   const [duration, setDuration] = useState(120);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // Art des Termins, den die nächsten Klicks anlegen. Beratung ist der
+  // Regelfall — der erste Kontakt ist immer ein Gespräch.
+  const [kind, setKind] = useState<SlotKind>("consultation");
+  // Freie Eingabe: der Inhaber denkt in „von 14 bis 17 Uhr", nicht in
+  // Minuten. Die Dauer ergibt sich, statt gewählt zu werden.
+  const [fromTime, setFromTime] = useState("14:00");
+  const [toTimeValue, setToTimeValue] = useState("16:00");
 
   // Mehrfach-Modus: erst Tage sammeln, dann einmal eine Uhrzeit setzen.
   const [multi, setMulti] = useState(false);
@@ -141,9 +172,34 @@ export function AdminCalendar({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slots: [{ date, startTime, durationMinutes: duration }] }),
+        body: JSON.stringify({ slots: [{ date, startTime, durationMinutes: duration, kind }] }),
       },
-      `${startTime} Uhr am ${formatDateLong(date)} ist jetzt online.`,
+      `${SLOT_KIND_LABEL[kind]} am ${formatDateLong(date)} um ${startTime} Uhr ist online.`,
+    );
+  }
+
+  /** Termin aus der freien Eingabe „von … bis …". */
+  async function addCustomSlot() {
+    if (!selectedDay) return;
+    const minutes = toMinutes(toTimeValue) - toMinutes(fromTime);
+    if (minutes < 15) {
+      setNote("Die Endzeit muss mindestens 15 Minuten nach der Startzeit liegen.");
+      return;
+    }
+    if (minutes > 720) {
+      setNote("Ein Termin kann höchstens 12 Stunden dauern.");
+      return;
+    }
+    await call(
+      "/api/admin/slots",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // Die Endzeit geht direkt mit — der Server rechnet die Dauer aus,
+        // damit Anzeige und Datenbestand nicht auseinanderlaufen können.
+        body: JSON.stringify({ slots: [{ date: selectedDay, startTime: fromTime, endTime: toTimeValue, kind }] }),
+      },
+      `${SLOT_KIND_LABEL[kind]} am ${formatDateLong(selectedDay)}, ${fromTime} – ${toTimeValue} Uhr ist online.`,
     );
   }
 
@@ -154,9 +210,9 @@ export function AdminCalendar({
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dates: picked, startTime, durationMinutes: duration }),
+        body: JSON.stringify({ dates: picked, startTime, durationMinutes: duration, kind }),
       },
-      `${startTime} Uhr an ${picked.length} ${picked.length === 1 ? "Tag" : "Tagen"} freigegeben.`,
+      `${SLOT_KIND_LABEL[kind]} um ${startTime} Uhr an ${picked.length} ${picked.length === 1 ? "Tag" : "Tagen"} freigegeben.`,
     );
     if (ok) { setPicked([]); setMulti(false); }
   }
@@ -288,6 +344,35 @@ export function AdminCalendar({
 
       {/* ── Seitenspalte: Tag bearbeiten oder Mehrfach-Modus ── */}
       <div className="card flex flex-col p-4 sm:p-6">
+        {/* ── Art des Termins ── */}
+        <div className="mb-5">
+          <span className="eyebrow mb-2 block">Art des Termins</span>
+          <div className="flex flex-wrap gap-2">
+            {SLOT_KINDS.map((k) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setKind(k)}
+                aria-pressed={kind === k}
+                className="min-h-[40px] rounded px-3 text-sm transition-colors"
+                style={{
+                  background: kind === k ? "var(--signal)" : "transparent",
+                  color: kind === k ? "#131200" : "var(--bone-soft)",
+                  border: `1px solid ${kind === k ? "var(--signal)" : "var(--ink-hair)"}`,
+                  fontWeight: kind === k ? 600 : 400,
+                }}
+              >
+                {SLOT_KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-xs" style={{ color: "var(--bone-dim)" }}>
+            {kind === "consultation"
+              ? "Erstgespräch: Motiv, Größe, Stelle und Preis. Es wird nicht gestochen."
+              : "Termin zum Tätowieren — für Kunden, mit denen alles schon besprochen ist."}
+          </p>
+        </div>
+
         <div className="mb-5">
           <span className="eyebrow mb-2 block">Dauer je Termin</span>
           <div className="flex flex-wrap gap-2">
@@ -359,6 +444,56 @@ export function AdminCalendar({
               })}
             </div>
 
+            {/* ── Freie Zeitspanne ──
+                Für alles, was nicht ins Stundenraster passt: Feierabend-
+                termin um 18:45, Sitzung von 12 bis 17:30. */}
+            <details className="mb-6" style={{ borderTop: "1px solid var(--ink-hair)", paddingTop: "1rem" }}>
+              <summary className="cursor-pointer text-sm" style={{ color: "var(--bone-soft)" }}>
+                Andere Uhrzeit eintragen
+              </summary>
+              <div className="mt-3 flex flex-wrap items-end gap-3">
+                <label className="flex-1">
+                  <span className="eyebrow mb-1 block">Von</span>
+                  <input
+                    type="time"
+                    step={300}
+                    className="field"
+                    value={fromTime}
+                    onChange={(e) => {
+                      setFromTime(e.target.value);
+                      // Endzeit mitziehen, damit sie nie vor dem Start liegt.
+                      if (toMinutes(e.target.value) >= toMinutes(toTimeValue)) {
+                        setToTimeValue(toTime(toMinutes(e.target.value) + duration));
+                      }
+                    }}
+                  />
+                </label>
+                <label className="flex-1">
+                  <span className="eyebrow mb-1 block">Bis</span>
+                  <input
+                    type="time"
+                    step={300}
+                    className="field"
+                    value={toTimeValue}
+                    onChange={(e) => setToTimeValue(e.target.value)}
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-xs" style={{ color: "var(--bone-dim)" }}>
+                {toMinutes(toTimeValue) > toMinutes(fromTime)
+                  ? `Dauer: ${durationLabel(toMinutes(toTimeValue) - toMinutes(fromTime))}`
+                  : "Die Endzeit muss nach der Startzeit liegen."}
+              </p>
+              <button
+                type="button"
+                disabled={!selectedDay || busy || toMinutes(toTimeValue) <= toMinutes(fromTime)}
+                onClick={addCustomSlot}
+                className="btn btn-ghost mt-3 h-11 w-full text-[0.7rem]"
+              >
+                Termin eintragen
+              </button>
+            </details>
+
             <div className="min-h-0 flex-1 overflow-y-auto">
               {daySlots.length === 0 ? (
                 <p className="text-sm" style={{ color: "var(--bone-dim)" }}>
@@ -389,6 +524,10 @@ export function AdminCalendar({
                               {tone.label}
                             </span>
                           </div>
+                          <p className="mt-1 text-[0.7rem]" style={{ color: "var(--bone-dim)" }}>
+                            {SLOT_KIND_LABEL[slot.kind ?? "consultation"]} ·{" "}
+                            {durationLabel(slot.durationMinutes)}
+                          </p>
 
                           {slot.booking && (
                             <button

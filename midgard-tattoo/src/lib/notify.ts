@@ -19,7 +19,9 @@ import {
   formatDateLong,
   placementLabel,
   sizeLabel,
+  slotKind,
   styleLabel,
+  SLOT_KIND_PUBLIC,
   type Booking,
   type Slot,
 } from "./types";
@@ -56,7 +58,7 @@ function shell(title: string, inner: string): string {
 
 function detailTable(booking: Booking, slot: Slot): string {
   return `<table style="width:100%;border-collapse:collapse">
-    ${row("Termin", `${formatDateLong(slot.date)}, ${slot.startTime} Uhr`)}
+    ${row("Termin", `${SLOT_KIND_PUBLIC[slotKind(slot)]} · ${formatDateLong(slot.date)}, ${slot.startTime} Uhr`)}
     ${row("Stil", styleLabel(booking.style))}
     ${row("Größe", sizeLabel(booking.size))}
     ${row("Stelle", placementLabel(booking.placement))}
@@ -86,7 +88,7 @@ export async function notifyStudio(booking: Booking, slot: Slot): Promise<void> 
     </p>`;
   await sendViaResend({
     to,
-    subject: `Neue Terminanfrage — ${formatDateLong(slot.date)}, ${slot.startTime} Uhr`,
+    subject: `Neue Anfrage (${SLOT_KIND_PUBLIC[slotKind(slot)]}) — ${formatDateLong(slot.date)}, ${slot.startTime} Uhr`,
     html: shell("Neue Terminanfrage", inner),
     replyTo: booking.email,
   }).catch(() => undefined);
@@ -97,7 +99,12 @@ export async function notifyCustomer(booking: Booking, slot: Slot): Promise<void
   const inner = `
     <p style="margin:0 0 16px;color:#111;font-size:15px">
       Hallo ${esc(booking.name.split(" ")[0])},<br>
-      deine Anfrage ist angekommen. Der Termin ist für dich reserviert — sobald ${esc(STUDIO.artist)} sie durchgesehen hat, bekommst du die feste Bestätigung.
+      deine Anfrage ist angekommen. Der ${esc(SLOT_KIND_PUBLIC[slotKind(slot)])} ist für dich reserviert — sobald ${esc(STUDIO.artist)} sie durchgesehen hat, bekommst du die feste Bestätigung.
+    </p>
+    <p style="margin:0 0 16px;color:#111;font-size:15px">
+      ${slotKind(slot) === "consultation"
+        ? "Beim Beratungstermin geht es ums Motiv, die Größe, die Stelle und den Preis — gestochen wird an dem Tag noch nicht. Den Termin fürs Tätowieren machen wir direkt im Anschluss aus."
+        : "Bring bitte etwas Zeit mit und iss vorher ordentlich."}
     </p>
     ${detailTable(booking, slot)}
     <p style="margin:20px 0 0;color:#8a8a90;font-size:13px">
@@ -122,7 +129,7 @@ export async function notifyDecision(
     <p style="margin:0 0 16px;color:#111;font-size:15px">
       Hallo ${esc(booking.name.split(" ")[0])},<br>
       ${confirmed
-        ? `dein Termin steht: <strong>${esc(formatDateLong(slot.date))}, ${esc(slot.startTime)} Uhr</strong>. Wir sehen uns in der ${esc(STUDIO.street)}.`
+        ? `dein ${esc(SLOT_KIND_PUBLIC[slotKind(slot)])} steht: <strong>${esc(formatDateLong(slot.date))}, ${esc(slot.startTime)} Uhr</strong>. Wir sehen uns in der ${esc(STUDIO.street)}.`
         : "dieser Termin lässt sich leider nicht einrichten. Schau gern noch einmal in den Kalender — dort stehen die aktuell freien Termine."}
     </p>
     ${confirmed ? detailTable(booking, slot) : ""}
