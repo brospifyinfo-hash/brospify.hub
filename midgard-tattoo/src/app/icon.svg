@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Studio-Marke: das "M" von Midgard in Signal-Gelb auf Tinten-Schwarz.
+       Bewusst nur eine dicke Linienführung — bei 16 px im Browser-Tab
+       überlebt kein Detail, aber diese Form bleibt erkennbar. -->
+  <rect width="32" height="32" rx="6" fill="#0b0b0c"/>
+  <path d="M6 24V8l10 10L26 8v16"
+        fill="none" stroke="#ffd200" stroke-width="4"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

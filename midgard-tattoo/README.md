@@ -1,0 +1,131 @@
+# Midgard Tattoo — Studio-Website
+
+Website des Tattoostudios **Midgard Tattoo**, Nürnberger Straße 7, 90518 Altdorf
+(Artist: Michl). Portfolio, Online-Terminanfrage und ein Dashboard, in dem der
+Inhaber seine freien Termine selbst pflegt.
+
+Eigenständiges Next.js-Projekt — keine Abhängigkeit zu anderen Anwendungen.
+
+```bash
+npm install
+cp .env.example .env.local     # mindestens TATTOO_ADMIN_PASSWORD setzen
+npm run dev                    # → http://localhost:3000
+```
+
+| Route | Was |
+|---|---|
+| `/` | Öffentliche Seite: Galerie, Handschrift, Ablauf, Buchung, Studio, FAQ |
+| `/admin` | Dashboard des Inhabers (Login-Pflicht) |
+| `/admin/login` | Passwort-Anmeldung |
+| `/api/slots` | `GET` — freie Termine für den Kundenkalender |
+| `/api/bookings` | `POST` — Terminanfrage abschicken |
+| `/api/admin/login`, `.../logout` | Session an/aus |
+| `/api/admin/slots` | `GET` `POST` `PATCH` `DELETE` — Termine verwalten |
+| `/api/admin/bookings` | `GET` `PATCH` `DELETE` — Anfragen verwalten |
+
+## Tech-Stack und warum
+
+| Baustein | Gewählt | Begründung |
+|---|---|---|
+| Framework | **Next.js 16 (App Router), React 19** | Server-Komponenten liefern Galerie und Terminzähler fertig gerendert aus — gut für die Ladezeit und für Google, das ein lokales Studio überhaupt erst findet. Route Handler ersetzen einen separaten API-Server. |
+| Styling | **Tailwind v4 + `globals.css`** | Tailwind für Layout und Abstände, `globals.css` für die Design-Tokens (Farben, Schrift, Kanten). Zwei Ebenen statt einer: die Marke steht an einer Stelle, das Layout bleibt im Markup lesbar. |
+| Animation | **Framer Motion 12** | Bewegt ausschließlich `transform`/`opacity` (Compositor statt Layout) und bringt `useReducedMotion` mit — Barrierefreiheit ohne Zusatzarbeit. |
+| Schriften | **`next/font` (Anton, Inter, Permanent Marker)** | Werden beim Build selbst gehostet: kein externer Request, kein Font-Flackern, keine Google-Fonts-Frage im Datenschutz. |
+| Bilder | **`next/image` + WebP + Blur-Platzhalter** | Die Fotos aus dem Studio sind der Inhalt der Seite; sie müssen scharf sein und trotzdem schnell laden. |
+| Auth | **iron-session** | Verschlüsseltes Cookie, kein Nutzerkonto, keine Tabelle. Für genau einen Inhaber ist alles andere Overhead. |
+| Daten | **JSON-Store, Adapter-basiert** | Läuft sofort — lokal als Datei, auf Vercel als Blob. Der Umzug auf Postgres/Supabase ist vorbereitet, siehe unten. |
+| Mails | **Resend** (optional) | Ein `fetch`-Aufruf statt eines SDK. Ohne Konfiguration funktioniert die Buchung trotzdem. |
+
+## Design
+
+Die Farben stammen nicht aus einer Palette, sondern aus den Fotos des Studios:
+
+* **Schwarz/Grau-Skala** — die Tinte selbst. Nie ein reines `#000`; das wirkt
+  auf Bildschirmen härter als jede Nadel es je war.
+* **Knochenweiß `#EDE9E3`** — die weiß gestrichene Studiowand und die
+  Schriftzüge auf der Schaufensterscheibe.
+* **Hautton `#D6B195`** — füllt auf jedem Foto die Fläche zwischen den Linien
+  und hält die Seite davon ab, kalt-blau zu kippen.
+* **Signal-Gelb `#FFD200`** — der Farbton des handgemalten „TATTOO" auf der
+  Scheibe. Der einzige bunte Ton der Seite und deshalb auch der einzige
+  Träger von Handlungsaufrufen.
+
+Schrift: **Anton** greift die fetten Versalien der Scheibe auf, **Permanent
+Marker** den handgemalten Schriftzug daneben (sparsam eingesetzt), **Inter**
+trägt alles, was gelesen statt angeschaut werden muss.
+
+## Datenhaltung
+
+`src/lib/store.ts` hält den kompletten Bestand als ein JSON-Dokument
+`{ slots, bookings }` und wählt den Adapter selbst:
+
+* **Vercel Blob** — sobald `BLOB_READ_WRITE_TOKEN` gesetzt ist.
+* **Lokale Datei** — sonst, `.data/tattoo-booking.json` (per `.gitignore` ausgeschlossen).
+
+Alle Änderungen laufen über `mutate()`, das Lesen-Ändern-Schreiben in einer
+prozesslokalen Kette serialisiert. Zwei gleichzeitige Anfragen auf denselben
+Termin können sich damit nicht überholen: die zweite bekommt einen 409.
+
+### Grenzen — und wann Postgres fällig wird
+
+1. **Vercel Blob kennt nur öffentliche Objekte.** Der Dateiname wird deshalb
+   per HMAC aus einem Server-Secret abgeleitet und ist ohne dieses Secret nicht
+   zu erraten. Das ist Verschleierung, keine Zugriffskontrolle.
+2. **Die Serialisierung gilt pro Prozess.** Laufen mehrere Serverless-Instanzen
+   parallel, greift sie nicht mehr. Bei einem Studio mit einer Handvoll
+   Anfragen pro Tag ist das Zusammentreffen praktisch ausgeschlossen — bei
+   mehreren Artists nicht mehr.
+
+Für beides liegt die Antwort fertig in [`docs/schema.sql`](./docs/schema.sql):
+echte Row-Level-Security, ein Unique-Index, der Doppelbuchungen auf
+Datenbankebene ausschließt, und Trigger, die den Termin-Status an die Buchung
+koppeln. Zu ersetzen sind ausschließlich `readRaw`/`writeRaw` und die vier
+Mutations-Funktionen in `store.ts` — Typen, API-Routen und UI bleiben
+unverändert.
+
+## Konfiguration
+
+Alle Variablen samt Erklärung stehen in [`.env.example`](./.env.example).
+Das absolute Minimum für den Betrieb:
+
+```
+TATTOO_ADMIN_PASSWORD=…     # ohne diese Variable ist /admin gesperrt
+TATTOO_SESSION_SECRET=…     # ≥32 zufällige Zeichen
+```
+
+## Inhalte pflegen
+
+Ohne CMS, alles an einer Stelle:
+
+* **Texte, Adresse, Öffnungszeiten, FAQ, Stilrichtungen** → `src/lib/studio.ts`
+* **Galerie** → Bild nach `public/` legen, Eintrag in `GALLERY` ergänzen.
+  `blur` ist ein 12 px breites WebP als Data-URI:
+  ```js
+  sharp(datei).resize({ width: 12 }).webp({ quality: 35 }).toBuffer()
+  ```
+* **Auswahlfelder des Formulars** (Stil, Größe, Körperstelle, Farbe, Budget) →
+  `src/lib/types.ts`. Der Server prüft jede Eingabe gegen genau diese Kataloge,
+  Client und Validierung bleiben also automatisch synchron.
+
+## Sicherheit
+
+* Passwortvergleich in konstanter Zeit; nach 8 Fehlversuchen ist die IP
+  15 Minuten gesperrt.
+* Jede Admin-Route prüft die Session einzeln — die Weiterleitung auf der
+  Seite ist Komfort, nicht der Schutz.
+* Terminanfragen: max. 5 pro IP und Stunde, Honeypot-Feld gegen Bots, jede
+  Eingabe serverseitig gegen die Kataloge geprüft und in der Länge begrenzt.
+* Der öffentliche Endpunkt liefert nur freie Termine ab heute und nur die
+  Felder, die der Kalender braucht — keine internen Notizen, keine Rückschlüsse
+  auf andere Kunden.
+* `/admin` ist per `robots: noindex` und `robots.txt` von der Suche
+  ausgeschlossen.
+
+## Vor dem Live-Gang prüfen
+
+Adresse, Telefonnummer und Artist stammen vom Schaufenster-Foto des Studios.
+Die **Öffnungszeiten in `src/lib/studio.ts` sind angenommen** — auf der Scheibe
+steht nur „Termine nach Vereinbarung". Ebenso zu ergänzen:
+
+* echte E-Mail-Adresse und Instagram-Profil in `STUDIO`
+* Impressum und Datenschutzerklärung (in Deutschland Pflicht)
