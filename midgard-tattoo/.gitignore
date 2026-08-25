@@ -30,3 +30,7 @@ next-env.d.ts
 # Lokaler Datei-Store der Terminbuchung (src/lib/store.ts).
 # Enthält echte Kundendaten und gehört nie ins Repository.
 .data/
+
+# Erzeugte Einzeldatei-Vorschau (Artifact). Baut sich aus dem Projekt
+# und gehoert nicht in die Versionsverwaltung.
+preview.html
