@@ -18,18 +18,21 @@ import { PRICE_ROWS } from "@/lib/content";
 import { STUDIO, STUDIO_PHOTOS } from "@/lib/studio";
 import type { Review } from "@/lib/types";
 import { Parallax, Reveal } from "./motion";
-import { formatDateShortDe, SectionHead, Stars } from "./ui";
+import { formatDateShortDe, SectionHead, Stagger, Stars } from "./ui";
 
 // ─── Galerie ─────────────────────────────────────────────────────
-// Ein großes Motiv, drei kleinere daneben — das erste bekommt Fläche,
-// weil eine Reihe gleich großer Kacheln nichts über Qualität sagt.
+// Eine schmale Reihe gleich großer Kacheln statt einer Bildwand. Auf der
+// Startseite ist die Galerie eine Andeutung, kein Auftritt: sechs Motive
+// nebeneinander sagen „davon gibt es mehr" und geben den Kapiteln
+// darunter — Termin, Artists, Preise — noch Luft. Groß angesehen werden
+// die Arbeiten auf /galerie.
 export function GalleryTeaser({ images, index }: { images: DisplayImage[]; index?: number }) {
-  const [feature, ...rest] = images.slice(0, 4);
-  if (!feature) return null;
+  const picks = images.slice(0, 5);
+  if (!picks.length) return null;
 
   return (
     <section className="hair-top" aria-labelledby="galerie-vorschau">
-      <div className="shell py-16 md:py-24">
+      <div className="shell py-14 md:py-20">
         <SectionHead
           index={index}
           eyebrow="Galerie"
@@ -38,85 +41,78 @@ export function GalleryTeaser({ images, index }: { images: DisplayImage[]; index
           action={<Link href="/galerie" className="btn btn-ghost">Alle Arbeiten</Link>}
         />
 
-        <div className="grid gap-3 sm:grid-cols-2 md:gap-4 lg:grid-cols-4">
-          <Reveal className="sm:col-span-2 lg:row-span-2">
-            <Kachel piece={feature} sizes="(max-width: 639px) 92vw, (max-width: 1023px) 92vw, 46vw" gross />
-          </Reveal>
-
-          {rest.map((piece, i) => (
-            <Reveal key={piece.id} delay={0.08 + i * 0.07}>
-              <Kachel piece={piece} sizes="(max-width: 639px) 92vw, (max-width: 1023px) 45vw, 23vw" />
-            </Reveal>
-          ))}
-
-          <Reveal delay={0.29}>
-            <Link
-              href="/galerie"
-              className="group flex h-full min-h-[170px] flex-col items-start justify-between p-5 transition-colors duration-500"
-              style={{ border: "1px solid var(--ink-hair)", background: "var(--ink-card)" }}
-            >
-              <span className="eyebrow">Mehr davon</span>
-              <span>
-                <span className="display block text-[1.5rem] leading-none">
-                  Alle<br />Arbeiten
-                </span>
-                <span
-                  className="mt-3 block text-[0.72rem] uppercase tracking-[0.16em] transition-transform duration-500 group-hover:translate-x-1.5"
-                  style={{ color: "var(--signal)" }}
-                >
-                  Ansehen →
-                </span>
-              </span>
-            </Link>
-          </Reveal>
-        </div>
+        {/* Drei nebeneinander auf dem Handy, sechs auf dem Desktop: eine
+            Zeile, mehr nicht. */}
+        <Stagger className="grid grid-cols-3 gap-2 sm:grid-cols-6 md:gap-3" step={0.06}>
+          {[
+            ...picks.map((piece) => <Kachel key={piece.id} piece={piece} />),
+            <MehrKachel key="mehr" rest={Math.max(0, images.length - picks.length)} />,
+          ]}
+        </Stagger>
       </div>
     </section>
   );
 }
 
-function Kachel({
-  piece,
-  sizes,
-  gross,
-}: {
-  piece: DisplayImage;
-  sizes: string;
-  gross?: boolean;
-}) {
+function Kachel({ piece }: { piece: DisplayImage }) {
   return (
     <Link
       href="/galerie"
-      className="group relative block h-full overflow-hidden"
+      className="group relative block overflow-hidden"
       style={{ border: "1px solid var(--ink-hair)" }}
+      aria-label={`${piece.title} — zur Galerie`}
     >
-      <span className={`relative block h-full w-full overflow-hidden ${gross ? "aspect-[4/5] lg:aspect-auto lg:min-h-[420px]" : "aspect-[4/5]"}`}>
+      <span className="relative block aspect-[3/4] overflow-hidden">
         <Image
           src={piece.src}
-          alt={piece.alt}
+          alt=""
           fill
           placeholder="blur"
           blurDataURL={piece.blur}
-          sizes={sizes}
-          className="object-cover transition-transform duration-[1100ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
+          sizes="(max-width: 639px) 31vw, 16vw"
+          // Zurückgenommen im Ruhezustand, voll beim Darüberfahren — so
+          // drängt sich die Reihe nicht in den Vordergrund.
+          className="object-cover opacity-80 transition-all duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.06] group-hover:opacity-100"
           style={{ objectPosition: piece.focal }}
         />
       </span>
+
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-80 transition-opacity duration-500 group-hover:opacity-95"
-        style={{ background: "linear-gradient(to top, rgba(8,8,9,0.92) 0%, transparent 46%)" }}
+        className="pointer-events-none absolute inset-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100"
+        style={{ background: "linear-gradient(to top, rgba(8,8,9,0.9) 0%, transparent 58%)" }}
       />
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 p-4">
-        <span className={`display block leading-tight ${gross ? "text-[1.35rem] md:text-[1.7rem]" : "text-[1rem]"}`}>
-          {piece.title}
+      {/* Der Titel erscheint erst beim Darüberfahren. Für Screenreader
+          steht er im aria-label des Links, das Bild bleibt deshalb
+          alt="" — sonst wäre der Name zweimal da. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 bottom-0 translate-y-1 p-2 text-[0.6rem] uppercase leading-tight tracking-[0.12em] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100"
+        style={{ color: "var(--bone)" }}
+      >
+        {piece.title}
+      </span>
+    </Link>
+  );
+}
+
+function MehrKachel({ rest }: { rest: number }) {
+  return (
+    <Link
+      href="/galerie"
+      className="group flex aspect-[3/4] flex-col items-start justify-end p-2.5 transition-colors duration-500"
+      style={{ border: "1px solid var(--ink-hair)", background: "var(--ink-card)" }}
+    >
+      {rest > 0 && (
+        <span className="display text-[1.1rem] leading-none" style={{ color: "var(--bone-soft)" }}>
+          +{rest}
         </span>
-        <span
-          className="mt-1 block translate-y-1 text-[0.65rem] uppercase tracking-[0.16em] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100"
-          style={{ color: "var(--signal)" }}
-        >
-          {piece.style} · {piece.placement}
-        </span>
+      )}
+      <span
+        className="mt-1 text-[0.6rem] uppercase leading-tight tracking-[0.12em] transition-transform duration-500 group-hover:translate-x-1"
+        style={{ color: "var(--signal)" }}
+      >
+        Alle<br />Arbeiten →
       </span>
     </Link>
   );
