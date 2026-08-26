@@ -15,7 +15,7 @@ npm run dev                    # → http://localhost:3000
 | Route | Was |
 |---|---|
 | `/` | Startseite: Hero-Slideshow, darunter je eine Vorschau auf jede Hauptseite |
-| `/galerie` | Alle Motive mit Leuchtkasten |
+| `/galerie` | Alle Motive mit Leuchtkasten, darunter die Terminbuchung |
 | `/termin` | Kalender, Anfrageformular, die wichtigsten Fragen |
 | `/preise` | Richtwerte, Tagessatz, was den Preis beeinflusst |
 | `/bewertungen` | Kundenstimmen (nur echte, vom Inhaber eingetragen) |
@@ -68,7 +68,9 @@ setzen sowie zwei Haken: **In der Galerie** und **In der Slideshow**
 (das Hero oben auf der Startseite). Die Reihenfolge bestimmen die Pfeile.
 
 **Rückfall:** Solange kein eigenes Bild hochgeladen ist, zeigt die
-Website die fünf mitgelieferten Motive aus `src/lib/studio.ts`. Sobald
+Website die zehn mitgelieferten Motive aus `src/lib/studio.ts`. Welche
+davon in der Slideshow laufen, steuert dort das Feld `inHero` — kuratiert,
+weil ein Studiofoto als bildschirmfüllender Hintergrund nicht funktioniert. Sobald
 das erste eigene Bild da ist, gilt ausschließlich der eigene Bestand —
 sonst ließen sich die Beispiele nie loswerden. Ist für die Slideshow
 nichts markiert, laufen dort die ersten Galeriebilder.

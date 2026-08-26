@@ -67,9 +67,15 @@ export async function getGalleryImages(): Promise<DisplayImage[]> {
   return GALLERY.map(fromBuiltIn);
 }
 
-/** Bilder für die Slideshow im Hero. Ist nichts markiert, nimmt sie
- *  einfach die ersten Galeriebilder — ein leerer Hero wäre schlimmer
- *  als eine ungefragte Auswahl. */
+/** Bilder für die Slideshow im Hero.
+ *
+ *  Reihenfolge der Quellen:
+ *   1. Eigene Bilder mit gesetztem Haken „Im Hero zeigen"
+ *   2. Sonst die mitgelieferten Motive, die dafür markiert sind —
+ *      kuratiert, weil ein Studiofoto als bildschirmfüllender
+ *      Hintergrund nicht funktioniert
+ *   3. Notfalls die ersten Galeriebilder; ein leerer Hero wäre
+ *      schlimmer als eine ungefragte Auswahl. */
 export async function getHeroImages(): Promise<DisplayImage[]> {
   try {
     const { media } = await readData();
@@ -83,6 +89,10 @@ export async function getHeroImages(): Promise<DisplayImage[]> {
   } catch (error) {
     console.error("[gallery] Bestand nicht lesbar, zeige mitgelieferte Motive", error);
   }
+
+  const kuratiert = GALLERY.filter((p) => p.inHero);
+  if (kuratiert.length) return kuratiert.map(fromBuiltIn);
+
   const fallback = await getGalleryImages();
   return fallback.slice(0, 4);
 }

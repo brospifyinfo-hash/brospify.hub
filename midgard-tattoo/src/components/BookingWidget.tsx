@@ -640,9 +640,9 @@ export function BookingWidget({ variant = "page" }: { variant?: "page" | "hero" 
             <h2 className="display display-l">Freie Termine</h2>
           </div>
           <p className="max-w-[42ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Jeder Termin hier ist ein <strong style={{ color: "var(--bone)" }}>Beratungstermin</strong>:
-            Wir gehen Motiv, Größe, Stelle und Preis durch, gestochen wird an dem Tag
-            noch nicht. Den Termin fürs Tätowieren machen wir direkt im Anschluss aus.
+            Etwas dabei, das in deine Richtung geht? Jeder Termin hier ist ein{" "}
+            <strong style={{ color: "var(--bone)" }}>Beratungstermin</strong>: Wir gehen
+            Motiv, Größe, Stelle und Preis durch, gestochen wird an dem Tag noch nicht.
           </p>
         </Reveal>
         {panel}

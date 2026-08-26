@@ -53,6 +53,11 @@ export interface GalleryPiece {
   height: number;
   blur: string;
   span?: "tall" | "wide";
+  /** Läuft in der Slideshow im Hero mit, solange keine eigenen Bilder
+   *  hochgeladen sind. Ohne Markierung bliebe die Auswahl dem Zufall der
+   *  Reihenfolge überlassen — inklusive Studiofotos, die als
+   *  bildschirmfüllender Hintergrund nicht funktionieren. */
+  inHero?: boolean;
 }
 
 export const GALLERY: GalleryPiece[] = [
@@ -67,6 +72,7 @@ export const GALLERY: GalleryPiece[] = [
     height: 1549,
     blur: "data:image/webp;base64,UklGRmYAAABXRUJQVlA4IFoAAAAQAgCdASoMABAAA8BgJZACdADdb+Xmh6lAAP7m2kSR/1zqzzSUYMqc/i7vsVBh4lBY5CosYZGtq3fDnnhtW/bnpImqgRFHNnPE1M4pku95ntQPjuGrGX2f4AA=",
     span: "tall",
+    inHero: true,
   },
   {
     slug: "loewe-sketch",
@@ -78,6 +84,7 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1155,
     blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAADwAQCdASoMAAwAA8BgJQBOgBusN08sruAA+EKjYtTIBLkoPPj+oGatVsUpItM/mde47Wb1TYjoRRMq/ZtcKj+OyWts6e+AAAA=",
+    inHero: true,
   },
   {
     slug: "libelle-seerose",
@@ -89,6 +96,7 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1174,
     blur: "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAADwAQCdASoMAAwAA8BgJZACdAD8LXIZXOgA/k9sBpZIXf7IA/86G6lkGUcM/kyS6P1HBRkPvRzELV3u5GUA/UEDhV90UQgNUjeAqaQA",
+    inHero: true,
   },
   {
     slug: "wanderhoden",
@@ -100,6 +108,64 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1152,
     blur: "data:image/webp;base64,UklGRk4AAABXRUJQVlA4IEIAAADwAQCdASoMAAwAA8BgJZACdADcYsso1oAA9zOdEWr1o8RThBNz2h6uCMQkq/l2P3yaKtkQe+n7rsUYVNQlfkUWgAA=",
+  },
+  {
+    slug: "fee-schmetterlinge",
+    src: "/fee-schmetterlinge.webp",
+    alt: "Fee mit Schmetterlingsflügeln, langem Haar und Schmetterlingen, Black-and-Grey-Tattoo auf dem Oberarm",
+    title: "Fee & Schmetterlinge",
+    style: "Black & Grey / Fineline",
+    placement: "Oberarm",
+    width: 1179,
+    height: 1172,
+    blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAACwAQCdASoMAAwAA8BgJQBOgBmfNjoAAOJ8xmENCEkwbbAT29kL30Q3Zz38TZQKidQVuvps4yvU0w6HWw9z/Iv02Y+ESC6gAAA=",
+    inHero: true,
+  },
+  {
+    slug: "phoenix",
+    src: "/phoenix.webp",
+    alt: "Aufsteigender Phönix mit langen Schwanzfedern, schwarz-grau mit roten Akzenten, Tattoo auf der Wade",
+    title: "Phönix",
+    style: "Black & Grey mit Rot",
+    placement: "Wade",
+    width: 824,
+    height: 1153,
+    blur: "data:image/webp;base64,UklGRmIAAABXRUJQVlA4IFYAAACwAwCdASoMABEAPwFqrU8rJaQiMAgBYCAJQBOkGQAtYcF3wGk5IAD7AHRu8O5E9L/neIEY+Hfr7dgnmicK4IRVrgQd5IooR5FXNwbMCteD+ZCsnEAAAA==",
+    inHero: true,
+  },
+  {
+    slug: "blut-schweiss-traenen",
+    src: "/blut-schweiss-traenen.webp",
+    alt: "Schriftzug „Blut Schweiß Tränen“ in geschwungener Schreibschrift auf dem Handrücken",
+    title: "Blut, Schweiß, Tränen",
+    style: "Lettering",
+    placement: "Handrücken",
+    width: 1179,
+    height: 1161,
+    blur: "data:image/webp;base64,UklGRlIAAABXRUJQVlA4IEYAAADQAQCdASoMAAwAA8BgJZACsADZqzh2QAD+058wrmeT8fcFr7eq8zlkRDw+mZTq5KMjqS/HZwaH5P1RLYKyy9ziXl/ZwAAA",
+  },
+  {
+    slug: "totenkopf",
+    src: "/totenkopf.webp",
+    alt: "Fotorealistischer Totenkopf über einer düsteren Landschaft, Tattoo auf dem Unterarm",
+    title: "Totenkopf",
+    style: "Realistic",
+    placement: "Unterarm",
+    width: 1179,
+    height: 1156,
+    blur: "data:image/webp;base64,UklGRkYAAABXRUJQVlA4IDoAAADwAQCdASoMAAwAA8BgJZQCdADdJAXI6YAA/qwsZ/Low6OkhqWv5JOrBqiOFZJiamxse76kyUJiEgAA",
+    inHero: true,
+  },
+  {
+    slug: "studio-abend",
+    src: "/studio-abend.webp",
+    alt: "Das beleuchtete Schaufenster des Studios von innen, am Abend",
+    title: "Studio am Abend",
+    style: "Nürnberger Straße 7",
+    placement: "Altdorf",
+    width: 979,
+    height: 1004,
+    blur: "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAADwAQCdASoMAAwAA8BgJbACdAEK3s7VVAAA/qMmWIYjX/Dd8aNqD93DoPMUIVUzXqrU2DOJl369Twa2zJMCGH2clccSAQH/T2XXKAAA",
   },
   {
     slug: "studio-altdorf",
@@ -115,8 +181,8 @@ export const GALLERY: GalleryPiece[] = [
   },
 ];
 
-/** Das Stück, das im Hero groß im Parallax liegt. */
-export const HERO_PIECE = GALLERY[0];
+/** Erstes Bild der Hero-Slideshow — Rückfall für Vorschaubilder. */
+export const HERO_PIECE = GALLERY.find((p) => p.inHero) ?? GALLERY[0];
 
 // ─── Stil-Schwerpunkte (Sektion „Handschrift") ───────────────────
 export const SPECIALTIES = [

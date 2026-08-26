@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { BookingWidget } from "@/components/BookingWidget";
 import { Gallery } from "@/components/Gallery";
 import { PageHead } from "@/components/PageHead";
 import { getGalleryImages } from "@/lib/gallery";
@@ -26,15 +26,13 @@ export default async function GaleriePage() {
         lead="Frisch gestochen, direkt nach der Sitzung fotografiert — deshalb die gerötete Haut. So sieht ein Tattoo am ersten Tag wirklich aus."
       />
       <Gallery images={images} />
-      <section className="hair-top">
-        <div className="shell flex flex-wrap items-center justify-between gap-6 py-14">
-          <p className="max-w-[40ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Etwas dabei, das in deine Richtung geht? Im Beratungstermin schauen wir,
-            was daraus für dich werden kann.
-          </p>
-          <Link href="/termin" className="btn btn-signal">Termin buchen</Link>
-        </div>
-      </section>
+
+      {/* Buchung direkt unter der Galerie: Wer sich gerade durch die
+          Motive geklickt hat, ist genau jetzt in Stimmung für einen
+          Termin — ein Link auf eine andere Seite wäre eine Hürde zu
+          viel. Dieselbe Komponente steht auch auf /termin; Zustand und
+          Absenden laufen dort wie hier über dieselbe Logik. */}
+      <BookingWidget />
     </>
   );
 }
