@@ -9,13 +9,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
 import { FAQ, OPENING_HOURS, SPECIALTIES, STUDIO } from "@/lib/studio";
-import { Reveal } from "./motion";
+import { Reveal, RevealSection } from "./motion";
 import { SectionHead, Stagger } from "./ui";
 
 // ─── Handschrift ─────────────────────────────────────────────────
 export function Specialties() {
   return (
-    <section id="handschrift" className="hair-top scroll-mt-24" aria-labelledby="handschrift-titel">
+    <RevealSection id="handschrift" className="hair-top scroll-mt-24" aria-labelledby="handschrift-titel">
       <div className="shell py-16 md:py-24">
       <SectionHead
         eyebrow="Handschrift"
@@ -47,7 +47,7 @@ export function Specialties() {
         ))}
       </div>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
@@ -61,7 +61,7 @@ const STEPS = [
 
 export function Process() {
   return (
-    <section className="hair-top" aria-labelledby="ablauf-titel">
+    <RevealSection className="hair-top" aria-labelledby="ablauf-titel">
       <div className="shell py-16 md:py-24">
         <SectionHead
           eyebrow="Ablauf"
@@ -91,7 +91,7 @@ export function Process() {
           ))}
         </Stagger>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
@@ -102,7 +102,7 @@ export function FaqSection() {
   const [open, setOpen] = useState<number | null>(0);
 
   return (
-    <section id="fragen" className="scroll-mt-24">
+    <RevealSection id="fragen" className="scroll-mt-24">
       <div className="shell py-8 md:py-12">
         <Reveal>
           {/* Fragen brauchen kurze Zeilen, aber sie sollen an derselben
@@ -154,7 +154,7 @@ export function FaqSection() {
           </ul>
         </Reveal>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
@@ -163,8 +163,8 @@ export function SiteFooter() {
   return (
     <footer className="hair-top">
       <div className="shell py-16 md:py-20">
-        <div className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]">
-          <div>
+        <Stagger className="grid gap-10 md:grid-cols-2 lg:grid-cols-[1.5fr_1fr_1fr_1fr_1fr]" step={0.06}>
+          <div key="marke">
             <div className="flex items-baseline gap-2">
               <span className="display text-3xl">{STUDIO.name.split(" ")[0]}</span>
               <span className="marker text-xl" style={{ color: "var(--signal)" }}>Tattoo</span>
@@ -238,9 +238,9 @@ export function SiteFooter() {
               ))}
             </ul>
           </div>
-        </div>
+        </Stagger>
 
-        <div className="hair-top mt-12 flex flex-wrap items-center justify-between gap-4 pt-6 text-xs" style={{ color: "var(--bone-dim)" }}>
+        <Reveal className="hair-top mt-12 flex flex-wrap items-center justify-between gap-4 pt-6 text-xs" style={{ color: "var(--bone-dim)" }}>
           <span>© {new Date().getFullYear()} {STUDIO.name} · Artists: {STUDIO.artists}</span>
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span>Tätowierungen erst ab 18 Jahren. Ausweis mitbringen.</span>
@@ -252,7 +252,7 @@ export function SiteFooter() {
               Studio-Login
             </Link>
           </span>
-        </div>
+        </Reveal>
       </div>
     </footer>
   );

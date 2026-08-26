@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHead } from "@/components/PageHead";
-import { Reveal } from "@/components/motion";
+import { Reveal, RevealSection } from "@/components/motion";
 import { PRIVACY_SECTIONS } from "@/lib/content";
 import { STUDIO } from "@/lib/studio";
 
@@ -22,7 +22,7 @@ export default function DatenschutzPage() {
         lead="Was mit deinen Angaben passiert, wenn du einen Termin anfragst — und was nicht passiert."
       />
 
-      <section>
+      <RevealSection>
         <div className="shell py-8 md:py-12"><div className="max-w-[72ch]">
           {offen > 0 && (
             <Reveal>
@@ -63,7 +63,7 @@ export default function DatenschutzPage() {
             </Reveal>
           ))}
         </div></div>
-      </section>
+      </RevealSection>
     </>
   );
 }

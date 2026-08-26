@@ -14,6 +14,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { todayKey } from "@/lib/types";
+import { Stagger } from "@/components/ui";
 import { AdminCalendar } from "./AdminCalendar";
 import { BookingInbox } from "./BookingInbox";
 import { MediaManager } from "./MediaManager";
@@ -117,13 +118,17 @@ export function Dashboard({ studioName }: { studioName: string }) {
       </header>
 
       <main className="shell py-8 md:py-12">
-        {/* ── Kennzahlen ── */}
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          <Kpi label="Offene Anfragen" value={pending} highlight={pending > 0} />
-          <Kpi label="Feste Termine" value={upcoming} />
-          <Kpi label="Frei buchbar" value={free} />
-          <Kpi label="Bilder online" value={media.filter((m) => m.inGallery).length} />
-        </div>
+        {/* ── Kennzahlen ──
+            Laufen beim Öffnen kurz nacheinander ein. Im Dashboard ist
+            das mehr als Zierde: die Zahlen kommen erst nach dem Laden
+            aus dem Store, und die Staffelung überbrückt genau den
+            Moment, in dem sie von 0 auf ihren Wert springen. */}
+        <Stagger className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4" step={0.05}>
+          <Kpi key="anfragen" label="Offene Anfragen" value={pending} highlight={pending > 0} />
+          <Kpi key="termine" label="Feste Termine" value={upcoming} />
+          <Kpi key="frei" label="Frei buchbar" value={free} />
+          <Kpi key="bilder" label="Bilder online" value={media.filter((m) => m.inGallery).length} />
+        </Stagger>
 
         {/* ── Reiter ── */}
         <div className="mt-8 flex flex-wrap gap-x-5 gap-y-1" role="tablist">

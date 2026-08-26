@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHead } from "@/components/PageHead";
-import { Reveal } from "@/components/motion";
+import { Reveal, RevealSection } from "@/components/motion";
 import { IMPRINT_FIELDS } from "@/lib/content";
 import { STUDIO } from "@/lib/studio";
 
@@ -19,7 +19,7 @@ export default function ImpressumPage() {
     <>
       <PageHead eyebrow="Rechtliches" title="Impressum" />
 
-      <section>
+      <RevealSection>
         <div className="shell py-8 md:py-12"><div className="max-w-[72ch]">
           {/* Der Hinweis steht bewusst auf der Seite und nicht nur im Code:
               solange Pflichtangaben fehlen, muss das ins Auge springen. */}
@@ -83,7 +83,7 @@ export default function ImpressumPage() {
             </p>
           </Reveal>
         </div></div>
-      </section>
+      </RevealSection>
     </>
   );
 }

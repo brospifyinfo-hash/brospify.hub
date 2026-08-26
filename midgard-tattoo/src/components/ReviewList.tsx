@@ -8,6 +8,7 @@
 
 import { motion } from "framer-motion";
 import type { Review } from "@/lib/types";
+import { RevealSection } from "./motion";
 import { formatDateShortDe, Reveal, Stars } from "./ui";
 import { STUDIO } from "@/lib/studio";
 
@@ -25,7 +26,7 @@ export function ReviewSummary({ reviews }: { reviews: Review[] }) {
   }));
 
   return (
-    <section className="hair-top">
+    <RevealSection className="hair-top">
       <div className="shell py-10 md:py-14">
         <div className="grid gap-8 md:grid-cols-[auto_1fr] md:items-center md:gap-14">
           <Reveal>
@@ -75,14 +76,14 @@ export function ReviewSummary({ reviews }: { reviews: Review[] }) {
           </Reveal>
         </div>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
 export function ReviewList({ reviews }: { reviews: Review[] }) {
   if (!reviews.length) {
     return (
-      <section>
+      <RevealSection>
         <div className="shell max-w-[60ch] py-12 md:py-16">
           <Reveal>
             <div className="card p-8 text-center">
@@ -103,14 +104,14 @@ export function ReviewList({ reviews }: { reviews: Review[] }) {
             </div>
           </Reveal>
         </div>
-      </section>
+      </RevealSection>
     );
   }
 
   const beispiele = reviews.filter((r) => r.isExample).length;
 
   return (
-    <section>
+    <RevealSection>
       <div className="shell py-8 md:py-12">
         {/* Solange Platzhalter dabei sind, sagt die Seite das deutlich.
             Erfundene Kundenstimmen dürfen nicht als echte durchgehen —
@@ -172,6 +173,6 @@ export function ReviewList({ reviews }: { reviews: Review[] }) {
           ))}
         </div>
       </div>
-    </section>
+    </RevealSection>
   );
 }

@@ -14,7 +14,7 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import Image from "next/image";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DisplayImage } from "@/lib/gallery";
-import { Reveal } from "./motion";
+import { Reveal, RevealSection } from "./motion";
 
 export function Gallery({ images }: { images: DisplayImage[] }) {
   const [index, setIndex] = useState<number | null>(null);
@@ -55,7 +55,7 @@ export function Gallery({ images }: { images: DisplayImage[] }) {
   const active = index === null ? null : images[index];
 
   return (
-    <section id="arbeiten" className="shell scroll-mt-24 py-10 md:py-14">
+    <RevealSection id="arbeiten" className="shell scroll-mt-24 py-10 md:py-14">
       {images.length === 0 && (
         <p className="py-16 text-center text-sm" style={{ color: "var(--bone-dim)" }}>
           Aktuell sind keine Motive eingestellt. Schau bald wieder vorbei.
@@ -152,7 +152,7 @@ export function Gallery({ images }: { images: DisplayImage[] }) {
           </motion.div>
         )}
       </AnimatePresence>
-    </section>
+    </RevealSection>
   );
 }
 

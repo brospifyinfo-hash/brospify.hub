@@ -7,7 +7,7 @@
 import { motion, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
 
-export { Parallax, Reveal, SplitHeadline } from "./motion";
+export { Parallax, Reveal, RevealSection, SplitHeadline } from "./motion";
 import { Reveal } from "./motion";
 
 const EASE = [0.22, 1, 0.36, 1] as const;

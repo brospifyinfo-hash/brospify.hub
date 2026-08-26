@@ -9,7 +9,7 @@ import { Artists } from "@/components/Artists";
 import { MapPreview } from "@/components/MapPreview";
 import { PageHead } from "@/components/PageHead";
 import { StudioSection } from "@/components/StudioSection";
-import { Reveal, SectionHead } from "@/components/ui";
+import { Reveal, RevealSection, SectionHead } from "@/components/ui";
 import { OPENING_HOURS, STUDIO } from "@/lib/studio";
 import { todayKey } from "@/lib/types";
 
@@ -44,7 +44,7 @@ export default function StudioPage() {
       />
 
       {/* ── Kontakt, Zeiten und Karte ── */}
-      <section className="hair-top" aria-labelledby="anfahrt">
+      <RevealSection className="hair-top" aria-labelledby="anfahrt">
         <div className="shell py-16 md:py-24">
           <SectionHead
             eyebrow="Anfahrt"
@@ -124,7 +124,7 @@ export default function StudioPage() {
             </Reveal>
           </div>
         </div>
-      </section>
+      </RevealSection>
     </>
   );
 }

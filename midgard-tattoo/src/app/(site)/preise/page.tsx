@@ -5,7 +5,7 @@
 
 import type { Metadata } from "next";
 import { PageHead } from "@/components/PageHead";
-import { Reveal, SectionHead, Stagger } from "@/components/ui";
+import { Reveal, RevealSection, SectionHead, Stagger } from "@/components/ui";
 import { PRICE_FACTORS, PRICE_INCLUDES, PRICE_ROWS } from "@/lib/content";
 import { STUDIO } from "@/lib/studio";
 
@@ -26,7 +26,7 @@ export default function PreisePage() {
       />
 
       {/* ── Richtwerte ── */}
-      <section>
+      <RevealSection>
         <div className="shell py-10 md:py-14">
           <dl className="grid gap-px" style={{ background: "var(--ink-hair)" }}>
             {PRICE_ROWS.map((row, i) => (
@@ -68,10 +68,10 @@ export default function PreisePage() {
             </p>
           </Reveal>
         </div>
-      </section>
+      </RevealSection>
 
       {/* ── Was drinsteckt ── */}
-      <section className="hair-top" aria-labelledby="enthalten">
+      <RevealSection className="hair-top" aria-labelledby="enthalten">
         <div className="shell py-16 md:py-24">
           <SectionHead
             eyebrow="Ohne Aufpreis"
@@ -96,10 +96,10 @@ export default function PreisePage() {
             ))}
           </Stagger>
         </div>
-      </section>
+      </RevealSection>
 
       {/* ── Woran es liegt ── */}
-      <section className="hair-top" aria-labelledby="faktoren">
+      <RevealSection className="hair-top" aria-labelledby="faktoren">
         <div className="shell py-16 md:py-24">
           <SectionHead
             eyebrow="Woran es liegt"
@@ -124,7 +124,7 @@ export default function PreisePage() {
             ))}
           </div>
         </div>
-      </section>
+      </RevealSection>
     </>
   );
 }

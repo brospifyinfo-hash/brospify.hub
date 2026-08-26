@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { PageHead } from "@/components/PageHead";
-import { Reveal } from "@/components/motion";
+import { Reveal, RevealSection } from "@/components/motion";
 import { AFTERCARE_STEPS, AFTERCARE_WARNINGS } from "@/lib/content";
 import { STUDIO } from "@/lib/studio";
 
@@ -19,7 +19,7 @@ export default function PflegePage() {
         lead="Wie gut ein Tattoo aussieht, entscheidet sich zur Hälfte in den zwei Wochen danach. Das Wichtigste in der Reihenfolge, in der es passiert."
       />
 
-      <section>
+      <RevealSection>
         <div className="shell py-8 md:py-12"><div className="max-w-[72ch]">
           <ol className="grid gap-px" style={{ background: "var(--ink-hair)" }}>
             {AFTERCARE_STEPS.map((step, i) => (
@@ -39,11 +39,11 @@ export default function PflegePage() {
             ))}
           </ol>
         </div></div>
-      </section>
+      </RevealSection>
 
       {/* Warnzeichen bewusst abgesetzt und in der Signalfarbe der Gefahr —
           das ist der einzige Abschnitt, bei dem ein Anruf zählt. */}
-      <section className="hair-top">
+      <RevealSection className="hair-top">
         <div className="shell py-12 md:py-16"><div className="max-w-[72ch]">
           <Reveal>
             <div className="card p-6" style={{ borderColor: "rgba(226,86,74,0.35)" }}>
@@ -73,7 +73,7 @@ export default function PflegePage() {
             </div>
           </Reveal>
         </div></div>
-      </section>
+      </RevealSection>
     </>
   );
 }

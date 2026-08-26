@@ -17,7 +17,7 @@ import type { DisplayImage } from "@/lib/gallery";
 import { PRICE_ROWS } from "@/lib/content";
 import { STUDIO, STUDIO_PHOTOS } from "@/lib/studio";
 import type { Review } from "@/lib/types";
-import { Parallax, Reveal } from "./motion";
+import { Parallax, Reveal, RevealSection } from "./motion";
 import { formatDateShortDe, SectionHead, Stagger, Stars } from "./ui";
 
 // ─── Galerie ─────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ export function GalleryTeaser({ images, index }: { images: DisplayImage[]; index
   if (!picks.length) return null;
 
   return (
-    <section className="hair-top" aria-labelledby="galerie-vorschau">
+    <RevealSection className="hair-top" aria-labelledby="galerie-vorschau">
       <div className="shell py-14 md:py-20">
         <SectionHead
           index={index}
@@ -50,7 +50,7 @@ export function GalleryTeaser({ images, index }: { images: DisplayImage[]; index
           ]}
         </Stagger>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
@@ -123,7 +123,7 @@ export function PriceTeaser({ index }: { index?: number }) {
   const picks = PRICE_ROWS.slice(0, 3);
 
   return (
-    <section className="hair-top" aria-labelledby="preise-vorschau">
+    <RevealSection className="hair-top" aria-labelledby="preise-vorschau">
       <div className="shell py-16 md:py-24">
         <SectionHead
           index={index}
@@ -163,7 +163,7 @@ export function PriceTeaser({ index }: { index?: number }) {
           </p>
         </Reveal>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
@@ -177,7 +177,7 @@ export function ReviewTeaser({ reviews, index }: { reviews: Review[]; index?: nu
   const schnitt = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
 
   return (
-    <section className="hair-top" aria-labelledby="bewertungen-vorschau">
+    <RevealSection className="hair-top" aria-labelledby="bewertungen-vorschau">
       <div className="shell py-16 md:py-24">
         <SectionHead
           index={index}
@@ -232,7 +232,7 @@ export function ReviewTeaser({ reviews, index }: { reviews: Review[]; index?: nu
           ))}
         </div>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
@@ -241,7 +241,7 @@ export function StudioTeaser({ index }: { index?: number }) {
   const [foto] = STUDIO_PHOTOS;
 
   return (
-    <section className="hair-top" aria-labelledby="studio-vorschau">
+    <RevealSection className="hair-top" aria-labelledby="studio-vorschau">
       <div className="shell py-16 md:py-24">
         <SectionHead
           index={index}
@@ -297,6 +297,6 @@ export function StudioTeaser({ index }: { index?: number }) {
           </Reveal>
         </div>
       </div>
-    </section>
+    </RevealSection>
   );
 }

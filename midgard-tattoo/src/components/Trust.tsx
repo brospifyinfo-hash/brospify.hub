@@ -16,7 +16,7 @@
 
 import { motion, useReducedMotion } from "framer-motion";
 import { TRUST_BADGES, type TrustBadge } from "@/lib/studio";
-import { Reveal } from "./motion";
+import { Reveal, RevealSection } from "./motion";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -84,7 +84,7 @@ export function TrustBadges() {
   const reduced = useReducedMotion();
 
   return (
-    <section className="hair-top" aria-labelledby="vertrauen">
+    <RevealSection className="hair-top" aria-labelledby="vertrauen">
       <div className="shell py-14 md:py-20">
         <Reveal className="mb-9 flex flex-wrap items-baseline gap-x-6 gap-y-2">
           <h2 id="vertrauen" className="eyebrow">
@@ -127,7 +127,7 @@ export function TrustBadges() {
           ))}
         </ul>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 

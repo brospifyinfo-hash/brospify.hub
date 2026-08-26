@@ -12,7 +12,7 @@
 
 import Image from "next/image";
 import { ARTISTS, type Artist } from "@/lib/studio";
-import { Parallax, Reveal } from "./motion";
+import { Parallax, Reveal, RevealSection } from "./motion";
 import { SectionHead } from "./ui";
 
 export function Artists({
@@ -27,7 +27,7 @@ export function Artists({
   lead?: string;
 }) {
   return (
-    <section className="hair-top" aria-labelledby="artists">
+    <RevealSection className="hair-top" aria-labelledby="artists">
       <div className="shell py-16 md:py-24">
         {/* Die Überschrift trägt die Kennung, auf die der Abschnitt
             verweist — sonst zeigt `aria-labelledby` ins Leere und der
@@ -45,7 +45,7 @@ export function Artists({
           ))}
         </div>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 

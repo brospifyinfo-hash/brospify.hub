@@ -12,7 +12,7 @@
 
 import Image from "next/image";
 import { STUDIO, STUDIO_PHOTOS } from "@/lib/studio";
-import { Parallax, Reveal } from "./motion";
+import { Parallax, Reveal, RevealSection } from "./motion";
 
 const [TAG, ABEND] = STUDIO_PHOTOS;
 
@@ -25,7 +25,7 @@ const FACTS = [
 
 export function StudioSection() {
   return (
-    <section id="studio" className="relative scroll-mt-24">
+    <RevealSection id="studio" className="relative scroll-mt-24">
       <div className="shell grid items-center gap-10 py-10 md:py-16 lg:grid-cols-[0.9fr_1.1fr] lg:gap-16">
         <Reveal>
           {/* Geschütztes Leerzeichen vor der Hausnummer: in der sehr
@@ -76,7 +76,7 @@ export function StudioSection() {
           </div>
         </Reveal>
       </div>
-    </section>
+    </RevealSection>
   );
 }
 

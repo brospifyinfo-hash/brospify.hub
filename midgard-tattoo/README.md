@@ -46,6 +46,29 @@ npm run dev                    # → http://localhost:3000
 | Daten | **JSON-Store, Adapter-basiert** | Läuft sofort — lokal als Datei, auf Vercel als Blob. Der Umzug auf Postgres/Supabase ist vorbereitet, siehe unten. |
 | Mails | **Resend** (optional) | Ein `fetch`-Aufruf statt eines SDK. Ohne Konfiguration funktioniert die Buchung trotzdem. |
 
+## Vorschau-Artifact
+
+`preview.html` ist eine klickbare Fassung der ganzen Seite in einer einzigen
+Datei: elf Seiten, alle Bilder und Schriften als Data-URI eingebettet, kein
+einziger Aufruf nach außen. Sie entsteht aus dem echten Server-HTML — es ist
+also dasselbe Markup und dasselbe CSS wie im Betrieb, nur ohne React.
+
+Was darin **wirklich funktioniert**: Navigation zwischen allen Seiten, die
+Hero-Slideshow, der Leuchtkasten der Galerie, die Klapp-Fragen, das
+Buchungsformular bis zum Absenden, der Studio-Login (Passwort `1234`) und im
+Dashboard die vier Reiter **samt Kalender**: Tag wählen, Art und Dauer
+einstellen, Uhrzeit antippen — der Termin erscheint in der Liste, der Tag
+bekommt seinen Punkt, die Kennzahl oben zählt hoch. Vergangene Tage sind
+gesperrt, genau wie in der Anwendung.
+
+Was **nicht** geht: speichern. Es gibt keinen Server hinter der Datei, alles
+lebt bis zum Neuladen im Browser. Der Kalender sagt das auch selbst an. Ebenso
+bleibt die Karte aus — die Sicherheitsregeln des Artifacts lassen keine fremden
+Server zu.
+
+Neu gebaut wird sie aus den Skripten in `/tmp` (`build3.mjs` → `assemble2.mjs`),
+gegengeprüft mit `prevcheck.mjs`.
+
 ## Ins Dashboard kommen
 
 `/admin` aufrufen — lokal `http://localhost:3000/admin`, live
@@ -194,6 +217,19 @@ Blöcke, `Stagger` für Listen, `SplitHeadline` für Überschriften, die wortwei
 aus einer Maske aufsteigen, `Parallax` für Bilder. Animiert werden
 ausschließlich `transform` und `opacity`; `prefers-reduced-motion` schaltet
 jede Bewegung ab und zeigt sofort den Endzustand.
+
+**Einblendungen.** Drei Ebenen, mehr nicht — eine vierte wirkt unruhig:
+
+1. `RevealSection` (`src/components/motion.tsx`) hebt **jeden Abschnitt** beim
+   Hereinscrollen einmal an. `amount: 0.05` löst aus, sobald ein Zwanzigstel
+   sichtbar ist; bei bildschirmhohen Abschnitten käme ein höherer Wert nie
+   zustande und der Abschnitt bliebe unsichtbar.
+2. `Reveal` / `Stagger` lassen die Teile darin nacheinander nachlaufen.
+3. `SplitHeadline` hebt Überschriften Wort für Wort aus einer Maske.
+
+Geprüft ist das an allen zehn öffentlichen Seiten: was beim Laden unterhalb des
+Falzes liegt, steht auf `opacity: 0` und ist nach dem Scrollen sichtbar. Bei
+`prefers-reduced-motion` entfällt jede Bewegung und alles steht sofort da.
 
 **Hero-Slideshow.** Wechselt von selbst alle **7 Sekunden** (`INTERVAL_MS` in
 `src/components/Hero.tsx`), pausiert bei Tab-Wechsel und steht bei reduzierter

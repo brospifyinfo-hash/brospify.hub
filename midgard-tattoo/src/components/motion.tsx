@@ -22,7 +22,7 @@ import {
   useTransform,
   type MotionValue,
 } from "framer-motion";
-import { Fragment, useRef, type ReactNode } from "react";
+import { Fragment, useRef, type CSSProperties, type ReactNode } from "react";
 
 // Eine ruhige, leicht bremsende Kurve — nichts federt oder wippt.
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -36,12 +36,14 @@ export function Reveal({
   delay = 0,
   y = 28,
   className,
+  style,
   as = "div",
 }: {
   children: ReactNode;
   delay?: number;
   y?: number;
   className?: string;
+  style?: CSSProperties;
   as?: "div" | "section" | "li" | "article" | "header" | "figure";
 }) {
   const reduced = useReducedMotion();
@@ -49,6 +51,7 @@ export function Reveal({
   return (
     <Tag
       className={className}
+      style={style}
       initial={reduced ? false : { opacity: 0, y }}
       whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.25, margin: "0px 0px -60px 0px" }}
@@ -87,6 +90,43 @@ export function Parallax({
     <div ref={ref} className={className}>
       <motion.div style={reduced ? undefined : { y }}>{children}</motion.div>
     </div>
+  );
+}
+
+// ─── Abschnitt mit Einblendung ───────────────────────────────────
+// Jeder Abschnitt der Seite hebt sich beim Hereinscrollen einmal an.
+// Bewusst zurückhaltender als `Reveal` (kleinerer Weg, früherer
+// Auslöser): der Abschnitt soll da sein, bevor man ihn liest, und erst
+// darin laufen die einzelnen Teile gestaffelt nach. Zwei Ebenen
+// Bewegung sind genug — eine dritte wirkt unruhig.
+//
+// `amount: 0.05` löst aus, sobald ein Zwanzigstel sichtbar ist. Bei
+// bildschirmhohen Abschnitten käme ein höherer Wert nie zustande, und
+// der Abschnitt bliebe unsichtbar.
+export function RevealSection({
+  children,
+  className,
+  id,
+  "aria-labelledby": labelledBy,
+}: {
+  children: ReactNode;
+  className?: string;
+  id?: string;
+  "aria-labelledby"?: string;
+}) {
+  const reduced = useReducedMotion();
+  return (
+    <motion.section
+      id={id}
+      className={className}
+      aria-labelledby={labelledBy}
+      initial={reduced ? false : { opacity: 0, y: 32 }}
+      whileInView={reduced ? undefined : { opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.05, margin: "0px 0px -80px 0px" }}
+      transition={{ duration: 0.8, ease: EASE }}
+    >
+      {children}
+    </motion.section>
   );
 }
 

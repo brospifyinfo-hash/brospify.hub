@@ -37,6 +37,7 @@ import {
   todayKey,
   type Option,
 } from "@/lib/types";
+import { RevealSection } from "./motion";
 import { SectionHead } from "./ui";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -267,9 +268,9 @@ export function BookingWidget({
 
     if (asHero) return confirmation;
     return (
-      <section id="termin" className="scroll-mt-24">
+      <RevealSection id="termin" className="scroll-mt-24">
         <div className="shell py-20 md:py-28">{confirmation}</div>
-      </section>
+      </RevealSection>
     );
   }
 
@@ -639,7 +640,7 @@ export function BookingWidget({
   if (asHero) return panel;
 
   return (
-    <section id="termin" className="scroll-mt-24 hair-top">
+    <RevealSection id="termin" className="scroll-mt-24 hair-top">
       <div className="shell py-20 md:py-28">
         <SectionHead
           index={index}
@@ -655,7 +656,7 @@ export function BookingWidget({
         />
         {panel}
       </div>
-    </section>
+    </RevealSection>
   );
 }
 
