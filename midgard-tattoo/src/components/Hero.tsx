@@ -35,9 +35,10 @@
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { DisplayImage } from "@/lib/gallery";
 import { STUDIO } from "@/lib/studio";
+import { TrustRow } from "./Trust";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 const INTERVAL_MS = 7000;
@@ -58,11 +59,6 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
   const fade = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
 
   const count = images.length;
-
-  const gehZu = useCallback((next: number) => {
-    setIndex(next);
-    setRunde((r) => r + 1);
-  }, []);
 
   useEffect(() => {
     if (reduced || paused || count < 2) return;
@@ -170,7 +166,7 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
           className="w-full pb-14 pt-32 md:pb-20 lg:py-28 lg:pr-14"
           style={reduced ? undefined : { y: textY }}
         >
-          <div className="mx-auto w-full max-w-[var(--shell-max)] lg:mx-0 lg:max-w-[34rem]">
+          <div className="mx-auto w-full max-w-[var(--shell-max)] lg:mx-0 lg:max-w-[36rem]">
             <motion.div className="mb-6 flex flex-wrap items-center gap-3" {...rise(0.1)}>
               <span className="eyebrow">{STUDIO.zip} {STUDIO.city} · Nürnberger Land</span>
               {openSlots > 0 && (
@@ -210,17 +206,13 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
               </Link>
             </motion.div>
 
-            {count > 1 && (
-              <motion.div {...rise(0.56)}>
-                <SlideControls
-                  images={images}
-                  index={index}
-                  runde={runde}
-                  laufend={!reduced && !paused}
-                  onSelect={gehZu}
-                />
-              </motion.div>
-            )}
+            {/* Hier standen die Vorschaubilder der Schau. Sie sind raus:
+                neben einem bildschirmhohen Motiv sind fünf Briefmarken
+                desselben Motivs kein Gewinn, sondern Lärm. An ihrer
+                Stelle die drei Zusagen, die vor dem ersten Termin
+                zählen — der Platz ganz oben ist zu wertvoll für
+                Navigation, die niemand braucht. */}
+            <TrustRow className="mt-10 border-t pt-8" style={{ borderColor: "var(--ink-hair)" }} />
           </div>
         </motion.div>
 
@@ -305,110 +297,5 @@ function SlidePanel({
         </span>
       </figcaption>
     </figure>
-  );
-}
-
-// ─── Steuerung der Schau ─────────────────────────────────────────
-// Vorschaubilder in einer Größe, in der man das Motiv erkennt — Punkte
-// oder Briefmarken sagen nichts darüber, was als Nächstes kommt. Unter
-// dem aktiven Bild läuft der Balken bis zum nächsten Wechsel ab, genau
-// die Sekunden, die `INTERVAL_MS` vorgibt.
-function SlideControls({
-  images,
-  index,
-  runde,
-  laufend,
-  onSelect,
-}: {
-  images: DisplayImage[];
-  index: number;
-  runde: number;
-  laufend: boolean;
-  onSelect: (next: number) => void;
-}) {
-  const active = images[index];
-
-  return (
-    <div className="mt-10">
-      <ul className="flex items-end gap-2.5 md:gap-3">
-        {images.map((image, i) => {
-          const istAktiv = i === index;
-          return (
-            <li key={image.id}>
-              <button
-                type="button"
-                onClick={() => onSelect(i)}
-                aria-label={`Bild ${i + 1} von ${images.length}: ${image.title}`}
-                aria-current={istAktiv}
-                className="group block"
-              >
-                {/* Breite über Klassen statt Inline-Stil: auf dem Handy
-                    müssen alle Vorschaubilder nebeneinander in eine Zeile
-                    passen, sonst bricht die letzte allein um. */}
-                <span
-                  className={`relative block overflow-hidden transition-all duration-500 ${
-                    istAktiv ? "w-[4.25rem] md:w-[6rem]" : "w-[3.5rem] md:w-[4.75rem]"
-                  }`}
-                  style={{
-                    aspectRatio: "4 / 5",
-                    border: `1px solid ${istAktiv ? "var(--signal)" : "var(--ink-hair-strong)"}`,
-                    opacity: istAktiv ? 1 : 0.6,
-                  }}
-                >
-                  <Image
-                    src={image.src}
-                    alt=""
-                    fill
-                    placeholder="blur"
-                    blurDataURL={image.blur}
-                    sizes="96px"
-                    className="object-cover transition-transform duration-700 group-hover:scale-110"
-                    style={{ objectPosition: image.focal }}
-                  />
-                </span>
-
-                {/* Ablaufbalken: nur unter dem aktiven Bild, und nur
-                    solange die Schau wirklich läuft. Steht sie still
-                    (reduzierte Bewegung, Tab im Hintergrund), bleibt der
-                    Balken voll — eine ablaufende Anzeige ohne Ablauf
-                    wäre gelogen. */}
-                <span
-                  aria-hidden
-                  className={`mt-2 block h-[3px] overflow-hidden transition-all duration-500 ${
-                    istAktiv ? "w-[4.25rem] md:w-[6rem]" : "w-[3.5rem] md:w-[4.75rem]"
-                  }`}
-                  style={{ background: "var(--ink-hair-strong)" }}
-                >
-                  {istAktiv && (
-                    <motion.span
-                      key={runde}
-                      className="block h-full origin-left"
-                      style={{ background: "var(--signal)" }}
-                      initial={{ scaleX: laufend ? 0 : 1 }}
-                      animate={{ scaleX: 1 }}
-                      transition={
-                        laufend
-                          ? { duration: INTERVAL_MS / 1000, ease: "linear" }
-                          : { duration: 0 }
-                      }
-                    />
-                  )}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-
-      {/* Auf dem Handy steht der Titel hier, weil es dort keinen Rahmen
-          mit Bildunterschrift gibt. */}
-      <span className="mt-4 flex items-baseline gap-3 text-[0.7rem] uppercase tracking-[0.16em]">
-        <span className="display tabular-nums" style={{ color: "var(--signal)" }}>
-          {String(index + 1).padStart(2, "0")}
-        </span>
-        <span style={{ color: "var(--bone-dim)" }}>/ {String(images.length).padStart(2, "0")}</span>
-        <span className="lg:hidden" style={{ color: "var(--bone-soft)" }}>{active?.title}</span>
-      </span>
-    </div>
   );
 }

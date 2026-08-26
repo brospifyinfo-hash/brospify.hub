@@ -23,10 +23,10 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 // ─── Piktogramme ─────────────────────────────────────────────────
 // `currentColor` und einheitliche Strichstärke — dadurch wirken sie
 // wie aus einem Guss, obwohl jedes einzeln gezeichnet ist.
-function Icon({ name }: { name: TrustBadge["icon"] }) {
+export function TrustIcon({ name, size = 26 }: { name: TrustBadge["icon"]; size?: number }) {
   const common = {
-    width: 26,
-    height: 26,
+    width: size,
+    height: size,
     viewBox: "0 0 24 24",
     fill: "none",
     stroke: "currentColor",
@@ -117,7 +117,7 @@ export function TrustBadges() {
                 className="transition-colors duration-500 group-hover:text-[var(--signal)]"
                 style={{ color: "var(--bone-soft)" }}
               >
-                <Icon name={badge.icon} />
+                <TrustIcon name={badge.icon} />
               </span>
               <span className="display text-[1.05rem] leading-tight">{badge.title}</span>
               <span className="text-[0.82rem] leading-relaxed" style={{ color: "var(--bone-soft)" }}>
@@ -128,5 +128,46 @@ export function TrustBadges() {
         </ul>
       </div>
     </section>
+  );
+}
+
+// ─── Kompakte Zeile ──────────────────────────────────────────────
+// Für den Hero: drei kurze Zusagen statt einer Bilderleiste. Wer ganz
+// oben auf der Seite landet, entscheidet in wenigen Sekunden, ob er hier
+// bleibt — und dafür zählt „steril, eigener Entwurf, Beratung kostet
+// nichts" mehr als fünf Briefmarken der Motive, die daneben ohnehin
+// bildschirmhoch zu sehen sind.
+export function TrustRow({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const reduced = useReducedMotion();
+  const picks = TRUST_BADGES.filter((b) => b.inHero);
+
+  return (
+    <ul className={`grid grid-cols-1 gap-y-3 sm:grid-cols-3 sm:gap-x-4 ${className ?? ""}`} style={style}>
+      {picks.map((badge, i) => (
+        <motion.li
+          key={badge.title}
+          className="flex items-center gap-2 whitespace-nowrap"
+          initial={reduced ? false : { opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.7, delay: 0.62 + i * 0.08, ease: EASE }}
+        >
+          <span style={{ color: "var(--signal)" }}>
+            <TrustIcon name={badge.icon} size={17} />
+          </span>
+          <span
+            className="text-[0.66rem] uppercase tracking-[0.13em] md:text-[0.72rem]"
+            style={{ color: "var(--bone-soft)" }}
+          >
+            {badge.heroTitle ?? badge.title}
+          </span>
+        </motion.li>
+      ))}
+    </ul>
   );
 }

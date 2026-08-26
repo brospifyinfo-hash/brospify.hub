@@ -196,11 +196,15 @@ ausschließlich `transform` und `opacity`; `prefers-reduced-motion` schaltet
 jede Bewegung ab und zeigt sofort den Endzustand.
 
 **Hero-Slideshow.** Wechselt von selbst alle **7 Sekunden** (`INTERVAL_MS` in
-`src/components/Hero.tsx`). Unter dem aktiven Vorschaubild läuft ein Balken
-genau diese Zeit ab, damit sichtbar ist, wann der nächste Wechsel kommt. Die
-Schau pausiert, sobald der Tab in den Hintergrund geht, und steht bei
-reduzierter Bewegung ganz still — dann bleibt der Balken voll, statt einen
-Ablauf vorzutäuschen, den es nicht gibt.
+`src/components/Hero.tsx`), pausiert bei Tab-Wechsel und steht bei reduzierter
+Bewegung ganz still.
+
+Es gibt **bewusst keine Vorschaubilder und keine Punkte** zum Weiterklicken.
+Neben einem bildschirmhohen Motiv sind fünf Briefmarken desselben Motivs kein
+Gewinn, sondern Lärm — und der Platz ganz oben ist zu wertvoll für Navigation,
+die niemand braucht. An ihrer Stelle stehen drei Zusagen aus `TRUST_BADGES`
+(`inHero: true`, Kurzform über `heroTitle`): Einwegnadeln, eigener Entwurf,
+Beratung gratis. Ab 768 px in einer Zeile, darunter gestapelt.
 
 Das Motiv liegt auf breiten Schirmen **nicht** als Hintergrund hinter dem Text.
 Tattoo-Aufnahmen sind hochkant; ein 16:9-Ausschnitt schneidet zwei Drittel weg,
@@ -223,6 +227,11 @@ Welche Motive laufen und in welcher Reihenfolge, steuern `inHero` und
 `heroOrder` in `GALLERY` (`src/lib/studio.ts`); `focal` setzt den
 Bildausschnitt. Sobald der Inhaber eigene Bilder mit dem Haken „Im Hero zeigen"
 hochlädt, gilt ausschließlich seine Auswahl.
+
+Weil die Schau ohne Bedienelemente läuft, nennt die Bildunterschrift auf der
+Fläche immer Titel, Stil und Körperstelle des gerade sichtbaren Motivs — das
+`alt` des Bildes wechselt mit. Wer alle Arbeiten sehen will, geht auf
+`/galerie`; dort steht jedes Motiv groß und dauerhaft.
 
 **Galeriegröße.** Die Masonry-Spalten stehen auf 1 (Handy) / 2 (ab 640 px) /
 3 (ab 1280 px) — siehe `.masonry` in `src/app/globals.css`. Vier Spalten

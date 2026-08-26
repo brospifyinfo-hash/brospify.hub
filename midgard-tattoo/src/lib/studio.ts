@@ -333,6 +333,13 @@ export interface TrustBadge {
   body: string;
   /** Piktogramm-Kennung, siehe src/components/Trust.tsx. */
   icon: "needle" | "shield" | "pencil" | "chat" | "id";
+  /** Steht zusätzlich im Hero. Dort ist nur Platz für drei kurze
+   *  Zusagen — die vollständige Liste bleibt weiter unten auf der
+   *  Startseite. */
+  inHero?: boolean;
+  /** Kürzere Fassung für den Hero, wo die drei Zusagen in eine Zeile
+   *  müssen. Ohne Angabe gilt `title`. */
+  heroTitle?: string;
 }
 
 export const TRUST_BADGES: TrustBadge[] = [
@@ -340,6 +347,7 @@ export const TRUST_BADGES: TrustBadge[] = [
     title: "Einwegnadeln",
     body: "Jede Nadel und jede Kartusche kommt steril verpackt und wird nach der Sitzung entsorgt. Nichts wird zweimal benutzt.",
     icon: "needle",
+    inHero: true,
   },
   {
     title: "Saubere Arbeitsfläche",
@@ -350,11 +358,14 @@ export const TRUST_BADGES: TrustBadge[] = [
     title: "Eigener Entwurf",
     body: "Dein Motiv wird für dich gezeichnet — keine Vorlage von der Wand, die schon zehn andere tragen.",
     icon: "pencil",
+    inHero: true,
   },
   {
     title: "Kostenlose Beratung",
     body: "Das Vorgespräch kostet nichts und verpflichtet zu nichts. Auch wenn am Ende kein Termin daraus wird.",
     icon: "chat",
+    inHero: true,
+    heroTitle: "Beratung gratis",
   },
   {
     title: "Ab 18, mit Ausweis",
