@@ -6,7 +6,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { isStudioAdmin } from "@/lib/auth";
-import { addReview, deleteReview, readData, updateReview } from "@/lib/store";
+import { addReview, deleteExampleReviews, deleteReview, readData, updateReview } from "@/lib/store";
+import { EXAMPLE_REVIEWS } from "@/lib/example-reviews";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,25 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "Ungültige Anfrage." }, { status: 400 });
+
+  // Platzhalter zum Befüllen der Seite. Bereits vorhandene Beispiele
+  // werden vorher entfernt, damit mehrfaches Klicken sie nicht stapelt.
+  if (body.seedExamples === true) {
+    await deleteExampleReviews();
+    const heute = Date.now();
+    for (const beispiel of EXAMPLE_REVIEWS) {
+      await addReview({
+        name: beispiel.name,
+        rating: beispiel.rating,
+        text: beispiel.text,
+        date: new Date(heute - beispiel.daysAgo * 864e5).toISOString().slice(0, 10),
+        source: beispiel.source,
+        published: true,
+        isExample: true,
+      });
+    }
+    return NextResponse.json({ seeded: EXAMPLE_REVIEWS.length });
+  }
 
   const name = text(body.name, 60);
   const reviewText = text(body.text, 1500);
@@ -95,6 +115,12 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const denied = await guard();
   if (denied) return denied;
+
+  if (req.nextUrl.searchParams.get("examples") === "true") {
+    const removed = await deleteExampleReviews();
+    return NextResponse.json({ removed });
+  }
+
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "Bewertung fehlt." }, { status: 400 });
   const ok = await deleteReview(id);

@@ -19,10 +19,12 @@ export default async function BewertungenPage() {
     ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
     : 0;
 
-  // Structured Data nur, wenn es wirklich Bewertungen gibt. Eine
-  // AggregateRating ohne Grundlage ist eine Falschangabe gegenüber
-  // Google — und fliegt früher oder später auf.
-  const jsonLd = reviews.length
+  // Structured Data nur, wenn es echte Bewertungen gibt und KEINE
+  // Platzhalter dabei sind. Eine Durchschnittsnote aus erfundenen
+  // Stimmen wäre eine Falschangabe gegenüber Google — und fliegt früher
+  // oder später auf.
+  const nurEcht = reviews.length > 0 && reviews.every((r) => !r.isExample);
+  const jsonLd = nurEcht
     ? {
         "@context": "https://schema.org",
         "@type": "TattooParlor",
@@ -64,7 +66,7 @@ export default async function BewertungenPage() {
         eyebrow="Bewertungen"
         title="Was Kunden sagen"
         lead={
-          reviews.length
+          nurEcht
             ? `${reviews.length} ${reviews.length === 1 ? "Bewertung" : "Bewertungen"} · Durchschnitt ${schnitt.toFixed(1)} von 5`
             : undefined
         }

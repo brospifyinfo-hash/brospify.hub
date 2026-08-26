@@ -141,6 +141,11 @@ export interface Review {
   source?: string;
   /** Nicht veröffentlichte Bewertungen bleiben im Dashboard sichtbar. */
   published: boolean;
+  /** Platzhalter zum Befüllen der Seite. Wird überall sichtbar als
+   *  solcher gekennzeichnet und lässt sich im Dashboard mit einem Klick
+   *  komplett entfernen — damit erfundene Kundenstimmen niemals
+   *  unbemerkt als echte durchgehen. */
+  isExample?: boolean;
   createdAt: string;
 }
 

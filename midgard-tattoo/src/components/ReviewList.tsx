@@ -38,9 +38,34 @@ export function ReviewList({ reviews }: { reviews: Review[] }) {
     );
   }
 
+  const beispiele = reviews.filter((r) => r.isExample).length;
+
   return (
     <section>
       <div className="shell py-8 md:py-12">
+        {/* Solange Platzhalter dabei sind, sagt die Seite das deutlich.
+            Erfundene Kundenstimmen dürfen nicht als echte durchgehen —
+            der Hinweis verschwindet, sobald die Beispiele gelöscht sind. */}
+        {beispiele > 0 && (
+          <Reveal className="mb-6">
+            <p
+              className="rounded p-4 text-sm leading-relaxed"
+              style={{
+                background: "rgba(255,210,0,0.06)",
+                border: "1px solid rgba(255,210,0,0.35)",
+                color: "var(--bone)",
+              }}
+            >
+              <strong style={{ color: "var(--signal)" }}>Beispieldaten:</strong>{" "}
+              {beispiele === reviews.length
+                ? "Diese Bewertungen sind Platzhalter, um die Seite im Aufbau zu zeigen."
+                : `${beispiele} der ${reviews.length} Bewertungen sind Platzhalter.`}{" "}
+              Sie stammen nicht von echten Kundinnen und Kunden und werden ersetzt,
+              sobald echte Rückmeldungen eingetragen sind.
+            </p>
+          </Reveal>
+        )}
+
         {/* Masonry-Spalten: Bewertungen sind unterschiedlich lang, ein
             starres Raster würde überall Löcher lassen. */}
         <div className="masonry-reviews">
@@ -49,7 +74,15 @@ export function ReviewList({ reviews }: { reviews: Review[] }) {
               <figure className="card p-6">
                 <div className="flex items-center justify-between gap-4">
                   <Stars rating={review.rating} />
-                  <span className="text-xs" style={{ color: "var(--bone-dim)" }}>
+                  <span className="flex items-center gap-2 text-xs" style={{ color: "var(--bone-dim)" }}>
+                    {review.isExample && (
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[0.6rem] uppercase tracking-[0.1em]"
+                        style={{ background: "rgba(255,210,0,0.12)", color: "var(--signal)" }}
+                      >
+                        Beispiel
+                      </span>
+                    )}
                     {formatDateShortDe(review.date)}
                   </span>
                 </div>

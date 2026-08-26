@@ -358,6 +358,15 @@ export async function updateReview(
   });
 }
 
+/** Entfernt alle Platzhalter auf einmal. Echte Bewertungen bleiben. */
+export async function deleteExampleReviews(): Promise<number> {
+  return mutate((data) => {
+    const before = data.reviews.length;
+    data.reviews = data.reviews.filter((r) => !r.isExample);
+    return before - data.reviews.length;
+  });
+}
+
 export async function deleteReview(id: string): Promise<boolean> {
   return mutate((data) => {
     const before = data.reviews.length;

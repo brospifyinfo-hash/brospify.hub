@@ -149,7 +149,17 @@ export function ReviewTeaser({ reviews }: { reviews: Review[] }) {
         {picks.map((review, i) => (
           <Reveal key={review.id} delay={i * 0.08}>
             <figure className="card h-full p-6">
-              <Stars rating={review.rating} />
+              <div className="flex items-center justify-between gap-3">
+                <Stars rating={review.rating} />
+                {review.isExample && (
+                  <span
+                    className="rounded-full px-2 py-0.5 text-[0.6rem] uppercase tracking-[0.1em]"
+                    style={{ background: "rgba(255,210,0,0.12)", color: "var(--signal)" }}
+                  >
+                    Beispiel
+                  </span>
+                )}
+              </div>
               <blockquote className="mt-4 text-[0.98rem] leading-relaxed" style={{ color: "var(--bone-soft)" }}>
                 &bdquo;{review.text}&ldquo;
               </blockquote>

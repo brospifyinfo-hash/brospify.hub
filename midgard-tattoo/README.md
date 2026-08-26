@@ -86,9 +86,28 @@ eingetragen ist, zeigt `/bewertungen` einen Hinweis statt einer leeren
 Liste, und der Anreißer auf der Startseite bleibt weg.
 
 Der Schalter *Auf der Website sichtbar* erlaubt, eine Bewertung
-vorzubereiten oder zurückzuziehen, ohne sie zu verlieren. Die
-Structured Data (`AggregateRating`) entsteht nur, wenn es wirklich
-Bewertungen gibt.
+vorzubereiten oder zurückzuziehen, ohne sie zu verlieren.
+
+### Beispiel-Bewertungen
+
+Unten im Formular gibt es **Beispiele einfügen** — fünf Platzhalter, um
+die Seite gefüllt zu sehen. Sie sind an drei Stellen als solche
+erkennbar, damit sie nicht versehentlich als echte Kundenstimmen
+durchgehen:
+
+* auf `/bewertungen` ein deutlich sichtbarer Hinweis über der Liste,
+* auf jeder Karte ein Etikett „Beispiel" (auch im Anreißer der Startseite),
+* im Dashboard ein Hinweis samt Knopf **Beispiele entfernen**.
+
+Solange auch nur ein Platzhalter dabei ist, wird die
+Bewertungs-Auszeichnung für Google (`AggregateRating`) **nicht** erzeugt
+und der Durchschnitt nicht angezeigt — eine erfundene Note im
+Suchergebnis wäre eine Falschangabe. Sobald nur noch echte Bewertungen
+übrig sind, erscheint beides automatisch.
+
+**Vor dem Live-Gang entfernen.** Erfundene Bewertungen auf einer echten
+Studio-Website sind irreführende Werbung und abmahnfähig — ein Klick auf
+*Beispiele entfernen* genügt.
 
 ## Karte
 
@@ -228,7 +247,9 @@ auf den betroffenen Seiten sichtbar markiert:
 3. **Preise** (`PRICE_ROWS` in `src/lib/content.ts`) sind Platzhalter in
    marktüblicher Größenordnung. Falsche Preise auf einer Website landen
    direkt als Ärger am Empfang.
-4. **Impressum und Datenschutz** (`IMPRINT_FIELDS`, `PRIVACY_SECTIONS` in
+4. **Beispiel-Bewertungen**, falls eingefügt — im Dashboard unter
+   *Bewertungen* mit einem Klick entfernen.
+5. **Impressum und Datenschutz** (`IMPRINT_FIELDS`, `PRIVACY_SECTIONS` in
    `src/lib/content.ts`) sind ein ausgefülltes Gerüst, keine
    Rechtsberatung. Alle offenen Stellen stehen in eckigen Klammern und
    werden auf den Seiten selbst als Hinweis angezeigt, solange sie leer

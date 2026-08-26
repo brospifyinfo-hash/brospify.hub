@@ -30,6 +30,7 @@ export function ReviewManager({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const anzahlBeispiele = reviews.filter((r) => r.isExample).length;
 
   useEffect(() => {
     if (!note) return;
@@ -76,6 +77,30 @@ export function ReviewManager({
       });
       if (!res.ok) { setNote("Änderung fehlgeschlagen."); return; }
       await onChanged();
+    } catch {
+      setNote("Keine Verbindung zum Server.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Fügt die Platzhalter ein oder wirft sie wieder raus. */
+  async function beispiele(aktion: "einfuegen" | "entfernen") {
+    if (aktion === "entfernen" && !window.confirm("Alle Beispiel-Bewertungen entfernen?")) return;
+    setBusy(true);
+    try {
+      const res = aktion === "einfuegen"
+        ? await fetch("/api/admin/reviews", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ seedExamples: true }),
+          })
+        : await fetch("/api/admin/reviews?examples=true", { method: "DELETE" });
+      if (!res.ok) { setNote("Das hat nicht geklappt."); return; }
+      await onChanged();
+      setNote(aktion === "einfuegen"
+        ? "Beispiele eingefügt — sie sind auf der Website als Platzhalter gekennzeichnet."
+        : "Beispiele entfernt.");
     } catch {
       setNote("Keine Verbindung zum Server.");
     } finally {
@@ -176,6 +201,46 @@ export function ReviewManager({
           {busy ? "Moment …" : "Eintragen"}
         </button>
 
+        {/* Platzhalter, um die Seite gefüllt zu sehen. Sie sind auf der
+            Website als Beispiel gekennzeichnet und dürfen so nicht live
+            bleiben — der Knopf zum Entfernen steht direkt daneben. */}
+        <div className="mt-6 pt-5" style={{ borderTop: "1px solid var(--ink-hair)" }}>
+          <p className="eyebrow mb-2">Beispiele</p>
+          {anzahlBeispiele > 0 ? (
+            <>
+              <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--signal)" }}>
+                {anzahlBeispiele} Platzhalter aktiv. Auf der Website steht dazu ein
+                deutlicher Hinweis, und die Bewertungs-Auszeichnung für Google bleibt
+                aus. Vor dem Live-Gang entfernen.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void beispiele("entfernen")}
+                className="btn btn-ghost h-11 w-full text-[0.7rem]"
+                style={{ borderColor: "rgba(226,86,74,0.4)", color: "var(--danger)" }}
+              >
+                Beispiele entfernen
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="mb-3 text-xs leading-relaxed" style={{ color: "var(--bone-dim)" }}>
+                Zum Anschauen, wie die Seite gefüllt wirkt. Die Einträge werden überall
+                sichtbar als Beispiel gekennzeichnet.
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void beispiele("einfuegen")}
+                className="btn btn-ghost h-11 w-full text-[0.7rem]"
+              >
+                Beispiele einfügen
+              </button>
+            </>
+          )}
+        </div>
+
         <AnimatePresence>
           {note && (
             <motion.p
@@ -218,7 +283,15 @@ export function ReviewManager({
                       <Stars rating={review.rating} />
                       <span className="text-sm font-medium">{review.name}</span>
                     </span>
-                    <span className="text-xs" style={{ color: "var(--bone-dim)" }}>
+                    <span className="flex items-center gap-2 text-xs" style={{ color: "var(--bone-dim)" }}>
+                      {review.isExample && (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[0.6rem] uppercase tracking-[0.1em]"
+                          style={{ background: "rgba(255,210,0,0.12)", color: "var(--signal)" }}
+                        >
+                          Beispiel
+                        </span>
+                      )}
                       {review.date}
                       {review.source && ` · ${review.source}`}
                     </span>
