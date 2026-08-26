@@ -8,10 +8,18 @@
 // Die tragende Entscheidung: das Motiv liegt auf breiten Schirmen NICHT
 // als Hintergrund hinter dem Text. Tattoo-Aufnahmen sind hochkant, ein
 // 16:9-Ausschnitt schneidet davon zwei Drittel weg — vom Löwen bleibt
-// ein Auge übrig, und die beste Arbeit sieht aus wie eine Textur. Statt
-// dessen steht das Bild rechts in einem eigenen Rahmen, groß und
-// vollständig. Den Hintergrund macht dieselbe Aufnahme als 12-px-Version
-// aus dem Blur-Platzhalter, weich hochskaliert: kostet keinen einzigen
+// ein Auge übrig, und die beste Arbeit sieht aus wie eine Textur.
+//
+// Stattdessen ist der Hero geteilt: links der Text, rechts eine Fläche
+// über die volle Höhe des Bildschirms, die bis an den rechten Rand
+// läuft. Sie ist rund 46 % breit und 100 svh hoch — ein Verhältnis von
+// etwa 3:4, also praktisch das der Aufnahmen selbst. Das Bild wird damit
+// so groß wie irgend möglich gezeigt UND fast nichts davon
+// weggeschnitten. Der Text sitzt trotzdem exakt auf der Rasterkante der
+// übrigen Seite; dafür sorgt `.shell-left`.
+//
+// Den Grund hinter allem macht dieselbe Aufnahme als 12-px-Version aus
+// dem Blur-Platzhalter, weich hochskaliert: kostet keinen einzigen
 // zusätzlichen Ladevorgang und gibt der Fläche die Farbe des Motivs.
 //
 // Auf dem Handy ist der Bildschirm selbst hochkant — dort passt die
@@ -157,12 +165,12 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
       </motion.div>
 
       {/* ── Inhalt ── */}
-      <motion.div
-        className="shell relative z-10 pb-14 pt-32 md:pb-20 lg:py-28"
-        style={reduced ? undefined : { y: textY }}
-      >
-        <div className="grid items-center gap-12 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
-          <div>
+      <div className="shell-left relative z-10 grid min-h-[100svh] items-center pr-5 lg:grid-cols-[1fr_46%] lg:pr-0">
+        <motion.div
+          className="w-full pb-14 pt-32 md:pb-20 lg:py-28 lg:pr-14"
+          style={reduced ? undefined : { y: textY }}
+        >
+          <div className="mx-auto w-full max-w-[var(--shell-max)] lg:mx-0 lg:max-w-[34rem]">
             <motion.div className="mb-6 flex flex-wrap items-center gap-3" {...rise(0.1)}>
               <span className="eyebrow">{STUDIO.zip} {STUDIO.city} · Nürnberger Land</span>
               {openSlots > 0 && (
@@ -184,7 +192,7 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
             </h1>
 
             <motion.p
-              className="mt-7 max-w-[46ch] text-[1.02rem] leading-relaxed md:text-[1.1rem]"
+              className="mt-7 max-w-[44ch] text-[1.02rem] leading-relaxed md:text-[1.1rem]"
               style={{ color: "var(--bone-soft)" }}
               {...rise(0.38)}
             >
@@ -214,24 +222,15 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
               </motion.div>
             )}
           </div>
+        </motion.div>
 
-          {/* ── Das Motiv, groß und vollständig ── */}
-          {active && (
-            <motion.div
-              className="hidden lg:block"
-              initial={reduced ? false : { opacity: 0, y: 40 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 1, delay: 0.3, ease: EASE }}
-            >
-              <SlideFrame image={active} runde={runde} reduced={Boolean(reduced)} />
-            </motion.div>
-          )}
-        </div>
-      </motion.div>
+        {/* ── Das Motiv, bildschirmhoch ── */}
+        {active && <SlidePanel image={active} runde={runde} reduced={Boolean(reduced)} />}
+      </div>
 
       <motion.div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-5 z-10 hidden justify-center md:flex"
+        className="pointer-events-none absolute bottom-5 left-0 right-0 z-10 hidden justify-center md:flex lg:right-[46%]"
         style={reduced ? undefined : { opacity: fade }}
       >
         <span className="flex flex-col items-center gap-2 text-[0.62rem] uppercase tracking-[0.24em]" style={{ color: "var(--bone-dim)" }}>
@@ -243,11 +242,11 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
   );
 }
 
-// ─── Der Bildrahmen ──────────────────────────────────────────────
-// Feste Proportion, damit beim Wechsel nichts springt — aber hochkant,
-// also nah an dem, was die Kamera aufgenommen hat. Der Beschnitt bleibt
-// dadurch klein, und `focal` entscheidet, welcher Rest wegfällt.
-function SlideFrame({
+// ─── Die Bildfläche ──────────────────────────────────────────────
+// Volle Höhe, bis an den rechten Rand. Der Ausschnitt ist damit rund
+// 3:4 — praktisch das Format, in dem die Aufnahmen gemacht wurden, also
+// bleibt fast alles stehen. `focal` entscheidet, welcher Rest wegfällt.
+function SlidePanel({
   image,
   runde,
   reduced,
@@ -257,40 +256,51 @@ function SlideFrame({
   reduced: boolean;
 }) {
   return (
-    <figure
-      className="relative ml-auto w-full max-w-[30rem] overflow-hidden"
-      style={{ border: "1px solid var(--ink-hair-strong)", background: "var(--ink-raise)" }}
-    >
-      <span className="relative block aspect-[4/5] overflow-hidden">
-        <AnimatePresence initial={false}>
-          <motion.span
-            key={`${image.id}-${runde}`}
-            className="absolute inset-0"
-            initial={reduced ? false : { opacity: 0, scale: 1.06 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ opacity: { duration: 1 }, scale: { duration: 8, ease: "linear" } }}
-          >
-            <Image
-              src={image.src}
-              alt={image.alt}
-              fill
-              placeholder="blur"
-              blurDataURL={image.blur}
-              sizes="(max-width: 1023px) 0px, 30rem"
-              className="object-cover"
-              style={{ objectPosition: image.focal }}
-            />
-          </motion.span>
-        </AnimatePresence>
-      </span>
+    <figure className="relative hidden self-stretch overflow-hidden lg:block">
+      <AnimatePresence initial={false}>
+        <motion.div
+          key={`${image.id}-${runde}`}
+          className="absolute inset-0"
+          initial={reduced ? false : { opacity: 0, scale: 1.05 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ opacity: { duration: 1.2 }, scale: { duration: 9, ease: "linear" } }}
+        >
+          <Image
+            src={image.src}
+            alt={image.alt}
+            fill
+            priority
+            placeholder="blur"
+            blurDataURL={image.blur}
+            sizes="(max-width: 1023px) 0px, 46vw"
+            className="object-cover"
+            style={{ objectPosition: image.focal }}
+          />
+        </motion.div>
+      </AnimatePresence>
 
-      <figcaption
-        className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3"
-        style={{ borderTop: "1px solid var(--ink-hair)" }}
-      >
-        <span className="display text-[1.05rem] leading-none">{image.title}</span>
-        <span className="text-[0.66rem] uppercase tracking-[0.14em]" style={{ color: "var(--bone-dim)" }}>
+      {/* Weiche linke Kante: ohne sie klebt die Fläche wie ein
+          aufgeklebtes Rechteck neben dem Text. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{ background: "linear-gradient(to right, var(--ink) 0%, rgba(11,11,12,0.35) 12%, transparent 30%)" }}
+      />
+      {/* Oben abdunkeln, damit die Navigation über dem Bild lesbar
+          bleibt; unten, damit es die Bildunterschrift trägt. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background:
+            "linear-gradient(to bottom, rgba(11,11,12,0.62) 0%, transparent 16%, transparent 62%, rgba(8,8,9,0.9) 100%)",
+        }}
+      />
+
+      <figcaption className="absolute inset-x-0 bottom-0 flex flex-wrap items-baseline justify-between gap-x-5 gap-y-1 px-8 pb-10 xl:px-10">
+        <span className="display text-[1.4rem] leading-none xl:text-[1.7rem]">{image.title}</span>
+        <span className="text-[0.68rem] uppercase tracking-[0.16em]" style={{ color: "var(--bone-soft)" }}>
           {image.style} · {image.placement}
         </span>
       </figcaption>
@@ -337,7 +347,7 @@ function SlideControls({
                     passen, sonst bricht die letzte allein um. */}
                 <span
                   className={`relative block overflow-hidden transition-all duration-500 ${
-                    istAktiv ? "w-[4.25rem] md:w-[5.5rem]" : "w-[3.5rem] md:w-[4.25rem]"
+                    istAktiv ? "w-[4.25rem] md:w-[6rem]" : "w-[3.5rem] md:w-[4.75rem]"
                   }`}
                   style={{
                     aspectRatio: "4 / 5",
@@ -351,7 +361,7 @@ function SlideControls({
                     fill
                     placeholder="blur"
                     blurDataURL={image.blur}
-                    sizes="88px"
+                    sizes="96px"
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                     style={{ objectPosition: image.focal }}
                   />
@@ -365,7 +375,7 @@ function SlideControls({
                 <span
                   aria-hidden
                   className={`mt-2 block h-[3px] overflow-hidden transition-all duration-500 ${
-                    istAktiv ? "w-[4.25rem] md:w-[5.5rem]" : "w-[3.5rem] md:w-[4.25rem]"
+                    istAktiv ? "w-[4.25rem] md:w-[6rem]" : "w-[3.5rem] md:w-[4.75rem]"
                   }`}
                   style={{ background: "var(--ink-hair-strong)" }}
                 >
@@ -392,12 +402,12 @@ function SlideControls({
 
       {/* Auf dem Handy steht der Titel hier, weil es dort keinen Rahmen
           mit Bildunterschrift gibt. */}
-      <span className="mt-4 flex items-baseline gap-3 text-[0.7rem] uppercase tracking-[0.16em] lg:hidden">
+      <span className="mt-4 flex items-baseline gap-3 text-[0.7rem] uppercase tracking-[0.16em]">
         <span className="display tabular-nums" style={{ color: "var(--signal)" }}>
           {String(index + 1).padStart(2, "0")}
         </span>
         <span style={{ color: "var(--bone-dim)" }}>/ {String(images.length).padStart(2, "0")}</span>
-        <span style={{ color: "var(--bone-soft)" }}>{active?.title}</span>
+        <span className="lg:hidden" style={{ color: "var(--bone-soft)" }}>{active?.title}</span>
       </span>
     </div>
   );

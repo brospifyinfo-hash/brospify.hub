@@ -37,7 +37,8 @@
   --danger: #e2564a;
   --ok: #6fbf7a;
 
-  --shell: min(1240px, 100% - 2.5rem);
+  --shell-max: 1240px;
+  --shell: min(var(--shell-max), 100% - 2.5rem);
   --radius: 4px;
 }
 
@@ -108,6 +109,18 @@ select {
 .shell {
   width: var(--shell);
   margin-inline: auto;
+}
+
+/* Geteilter Bereich: links beginnt der Inhalt exakt dort, wo er auch in
+   `.shell` beganne — rechts läuft er bis an den Bildschirmrand, statt im
+   Raster steckenzubleiben.
+   Die Klasse gehört auf den UMGEBENDEN Kasten, nicht auf die linke
+   Spalte: `100%` muss die volle Breite meinen. Auf der Spalte gerechnet
+   käme immer nur das Minimum heraus, und der Text klebte am Rand.
+   Bewusst `100%` und nicht `100vw` — `100vw` zählt die Scrollleiste mit
+   und läge um deren Breite neben `.shell`. */
+.shell-left {
+  padding-left: max(1.25rem, calc((100% - var(--shell-max)) / 2));
 }
 
 .hair-top { border-top: 1px solid var(--ink-hair); }

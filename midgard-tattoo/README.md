@@ -204,12 +204,20 @@ Ablauf vorzutäuschen, den es nicht gibt.
 
 Das Motiv liegt auf breiten Schirmen **nicht** als Hintergrund hinter dem Text.
 Tattoo-Aufnahmen sind hochkant; ein 16:9-Ausschnitt schneidet zwei Drittel weg,
-und vom Löwen bleibt ein Auge übrig. Stattdessen steht das Bild rechts in einem
-eigenen Rahmen (4:5, mit Titel, Stil und Körperstelle), und den Hintergrund
-macht dieselbe Aufnahme als 12-px-Version aus dem Blur-Platzhalter, weich
-hochskaliert: kein zusätzlicher Ladevorgang, aber die Farbe des Motivs auf der
-ganzen Fläche. Auf dem Handy ist der Bildschirm selbst hochkant — dort läuft
-die Aufnahme wie gehabt bildschirmfüllend hinter dem Text.
+und vom Löwen bleibt ein Auge übrig. Der Hero ist deshalb geteilt: links der
+Text, rechts eine Fläche über die **volle Höhe des Bildschirms**, die bis an den
+rechten Rand läuft — rund 46 % breit und 100 svh hoch, also etwa 3:4 und damit
+praktisch das Format der Aufnahmen selbst. Das Bild wird so groß wie irgend
+möglich gezeigt und trotzdem kaum beschnitten (462×950 px bei 1024er Breite,
+727×950 px bei 1920). Der Text sitzt dabei exakt auf der Rasterkante der übrigen
+Seite; dafür sorgt `.shell-left` in `globals.css` — die Klasse gehört auf den
+umgebenden Kasten, nicht auf die linke Spalte, sonst rechnet `100%` mit der
+falschen Breite.
+
+Den Grund hinter allem macht dieselbe Aufnahme als 12-px-Version aus dem
+Blur-Platzhalter, weich hochskaliert: kein zusätzlicher Ladevorgang, aber die
+Farbe des Motivs auf der ganzen Fläche. Auf dem Handy ist der Bildschirm selbst
+hochkant — dort läuft die Aufnahme wie gehabt bildschirmfüllend hinter dem Text.
 
 Welche Motive laufen und in welcher Reihenfolge, steuern `inHero` und
 `heroOrder` in `GALLERY` (`src/lib/studio.ts`); `focal` setzt den
