@@ -245,19 +245,26 @@ select.field option {
 /* CSS-Columns statt JS-Masonry: kein Layout-Thrashing, kein Nachrechnen
    beim Resize, und das erste Bild ist sichtbar, bevor JS überhaupt
    geladen ist. */
+/* Bewusst wenige Spalten: eine Tattoo-Galerie lebt davon, dass man die
+   Linien erkennt. Vier Spalten nebeneinander machen aus jeder Arbeit
+   eine Briefmarke — auf dem Handy steht deshalb ein Motiv je Zeile,
+   auf dem Desktop höchstens drei. */
 .masonry {
-  column-count: 2;
-  column-gap: 0.75rem;
+  column-count: 1;
+  column-gap: 1rem;
 }
-@media (min-width: 640px) { .masonry { column-count: 3; column-gap: 1rem; } }
-@media (min-width: 1024px) { .masonry { column-count: 4; column-gap: 1rem; } }
+@media (min-width: 640px) { .masonry { column-count: 2; column-gap: 1.25rem; } }
+@media (min-width: 1280px) { .masonry { column-count: 3; column-gap: 1.5rem; } }
 
 .masonry > * {
   break-inside: avoid;
-  margin-bottom: 0.75rem;
+  margin-bottom: 1rem;
 }
 @media (min-width: 640px) {
-  .masonry > * { margin-bottom: 1rem; }
+  .masonry > * { margin-bottom: 1.25rem; }
+}
+@media (min-width: 1280px) {
+  .masonry > * { margin-bottom: 1.5rem; }
 }
 
 /* ─── Bewertungen ───────────────────────────────────────────────── */

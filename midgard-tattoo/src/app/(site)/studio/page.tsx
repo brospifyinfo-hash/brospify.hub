@@ -1,16 +1,21 @@
+// ─── Studio & Anfahrt ────────────────────────────────────────────
+// Auf dieser Seite geht es ausschließlich um den Ort und die Menschen
+// darin: die beiden Aufnahmen des Ladens, die zwei Artists, Adresse,
+// Öffnungszeiten und Karte. Keine Preise, keine Galerie, keine
+// Buchungsstrecke.
+
 import type { Metadata } from "next";
-import Link from "next/link";
-import { PageHead } from "@/components/PageHead";
+import { Artists } from "@/components/Artists";
 import { MapPreview } from "@/components/MapPreview";
+import { PageHead } from "@/components/PageHead";
 import { StudioSection } from "@/components/StudioSection";
-import { Process, Specialties } from "@/components/Sections";
-import { Reveal } from "@/components/ui";
+import { Reveal, SectionHead } from "@/components/ui";
 import { OPENING_HOURS, STUDIO } from "@/lib/studio";
 import { todayKey } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Studio & Anfahrt",
-  description: `${STUDIO.name} in der ${STUDIO.street}, ${STUDIO.zip} ${STUDIO.city}: Handschrift, Ablauf, Öffnungszeiten, Kontakt und Anfahrt.`,
+  description: `${STUDIO.name} in der ${STUDIO.street}, ${STUDIO.zip} ${STUDIO.city}: der Laden, die Artists ${STUDIO.artists}, Öffnungszeiten, Kontakt und Anfahrt.`,
   alternates: { canonical: "/studio" },
 };
 
@@ -19,6 +24,7 @@ export const dynamic = "force-dynamic";
 
 export default function StudioPage() {
   const heuteIndex = (new Date(`${todayKey()}T12:00:00Z`).getUTCDay() + 6) % 7;
+  const heute = OPENING_HOURS[heuteIndex];
 
   return (
     <>
@@ -26,17 +32,25 @@ export default function StudioPage() {
         eyebrow="Studio"
         title="Ein Platz, ein Artist"
         lead={`Kein Durchlauf, keine Hektik — wer hier auf der Liege liegt, hat den Raum für sich. ${STUDIO.doorNote}`}
+        meta={heute?.hours ? `Heute ${heute.hours}` : "Heute geschlossen"}
       />
 
       <StudioSection />
 
+      <Artists
+        eyebrow="Wer hier tätowiert"
+        title="Michi und Gorilla"
+        lead="Beide arbeiten im selben Raum, aber nicht in derselben Handschrift. Wer dein Motiv sticht, entscheidet sich im Vorgespräch."
+      />
+
       {/* ── Kontakt, Zeiten und Karte ── */}
-      <section className="hair-top">
-        <div className="shell py-14 md:py-20">
-          <Reveal className="mb-10">
-            <p className="eyebrow mb-4">Anfahrt</p>
-            <h2 className="display display-m max-w-[16ch]">So findest du uns</h2>
-          </Reveal>
+      <section className="hair-top" aria-labelledby="anfahrt">
+        <div className="shell py-16 md:py-24">
+          <SectionHead
+            eyebrow="Anfahrt"
+            title={<span id="anfahrt">So findest du uns</span>}
+            lead="Die Karte lädt erst auf Klick — bis dahin verlässt kein Datenpaket diese Seite."
+          />
 
           <div className="grid gap-10 lg:grid-cols-[1fr_1.15fr] lg:gap-14">
             <Reveal>
@@ -109,18 +123,6 @@ export default function StudioPage() {
               </p>
             </Reveal>
           </div>
-        </div>
-      </section>
-
-      <Specialties />
-      <Process />
-
-      <section className="hair-top">
-        <div className="shell flex flex-wrap items-center justify-between gap-6 py-14">
-          <p className="max-w-[40ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Der erste Schritt ist immer ein Gespräch — kostenlos und unverbindlich.
-          </p>
-          <Link href="/termin" className="btn btn-signal">Termin buchen</Link>
         </div>
       </section>
     </>

@@ -55,7 +55,7 @@ export function Gallery({ images }: { images: DisplayImage[] }) {
   const active = index === null ? null : images[index];
 
   return (
-    <section id="arbeiten" className="shell scroll-mt-24 py-8 md:py-10">
+    <section id="arbeiten" className="shell scroll-mt-24 py-10 md:py-14">
       {images.length === 0 && (
         <p className="py-16 text-center text-sm" style={{ color: "var(--bone-dim)" }}>
           Aktuell sind keine Motive eingestellt. Schau bald wieder vorbei.
@@ -64,7 +64,7 @@ export function Gallery({ images }: { images: DisplayImage[] }) {
 
       <div className="masonry">
         {images.map((piece, i) => (
-          <Reveal key={piece.id} delay={(i % 3) * 0.08} as="figure">
+          <Reveal key={piece.id} delay={(i % 2) * 0.09} as="figure">
             <GalleryTile
               piece={piece}
               onOpen={(el) => { triggerRef.current = el; setIndex(i); }}
@@ -99,7 +99,7 @@ export function Gallery({ images }: { images: DisplayImage[] }) {
             </button>
 
             <motion.figure
-              className="max-h-full w-full max-w-3xl"
+              className="max-h-full w-full max-w-4xl"
               onClick={(e) => e.stopPropagation()}
               initial={reduced ? false : { scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -121,8 +121,8 @@ export function Gallery({ images }: { images: DisplayImage[] }) {
                 height={active.height}
                 placeholder="blur"
                 blurDataURL={active.blur}
-                sizes="(max-width: 768px) 92vw, 768px"
-                className="max-h-[74svh] w-full object-contain"
+                sizes="(max-width: 896px) 92vw, 896px"
+                className="max-h-[78svh] w-full object-contain"
               />
               <figcaption className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
                 <span className="display text-lg">{active.title}</span>
@@ -181,7 +181,7 @@ function GalleryTile({
         height={piece.height}
         placeholder="blur"
         blurDataURL={piece.blur}
-        sizes="(max-width: 639px) 46vw, (max-width: 1023px) 31vw, 23vw"
+        sizes="(max-width: 639px) 92vw, (max-width: 1279px) 46vw, 31vw"
         className="w-full transition-transform duration-[900ms] ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-[1.05]"
       />
       {/* Abdunklung, damit die Bildunterschrift immer lesbar bleibt */}
@@ -190,10 +190,10 @@ function GalleryTile({
         className="pointer-events-none absolute inset-0 opacity-70 transition-opacity duration-500 group-hover:opacity-95"
         style={{ background: "linear-gradient(to top, rgba(8,8,9,0.92) 0%, transparent 48%)" }}
       />
-      <span className="pointer-events-none absolute inset-x-0 bottom-0 p-3 md:p-4">
-        <span className="display block text-[0.95rem] leading-tight md:text-[1.05rem]">{piece.title}</span>
+      <span className="pointer-events-none absolute inset-x-0 bottom-0 p-4 md:p-6">
+        <span className="display block text-[1.15rem] leading-tight md:text-[1.5rem]">{piece.title}</span>
         <span
-          className="mt-1 block translate-y-1 text-[0.65rem] uppercase tracking-[0.16em] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100"
+          className="mt-1.5 block translate-y-1 text-[0.7rem] uppercase tracking-[0.16em] opacity-0 transition-all duration-500 group-hover:translate-y-0 group-hover:opacity-100"
           style={{ color: "var(--signal)" }}
         >
           {piece.style} · {piece.placement}

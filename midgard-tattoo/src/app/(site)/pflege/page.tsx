@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHead } from "@/components/PageHead";
 import { Reveal } from "@/components/motion";
 import { AFTERCARE_STEPS, AFTERCARE_WARNINGS } from "@/lib/content";
@@ -21,7 +20,7 @@ export default function PflegePage() {
       />
 
       <section>
-        <div className="shell max-w-[70ch] py-8 md:py-12">
+        <div className="shell py-8 md:py-12"><div className="max-w-[72ch]">
           <ol className="grid gap-px" style={{ background: "var(--ink-hair)" }}>
             {AFTERCARE_STEPS.map((step, i) => (
               <Reveal key={step.when} delay={i * 0.05} as="li">
@@ -39,13 +38,13 @@ export default function PflegePage() {
               </Reveal>
             ))}
           </ol>
-        </div>
+        </div></div>
       </section>
 
       {/* Warnzeichen bewusst abgesetzt und in der Signalfarbe der Gefahr —
           das ist der einzige Abschnitt, bei dem ein Anruf zählt. */}
       <section className="hair-top">
-        <div className="shell max-w-[70ch] py-12 md:py-16">
+        <div className="shell py-12 md:py-16"><div className="max-w-[72ch]">
           <Reveal>
             <div className="card p-6" style={{ borderColor: "rgba(226,86,74,0.35)" }}>
               <h2 className="display text-lg" style={{ color: "var(--danger)" }}>
@@ -73,16 +72,7 @@ export default function PflegePage() {
               </p>
             </div>
           </Reveal>
-        </div>
-      </section>
-
-      <section className="hair-top">
-        <div className="shell flex flex-wrap items-center justify-between gap-6 py-14">
-          <p className="max-w-[42ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Die Anleitung bekommst du nach der Sitzung auch schriftlich mit.
-          </p>
-          <Link href="/termin" className="btn btn-ghost">Termin buchen</Link>
-        </div>
+        </div></div>
       </section>
     </>
   );

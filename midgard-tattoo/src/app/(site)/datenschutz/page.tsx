@@ -23,7 +23,7 @@ export default function DatenschutzPage() {
       />
 
       <section>
-        <div className="shell max-w-[70ch] py-8 md:py-12">
+        <div className="shell py-8 md:py-12"><div className="max-w-[72ch]">
           {offen > 0 && (
             <Reveal>
               <div
@@ -62,7 +62,7 @@ export default function DatenschutzPage() {
               </section>
             </Reveal>
           ))}
-        </div>
+        </div></div>
       </section>
     </>
   );

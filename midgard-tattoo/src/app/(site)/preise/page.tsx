@@ -1,8 +1,12 @@
+// ─── Preise ──────────────────────────────────────────────────────
+// Auf dieser Seite geht es ausschließlich ums Geld: Richtwerte, was
+// darin enthalten ist und woran es liegt, wenn zwei gleich große
+// Motive verschieden viel kosten. Keine Galerie, keine Buchungsstrecke.
+
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHead } from "@/components/PageHead";
-import { Reveal } from "@/components/motion";
-import { PRICE_FACTORS, PRICE_ROWS } from "@/lib/content";
+import { Reveal, SectionHead, Stagger } from "@/components/ui";
+import { PRICE_FACTORS, PRICE_INCLUDES, PRICE_ROWS } from "@/lib/content";
 import { STUDIO } from "@/lib/studio";
 
 export const metadata: Metadata = {
@@ -18,39 +22,46 @@ export default function PreisePage() {
         eyebrow="Preise"
         title="Was kostet das?"
         lead="Ehrliche Richtwerte statt Fantasiepreise. Was dein Motiv wirklich kostet, sagen wir dir im Beratungstermin — vorher wird nichts fest."
+        meta={`Mindestpreis ${PRICE_ROWS[0].price}`}
       />
 
+      {/* ── Richtwerte ── */}
       <section>
-        <div className="shell py-8 md:py-12">
-          <Reveal>
-            <dl className="grid gap-px" style={{ background: "var(--ink-hair)" }}>
-              {PRICE_ROWS.map((row) => (
+        <div className="shell py-10 md:py-14">
+          <dl className="grid gap-px" style={{ background: "var(--ink-hair)" }}>
+            {PRICE_ROWS.map((row, i) => (
+              <Reveal key={row.label} delay={i * 0.06}>
                 <div
-                  key={row.label}
-                  className="grid gap-2 py-5 md:grid-cols-[1fr_auto] md:items-baseline md:gap-8"
+                  className="group grid gap-2 py-6 md:grid-cols-[auto_1fr_auto] md:items-baseline md:gap-8"
                   style={{ background: "var(--ink)" }}
                 >
-                  <div>
-                    <dt className="text-[1.05rem] font-medium">{row.label}</dt>
+                  <span
+                    className="display hidden text-[0.75rem] tabular-nums md:block"
+                    style={{ color: "var(--bone-dim)" }}
+                  >
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div className="transition-transform duration-500 md:group-hover:translate-x-1.5">
+                    <dt className="display text-[1.3rem] md:text-[1.6rem]">{row.label}</dt>
                     {row.note && (
-                      <p className="mt-1 max-w-[52ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
+                      <p className="mt-2 max-w-[52ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
                         {row.note}
                       </p>
                     )}
                   </div>
                   <dd
-                    className="display text-[1.6rem] tabular-nums md:text-[1.9rem] md:text-right"
+                    className="display text-[1.7rem] tabular-nums md:text-right md:text-[2.1rem]"
                     style={{ color: "var(--signal)" }}
                   >
                     {row.price}
                   </dd>
                 </div>
-              ))}
-            </dl>
-          </Reveal>
+              </Reveal>
+            ))}
+          </dl>
 
-          <Reveal delay={0.08}>
-            <p className="mt-6 max-w-[62ch] text-sm leading-relaxed" style={{ color: "var(--bone-dim)" }}>
+          <Reveal delay={0.1}>
+            <p className="mt-7 max-w-[62ch] text-sm leading-relaxed" style={{ color: "var(--bone-dim)" }}>
               Alle Angaben sind Richtwerte inklusive Mehrwertsteuer. Für größere
               Projekte fällt eine Anzahlung an, die den Termin sichert und mit dem
               Endpreis verrechnet wird.
@@ -59,18 +70,52 @@ export default function PreisePage() {
         </div>
       </section>
 
-      <section className="hair-top">
-        <div className="shell py-14 md:py-20">
-          <Reveal className="mb-10">
-            <p className="eyebrow mb-4">Woran es liegt</p>
-            <h2 className="display display-m max-w-[18ch]">Warum zwei gleich große Motive unterschiedlich kosten</h2>
-          </Reveal>
+      {/* ── Was drinsteckt ── */}
+      <section className="hair-top" aria-labelledby="enthalten">
+        <div className="shell py-16 md:py-24">
+          <SectionHead
+            eyebrow="Ohne Aufpreis"
+            title={<span id="enthalten">Das steckt im Preis</span>}
+            lead="Es gibt keine Position, die am Ende noch dazukommt. Was hier steht, ist Teil jedes Termins."
+          />
 
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+          <Stagger className="grid gap-px sm:grid-cols-2 lg:grid-cols-3" step={0.06}>
+            {PRICE_INCLUDES.map((item) => (
+              <div
+                key={item}
+                className="flex h-full items-start gap-3 p-5"
+                style={{ background: "var(--ink)", outline: "1px solid var(--ink-hair)" }}
+              >
+                <span aria-hidden className="mt-0.5 shrink-0" style={{ color: "var(--signal)" }}>
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 12.5l5 5L20 6.5" />
+                  </svg>
+                </span>
+                <span className="text-[0.95rem] leading-relaxed">{item}</span>
+              </div>
+            ))}
+          </Stagger>
+        </div>
+      </section>
+
+      {/* ── Woran es liegt ── */}
+      <section className="hair-top" aria-labelledby="faktoren">
+        <div className="shell py-16 md:py-24">
+          <SectionHead
+            eyebrow="Woran es liegt"
+            title={<span id="faktoren">Warum zwei gleich große Motive unterschiedlich kosten</span>}
+          />
+
+          <div className="grid gap-px md:grid-cols-2 lg:grid-cols-4" style={{ background: "var(--ink-hair)" }}>
             {PRICE_FACTORS.map((factor, i) => (
               <Reveal key={factor.title} delay={i * 0.07}>
-                <div className="card h-full p-5">
-                  <h3 className="display text-lg">{factor.title}</h3>
+                <div className="group h-full p-6" style={{ background: "var(--ink)" }}>
+                  <span className="marker text-2xl" style={{ color: "var(--signal)" }}>
+                    0{i + 1}
+                  </span>
+                  <h3 className="display mt-4 text-xl leading-tight transition-transform duration-500 md:group-hover:translate-x-1">
+                    {factor.title}
+                  </h3>
                   <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
                     {factor.body}
                   </p>
@@ -78,16 +123,6 @@ export default function PreisePage() {
               </Reveal>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section className="hair-top">
-        <div className="shell flex flex-wrap items-center justify-between gap-6 py-14">
-          <p className="max-w-[42ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Konkrete Zahl für dein Motiv? Die gibt es im Beratungstermin — kostenlos
-            und unverbindlich.
-          </p>
-          <Link href="/termin" className="btn btn-signal">Termin buchen</Link>
         </div>
       </section>
     </>

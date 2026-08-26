@@ -1,18 +1,23 @@
 "use client";
 
 // ─── Hero mit Slideshow ──────────────────────────────────────────
-// Bildschirmfüllender Auftakt. Die Bilder wechseln alle acht Sekunden
-// mit einer weichen Blende; welche gezeigt werden, bestimmt der Inhaber
-// im Dashboard über den Haken „Im Hero zeigen".
+// Bildschirmfüllender Auftakt. Die Bilder wechseln von selbst alle
+// sieben Sekunden mit einer weichen Blende; welche gezeigt werden,
+// bestimmt der Inhaber im Dashboard über den Haken „Im Hero zeigen".
 //
-// Drei Regeln, an denen die Umsetzung hängt:
-//  • Nur das aktive Bild ist sichtbar, alle liegen übereinander — so
-//    gibt es kein Nachladen beim Wechsel und keinen Sprung im Layout.
-//  • `prefers-reduced-motion` hält die Schau an und zeigt das erste
-//    Bild; automatisch wechselnde Inhalte sind für manche Menschen
-//    schlicht nicht benutzbar.
-//  • Die Punkte unten sind echte Knöpfe mit Beschriftung, nicht nur
-//    Dekoration — die Schau lässt sich damit steuern.
+// Vier Regeln, an denen die Umsetzung hängt:
+//  • Nur das aktive Bild ist im DOM, alle liegen an derselben Stelle —
+//    so gibt es kein Nachladen beim Wechsel und keinen Sprung im Layout.
+//  • Jedes Motiv bringt seinen eigenen Bildausschnitt mit (`focal`).
+//    Ein Hochformat bildschirmfüllend zu zeigen heißt, den Großteil
+//    wegzuschneiden; welcher Teil stehen bleibt, ist der Unterschied
+//    zwischen Motiv und Hautausschnitt.
+//  • Der Fortschritt ist sichtbar: unter dem aktiven Vorschaubild läuft
+//    ein Balken ab. Wer eine Schau nicht steuern kann, muss wenigstens
+//    sehen, wann sie weiterspringt.
+//  • `prefers-reduced-motion` hält alles an und zeigt das erste Bild;
+//    automatisch wechselnde Inhalte sind für manche Menschen schlicht
+//    nicht benutzbar.
 
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import Image from "next/image";
@@ -22,13 +27,17 @@ import type { DisplayImage } from "@/lib/gallery";
 import { STUDIO } from "@/lib/studio";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
-const INTERVAL_MS = 8000;
+const INTERVAL_MS = 7000;
 
 export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots: number }) {
   const reduced = useReducedMotion();
   const ref = useRef<HTMLElement>(null);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
+  // Zählt bei jedem Wechsel hoch — auch wenn dasselbe Bild noch einmal
+  // drankommt. Der Fortschrittsbalken hängt daran und startet dadurch
+  // zuverlässig neu, statt beim Klick auf das aktive Bild stehenzubleiben.
+  const [runde, setRunde] = useState(0);
 
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
   const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "16%"]);
@@ -36,13 +45,20 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
   const fade = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
 
   const count = images.length;
-  const advance = useCallback(() => setIndex((i) => (i + 1) % count), [count]);
+
+  const gehZu = useCallback((next: number) => {
+    setIndex(next);
+    setRunde((r) => r + 1);
+  }, []);
 
   useEffect(() => {
     if (reduced || paused || count < 2) return;
-    const id = setInterval(advance, INTERVAL_MS);
+    const id = setInterval(() => {
+      setIndex((i) => (i + 1) % count);
+      setRunde((r) => r + 1);
+    }, INTERVAL_MS);
     return () => clearInterval(id);
-  }, [advance, reduced, paused, count]);
+  }, [reduced, paused, count]);
 
   // Weiterschalten anhalten, solange der Tab im Hintergrund liegt —
   // sonst springt die Schau beim Zurückkommen um mehrere Bilder.
@@ -74,9 +90,9 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
       >
         <AnimatePresence initial={false}>
           <motion.div
-            key={active?.id ?? "leer"}
+            key={`${active?.id ?? "leer"}-${runde}`}
             className="absolute inset-0"
-            initial={reduced ? false : { opacity: 0, scale: 1.06 }}
+            initial={reduced ? false : { opacity: 0, scale: 1.07 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             // Lange Blende, langsamer Zoom: der Wechsel soll auffallen,
@@ -94,25 +110,35 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
                 placeholder="blur"
                 blurDataURL={active.blur}
                 sizes="100vw"
-                className="object-cover object-[62%_25%]"
+                className="object-cover"
+                style={{ objectPosition: active.focal }}
               />
             )}
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute inset-0" style={{ background: "rgba(11,11,12,0.42)" }} />
+        <div className="absolute inset-0" style={{ background: "rgba(11,11,12,0.44)" }} />
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to top, var(--ink) 0%, rgba(11,11,12,0.86) 26%, rgba(11,11,12,0.34) 62%, rgba(11,11,12,0.60) 100%)",
+              "linear-gradient(to top, var(--ink) 0%, rgba(11,11,12,0.88) 28%, rgba(11,11,12,0.32) 64%, rgba(11,11,12,0.62) 100%)",
+          }}
+        />
+        {/* Zweiter Verlauf von links: gibt der Schrift überall Grund,
+            auch wenn das Motiv gerade hell in die linke Hälfte ragt. */}
+        <div
+          className="absolute inset-0 hidden md:block"
+          style={{
+            background:
+              "linear-gradient(to right, rgba(11,11,12,0.78) 0%, rgba(11,11,12,0.25) 46%, transparent 72%)",
           }}
         />
       </motion.div>
 
       {/* ── Aussage ── */}
       <motion.div
-        className="shell relative z-10 pb-16 pt-32 md:pb-24"
+        className="shell relative z-10 pb-14 pt-32 md:pb-20"
         style={reduced ? undefined : { y: textY }}
       >
         <motion.div className="mb-6 flex flex-wrap items-center gap-3" {...rise(0.1)}>
@@ -141,7 +167,7 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
           {...rise(0.38)}
         >
           Schwarz-Grau-Arbeiten mit weichen Verläufen, feine Linien und ehrliche
-          Beratung — von {STUDIO.artist} in der {STUDIO.street}. Jedes Motiv
+          Beratung — von {STUDIO.artists} in der {STUDIO.street}. Jedes Motiv
           entsteht für genau eine Person.
         </motion.p>
 
@@ -154,32 +180,15 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
           </Link>
         </motion.div>
 
-        {/* ── Steuerung der Schau ── */}
         {count > 1 && (
-          <motion.div className="mt-10 flex items-center gap-4" {...rise(0.56)}>
-            <div className="flex items-center gap-2">
-              {images.map((image, i) => (
-                <button
-                  key={image.id}
-                  type="button"
-                  onClick={() => setIndex(i)}
-                  aria-label={`Bild ${i + 1} von ${count}: ${image.title}`}
-                  aria-current={i === index}
-                  className="h-9 px-1"
-                >
-                  <span
-                    className="block h-[3px] transition-all duration-500"
-                    style={{
-                      width: i === index ? "2.25rem" : "1rem",
-                      background: i === index ? "var(--signal)" : "var(--ink-hair-strong)",
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-            <span className="text-[0.7rem] uppercase tracking-[0.16em]" style={{ color: "var(--bone-dim)" }}>
-              {active?.title}
-            </span>
+          <motion.div {...rise(0.56)}>
+            <SlideControls
+              images={images}
+              index={index}
+              runde={runde}
+              laufend={!reduced && !paused}
+              onSelect={gehZu}
+            />
           </motion.div>
         )}
       </motion.div>
@@ -195,5 +204,105 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
         </span>
       </motion.div>
     </section>
+  );
+}
+
+// ─── Steuerung der Schau ─────────────────────────────────────────
+// Vorschaubilder statt Punkten: man sieht, was als Nächstes kommt, und
+// kann gezielt hinspringen. Unter dem aktiven Bild läuft der Balken bis
+// zum nächsten Wechsel ab — genau die Sekunden, die `INTERVAL_MS`
+// vorgibt, damit die Anzeige nicht bloß Dekoration ist.
+function SlideControls({
+  images,
+  index,
+  runde,
+  laufend,
+  onSelect,
+}: {
+  images: DisplayImage[];
+  index: number;
+  runde: number;
+  laufend: boolean;
+  onSelect: (next: number) => void;
+}) {
+  const active = images[index];
+
+  return (
+    <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-4">
+      <ul className="flex items-end gap-2.5">
+        {images.map((image, i) => {
+          const istAktiv = i === index;
+          return (
+            <li key={image.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(i)}
+                aria-label={`Bild ${i + 1} von ${images.length}: ${image.title}`}
+                aria-current={istAktiv}
+                className="group block"
+              >
+                <span
+                  className="relative block overflow-hidden transition-all duration-500"
+                  style={{
+                    width: istAktiv ? "4rem" : "2.75rem",
+                    aspectRatio: "1 / 1",
+                    border: `1px solid ${istAktiv ? "var(--signal)" : "var(--ink-hair-strong)"}`,
+                    opacity: istAktiv ? 1 : 0.55,
+                  }}
+                >
+                  <Image
+                    src={image.src}
+                    alt=""
+                    fill
+                    placeholder="blur"
+                    blurDataURL={image.blur}
+                    sizes="64px"
+                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    style={{ objectPosition: image.focal }}
+                  />
+                </span>
+
+                {/* Ablaufbalken: nur unter dem aktiven Bild, und nur
+                    solange die Schau wirklich läuft. Steht sie still
+                    (reduzierte Bewegung, Tab im Hintergrund), bleibt der
+                    Balken voll — eine ablaufende Anzeige ohne Ablauf
+                    wäre gelogen. */}
+                <span
+                  aria-hidden
+                  className="mt-1.5 block h-[3px] overflow-hidden transition-all duration-500"
+                  style={{
+                    width: istAktiv ? "4rem" : "2.75rem",
+                    background: "var(--ink-hair-strong)",
+                  }}
+                >
+                  {istAktiv && (
+                    <motion.span
+                      key={runde}
+                      className="block h-full origin-left"
+                      style={{ background: "var(--signal)" }}
+                      initial={{ scaleX: laufend ? 0 : 1 }}
+                      animate={{ scaleX: 1 }}
+                      transition={
+                        laufend
+                          ? { duration: INTERVAL_MS / 1000, ease: "linear" }
+                          : { duration: 0 }
+                      }
+                    />
+                  )}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <span className="flex items-baseline gap-3 text-[0.7rem] uppercase tracking-[0.16em]">
+        <span className="display tabular-nums" style={{ color: "var(--signal)" }}>
+          {String(index + 1).padStart(2, "0")}
+        </span>
+        <span style={{ color: "var(--bone-dim)" }}>/ {String(images.length).padStart(2, "0")}</span>
+        <span style={{ color: "var(--bone-soft)" }}>{active?.title}</span>
+      </span>
+    </div>
   );
 }

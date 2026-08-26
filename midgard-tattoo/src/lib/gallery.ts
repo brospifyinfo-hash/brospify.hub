@@ -21,7 +21,14 @@ export interface DisplayImage {
   width: number;
   height: number;
   blur: string;
+  /** `object-position` für den bildschirmfüllenden Zuschnitt im Hero.
+   *  Eigene Uploads kennen keinen Bildausschnitt — für sie ist die
+   *  Bildmitte leicht nach oben versetzt der beste Kompromiss, weil
+   *  Motive fast immer über der Mitte sitzen. */
+  focal: string;
 }
+
+const FOCAL_DEFAULT = "50% 35%";
 
 function fromMedia(item: MediaItem): DisplayImage {
   return {
@@ -34,6 +41,7 @@ function fromMedia(item: MediaItem): DisplayImage {
     width: item.width,
     height: item.height,
     blur: item.blur,
+    focal: FOCAL_DEFAULT,
   };
 }
 
@@ -48,6 +56,7 @@ function fromBuiltIn(piece: GalleryPiece): DisplayImage {
     width: piece.width,
     height: piece.height,
     blur: piece.blur,
+    focal: piece.focal ?? FOCAL_DEFAULT,
   };
 }
 

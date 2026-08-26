@@ -6,9 +6,78 @@
 // Kundenstimmen sind Irreführung, und der Leerzustand unten ist die
 // ehrlichere Antwort auf „noch keine Bewertungen".
 
+import { motion } from "framer-motion";
 import type { Review } from "@/lib/types";
 import { formatDateShortDe, Reveal, Stars } from "./ui";
 import { STUDIO } from "@/lib/studio";
+
+// ─── Überblick ───────────────────────────────────────────────────
+// Durchschnitt, Anzahl und die Verteilung auf die fünf Stufen. Die
+// Verteilung ist keine Deko: ein Schnitt von 4,8 aus lauter Fünfen
+// liest sich anders als derselbe Schnitt aus Fünfen und einer Zwei.
+export function ReviewSummary({ reviews }: { reviews: Review[] }) {
+  if (!reviews.length) return null;
+
+  const schnitt = reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length;
+  const stufen = [5, 4, 3, 2, 1].map((stufe) => ({
+    stufe,
+    anzahl: reviews.filter((r) => Math.round(r.rating) === stufe).length,
+  }));
+
+  return (
+    <section className="hair-top">
+      <div className="shell py-10 md:py-14">
+        <div className="grid gap-8 md:grid-cols-[auto_1fr] md:items-center md:gap-14">
+          <Reveal>
+            <div className="flex items-end gap-5">
+              <span className="display leading-none" style={{ fontSize: "clamp(3.5rem, 11vw, 6rem)", color: "var(--signal)" }}>
+                {schnitt.toFixed(1)}
+              </span>
+              <span className="pb-2">
+                <Stars rating={schnitt} size="1.15rem" />
+                <span className="mt-2 block text-sm" style={{ color: "var(--bone-dim)" }}>
+                  aus {reviews.length} {reviews.length === 1 ? "Bewertung" : "Bewertungen"}
+                </span>
+              </span>
+            </div>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <ul className="grid gap-2">
+              {stufen.map(({ stufe, anzahl }) => {
+                const anteil = anzahl / reviews.length;
+                return (
+                  <li key={stufe} className="flex items-center gap-3 text-sm">
+                    <span className="w-14 shrink-0 tabular-nums" style={{ color: "var(--bone-dim)" }}>
+                      {stufe} Sterne
+                    </span>
+                    <span
+                      aria-hidden
+                      className="h-1.5 flex-1 overflow-hidden rounded-full"
+                      style={{ background: "var(--ink-hair)" }}
+                    >
+                      <motion.span
+                        className="block h-full origin-left rounded-full"
+                        style={{ background: stufe >= 4 ? "var(--signal)" : "var(--bone-dim)" }}
+                        initial={{ scaleX: 0 }}
+                        whileInView={{ scaleX: anteil }}
+                        viewport={{ once: true, amount: 0.6 }}
+                        transition={{ duration: 0.9, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+                      />
+                    </span>
+                    <span className="w-8 shrink-0 text-right tabular-nums" style={{ color: "var(--bone-soft)" }}>
+                      {anzahl}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </Reveal>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export function ReviewList({ reviews }: { reviews: Review[] }) {
   if (!reviews.length) {

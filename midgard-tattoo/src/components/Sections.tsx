@@ -9,20 +9,19 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { useState } from "react";
 import { FAQ, OPENING_HOURS, SPECIALTIES, STUDIO } from "@/lib/studio";
-import { Reveal, SplitHeadline } from "./motion";
+import { Reveal } from "./motion";
+import { SectionHead, Stagger } from "./ui";
 
 // ─── Handschrift ─────────────────────────────────────────────────
 export function Specialties() {
   return (
-    <section id="handschrift" className="shell scroll-mt-24 py-24 md:py-32">
-      <Reveal className="mb-14 max-w-[22ch]">
-        <p className="eyebrow mb-4">Handschrift</p>
-        <h2 className="display display-l">
-          <SplitHeadline text="Worauf hier" />{" "}
-          <span style={{ color: "var(--signal)" }}><SplitHeadline text="spezialisiert" delay={0.12} /></span>{" "}
-          <SplitHeadline text="wird" delay={0.24} />
-        </h2>
-      </Reveal>
+    <section id="handschrift" className="hair-top scroll-mt-24" aria-labelledby="handschrift-titel">
+      <div className="shell py-16 md:py-24">
+      <SectionHead
+        eyebrow="Handschrift"
+        title={<span id="handschrift-titel">Worauf hier spezialisiert wird</span>}
+        lead="Vier Richtungen, in denen die Arbeiten oben entstehen. Wer etwas anderes im Kopf hat, fragt einfach — abgelehnt wird nur, was auf Dauer nicht gut aussieht."
+      />
 
       <div className="grid gap-px" style={{ background: "var(--ink-hair)" }}>
         {SPECIALTIES.map((item, i) => (
@@ -47,6 +46,7 @@ export function Specialties() {
           </Reveal>
         ))}
       </div>
+      </div>
     </section>
   );
 }
@@ -61,26 +61,35 @@ const STEPS = [
 
 export function Process() {
   return (
-    <section className="hair-top">
-      <div className="shell py-24 md:py-32">
-        <Reveal className="mb-14">
-          <p className="eyebrow mb-4">Ablauf</p>
-          <h2 className="display display-l max-w-[16ch]">Von der Idee zur fertigen Arbeit</h2>
-        </Reveal>
+    <section className="hair-top" aria-labelledby="ablauf-titel">
+      <div className="shell py-16 md:py-24">
+        <SectionHead
+          eyebrow="Ablauf"
+          title={<span id="ablauf-titel">Von der Anfrage zum fertigen Motiv</span>}
+          lead="Vier Schritte, immer in dieser Reihenfolge. Der erste kostet nichts und verpflichtet zu nichts."
+        />
 
-        <ol className="grid gap-8 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+        <Stagger className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-5" step={0.09}>
           {STEPS.map((step, i) => (
-            <Reveal key={step.title} delay={i * 0.08} as="li">
-              <div className="card h-full p-6">
+            <div key={step.title} className="card group relative h-full overflow-hidden p-6">
+              {/* Verbindungslinie zwischen den Schritten — auf breiten
+                  Schirmen wird aus vier Kästen so eine Kette. */}
+              <span
+                aria-hidden
+                className="absolute inset-x-0 top-0 h-px origin-left scale-x-0 transition-transform duration-700 group-hover:scale-x-100"
+                style={{ background: "var(--signal)" }}
+              />
+              <span className="flex items-baseline justify-between">
                 <span className="marker text-2xl" style={{ color: "var(--signal)" }}>0{i + 1}</span>
-                <h3 className="display mt-4 text-xl">{step.title}</h3>
-                <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-                  {step.body}
-                </p>
-              </div>
-            </Reveal>
+                <span className="eyebrow">Schritt</span>
+              </span>
+              <h3 className="display mt-5 text-xl leading-tight">{step.title}</h3>
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
+                {step.body}
+              </p>
+            </div>
           ))}
-        </ol>
+        </Stagger>
       </div>
     </section>
   );
@@ -94,9 +103,12 @@ export function FaqSection() {
 
   return (
     <section id="fragen" className="scroll-mt-24">
-      <div className="shell max-w-[70ch] py-8 md:py-12">
+      <div className="shell py-8 md:py-12">
         <Reveal>
-          <ul>
+          {/* Fragen brauchen kurze Zeilen, aber sie sollen an derselben
+              Kante beginnen wie die Überschrift darüber — deshalb die
+              Breite auf der Liste, nicht auf dem zentrierten Rahmen. */}
+          <ul className="max-w-[72ch]">
             {FAQ.map((item, i) => {
               const isOpen = open === i;
               return (
@@ -229,7 +241,7 @@ export function SiteFooter() {
         </div>
 
         <div className="hair-top mt-12 flex flex-wrap items-center justify-between gap-4 pt-6 text-xs" style={{ color: "var(--bone-dim)" }}>
-          <span>© {new Date().getFullYear()} {STUDIO.name} · Artist: {STUDIO.artist}</span>
+          <span>© {new Date().getFullYear()} {STUDIO.name} · Artists: {STUDIO.artists}</span>
           <span className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <span>Tätowierungen erst ab 18 Jahren. Ausweis mitbringen.</span>
             <Link

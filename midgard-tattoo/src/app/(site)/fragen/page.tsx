@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { FaqSection } from "@/components/Sections";
 import { PageHead } from "@/components/PageHead";
 import { FAQ, STUDIO } from "@/lib/studio";
@@ -36,14 +35,6 @@ export default function FragenPage() {
         lead={`Steht deine Frage nicht dabei? Ruf einfach an — ${STUDIO.phone}.`}
       />
       <FaqSection />
-      <section className="hair-top">
-        <div className="shell flex flex-wrap items-center justify-between gap-6 py-14">
-          <p className="max-w-[40ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Alles geklärt? Dann such dir einen freien Beratungstermin aus.
-          </p>
-          <Link href="/termin" className="btn btn-signal">Termin buchen</Link>
-        </div>
-      </section>
     </>
   );
 }

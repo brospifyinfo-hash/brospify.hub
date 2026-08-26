@@ -15,13 +15,14 @@
 
 import {
   motion,
+  useInView,
   useReducedMotion,
   useScroll,
   useSpring,
   useTransform,
   type MotionValue,
 } from "framer-motion";
-import { useRef, type ReactNode } from "react";
+import { Fragment, useRef, type ReactNode } from "react";
 
 // Eine ruhige, leicht bremsende Kurve — nichts federt oder wippt.
 const EASE = [0.22, 1, 0.36, 1] as const;
@@ -99,6 +100,12 @@ export function useScrollProgress(): MotionValue<number> {
 // Jedes Wort steigt einzeln aus einer Maske auf. Der Text bleibt ein
 // zusammenhängender String im DOM (`aria-label`), damit Screenreader
 // die Überschrift am Stück vorlesen statt Wort für Wort.
+//
+// Wichtig: der Auslöser hängt am äußeren Element, nicht an den Wörtern.
+// Ein `whileInView` direkt am Wort feuert nie — im Startzustand liegt
+// das Wort vollständig außerhalb seiner Maske, und ein
+// IntersectionObserver rechnet die Überdeckung durch `overflow: hidden`
+// mit ein. Die Schnittmenge bleibt 0, die Überschrift damit unsichtbar.
 export function SplitHeadline({
   text,
   className,
@@ -109,6 +116,8 @@ export function SplitHeadline({
   delay?: number;
 }) {
   const reduced = useReducedMotion();
+  const ref = useRef<HTMLSpanElement>(null);
+  const sichtbar = useInView(ref, { once: true, amount: 0.35 });
   const words = text.split(" ");
 
   if (reduced) {
@@ -116,24 +125,44 @@ export function SplitHeadline({
   }
 
   return (
-    <span className={className} aria-label={text}>
+    <span ref={ref} className={className} aria-label={text}>
       {words.map((word, i) => (
-        <span
-          key={`${word}-${i}`}
-          aria-hidden
-          style={{ display: "inline-block", overflow: "hidden", verticalAlign: "bottom" }}
-        >
-          <motion.span
-            style={{ display: "inline-block" }}
-            initial={{ y: "108%" }}
-            whileInView={{ y: 0 }}
-            viewport={{ once: true, amount: 0.5 }}
-            transition={{ duration: 0.85, delay: delay + i * 0.07, ease: EASE }}
+        // Das Leerzeichen steht ZWISCHEN den Masken, nicht darin: am Rand
+        // eines inline-block fällt es weg, und aus „Termin buchen" würde
+        // „Terminbuchen".
+        <Fragment key={`${word}-${i}`}>
+          <span
+            aria-hidden
+            // Die Maske bekommt oben und unten Luft. Ohne sie schneidet
+            // sie bei `line-height: 0.88` genau das weg, was über die
+            // Versalhöhe hinausragt: unten Komma und Unterlängen („Ein
+            // Platz," verliert sein Komma), oben die Punkte auf Ä, Ö, Ü
+            // („Häufige Fragen" wird zu „Haufige Fragen"). Die negativen
+            // Außenabstände nehmen die Luft aus dem Layout wieder heraus,
+            // damit sich die Zeilenhöhe nicht ändert. Der Startversatz ist
+            // größer als die Maske hoch ist, damit durch die Luft unten
+            // kein Buchstabenrand hervorlugt.
+            style={{
+              display: "inline-block",
+              overflow: "hidden",
+              verticalAlign: "bottom",
+              paddingTop: "0.16em",
+              marginTop: "-0.16em",
+              paddingBottom: "0.18em",
+              marginBottom: "-0.18em",
+            }}
           >
-            {word}
-            {i < words.length - 1 ? " " : ""}
-          </motion.span>
-        </span>
+            <motion.span
+              style={{ display: "inline-block" }}
+              initial={{ y: "135%" }}
+              animate={sichtbar ? { y: 0 } : { y: "135%" }}
+              transition={{ duration: 0.85, delay: delay + i * 0.07, ease: EASE }}
+            >
+              {word}
+            </motion.span>
+          </span>
+          {i < words.length - 1 ? " " : null}
+        </Fragment>
       ))}
     </span>
   );

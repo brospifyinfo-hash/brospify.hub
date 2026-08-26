@@ -37,7 +37,7 @@ import {
   todayKey,
   type Option,
 } from "@/lib/types";
-import { Reveal } from "./motion";
+import { SectionHead } from "./ui";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -67,8 +67,15 @@ const EMPTY_FORM: FormState = {
 /** `page` rahmt die Buchung als eigene Sektion mit Überschrift ein,
  *  `hero` liefert nur das nackte Panel — für den Kopfbereich der
  *  Startseite, wo die Überschrift schon danebensteht. Die Logik ist in
- *  beiden Fällen dieselbe; es gibt bewusst keine zweite Umsetzung. */
-export function BookingWidget({ variant = "page" }: { variant?: "page" | "hero" } = {}) {
+ *  beiden Fällen dieselbe; es gibt bewusst keine zweite Umsetzung.
+ *
+ *  `index` nummeriert den Abschnitt, wenn die Buchung als Kapitel in
+ *  einer Folge steht (Startseite). Auf der eigenen Terminseite bleibt
+ *  die Nummer weg — dort gibt es nichts zu zählen. */
+export function BookingWidget({
+  variant = "page",
+  index,
+}: { variant?: "page" | "hero"; index?: number } = {}) {
   const asHero = variant === "hero";
   const [slots, setSlots] = useState<PublicSlot[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -634,17 +641,18 @@ export function BookingWidget({ variant = "page" }: { variant?: "page" | "hero" 
   return (
     <section id="termin" className="scroll-mt-24 hair-top">
       <div className="shell py-20 md:py-28">
-        <Reveal className="mb-10 flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <p className="eyebrow mb-4">Termin</p>
-            <h2 className="display display-l">Freie Termine</h2>
-          </div>
-          <p className="max-w-[42ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Etwas dabei, das in deine Richtung geht? Jeder Termin hier ist ein{" "}
-            <strong style={{ color: "var(--bone)" }}>Beratungstermin</strong>: Wir gehen
-            Motiv, Größe, Stelle und Preis durch, gestochen wird an dem Tag noch nicht.
-          </p>
-        </Reveal>
+        <SectionHead
+          index={index}
+          eyebrow="Termin"
+          title="Freie Termine"
+          lead={
+            <>
+              Etwas dabei, das in deine Richtung geht? Jeder Termin hier ist ein{" "}
+              <strong style={{ color: "var(--bone)" }}>Beratungstermin</strong>: Wir gehen
+              Motiv, Größe, Stelle und Preis durch, gestochen wird an dem Tag noch nicht.
+            </>
+          }
+        />
         {panel}
       </div>
     </section>

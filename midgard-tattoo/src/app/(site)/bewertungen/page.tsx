@@ -1,7 +1,11 @@
+// ─── Bewertungen ─────────────────────────────────────────────────
+// Auf dieser Seite stehen ausschließlich Rückmeldungen von Kundinnen
+// und Kunden — sonst nichts. Keine Preise, keine Galerie, keine
+// Buchungsstrecke.
+
 import type { Metadata } from "next";
-import Link from "next/link";
 import { PageHead } from "@/components/PageHead";
-import { ReviewList } from "@/components/ReviewList";
+import { ReviewList, ReviewSummary } from "@/components/ReviewList";
 import { getPublishedReviews } from "@/lib/gallery";
 import { STUDIO } from "@/lib/studio";
 
@@ -65,24 +69,16 @@ export default async function BewertungenPage() {
       <PageHead
         eyebrow="Bewertungen"
         title="Was Kunden sagen"
-        lead={
-          nurEcht
-            ? `${reviews.length} ${reviews.length === 1 ? "Bewertung" : "Bewertungen"} · Durchschnitt ${schnitt.toFixed(1)} von 5`
+        lead="Jede Stimme hier ist so eingetragen, wie sie angekommen ist — gekürzt wird nichts, und weggelassen wird auch nichts."
+        meta={
+          reviews.length
+            ? `${reviews.length} ${reviews.length === 1 ? "Stimme" : "Stimmen"}`
             : undefined
         }
       />
 
+      <ReviewSummary reviews={reviews} />
       <ReviewList reviews={reviews} />
-
-      <section className="hair-top">
-        <div className="shell flex flex-wrap items-center justify-between gap-6 py-14">
-          <p className="max-w-[44ch] text-sm leading-relaxed" style={{ color: "var(--bone-soft)" }}>
-            Schon mal hier gewesen? Über ein paar Zeilen freut sich jedes Studio —
-            am liebsten direkt bei Google, damit andere sie auch finden.
-          </p>
-          <Link href="/termin" className="btn btn-signal">Termin buchen</Link>
-        </div>
-      </section>
     </>
   );
 }

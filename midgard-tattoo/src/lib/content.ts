@@ -47,6 +47,18 @@ export const PRICE_FACTORS = [
   },
 ];
 
+// Was ohne Aufpreis dazugehört. Steht bewusst auf der Preisseite: die
+// häufigste stille Frage bei einem Preis ist nicht „warum so viel",
+// sondern „was kommt da noch obendrauf".
+export const PRICE_INCLUDES = [
+  "Vorgespräch und Beratung",
+  "Individuell gezeichneter Entwurf",
+  "Sterile Einwegnadeln, geprüfte Farben",
+  "Abdeckung und Erstversorgung nach der Sitzung",
+  "Schriftliche Pflegeanleitung",
+  "Nachkontrolle, wenn du unsicher bist",
+];
+
 // ─── Pflege ──────────────────────────────────────────────────────
 export const AFTERCARE_STEPS = [
   {

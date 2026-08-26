@@ -4,14 +4,18 @@
 // CMS nötig, und Server- wie Client-Komponenten ziehen dieselben Werte.
 //
 // Quelle der Kontaktdaten ist das Schaufenster-Foto des Studios
-// (Nürnberger Straße 7, 90518 Altdorf · Artist: Michl · 0171 833 99 86).
+// (Nürnberger Straße 7, 90518 Altdorf · 0171 833 99 86). Tätowiert wird
+// von Michi (Inhaber) und Gorilla — beide siehe ARTISTS weiter unten.
 // Vor dem Live-Gang bitte gegenprüfen — vor allem die Öffnungszeiten,
 // die auf der Scheibe nur als „Termine nach Vereinbarung" stehen.
 
 export const STUDIO = {
   name: "Midgard Tattoo",
   tagline: "Black & Grey aus Altdorf",
-  artist: "Michl",
+  /** Wer die Anfragen beantwortet — steht in Mails und Bestätigungen. */
+  artist: "Michi",
+  /** Beide Namen zusammen, für Fließtext und Suchmaschinen. */
+  artists: "Michi & Gorilla",
   street: "Nürnberger Straße 7",
   zip: "90518",
   city: "Altdorf",
@@ -58,6 +62,12 @@ export interface GalleryPiece {
    *  Reihenfolge überlassen — inklusive Studiofotos, die als
    *  bildschirmfüllender Hintergrund nicht funktionieren. */
   inHero?: boolean;
+  /** `object-position` für die bildschirmfüllende Darstellung im Hero.
+   *  Ein Hochformat auf einen breiten Bildschirm zu legen heißt, den
+   *  Großteil wegzuschneiden — welcher Teil stehen bleibt, entscheidet
+   *  über Wirkung oder Unfall. Deshalb pro Motiv gesetzt statt einmal
+   *  global geraten. Vorgabe: "50% 30%". */
+  focal?: string;
 }
 
 export const GALLERY: GalleryPiece[] = [
@@ -73,6 +83,7 @@ export const GALLERY: GalleryPiece[] = [
     blur: "data:image/webp;base64,UklGRmYAAABXRUJQVlA4IFoAAAAQAgCdASoMABAAA8BgJZACdADdb+Xmh6lAAP7m2kSR/1zqzzSUYMqc/i7vsVBh4lBY5CosYZGtq3fDnnhtW/bnpImqgRFHNnPE1M4pku95ntQPjuGrGX2f4AA=",
     span: "tall",
     inHero: true,
+    focal: "48% 45%",
   },
   {
     slug: "loewe-sketch",
@@ -85,6 +96,7 @@ export const GALLERY: GalleryPiece[] = [
     height: 1155,
     blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAADwAQCdASoMAAwAA8BgJQBOgBusN08sruAA+EKjYtTIBLkoPPj+oGatVsUpItM/mde47Wb1TYjoRRMq/ZtcKj+OyWts6e+AAAA=",
     inHero: true,
+    focal: "50% 42%",
   },
   {
     slug: "libelle-seerose",
@@ -96,7 +108,7 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1174,
     blur: "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAADwAQCdASoMAAwAA8BgJZACdAD8LXIZXOgA/k9sBpZIXf7IA/86G6lkGUcM/kyS6P1HBRkPvRzELV3u5GUA/UEDhV90UQgNUjeAqaQA",
-    inHero: true,
+    focal: "42% 42%",
   },
   {
     slug: "wanderhoden",
@@ -120,6 +132,7 @@ export const GALLERY: GalleryPiece[] = [
     height: 1172,
     blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAACwAQCdASoMAAwAA8BgJQBOgBmfNjoAAOJ8xmENCEkwbbAT29kL30Q3Zz38TZQKidQVuvps4yvU0w6HWw9z/Iv02Y+ESC6gAAA=",
     inHero: true,
+    focal: "45% 35%",
   },
   {
     slug: "phoenix",
@@ -132,6 +145,7 @@ export const GALLERY: GalleryPiece[] = [
     height: 1153,
     blur: "data:image/webp;base64,UklGRmIAAABXRUJQVlA4IFYAAACwAwCdASoMABEAPwFqrU8rJaQiMAgBYCAJQBOkGQAtYcF3wGk5IAD7AHRu8O5E9L/neIEY+Hfr7dgnmicK4IRVrgQd5IooR5FXNwbMCteD+ZCsnEAAAA==",
     inHero: true,
+    focal: "48% 40%",
   },
   {
     slug: "blut-schweiss-traenen",
@@ -155,29 +169,7 @@ export const GALLERY: GalleryPiece[] = [
     height: 1156,
     blur: "data:image/webp;base64,UklGRkYAAABXRUJQVlA4IDoAAADwAQCdASoMAAwAA8BgJZQCdADdJAXI6YAA/qwsZ/Low6OkhqWv5JOrBqiOFZJiamxse76kyUJiEgAA",
     inHero: true,
-  },
-  {
-    slug: "studio-abend",
-    src: "/studio-abend.webp",
-    alt: "Das beleuchtete Schaufenster des Studios von innen, am Abend",
-    title: "Studio am Abend",
-    style: "Nürnberger Straße 7",
-    placement: "Altdorf",
-    width: 979,
-    height: 1004,
-    blur: "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAADwAQCdASoMAAwAA8BgJbACdAEK3s7VVAAA/qMmWIYjX/Dd8aNqD93DoPMUIVUzXqrU2DOJl369Twa2zJMCGH2clccSAQH/T2XXKAAA",
-  },
-  {
-    slug: "studio-altdorf",
-    src: "/studio-altdorf.webp",
-    alt: "Schaufenster des Midgard-Tattoo-Studios in der Nürnberger Straße 7 in Altdorf",
-    title: "Das Studio",
-    style: "Nürnberger Straße 7",
-    placement: "Altdorf",
-    width: 1179,
-    height: 1037,
-    blur: "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAAAQAgCdASoMAAsAA8BgJYwC7AEQ+mOeAQ6AAP63CmzweDjxbO0evLHqz5UGZrA5R6Ll6EdMjmBIuaiCNIFOYNRJzD98wpgoAsfYAAAA",
-    span: "wide",
+    focal: "50% 40%",
   },
 ];
 
@@ -233,5 +225,129 @@ export const FAQ = [
   {
     q: "Wie pflege ich mein frisches Tattoo?",
     a: "Du bekommst nach der Sitzung eine schriftliche Pflegeanleitung mit: sauber halten, dünn eincremen, zwei Wochen kein Solarium, keine Sauna, kein Schwimmbad. Bei Fragen einfach anrufen.",
+  },
+];
+
+// ─── Studio-Aufnahmen ────────────────────────────────────────────
+// Bewusst NICHT in der Galerie: dort geht es um Arbeiten, nicht um
+// Räume. Diese beiden gehören zum Standort und stehen deshalb nur auf
+// der Studio-Seite.
+export const STUDIO_PHOTOS: GalleryPiece[] = [
+  {
+    slug: "studio-altdorf",
+    src: "/studio-altdorf.webp",
+    alt: "Schaufenster des Midgard-Tattoo-Studios in der Nürnberger Straße 7 in Altdorf bei Tag",
+    title: "Von der Straße",
+    style: "Nürnberger Straße 7",
+    placement: "Tagsüber",
+    width: 1179,
+    height: 1037,
+    blur: "data:image/webp;base64,UklGRlgAAABXRUJQVlA4IEwAAAAQAgCdASoMAAsAA8BgJYwC7AEQ+mOeAQ6AAP63CmzweDjxbO0evLHqz5UGZrA5R6Ll6EdMjmBIuaiCNIFOYNRJzD98wpgoAsfYAAAA",
+  },
+  {
+    slug: "studio-abend",
+    src: "/studio-abend.webp",
+    alt: "Das beleuchtete Schaufenster des Studios von innen, am Abend",
+    title: "Von innen",
+    style: "Nürnberger Straße 7",
+    placement: "Am Abend",
+    width: 979,
+    height: 1004,
+    blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAAAwAgCdASoMAAwAA8BgJagCdAEU+LrOfHW0AAD+oyZYhIBc/LpGji3c1ShiSdSVaslCBQboHL7wyH+NtE/0RYcKoJHOtQOAAAA=",
+  },
+];
+
+// ─── Die Artists ─────────────────────────────────────────────────
+// Zwei Menschen, zwei Handschriften. Die Fotos sind Schwarzweiß-
+// Aufnahmen bei der Arbeit — bewusst keine gestellten Portraits.
+export interface Artist {
+  slug: string;
+  name: string;
+  role: string;
+  src: string;
+  alt: string;
+  width: number;
+  height: number;
+  blur: string;
+  /** `object-position` — beide Aufnahmen sind quadratisch und werden im
+   *  Hochformat gezeigt; ohne Angabe schneidet der Browser mittig und
+   *  damit am Gesicht vorbei. */
+  focal: string;
+  /** Worauf sich diese Person spezialisiert hat. */
+  focus: string[];
+  bio: string;
+}
+
+export const ARTISTS: Artist[] = [
+  {
+    slug: "michi",
+    name: "Michi",
+    role: "Inhaber & Artist",
+    src: "/artist-michi.webp",
+    alt: "Michi bei der Arbeit am Tattoo, Schwarzweiß-Aufnahme im Studio",
+    width: 934,
+    height: 950,
+    focal: "62% 38%",
+    blur: "data:image/webp;base64,UklGRlwAAABXRUJQVlA4IFAAAADwAQCdASoMAAwAA8BgJaQAAq9hwvNszwAA/uFeI9aXt1Mk4bSgI7XEMzzIMTAdVfZGacJcprQYeY26mpqu8KCsfthXKVcBMf6TQJY1V/wwAA==",
+    focus: ["Black & Grey", "Realistic", "Cover-Up"],
+    bio: "Führt das Studio in der Nürnberger Straße. Arbeitet am liebsten in Schwarz-Grau mit weichen Verläufen — Portraits, Tiere, alles, was Tiefe braucht. Sagt vor dem Stechen ehrlich, wenn eine Idee so nicht funktioniert.",
+  },
+  {
+    slug: "gorilla",
+    name: "Gorilla",
+    role: "Artist",
+    src: "/artist-gorilla.webp",
+    alt: "Gorilla konzentriert bei der Arbeit am Tattoo, Schwarzweiß-Aufnahme im Studio",
+    width: 1048,
+    height: 1067,
+    focal: "35% 32%",
+    blur: "data:image/webp;base64,UklGRlwAAABXRUJQVlA4IFAAAADwAQCdASoMAAwAA8BgJaQAAlxljB+5bAAA/U8NQd3hIKnpUpKbnu7tUkErNo9DHXtTcV3LKw9xccUMyxpc6Peq7d0Ug9LB+f+fhCC/GAAAAA==",
+    focus: ["Fineline", "Florales", "Lettering"],
+    bio: "Feine Linien, Blüten, Insekten, Schriftzüge. Nimmt sich für filigrane Arbeiten die Zeit, die sie brauchen — und macht so oft Pause, wie du sie brauchst.",
+  },
+];
+
+// ─── Vertrauensmerkmale ──────────────────────────────────────────
+// Bewusst KEINE Siegel, Zertifikate oder Mitgliedschaften: was hier
+// steht, ist Selbstauskunft über die eigene Arbeitsweise — nachprüfbar
+// im Studio, nicht durch eine Prüfstelle. Erfundene Auszeichnungen
+// („TÜV-geprüft", „zertifizierter Betrieb") wären Werbung mit falschen
+// Tatsachen und nach § 5 UWG angreifbar. Wenn echte Nachweise
+// vorliegen (Hygieneschulung, Erste-Hilfe-Kurs, Gewerbeanmeldung beim
+// Gesundheitsamt), gehören sie hier hinein — mit Namen und Jahr.
+export interface TrustBadge {
+  /** Kurzform für die Kachel. */
+  title: string;
+  /** Ein Satz, der die Zusage konkret macht. */
+  body: string;
+  /** Piktogramm-Kennung, siehe src/components/Trust.tsx. */
+  icon: "needle" | "shield" | "pencil" | "chat" | "id";
+}
+
+export const TRUST_BADGES: TrustBadge[] = [
+  {
+    title: "Einwegnadeln",
+    body: "Jede Nadel und jede Kartusche kommt steril verpackt und wird nach der Sitzung entsorgt. Nichts wird zweimal benutzt.",
+    icon: "needle",
+  },
+  {
+    title: "Saubere Arbeitsfläche",
+    body: "Liege, Griffe und Ablagen werden vor jedem Termin desinfiziert und abgedeckt. Farben stammen von geprüften Herstellern.",
+    icon: "shield",
+  },
+  {
+    title: "Eigener Entwurf",
+    body: "Dein Motiv wird für dich gezeichnet — keine Vorlage von der Wand, die schon zehn andere tragen.",
+    icon: "pencil",
+  },
+  {
+    title: "Kostenlose Beratung",
+    body: "Das Vorgespräch kostet nichts und verpflichtet zu nichts. Auch wenn am Ende kein Termin daraus wird.",
+    icon: "chat",
+  },
+  {
+    title: "Ab 18, mit Ausweis",
+    body: "Tätowiert wird ausschließlich ab 18 Jahren. Ausweis bitte mitbringen — ohne Ausnahme, auch nicht mit Einverständnis der Eltern.",
+    icon: "id",
   },
 ];

@@ -20,7 +20,7 @@ export default function ImpressumPage() {
       <PageHead eyebrow="Rechtliches" title="Impressum" />
 
       <section>
-        <div className="shell max-w-[70ch] py-8 md:py-12">
+        <div className="shell py-8 md:py-12"><div className="max-w-[72ch]">
           {/* Der Hinweis steht bewusst auf der Seite und nicht nur im Code:
               solange Pflichtangaben fehlen, muss das ins Auge springen. */}
           {offen > 0 && (
@@ -82,7 +82,7 @@ export default function ImpressumPage() {
               und werden mit Einverständnis der abgebildeten Personen veröffentlicht.
             </p>
           </Reveal>
-        </div>
+        </div></div>
       </section>
     </>
   );

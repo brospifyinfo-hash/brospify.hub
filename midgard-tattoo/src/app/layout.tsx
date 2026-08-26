@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Anton, Inter, Permanent_Marker } from "next/font/google";
-import { OPENING_HOURS, STUDIO } from "@/lib/studio";
+import { ARTISTS, OPENING_HOURS, STUDIO } from "@/lib/studio";
 import "./globals.css";
 
 // ─── Schriften ───────────────────────────────────────────────────
@@ -22,7 +22,7 @@ const marker = Permanent_Marker({ subsets: ["latin"], weight: "400", variable: "
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://midgard-tattoo.de";
 
 const TITLE = `${STUDIO.name} — ${STUDIO.tagline}`;
-const DESCRIPTION = `Tattoostudio in ${STUDIO.city}: Black & Grey, Realistic, Fineline und Cover-Ups von ${STUDIO.artist}. Freie Termine online ansehen und direkt anfragen.`;
+const DESCRIPTION = `Tattoostudio in ${STUDIO.city}: Black & Grey, Realistic, Fineline und Cover-Ups von ${STUDIO.artists}. Freie Termine online ansehen und direkt anfragen.`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -91,7 +91,14 @@ const JSON_LD = {
     addressLocality: STUDIO.city,
     addressCountry: "DE",
   },
-  employee: { "@type": "Person", name: STUDIO.artist, jobTitle: "Tätowierer" },
+  // Beide Artists als Personen — Google zeigt sie im Eintrag an, und
+  // eine einzelne Person wäre schlicht falsch.
+  employee: ARTISTS.map((a) => ({
+    "@type": "Person",
+    name: a.name,
+    jobTitle: a.role,
+    image: `${SITE_URL}${a.src}`,
+  })),
   openingHoursSpecification: OPENING_HOURS.filter((d) => d.hours).map((d) => {
     const [opens, closes] = d.hours!.split("–").map((t) => t.trim());
     return {

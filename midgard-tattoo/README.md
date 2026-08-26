@@ -1,8 +1,9 @@
 # Midgard Tattoo — Studio-Website
 
-Website des Tattoostudios **Midgard Tattoo**, Nürnberger Straße 7, 90518 Altdorf
-(Artist: Michl). Portfolio, Online-Terminanfrage und ein Dashboard, in dem der
-Inhaber seine freien Termine selbst pflegt.
+Website des Tattoostudios **Midgard Tattoo**, Nürnberger Straße 7, 90518 Altdorf.
+Tätowiert wird von **Michi** (Inhaber) und **Gorilla**. Portfolio,
+Online-Terminanfrage und ein Dashboard, in dem der Inhaber seine freien Termine
+selbst pflegt.
 
 Eigenständiges Next.js-Projekt — keine Abhängigkeit zu anderen Anwendungen.
 
@@ -14,12 +15,12 @@ npm run dev                    # → http://localhost:3000
 
 | Route | Was |
 |---|---|
-| `/` | Startseite: Hero-Slideshow, darunter je eine Vorschau auf jede Hauptseite |
-| `/galerie` | Alle Motive mit Leuchtkasten, darunter die Terminbuchung |
-| `/termin` | Kalender, Anfrageformular, die wichtigsten Fragen |
-| `/preise` | Richtwerte, Tagessatz, was den Preis beeinflusst |
-| `/bewertungen` | Kundenstimmen (nur echte, vom Inhaber eingetragen) |
-| `/studio` | Studio, Anfahrt mit Karte, Öffnungszeiten, Handschrift, Ablauf |
+| `/` | Startseite: Hero-Slideshow, dann sechs nummerierte Kapitel — Galerie-Vorschau, **vollständige Terminbuchung**, die beiden Artists, Vertrauensmerkmale, Preis-, Bewertungs- und Studio-Vorschau |
+| `/galerie` | Alle Motive mit Leuchtkasten, darunter die Stilrichtungen |
+| `/termin` | Ablauf in vier Schritten, Kalender, Anfrageformular |
+| `/preise` | Richtwerte, was im Preis enthalten ist, was ihn beeinflusst |
+| `/bewertungen` | Überblick (Schnitt + Verteilung) und alle Kundenstimmen |
+| `/studio` | Die beiden Studiofotos, Michi und Gorilla, Anfahrt mit Karte, Öffnungszeiten |
 | `/pflege` | Pflegeanleitung nach der Sitzung, inkl. Warnzeichen |
 | `/fragen` | Häufige Fragen (mit FAQPage-Structured-Data) |
 | `/impressum` · `/datenschutz` | Pflichtseiten · `noindex` |
@@ -136,6 +137,40 @@ Weil ein Beratungsgespräch genau der Ort ist, an dem offene Fragen geklärt
 werden, bietet **jedes** Auswahlfeld des Formulars „Noch nicht sicher" an.
 Wer sich nicht festlegen will, soll das sagen können, statt zu raten.
 
+## Jede Seite nur ihr Thema
+
+Die Unterseiten wiederholen einander nicht. Preise stehen auf `/preise`,
+Motive auf `/galerie`, der Laden auf `/studio` — und nirgends sonst. Auch
+angehängte „Termin buchen"-Streifen am Seitenende gibt es nicht mehr: der Weg
+zum Termin steht im Kopfbereich und in der Fußzeile, das reicht.
+
+Zwei Stellen sind bewusst anders:
+
+* Die **Terminbuchung steht zweimal**: vollständig auf `/termin` und
+  vollständig auf der Startseite direkt unter der Galerie-Vorschau. Wer sich
+  gerade durch die Motive gesehen hat, ist genau dort so weit — ein Klick auf
+  eine andere Seite wäre die Hürde, an der es scheitert. Es ist dieselbe
+  Komponente (`<BookingWidget />`), nicht zwei Umsetzungen.
+* Die **Startseite** ist die Übersicht: je ein Kapitel pro Hauptseite,
+  durchnummeriert von 01 bis 06.
+
+Die beiden **Studiofotos** (`STUDIO_PHOTOS` in `src/lib/studio.ts`) liegen
+ausdrücklich nicht in `GALLERY`. In der Galerie geht es um Arbeiten; Räume
+gehören zum Standort und stehen nur auf `/studio`.
+
+## Vertrauensmerkmale
+
+`TRUST_BADGES` (`src/lib/studio.ts`) zeigt fünf Kacheln auf der Startseite:
+Einwegnadeln, saubere Arbeitsfläche, eigener Entwurf, kostenlose Beratung,
+ab 18 mit Ausweis.
+
+**Das sind Selbstauskünfte über die Arbeitsweise, keine Zertifikate.** Bewusst
+kein Siegel, kein „TÜV-geprüft", keine erfundene Mitgliedschaft — Werbung mit
+Auszeichnungen, die es nicht gibt, ist nach § 5 UWG angreifbar und fliegt beim
+ersten Nachfragen auf. Wenn echte Nachweise vorliegen (Hygieneschulung,
+Erste-Hilfe-Kurs, Anzeige beim Gesundheitsamt), gehören sie dort hinein — mit
+Namen und Jahr.
+
 ## Design
 
 Die Farben stammen nicht aus einer Palette, sondern aus den Fotos des Studios:
@@ -153,6 +188,27 @@ Die Farben stammen nicht aus einer Palette, sondern aus den Fotos des Studios:
 Schrift: **Anton** greift die fetten Versalien der Scheibe auf, **Permanent
 Marker** den handgemalten Schriftzug daneben (sparsam eingesetzt), **Inter**
 trägt alles, was gelesen statt angeschaut werden muss.
+
+**Bewegung.** Alles blendet beim Hereinscrollen ein — `Reveal` für einzelne
+Blöcke, `Stagger` für Listen, `SplitHeadline` für Überschriften, die wortweise
+aus einer Maske aufsteigen, `Parallax` für Bilder. Animiert werden
+ausschließlich `transform` und `opacity`; `prefers-reduced-motion` schaltet
+jede Bewegung ab und zeigt sofort den Endzustand.
+
+**Hero-Slideshow.** Wechselt von selbst alle **7 Sekunden** (`INTERVAL_MS` in
+`src/components/Hero.tsx`). Unter dem aktiven Vorschaubild läuft ein Balken
+genau diese Zeit ab, damit sichtbar ist, wann der nächste Wechsel kommt. Die
+Schau pausiert, sobald der Tab in den Hintergrund geht, und steht bei
+reduzierter Bewegung ganz still — dann bleibt der Balken voll, statt einen
+Ablauf vorzutäuschen, den es nicht gibt. Jedes Motiv bringt über `focal` seinen
+eigenen Bildausschnitt mit: ein Hochformat bildschirmfüllend zu zeigen heißt,
+den Großteil wegzuschneiden, und welcher Teil stehen bleibt, entscheidet über
+Motiv oder Hautausschnitt.
+
+**Galeriegröße.** Die Masonry-Spalten stehen auf 1 (Handy) / 2 (ab 640 px) /
+3 (ab 1280 px) — siehe `.masonry` in `src/app/globals.css`. Vier Spalten
+nebeneinander machten aus jeder Arbeit eine Briefmarke; bei einer
+Tattoo-Galerie muss man die Linien erkennen.
 
 ## Datenhaltung
 
@@ -197,9 +253,11 @@ TATTOO_SESSION_SECRET=…     # ≥32 zufällige Zeichen
 
 Ohne CMS, alles an einer Stelle:
 
-* **Texte, Adresse, Öffnungszeiten, FAQ, Stilrichtungen** → `src/lib/studio.ts`
-* **Galerie** → Bild nach `public/` legen, Eintrag in `GALLERY` ergänzen.
-  `blur` ist ein 12 px breites WebP als Data-URI:
+* **Texte, Adresse, Öffnungszeiten, FAQ, Stilrichtungen, Artists,
+  Vertrauensmerkmale** → `src/lib/studio.ts`
+* **Galerie** → Bild nach `public/` legen, Eintrag in `GALLERY` ergänzen
+  (`inHero: true` nimmt es in die Slideshow auf, `focal` setzt dort den
+  Bildausschnitt). `blur` ist ein 12 px breites WebP als Data-URI:
   ```js
   sharp(datei).resize({ width: 12 }).webp({ quality: 35 }).toBuffer()
   ```
@@ -258,5 +316,15 @@ auf den betroffenen Seiten sichtbar markiert:
    sind. Ein unvollständiges Impressum ist in Deutschland abmahnfähig —
    bitte den fertigen Text prüfen lassen.
 
-Adresse, Telefonnummer und der Artist-Name stammen vom Schaufenster-Foto
-des Studios und sollten gegengeprüft werden.
+6. **Vertrauensmerkmale** (`TRUST_BADGES` in `src/lib/studio.ts`) sind
+   Selbstauskünfte, keine Zertifikate. Bitte prüfen, dass jede Zusage im
+   Studio auch wirklich so gehalten wird — und echte Nachweise dort
+   ergänzen, statt Siegel zu erfinden.
+7. **Artist-Texte** (`ARTISTS` in `src/lib/studio.ts`) beschreiben
+   Schwerpunkte und Arbeitsweise von Michi und Gorilla. Von beiden
+   gegenlesen lassen.
+
+Adresse und Telefonnummer stammen vom Schaufenster-Foto des Studios und
+sollten gegengeprüft werden. Auf der Scheibe steht „Artist: Michl" — im
+Projekt ist durchgehend **Michi** hinterlegt; bitte klären, welche
+Schreibweise nach außen gelten soll.
