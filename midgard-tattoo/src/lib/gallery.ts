@@ -99,7 +99,11 @@ export async function getHeroImages(): Promise<DisplayImage[]> {
     console.error("[gallery] Bestand nicht lesbar, zeige mitgelieferte Motive", error);
   }
 
-  const kuratiert = GALLERY.filter((p) => p.inHero);
+  // Nach `heroOrder` sortiert: welches Motiv den Auftakt macht, ist eine
+  // Entscheidung und darf nicht davon abhängen, wie die Galerie sortiert ist.
+  const kuratiert = GALLERY.filter((p) => p.inHero)
+    .slice()
+    .sort((a, b) => (a.heroOrder ?? 99) - (b.heroOrder ?? 99));
   if (kuratiert.length) return kuratiert.map(fromBuiltIn);
 
   const fallback = await getGalleryImages();

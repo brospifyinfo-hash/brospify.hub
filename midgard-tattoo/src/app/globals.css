@@ -286,7 +286,23 @@ select.field option {
 .ticker-track {
   display: flex;
   width: max-content;
-  animation: ticker 38s linear infinite;
+  /* Langsam genug zum Mitlesen: alles darunter wirkt als Flimmern. */
+  animation: ticker 60s linear infinite;
+}
+
+/* Die Ränder ausblenden, statt den Text an der Fensterkante
+   abzuschneiden — sonst sieht das Band aus wie ein Darstellungsfehler.
+   `mask` erst ab 2023 überall; ohne Unterstützung bleibt einfach die
+   harte Kante, nichts geht kaputt. */
+.ticker-mask {
+  /* Breit genug, dass angeschnittene Wörter wirklich verschwinden statt
+     nur blasser zu werden — sonst liest man weiter „ALISTIC" am Rand. */
+  -webkit-mask-image: linear-gradient(
+    to right, transparent, #000 13%, #000 87%, transparent
+  );
+  mask-image: linear-gradient(
+    to right, transparent, #000 13%, #000 87%, transparent
+  );
 }
 @keyframes ticker {
   from { transform: translate3d(0, 0, 0); }

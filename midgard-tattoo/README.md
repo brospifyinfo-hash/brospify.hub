@@ -200,10 +200,21 @@ jede Bewegung ab und zeigt sofort den Endzustand.
 genau diese Zeit ab, damit sichtbar ist, wann der nächste Wechsel kommt. Die
 Schau pausiert, sobald der Tab in den Hintergrund geht, und steht bei
 reduzierter Bewegung ganz still — dann bleibt der Balken voll, statt einen
-Ablauf vorzutäuschen, den es nicht gibt. Jedes Motiv bringt über `focal` seinen
-eigenen Bildausschnitt mit: ein Hochformat bildschirmfüllend zu zeigen heißt,
-den Großteil wegzuschneiden, und welcher Teil stehen bleibt, entscheidet über
-Motiv oder Hautausschnitt.
+Ablauf vorzutäuschen, den es nicht gibt.
+
+Das Motiv liegt auf breiten Schirmen **nicht** als Hintergrund hinter dem Text.
+Tattoo-Aufnahmen sind hochkant; ein 16:9-Ausschnitt schneidet zwei Drittel weg,
+und vom Löwen bleibt ein Auge übrig. Stattdessen steht das Bild rechts in einem
+eigenen Rahmen (4:5, mit Titel, Stil und Körperstelle), und den Hintergrund
+macht dieselbe Aufnahme als 12-px-Version aus dem Blur-Platzhalter, weich
+hochskaliert: kein zusätzlicher Ladevorgang, aber die Farbe des Motivs auf der
+ganzen Fläche. Auf dem Handy ist der Bildschirm selbst hochkant — dort läuft
+die Aufnahme wie gehabt bildschirmfüllend hinter dem Text.
+
+Welche Motive laufen und in welcher Reihenfolge, steuern `inHero` und
+`heroOrder` in `GALLERY` (`src/lib/studio.ts`); `focal` setzt den
+Bildausschnitt. Sobald der Inhaber eigene Bilder mit dem Haken „Im Hero zeigen"
+hochlädt, gilt ausschließlich seine Auswahl.
 
 **Galeriegröße.** Die Masonry-Spalten stehen auf 1 (Handy) / 2 (ab 640 px) /
 3 (ab 1280 px) — siehe `.masonry` in `src/app/globals.css`. Vier Spalten
@@ -256,8 +267,8 @@ Ohne CMS, alles an einer Stelle:
 * **Texte, Adresse, Öffnungszeiten, FAQ, Stilrichtungen, Artists,
   Vertrauensmerkmale** → `src/lib/studio.ts`
 * **Galerie** → Bild nach `public/` legen, Eintrag in `GALLERY` ergänzen
-  (`inHero: true` nimmt es in die Slideshow auf, `focal` setzt dort den
-  Bildausschnitt). `blur` ist ein 12 px breites WebP als Data-URI:
+  (`inHero: true` nimmt es in die Slideshow auf, `heroOrder` bestimmt die
+  Reihenfolge dort, `focal` den Bildausschnitt). `blur` ist ein 12 px breites WebP als Data-URI:
   ```js
   sharp(datei).resize({ width: 12 }).webp({ quality: 35 }).toBuffer()
   ```

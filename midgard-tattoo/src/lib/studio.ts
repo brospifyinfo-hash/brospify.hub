@@ -62,7 +62,11 @@ export interface GalleryPiece {
    *  Reihenfolge überlassen — inklusive Studiofotos, die als
    *  bildschirmfüllender Hintergrund nicht funktionieren. */
   inHero?: boolean;
-  /** `object-position` für die bildschirmfüllende Darstellung im Hero.
+  /** Reihenfolge in der Slideshow. Ohne Angabe entscheidet die
+   *  Reihenfolge in GALLERY — und die richtet sich nach der Galerie-Seite,
+   *  nicht danach, welches Motiv den besten ersten Eindruck macht. */
+  heroOrder?: number;
+  /** `object-position` für die Darstellung im Hero.
    *  Ein Hochformat auf einen breiten Bildschirm zu legen heißt, den
    *  Großteil wegzuschneiden — welcher Teil stehen bleibt, entscheidet
    *  über Wirkung oder Unfall. Deshalb pro Motiv gesetzt statt einmal
@@ -82,8 +86,9 @@ export const GALLERY: GalleryPiece[] = [
     height: 1549,
     blur: "data:image/webp;base64,UklGRmYAAABXRUJQVlA4IFoAAAAQAgCdASoMABAAA8BgJZACdADdb+Xmh6lAAP7m2kSR/1zqzzSUYMqc/i7vsVBh4lBY5CosYZGtq3fDnnhtW/bnpImqgRFHNnPE1M4pku95ntQPjuGrGX2f4AA=",
     span: "tall",
-    inHero: true,
     focal: "48% 45%",
+    inHero: true,
+    heroOrder: 2,
   },
   {
     slug: "loewe-sketch",
@@ -95,8 +100,9 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1155,
     blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAADwAQCdASoMAAwAA8BgJQBOgBusN08sruAA+EKjYtTIBLkoPPj+oGatVsUpItM/mde47Wb1TYjoRRMq/ZtcKj+OyWts6e+AAAA=",
-    inHero: true,
     focal: "50% 42%",
+    inHero: true,
+    heroOrder: 5,
   },
   {
     slug: "libelle-seerose",
@@ -131,8 +137,9 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1172,
     blur: "data:image/webp;base64,UklGRlQAAABXRUJQVlA4IEgAAACwAQCdASoMAAwAA8BgJQBOgBmfNjoAAOJ8xmENCEkwbbAT29kL30Q3Zz38TZQKidQVuvps4yvU0w6HWw9z/Iv02Y+ESC6gAAA=",
-    inHero: true,
     focal: "45% 35%",
+    inHero: true,
+    heroOrder: 1,
   },
   {
     slug: "phoenix",
@@ -144,8 +151,9 @@ export const GALLERY: GalleryPiece[] = [
     width: 824,
     height: 1153,
     blur: "data:image/webp;base64,UklGRmIAAABXRUJQVlA4IFYAAACwAwCdASoMABEAPwFqrU8rJaQiMAgBYCAJQBOkGQAtYcF3wGk5IAD7AHRu8O5E9L/neIEY+Hfr7dgnmicK4IRVrgQd5IooR5FXNwbMCteD+ZCsnEAAAA==",
-    inHero: true,
     focal: "48% 40%",
+    inHero: true,
+    heroOrder: 4,
   },
   {
     slug: "blut-schweiss-traenen",
@@ -168,13 +176,16 @@ export const GALLERY: GalleryPiece[] = [
     width: 1179,
     height: 1156,
     blur: "data:image/webp;base64,UklGRkYAAABXRUJQVlA4IDoAAADwAQCdASoMAAwAA8BgJZQCdADdJAXI6YAA/qwsZ/Low6OkhqWv5JOrBqiOFZJiamxse76kyUJiEgAA",
-    inHero: true,
     focal: "50% 40%",
+    inHero: true,
+    heroOrder: 3,
   },
 ];
 
 /** Erstes Bild der Hero-Slideshow — Rückfall für Vorschaubilder. */
-export const HERO_PIECE = GALLERY.find((p) => p.inHero) ?? GALLERY[0];
+export const HERO_PIECE =
+  GALLERY.filter((p) => p.inHero).sort((a, b) => (a.heroOrder ?? 99) - (b.heroOrder ?? 99))[0]
+  ?? GALLERY[0];
 
 // ─── Stil-Schwerpunkte (Sektion „Handschrift") ───────────────────
 export const SPECIALTIES = [

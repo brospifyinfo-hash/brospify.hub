@@ -1,23 +1,28 @@
 "use client";
 
 // ─── Hero mit Slideshow ──────────────────────────────────────────
-// Bildschirmfüllender Auftakt. Die Bilder wechseln von selbst alle
-// sieben Sekunden mit einer weichen Blende; welche gezeigt werden,
-// bestimmt der Inhaber im Dashboard über den Haken „Im Hero zeigen".
+// Bildschirmfüllender Auftakt. Die Motive wechseln von selbst alle
+// sieben Sekunden; welche gezeigt werden, bestimmt der Inhaber im
+// Dashboard über den Haken „Im Hero zeigen".
 //
-// Vier Regeln, an denen die Umsetzung hängt:
-//  • Nur das aktive Bild ist im DOM, alle liegen an derselben Stelle —
-//    so gibt es kein Nachladen beim Wechsel und keinen Sprung im Layout.
-//  • Jedes Motiv bringt seinen eigenen Bildausschnitt mit (`focal`).
-//    Ein Hochformat bildschirmfüllend zu zeigen heißt, den Großteil
-//    wegzuschneiden; welcher Teil stehen bleibt, ist der Unterschied
-//    zwischen Motiv und Hautausschnitt.
+// Die tragende Entscheidung: das Motiv liegt auf breiten Schirmen NICHT
+// als Hintergrund hinter dem Text. Tattoo-Aufnahmen sind hochkant, ein
+// 16:9-Ausschnitt schneidet davon zwei Drittel weg — vom Löwen bleibt
+// ein Auge übrig, und die beste Arbeit sieht aus wie eine Textur. Statt
+// dessen steht das Bild rechts in einem eigenen Rahmen, groß und
+// vollständig. Den Hintergrund macht dieselbe Aufnahme als 12-px-Version
+// aus dem Blur-Platzhalter, weich hochskaliert: kostet keinen einzigen
+// zusätzlichen Ladevorgang und gibt der Fläche die Farbe des Motivs.
+//
+// Auf dem Handy ist der Bildschirm selbst hochkant — dort passt die
+// Aufnahme, also läuft sie wie gehabt bildschirmfüllend hinter dem Text.
+//
+// Weitere Regeln:
+//  • Jedes Motiv bringt über `focal` seinen Bildausschnitt mit.
 //  • Der Fortschritt ist sichtbar: unter dem aktiven Vorschaubild läuft
 //    ein Balken ab. Wer eine Schau nicht steuern kann, muss wenigstens
 //    sehen, wann sie weiterspringt.
-//  • `prefers-reduced-motion` hält alles an und zeigt das erste Bild;
-//    automatisch wechselnde Inhalte sind für manche Menschen schlicht
-//    nicht benutzbar.
+//  • `prefers-reduced-motion` hält alles an und zeigt das erste Bild.
 
 import { AnimatePresence, motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import Image from "next/image";
@@ -40,8 +45,8 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
   const [runde, setRunde] = useState(0);
 
   const { scrollYProgress } = useScroll({ target: ref, offset: ["start start", "end start"] });
-  const imageY = useTransform(scrollYProgress, [0, 1], ["0%", "16%"]);
-  const textY = useTransform(scrollYProgress, [0, 1], ["0%", "-12%"]);
+  const backdropY = useTransform(scrollYProgress, [0, 1], ["0%", "14%"]);
+  const textY = useTransform(scrollYProgress, [0, 1], ["0%", "-10%"]);
   const fade = useTransform(scrollYProgress, [0, 0.75], [1, 0]);
 
   const count = images.length;
@@ -79,118 +84,149 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
   return (
     <section
       ref={ref}
-      className="relative flex min-h-[100svh] flex-col justify-end"
+      className="relative flex min-h-[100svh] flex-col justify-end lg:justify-center"
       style={{ isolation: "isolate" }}
     >
-      {/* ── Slideshow ── */}
+      {/* ── Hintergrund ── */}
       <motion.div
         aria-hidden
         className="absolute inset-0 overflow-hidden"
-        style={reduced ? undefined : { y: imageY }}
+        style={reduced ? undefined : { y: backdropY }}
       >
         <AnimatePresence initial={false}>
           <motion.div
             key={`${active?.id ?? "leer"}-${runde}`}
             className="absolute inset-0"
-            initial={reduced ? false : { opacity: 0, scale: 1.07 }}
-            animate={{ opacity: 1, scale: 1 }}
+            initial={reduced ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            // Lange Blende, langsamer Zoom: der Wechsel soll auffallen,
-            // ohne die Aufmerksamkeit vom Text zu ziehen.
-            transition={{ opacity: { duration: 1.4 }, scale: { duration: 9, ease: "linear" } }}
+            transition={{ duration: 1.3 }}
           >
             {active && (
-              <Image
-                src={active.src}
-                alt=""
-                fill
-                // Nur das erste Bild ist für den ersten Eindruck nötig;
-                // die übrigen holt der Browser nebenbei.
-                priority={index === 0}
-                placeholder="blur"
-                blurDataURL={active.blur}
-                sizes="100vw"
-                className="object-cover"
-                style={{ objectPosition: active.focal }}
-              />
+              <>
+                {/* Handy: das Motiv selbst, der Bildschirm ist hochkant. */}
+                <Image
+                  src={active.src}
+                  alt=""
+                  fill
+                  priority={index === 0}
+                  placeholder="blur"
+                  blurDataURL={active.blur}
+                  sizes="100vw"
+                  className="object-cover lg:hidden"
+                  style={{ objectPosition: active.focal }}
+                />
+                {/* Breite Schirme: nur Farbe und Stimmung. Das ist der
+                    12-px-Platzhalter, hochskaliert — deshalb weich, ohne
+                    einen Filter zu berechnen oder etwas nachzuladen. */}
+                <motion.div
+                  className="absolute inset-0 hidden lg:block"
+                  style={{
+                    backgroundImage: `url(${active.blur})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }}
+                  initial={reduced ? false : { scale: 1.12 }}
+                  animate={{ scale: 1.04 }}
+                  transition={{ duration: 9, ease: "linear" }}
+                />
+              </>
             )}
           </motion.div>
         </AnimatePresence>
 
-        <div className="absolute inset-0" style={{ background: "rgba(11,11,12,0.44)" }} />
+        {/* Auf dem Handy liegt der Text auf dem Motiv und braucht die
+            volle Abdunklung. Auf breiten Schirmen ist der Hintergrund
+            ohnehin nur Farbe — dort darf man sie auch sehen. */}
+        <div className="absolute inset-0 lg:hidden" style={{ background: "rgba(11,11,12,0.46)" }} />
+        <div className="absolute inset-0 hidden lg:block" style={{ background: "rgba(11,11,12,0.26)" }} />
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(to top, var(--ink) 0%, rgba(11,11,12,0.88) 28%, rgba(11,11,12,0.32) 64%, rgba(11,11,12,0.62) 100%)",
+              "linear-gradient(to top, var(--ink) 0%, rgba(11,11,12,0.88) 26%, rgba(11,11,12,0.34) 64%, rgba(11,11,12,0.62) 100%)",
           }}
         />
-        {/* Zweiter Verlauf von links: gibt der Schrift überall Grund,
-            auch wenn das Motiv gerade hell in die linke Hälfte ragt. */}
         <div
           className="absolute inset-0 hidden md:block"
           style={{
             background:
-              "linear-gradient(to right, rgba(11,11,12,0.78) 0%, rgba(11,11,12,0.25) 46%, transparent 72%)",
+              "linear-gradient(to right, rgba(11,11,12,0.82) 0%, rgba(11,11,12,0.42) 48%, rgba(11,11,12,0.30) 100%)",
           }}
         />
       </motion.div>
 
-      {/* ── Aussage ── */}
+      {/* ── Inhalt ── */}
       <motion.div
-        className="shell relative z-10 pb-14 pt-32 md:pb-20"
+        className="shell relative z-10 pb-14 pt-32 md:pb-20 lg:py-28"
         style={reduced ? undefined : { y: textY }}
       >
-        <motion.div className="mb-6 flex flex-wrap items-center gap-3" {...rise(0.1)}>
-          <span className="eyebrow">{STUDIO.zip} {STUDIO.city} · Nürnberger Land</span>
-          {openSlots > 0 && (
-            <span
-              className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.14em]"
-              style={{ background: "var(--signal-glow)", color: "var(--signal)" }}
+        <div className="grid items-center gap-12 lg:grid-cols-[1.02fr_0.98fr] lg:gap-16">
+          <div>
+            <motion.div className="mb-6 flex flex-wrap items-center gap-3" {...rise(0.1)}>
+              <span className="eyebrow">{STUDIO.zip} {STUDIO.city} · Nürnberger Land</span>
+              {openSlots > 0 && (
+                <span
+                  className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[0.7rem] font-medium uppercase tracking-[0.14em]"
+                  style={{ background: "var(--signal-glow)", color: "var(--signal)" }}
+                >
+                  <span className="pulse-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--signal)" }} />
+                  {openSlots} {openSlots === 1 ? "freier Termin" : "freie Termine"}
+                </span>
+              )}
+            </motion.div>
+
+            <h1 className="display display-hero">
+              <motion.span className="block" {...rise(0.16)}>Tinte,</motion.span>
+              <motion.span className="block" style={{ color: "var(--skin)" }} {...rise(0.26)}>
+                die bleibt
+              </motion.span>
+            </h1>
+
+            <motion.p
+              className="mt-7 max-w-[46ch] text-[1.02rem] leading-relaxed md:text-[1.1rem]"
+              style={{ color: "var(--bone-soft)" }}
+              {...rise(0.38)}
             >
-              <span className="pulse-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--signal)" }} />
-              {openSlots} {openSlots === 1 ? "freier Termin" : "freie Termine"}
-            </span>
+              Schwarz-Grau-Arbeiten mit weichen Verläufen, feine Linien und ehrliche
+              Beratung — von {STUDIO.artists} in der {STUDIO.street}. Jedes Motiv
+              entsteht für genau eine Person.
+            </motion.p>
+
+            <motion.div className="mt-9 flex flex-wrap items-center gap-3" {...rise(0.48)}>
+              <Link href="/termin" className="btn btn-signal h-14 px-8 text-[0.8rem]">
+                Termin buchen
+              </Link>
+              <Link href="/galerie" className="btn btn-ghost h-14 px-7 text-[0.8rem]">
+                Galerie ansehen
+              </Link>
+            </motion.div>
+
+            {count > 1 && (
+              <motion.div {...rise(0.56)}>
+                <SlideControls
+                  images={images}
+                  index={index}
+                  runde={runde}
+                  laufend={!reduced && !paused}
+                  onSelect={gehZu}
+                />
+              </motion.div>
+            )}
+          </div>
+
+          {/* ── Das Motiv, groß und vollständig ── */}
+          {active && (
+            <motion.div
+              className="hidden lg:block"
+              initial={reduced ? false : { opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 1, delay: 0.3, ease: EASE }}
+            >
+              <SlideFrame image={active} runde={runde} reduced={Boolean(reduced)} />
+            </motion.div>
           )}
-        </motion.div>
-
-        <h1 className="display display-xl">
-          <motion.span className="block" {...rise(0.16)}>Tinte,</motion.span>
-          <motion.span className="block" style={{ color: "var(--skin)" }} {...rise(0.26)}>
-            die bleibt
-          </motion.span>
-        </h1>
-
-        <motion.p
-          className="mt-8 max-w-[48ch] text-[1.05rem] leading-relaxed md:text-[1.15rem]"
-          style={{ color: "var(--bone-soft)" }}
-          {...rise(0.38)}
-        >
-          Schwarz-Grau-Arbeiten mit weichen Verläufen, feine Linien und ehrliche
-          Beratung — von {STUDIO.artists} in der {STUDIO.street}. Jedes Motiv
-          entsteht für genau eine Person.
-        </motion.p>
-
-        <motion.div className="mt-10 flex flex-wrap items-center gap-3" {...rise(0.48)}>
-          <Link href="/termin" className="btn btn-signal h-14 px-8 text-[0.8rem]">
-            Termin buchen
-          </Link>
-          <Link href="/galerie" className="btn btn-ghost h-14 px-7 text-[0.8rem]">
-            Galerie ansehen
-          </Link>
-        </motion.div>
-
-        {count > 1 && (
-          <motion.div {...rise(0.56)}>
-            <SlideControls
-              images={images}
-              index={index}
-              runde={runde}
-              laufend={!reduced && !paused}
-              onSelect={gehZu}
-            />
-          </motion.div>
-        )}
+        </div>
       </motion.div>
 
       <motion.div
@@ -207,11 +243,66 @@ export function Hero({ images, openSlots }: { images: DisplayImage[]; openSlots:
   );
 }
 
+// ─── Der Bildrahmen ──────────────────────────────────────────────
+// Feste Proportion, damit beim Wechsel nichts springt — aber hochkant,
+// also nah an dem, was die Kamera aufgenommen hat. Der Beschnitt bleibt
+// dadurch klein, und `focal` entscheidet, welcher Rest wegfällt.
+function SlideFrame({
+  image,
+  runde,
+  reduced,
+}: {
+  image: DisplayImage;
+  runde: number;
+  reduced: boolean;
+}) {
+  return (
+    <figure
+      className="relative ml-auto w-full max-w-[30rem] overflow-hidden"
+      style={{ border: "1px solid var(--ink-hair-strong)", background: "var(--ink-raise)" }}
+    >
+      <span className="relative block aspect-[4/5] overflow-hidden">
+        <AnimatePresence initial={false}>
+          <motion.span
+            key={`${image.id}-${runde}`}
+            className="absolute inset-0"
+            initial={reduced ? false : { opacity: 0, scale: 1.06 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ opacity: { duration: 1 }, scale: { duration: 8, ease: "linear" } }}
+          >
+            <Image
+              src={image.src}
+              alt={image.alt}
+              fill
+              placeholder="blur"
+              blurDataURL={image.blur}
+              sizes="(max-width: 1023px) 0px, 30rem"
+              className="object-cover"
+              style={{ objectPosition: image.focal }}
+            />
+          </motion.span>
+        </AnimatePresence>
+      </span>
+
+      <figcaption
+        className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-4 py-3"
+        style={{ borderTop: "1px solid var(--ink-hair)" }}
+      >
+        <span className="display text-[1.05rem] leading-none">{image.title}</span>
+        <span className="text-[0.66rem] uppercase tracking-[0.14em]" style={{ color: "var(--bone-dim)" }}>
+          {image.style} · {image.placement}
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
 // ─── Steuerung der Schau ─────────────────────────────────────────
-// Vorschaubilder statt Punkten: man sieht, was als Nächstes kommt, und
-// kann gezielt hinspringen. Unter dem aktiven Bild läuft der Balken bis
-// zum nächsten Wechsel ab — genau die Sekunden, die `INTERVAL_MS`
-// vorgibt, damit die Anzeige nicht bloß Dekoration ist.
+// Vorschaubilder in einer Größe, in der man das Motiv erkennt — Punkte
+// oder Briefmarken sagen nichts darüber, was als Nächstes kommt. Unter
+// dem aktiven Bild läuft der Balken bis zum nächsten Wechsel ab, genau
+// die Sekunden, die `INTERVAL_MS` vorgibt.
 function SlideControls({
   images,
   index,
@@ -228,8 +319,8 @@ function SlideControls({
   const active = images[index];
 
   return (
-    <div className="mt-10 flex flex-wrap items-center gap-x-5 gap-y-4">
-      <ul className="flex items-end gap-2.5">
+    <div className="mt-10">
+      <ul className="flex items-end gap-2.5 md:gap-3">
         {images.map((image, i) => {
           const istAktiv = i === index;
           return (
@@ -241,13 +332,17 @@ function SlideControls({
                 aria-current={istAktiv}
                 className="group block"
               >
+                {/* Breite über Klassen statt Inline-Stil: auf dem Handy
+                    müssen alle Vorschaubilder nebeneinander in eine Zeile
+                    passen, sonst bricht die letzte allein um. */}
                 <span
-                  className="relative block overflow-hidden transition-all duration-500"
+                  className={`relative block overflow-hidden transition-all duration-500 ${
+                    istAktiv ? "w-[4.25rem] md:w-[5.5rem]" : "w-[3.5rem] md:w-[4.25rem]"
+                  }`}
                   style={{
-                    width: istAktiv ? "4rem" : "2.75rem",
-                    aspectRatio: "1 / 1",
+                    aspectRatio: "4 / 5",
                     border: `1px solid ${istAktiv ? "var(--signal)" : "var(--ink-hair-strong)"}`,
-                    opacity: istAktiv ? 1 : 0.55,
+                    opacity: istAktiv ? 1 : 0.6,
                   }}
                 >
                   <Image
@@ -256,7 +351,7 @@ function SlideControls({
                     fill
                     placeholder="blur"
                     blurDataURL={image.blur}
-                    sizes="64px"
+                    sizes="88px"
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                     style={{ objectPosition: image.focal }}
                   />
@@ -269,11 +364,10 @@ function SlideControls({
                     wäre gelogen. */}
                 <span
                   aria-hidden
-                  className="mt-1.5 block h-[3px] overflow-hidden transition-all duration-500"
-                  style={{
-                    width: istAktiv ? "4rem" : "2.75rem",
-                    background: "var(--ink-hair-strong)",
-                  }}
+                  className={`mt-2 block h-[3px] overflow-hidden transition-all duration-500 ${
+                    istAktiv ? "w-[4.25rem] md:w-[5.5rem]" : "w-[3.5rem] md:w-[4.25rem]"
+                  }`}
+                  style={{ background: "var(--ink-hair-strong)" }}
                 >
                   {istAktiv && (
                     <motion.span
@@ -296,7 +390,9 @@ function SlideControls({
         })}
       </ul>
 
-      <span className="flex items-baseline gap-3 text-[0.7rem] uppercase tracking-[0.16em]">
+      {/* Auf dem Handy steht der Titel hier, weil es dort keinen Rahmen
+          mit Bildunterschrift gibt. */}
+      <span className="mt-4 flex items-baseline gap-3 text-[0.7rem] uppercase tracking-[0.16em] lg:hidden">
         <span className="display tabular-nums" style={{ color: "var(--signal)" }}>
           {String(index + 1).padStart(2, "0")}
         </span>
