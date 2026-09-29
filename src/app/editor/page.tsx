@@ -16,7 +16,7 @@ import {
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
   SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, Trash2, UploadCloud, X,
   Pencil, Target, ChevronDown, ArrowDownUp, FileText, Save, FolderOpen,
-  Clapperboard, ArrowUp,
+  Clapperboard, ArrowUp, Square,
   type LucideIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -30,6 +30,7 @@ import DesignsOverlay from "@/components/theme-editor/DesignsOverlay";
 import BuyboxGalleryOverlay from "@/components/theme-editor/BuyboxGalleryOverlay";
 import FullPreviewOverlay from "@/components/theme-editor/FullPreviewOverlay";
 import AiCopilot from "@/components/theme-editor/AiCopilot";
+import { useCinemaRecorder } from "@/components/theme-editor/useCinemaRecorder";
 import StartChoiceOverlay from "@/components/theme-editor/StartChoiceOverlay";
 import EditorLoginModal from "@/components/theme-editor/EditorLoginModal";
 import AccountOverlay from "@/components/theme-editor/AccountOverlay";
@@ -73,6 +74,12 @@ const CINEMA_SCALE_MAX = 2;
 const CINEMA_SCALE_DEFAULT = 0.7;
 const CINEMA_SCALE_LS = "bspx-cinema-scale-v2";
 const CINEMA_STAGE_BG = "#060608";
+// Aufnahme-Format: HD 9:16 (Reels/TikTok/Shorts) nutzt die volle
+// Bildschirmhöhe für maximale Pixel; „Wie angezeigt" nimmt die aktuelle
+// Handy-Spalte 1:1 auf. Breite gedeckelt auf 2× Handy (780 px) — mehr
+// kann die Vorschau nicht scharf rendern (ihr Zoom endet bei 200 %).
+const CINEMA_REC_FORMAT_LS = "bspx-cinema-rec-format";
+const CINEMA_REC_MAX_W = 780;
 // Handy-Bildschirm randlos (keine Browser-Leiste, keine Rundung/Schatten)
 // und die AI-Leiste garantiert deckend — auch im Drag-Zustand, dessen
 // halbtransparente Tönung sonst vom Keyer mit weggerechnet würde.
@@ -81,6 +88,10 @@ const CINEMA_CSS = `
 .bspx-cinema [data-cinema-phone] .pm-bar{display:none!important}
 .bspx-cinema [data-cinema-phone] .pm-frame{border-radius:0!important}
 .bspx-cinema [data-cinema-phone] .pm-canvas{border:0!important;border-radius:0!important;box-shadow:none!important}
+/* will-change friert die Raster-Auflösung der Galerie auf die Größe beim
+   ersten Anzeigen ein — größer skaliert (bzw. in der Aufnahme) würde sie
+   nur hochgerechnet und unscharf. Im Kino-Modus immer neu rastern. */
+.bspx-cinema [data-cinema-phone] .pm-gallery{will-change:auto!important}
 .bspx-cinema [data-ai-bar]{background-color:#ffffff!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
 `;
 
@@ -385,6 +396,37 @@ export default function ThemeEditorPage() {
   const [cinemaUi, setCinemaUi] = useState(true);
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const cinemaPhoneRef = useRef<HTMLDivElement>(null);
+  /** Aufnahme-Format (gemerkt): HD 9:16 oder die Handy-Spalte wie angezeigt. */
+  const [cinemaRecFormat, setCinemaRecFormat] = useState<"hd" | "view">(() => {
+    if (typeof window === "undefined") return "hd";
+    try { return localStorage.getItem(CINEMA_REC_FORMAT_LS) === "view" ? "view" : "hd"; } catch { return "hd"; }
+  });
+  /** true, solange das HD-Aufnahme-Layout aktiv ist (Start → Speichern). */
+  const [cinemaRecLayout, setCinemaRecLayout] = useState(false);
+  const getCinemaPhone = useCallback(() => cinemaPhoneRef.current, []);
+  const recorder = useCinemaRecorder(getCinemaPhone);
+  const recStateRef = useRef(recorder.state);
+  recStateRef.current = recorder.state;
+  const recStopRef = useRef(recorder.stop);
+  recStopRef.current = recorder.stop;
+  const startCinemaRecording = useCallback(() => {
+    recorder.start(
+      () => { if (cinemaRecFormat === "hd") setCinemaRecLayout(true); },
+      () => setCinemaRecLayout(false),
+    );
+  }, [recorder, cinemaRecFormat]);
+  const pickCinemaRecFormat = useCallback((f: "hd" | "view") => {
+    setCinemaRecFormat(f);
+    try { localStorage.setItem(CINEMA_REC_FORMAT_LS, f); } catch { /* privat */ }
+  }, []);
+  /** Kino verlassen — läuft eine Aufnahme, wird sie vorher gespeichert. */
+  const exitCinema = useCallback(() => {
+    if (recStateRef.current === "recording") recStopRef.current();
+    // Freigabe-Dialog offen bzw. Datei wird geschrieben: nicht verlassen —
+    // die Aufnahme würde sonst im normalen Editor starten/enden.
+    else if (recStateRef.current !== "idle") return;
+    setCinema(false);
+  }, []);
 
   // Kino-Modus aktiv: Viewport messen, Seiten-Scroll sperren, ESC beendet,
   // Steuerleiste + Cursor nach 2,5 s Ruhe ausblenden (saubere Aufnahme).
@@ -415,6 +457,10 @@ export default function ThemeEditorPage() {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       e.stopPropagation();
+      // Läuft eine Aufnahme: ESC stoppt + speichert sie (kein Verlust durch
+      // versehentliches Drücken); das nächste ESC verlässt den Kino-Modus.
+      if (recStateRef.current === "recording") { recStopRef.current(); return; }
+      if (recStateRef.current !== "idle") return;
       setCinema(false);
     };
     window.addEventListener("resize", measure);
@@ -443,12 +489,26 @@ export default function ThemeEditorPage() {
   // Geometrie: Handy-Spalte rechts in voller Höhe (Breite = 390 px × Größe,
   // nie mehr als die halbe Bildschirmbreite), links die Bühne mit einem
   // zentrierten Bluescreen-QUADRAT; die AI-Leiste sitzt unten im Quadrat.
-  const cinemaPhoneW = Math.round(Math.min(390 * cinemaScale, viewport.w * 0.5 || 390 * cinemaScale));
+  const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
+  const cinemaRecW = even(Math.min((viewport.h * 9) / 16, viewport.w * 0.6, CINEMA_REC_MAX_W));
+  const cinemaRecH = even((cinemaRecW * 16) / 9);
+  const cinemaPhoneW = cinemaRecLayout
+    ? cinemaRecW
+    : Math.round(Math.min(390 * cinemaScale, viewport.w * 0.5 || 390 * cinemaScale));
   const cinemaStageW = Math.max(0, viewport.w - cinemaPhoneW);
   const cinemaSquare = Math.max(0, Math.min(cinemaStageW, viewport.h) - 80);
   const cinemaSquareLeft = (cinemaStageW - cinemaSquare) / 2;
   const cinemaSquareTop = (viewport.h - cinemaSquare) / 2;
   const cinemaAiW = Math.max(0, Math.min(cinemaSquare - 48, 820));
+  const cinemaUiShown = cinemaUi || recorder.state !== "idle" || !!recorder.result || !!recorder.error;
+  const recNotice = recorder.result || recorder.error;
+  const { clearNotice: clearRecNotice } = recorder;
+  useEffect(() => {
+    if (!recNotice) return;
+    const id = setTimeout(clearRecNotice, 10_000);
+    return () => clearTimeout(id);
+  }, [recNotice, clearRecNotice]);
+  const fmtClock = (sec: number) => `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, "0")}`;
   /** Linke Programm-Leiste eingeklappt (bleibt über Besuche erhalten).
    *  Lazy-Init ist SSR-sicher: die Rail rendert erst nach Produkt-Wahl,
    *  also nie im Server-HTML — kein Hydration-Mismatch. */
@@ -2051,7 +2111,7 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                 className={cinema
                   ? "bspx-cinema fixed inset-0 z-[90]"
                   : `order-2 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "vorschau" ? "" : "hidden"} lg:flex lg:flex-col`}
-                style={cinema ? { background: CINEMA_STAGE_BG, cursor: cinemaUi ? undefined : "none" } : undefined}
+                style={cinema ? { background: CINEMA_STAGE_BG, cursor: cinemaUiShown ? undefined : "none" } : undefined}
               >
                 {cinema && (
                   <>
@@ -2069,7 +2129,7 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                       style={{
                         left: 16, top: 16, background: "#ffffff", color: "#111114",
                         boxShadow: "0 12px 34px -12px rgba(0,0,0,.55)",
-                        opacity: cinemaUi ? 1 : 0, pointerEvents: cinemaUi ? "auto" : "none",
+                        opacity: cinemaUiShown ? 1 : 0, pointerEvents: cinemaUiShown ? "auto" : "none",
                       }}
                     >
                       <Clapperboard className="w-4 h-4" style={{ color: ACCENT }} />
@@ -2085,10 +2145,55 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                           step={5}
                           value={Math.round(cinemaScale * 100)}
                           onChange={(e) => changeCinemaScale(Number(e.target.value) / 100)}
-                          className="w-[120px] accent-[#95BF47] cursor-pointer"
+                          // Gesperrt während der Aufnahme: eine Größenänderung
+                          // mitten im MP4 (H.264) kann die Datei beschädigen.
+                          disabled={recorder.state !== "idle"}
+                          className="w-[120px] accent-[#95BF47] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         />
                         <span className="w-[34px] tabular-nums text-right" style={{ color: "#111114" }}>{Math.round(cinemaScale * 100)}%</span>
                       </label>
+                      <span className="w-px h-4" style={{ background: "#e4e4e7" }} />
+                      {/* Aufnahme: nur die Handy-Ansicht, als Video-Datei */}
+                      {recorder.state === "idle" && (
+                        <div className="flex items-center rounded-lg p-0.5" style={{ background: "#f4f4f5" }} title={t.themes.editorCinemaRecFormatHint}>
+                          {([["hd", t.themes.editorCinemaRecHd], ["view", t.themes.editorCinemaRecView]] as const).map(([f, label]) => (
+                            <button
+                              key={f}
+                              onClick={() => pickCinemaRecFormat(f)}
+                              className="rounded-md px-2 py-0.5 text-[11px] font-semibold transition"
+                              style={cinemaRecFormat === f
+                                ? { background: "#ffffff", color: "#111114", boxShadow: "0 1px 3px rgba(0,0,0,.12)" }
+                                : { color: "#71717a" }}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        onClick={recorder.state === "recording" ? recorder.stop : startCinemaRecording}
+                        disabled={recorder.state === "starting" || recorder.state === "saving"}
+                        title={t.themes.editorCinemaRecHint}
+                        className="flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-bold transition hover:opacity-90 disabled:opacity-60"
+                        style={{ background: "#dc2626", color: "#ffffff" }}
+                      >
+                        {recorder.state === "recording" ? (
+                          <>
+                            <Square className="w-3 h-3" fill="currentColor" />
+                            {t.themes.editorCinemaRecStop}
+                            <span className="tabular-nums">{fmtClock(recorder.elapsed)}</span>
+                          </>
+                        ) : recorder.state === "starting" ? (
+                          t.themes.editorCinemaRecStarting
+                        ) : recorder.state === "saving" ? (
+                          t.themes.editorCinemaRecSaving
+                        ) : (
+                          <>
+                            <span className="w-2 h-2 rounded-full" style={{ background: "#ffffff" }} />
+                            {t.themes.editorCinemaRec}
+                          </>
+                        )}
+                      </button>
                       <button
                         onClick={() => cinemaPhoneRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
                         className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:opacity-80"
@@ -2097,7 +2202,7 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                         <ArrowUp className="w-3.5 h-3.5" /> {t.themes.editorCinemaTop}
                       </button>
                       <button
-                        onClick={() => setCinema(false)}
+                        onClick={exitCinema}
                         className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:opacity-80"
                         style={{ background: "#111114", color: "#ffffff" }}
                       >
@@ -2105,6 +2210,31 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                         <kbd className="ml-0.5 rounded px-1 text-[9.5px] font-bold" style={{ background: "rgba(255,255,255,.16)" }}>Esc</kbd>
                       </button>
                     </div>
+                    {recNotice && recorder.state === "idle" && (
+                      <div
+                        role="status"
+                        className="absolute z-[3] flex items-center gap-2 rounded-xl px-3 py-2 text-[11.5px] font-semibold"
+                        style={{
+                          left: 16, top: 68,
+                          background: recorder.error ? "#fef2f2" : "#f0fdf4",
+                          color: recorder.error ? "#991b1b" : "#166534",
+                          boxShadow: "0 12px 34px -12px rgba(0,0,0,.55)",
+                        }}
+                      >
+                        {recorder.error === "unsupported"
+                          ? t.themes.editorCinemaRecUnsupported
+                          : recorder.error === "wrongSurface"
+                            ? t.themes.editorCinemaRecWrongSurface
+                            : recorder.error
+                              ? t.themes.editorCinemaRecFailed
+                              : recorder.result
+                                ? `✓ ${t.themes.editorCinemaRecSaved}: ${recorder.result.fileName}${recorder.result.width ? ` · ${recorder.result.width}×${recorder.result.height} px` : ""} · ${fmtClock(recorder.result.seconds)} · ${(recorder.result.bytes / 1_048_576).toFixed(1)} MB`
+                                : null}
+                        <button onClick={recorder.clearNotice} aria-label={t.themes.editorCinemaExit} className="ml-1 opacity-60 hover:opacity-100">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
                 <div className={`glass-strong rounded-lg border border-white/[0.08] px-1.5 py-1 mb-2 flex items-center gap-1.5 shrink-0 ${cinema ? "hidden" : ""}`}>
@@ -2204,7 +2334,11 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                   className={cinema
                     ? "absolute top-0 right-0 bottom-0 z-[2] overflow-y-auto overflow-x-hidden no-scrollbar"
                     : `lg:flex-1 lg:min-h-0 lg:overflow-y-auto rounded-2xl ${aiBusy ? "pointer-events-none" : ""}`}
-                  style={cinema ? { width: cinemaPhoneW, background: doc.global.colors.background } : undefined}
+                  style={cinema
+                    ? cinemaRecLayout
+                      ? { width: cinemaPhoneW, height: cinemaRecH, top: Math.max(0, (viewport.h - cinemaRecH) / 2), bottom: "auto", background: doc.global.colors.background }
+                      : { width: cinemaPhoneW, background: doc.global.colors.background }
+                    : undefined}
                   onClick={cinema ? undefined : () => setSelected(null)}
                 >
                   <ThemePreview
