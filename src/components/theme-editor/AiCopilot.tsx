@@ -10,7 +10,7 @@
 // per Kopfzeile einklappbar; der Status (Plan bereit / % beim Umsetzen)
 // bleibt auch eingeklappt in der Kopfzeile sichtbar.
 
-import { useEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ClipboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -117,7 +117,7 @@ function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMo
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange, locked = false,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
-  focusPick = false, onToggleFocusPick, onClearFocus,
+  focusPick = false, onToggleFocusPick, onClearFocus, planStyle,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -143,6 +143,9 @@ export default function AiCopilot({
   focusPick?: boolean;
   onToggleFocusPick?: () => void;
   onClearFocus?: () => void;
+  /** Positions-Override der Plan-Karte (Kino-Modus: über der Vollbild-Ebene,
+   *  links neben der Handy-Vorschau statt unten rechts darüber). */
+  planStyle?: CSSProperties;
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
@@ -357,6 +360,7 @@ export default function AiCopilot({
           Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm) */}
       <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} />
       <div
+        data-ai-bar
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={onDrop}
@@ -458,6 +462,7 @@ export default function AiCopilot({
               exit={{ y: 140, opacity: 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className="fixed right-3 bottom-24 lg:right-6 lg:bottom-6 z-[60] w-[min(400px,calc(100vw-1.5rem))]"
+              style={planStyle}
             >
               <div className="max-h-[62vh] overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#101014]/95 backdrop-blur-xl shadow-[0_24px_70px_-18px_rgba(0,0,0,0.85)] p-2.5">
                 <div

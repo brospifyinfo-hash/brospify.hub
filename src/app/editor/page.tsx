@@ -16,6 +16,7 @@ import {
   Star, AlignLeft, Image as ImageIcon, Info, GripVertical, Eye, Layers,
   SlidersHorizontal, ZoomIn, ZoomOut, Maximize2, Trash2, UploadCloud, X,
   Pencil, Target, ChevronDown, ArrowDownUp, FileText, Save, FolderOpen,
+  Clapperboard, ArrowUp,
   type LucideIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
@@ -60,6 +61,21 @@ interface PreviewResponse extends PreviewData {
   homeSections?: BaseSectionInfo[];
   capabilities?: string[];
 }
+
+// ─── Kino-Modus (Admin-Aufnahmen) ──────────────────────────────────
+// Reines Chroma-Grün: keyt in jedem Schnittprogramm am saubersten.
+const CINEMA_GREEN = "#00ff00";
+const CINEMA_STAGE_BG = "#060608";
+// Handy-Bildschirm randlos (keine Browser-Leiste, keine Rundung/Schatten)
+// und die AI-Leiste garantiert deckend — auch im Drag-Zustand, dessen
+// halbtransparente Tönung sonst vom Keyer mit weggerechnet würde.
+const CINEMA_CSS = `
+.bspx-cinema [data-cinema-phone]{box-shadow:-1px 0 0 rgba(255,255,255,.08)}
+.bspx-cinema [data-cinema-phone] .pm-bar{display:none!important}
+.bspx-cinema [data-cinema-phone] .pm-frame{border-radius:0!important}
+.bspx-cinema [data-cinema-phone] .pm-canvas{border:0!important;border-radius:0!important;box-shadow:none!important}
+.bspx-cinema [data-ai-bar]{background-color:#ffffff!important;-webkit-backdrop-filter:none!important;backdrop-filter:none!important}
+`;
 
 function randFrom<T>(arr: readonly T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
@@ -344,6 +360,87 @@ export default function ThemeEditorPage() {
   const [shopCheckOpen, setShopCheckOpen] = useState(false);
   /** Fokus-Modus: Aufbau + Einstellungen ausgeblendet, Vorschau maximal. */
   const [focusMode, setFocusMode] = useState(false);
+  /** Kino-Modus (nur Admin, für Aufnahmen): die Vorschau-Spalte wird zur
+   *  Vollbild-Ebene — Handy-Ansicht über die KOMPLETTE Bildschirmhöhe rechts,
+   *  links die AI-Eingabe vor einem Greenscreen-Quadrat. Bewusst KEIN zweites
+   *  Overlay: dieselbe AI-Leiste (Zustand bleibt) und dieselbe Live-Vorschau. */
+  const [cinema, setCinema] = useState(false);
+  /** Größe der Handy-Ansicht relativ zur echten Handy-Breite (390 px). */
+  const [cinemaScale, setCinemaScale] = useState(() => {
+    if (typeof window === "undefined") return 1;
+    try {
+      const v = Number(localStorage.getItem("bspx-cinema-scale"));
+      return Number.isFinite(v) && v >= 0.8 && v <= 1.6 ? v : 1;
+    } catch { return 1; }
+  });
+  /** Steuerleiste + Mauszeiger blenden sich im Kino-Modus bei Ruhe aus. */
+  const [cinemaUi, setCinemaUi] = useState(true);
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
+  const cinemaPhoneRef = useRef<HTMLDivElement>(null);
+
+  // Kino-Modus aktiv: Viewport messen, Seiten-Scroll sperren, ESC beendet,
+  // Steuerleiste + Cursor nach 2,5 s Ruhe ausblenden (saubere Aufnahme).
+  // Auswahl/Fokus-Pick werden beendet — Markierungsrahmen gehören nicht ins Bild.
+  useEffect(() => {
+    if (!cinema) return;
+    setSelected(null);
+    setFocusPick(false);
+    // Läuft die Einblend-Animation des Shells noch, hat er opacity < 1 —
+    // das sperrt die Kino-Ebene in seinen Stapel-Kontext (Top-Leiste läge
+    // darüber, Grün + Schwarz wären ausgewaschen). Also sofort fertigstellen.
+    const shell = shellRef.current;
+    if (shell) {
+      gsap.killTweensOf(shell);
+      gsap.set(shell, { clearProps: "opacity,transform" });
+    }
+    const measure = () => setViewport({ w: window.innerWidth, h: window.innerHeight });
+    measure();
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    let idle: ReturnType<typeof setTimeout> | undefined;
+    const wake = () => {
+      setCinemaUi(true);
+      if (idle) clearTimeout(idle);
+      idle = setTimeout(() => setCinemaUi(false), 2500);
+    };
+    wake();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      setCinema(false);
+    };
+    window.addEventListener("resize", measure);
+    window.addEventListener("mousemove", wake);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      if (idle) clearTimeout(idle);
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("mousemove", wake);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [cinema]);
+
+  // Nur Admins dürfen in den Kino-Modus — fällt das Admin-Flag weg, raus.
+  useEffect(() => {
+    if (cinema && !isAdmin) setCinema(false);
+  }, [cinema, isAdmin]);
+
+  const changeCinemaScale = useCallback((v: number) => {
+    const next = Math.max(0.8, Math.min(1.6, Math.round(v * 100) / 100));
+    setCinemaScale(next);
+    try { localStorage.setItem("bspx-cinema-scale", String(next)); } catch { /* privat */ }
+  }, []);
+
+  // Geometrie: Handy-Spalte rechts in voller Höhe (Breite = 390 px × Größe,
+  // nie mehr als die halbe Bildschirmbreite), links die Bühne mit einem
+  // zentrierten Greenscreen-QUADRAT; die AI-Leiste sitzt unten im Quadrat.
+  const cinemaPhoneW = Math.round(Math.min(390 * cinemaScale, viewport.w * 0.5 || 390 * cinemaScale));
+  const cinemaStageW = Math.max(0, viewport.w - cinemaPhoneW);
+  const cinemaSquare = Math.max(0, Math.min(cinemaStageW, viewport.h) - 80);
+  const cinemaSquareLeft = (cinemaStageW - cinemaSquare) / 2;
+  const cinemaSquareTop = (viewport.h - cinemaSquare) / 2;
+  const cinemaAiW = Math.max(0, Math.min(cinemaSquare - 48, 820));
   /** Linke Programm-Leiste eingeklappt (bleibt über Besuche erhalten).
    *  Lazy-Init ist SSR-sicher: die Rail rendert erst nach Produkt-Wahl,
    *  also nie im Server-HTML — kein Hydration-Mismatch. */
@@ -797,9 +894,16 @@ export default function ThemeEditorPage() {
   }, [fullPreviewOpen, aiBusy, saveDialog, confirmNewOpen, shortcutsOpen, shopCheckOpen]);
 
   // Sanfter Einstieg des Editor-Shells (GSAP statt Layout-Sprung).
+  // clearProps: GSAP ließe sonst `transform: translate(0,0)` am Shell stehen —
+  // das macht ihn zum Bezugsrahmen für ALLES position:fixed darin (Kino-Modus
+  // lag dadurch versetzt, Klick-Fänger von Dropdowns deckten nicht den Schirm).
   useEffect(() => {
     if (doc.productId && shellRef.current) {
-      gsap.fromTo(shellRef.current, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" });
+      gsap.fromTo(
+        shellRef.current,
+        { opacity: 0, y: 14 },
+        { opacity: 1, y: 0, duration: 0.5, ease: "power3.out", clearProps: "transform" },
+      );
     }
   }, [doc.productId]);
 
@@ -1935,8 +2039,67 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
 
               {/* Live-Vorschau (Mitte) — mit eigener Toolbar: PC/Handy-Umschalter
                   + Zoom-Regler. Desktop: volle Höhe, Vorschau scrollt intern. */}
-              <div className={`order-2 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "vorschau" ? "" : "hidden"} lg:flex lg:flex-col`}>
-                <div className="glass-strong rounded-lg border border-white/[0.08] px-1.5 py-1 mb-2 flex items-center gap-1.5 shrink-0">
+              <div
+                className={cinema
+                  ? "bspx-cinema fixed inset-0 z-[90]"
+                  : `order-2 mb-4 lg:mb-0 lg:h-full lg:min-h-0 ${mobileTab === "vorschau" ? "" : "hidden"} lg:flex lg:flex-col`}
+                style={cinema ? { background: CINEMA_STAGE_BG, cursor: cinemaUi ? undefined : "none" } : undefined}
+              >
+                {cinema && (
+                  <>
+                    <style>{CINEMA_CSS}</style>
+                    {/* Greenscreen-Quadrat — reines Chroma-Grün, scharfe Kanten
+                        (sauber keybar); die AI-Leiste liegt DAVOR. */}
+                    <div
+                      aria-hidden
+                      className="absolute"
+                      style={{ left: cinemaSquareLeft, top: cinemaSquareTop, width: cinemaSquare, height: cinemaSquare, background: CINEMA_GREEN }}
+                    />
+                    {/* Steuerleiste (blendet sich bei Ruhe aus): Größe · Nach oben · Beenden */}
+                    <div
+                      className="absolute z-[3] flex items-center gap-2.5 rounded-xl px-3 py-2 transition-opacity duration-300"
+                      style={{
+                        left: 16, top: 16, background: "#ffffff", color: "#111114",
+                        boxShadow: "0 12px 34px -12px rgba(0,0,0,.55)",
+                        opacity: cinemaUi ? 1 : 0, pointerEvents: cinemaUi ? "auto" : "none",
+                      }}
+                    >
+                      <Clapperboard className="w-4 h-4" style={{ color: ACCENT }} />
+                      <span className="text-[12px] font-bold">{t.themes.editorCinemaTitle}</span>
+                      <span className="w-px h-4" style={{ background: "#e4e4e7" }} />
+                      <label className="flex items-center gap-2 text-[11px] font-semibold" style={{ color: "#52525b" }}>
+                        <Smartphone className="w-3.5 h-3.5" />
+                        {t.themes.editorCinemaSize}
+                        <input
+                          type="range"
+                          min={80}
+                          max={160}
+                          step={5}
+                          value={Math.round(cinemaScale * 100)}
+                          onChange={(e) => changeCinemaScale(Number(e.target.value) / 100)}
+                          className="w-[120px] accent-[#95BF47] cursor-pointer"
+                        />
+                        <span className="w-[34px] tabular-nums text-right" style={{ color: "#111114" }}>{Math.round(cinemaScale * 100)}%</span>
+                      </label>
+                      <button
+                        onClick={() => cinemaPhoneRef.current?.scrollTo({ top: 0, behavior: "smooth" })}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:opacity-80"
+                        style={{ background: "#f4f4f5", color: "#111114" }}
+                      >
+                        <ArrowUp className="w-3.5 h-3.5" /> {t.themes.editorCinemaTop}
+                      </button>
+                      <button
+                        onClick={() => setCinema(false)}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-semibold transition hover:opacity-80"
+                        style={{ background: "#111114", color: "#ffffff" }}
+                      >
+                        <X className="w-3.5 h-3.5" /> {t.themes.editorCinemaExit}
+                        <kbd className="ml-0.5 rounded px-1 text-[9.5px] font-bold" style={{ background: "rgba(255,255,255,.16)" }}>Esc</kbd>
+                      </button>
+                    </div>
+                  </>
+                )}
+                <div className={`glass-strong rounded-lg border border-white/[0.08] px-1.5 py-1 mb-2 flex items-center gap-1.5 shrink-0 ${cinema ? "hidden" : ""}`}>
                   {/* PC / Handy */}
                   <div className="inline-flex rounded-md border border-white/10 bg-white/[0.03] p-0.5 shrink-0">
                     <button
@@ -1963,6 +2126,17 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     <Maximize2 className="w-3 h-3" style={{ color: ACCENT }} />
                     <span className="hidden xl:inline">{t.themes.editorFullPreview}</span>
                   </button>
+                  {/* Kino-Modus — nur Admin, nur Desktop (Aufnahme-Werkzeug) */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => setCinema(true)}
+                      title={t.themes.editorCinemaHint}
+                      className="hidden lg:flex shrink-0 items-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-2 py-1 text-[10.5px] font-semibold text-zinc-300 hover:text-white hover:border-[#95BF47]/40 transition"
+                    >
+                      <Clapperboard className="w-3 h-3" style={{ color: ACCENT }} />
+                      <span className="hidden xl:inline">{t.themes.editorCinema}</span>
+                    </button>
+                  )}
                   {/* Inline-Text-Bearbeitung an/aus */}
                   <button
                     onClick={() => setEditTexts((v) => !v)}
@@ -2016,7 +2190,15 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     </button>
                   </div>
                 </div>
-                <div className={`lg:flex-1 lg:min-h-0 lg:overflow-y-auto rounded-2xl ${aiBusy ? "pointer-events-none" : ""}`} onClick={() => setSelected(null)}>
+                <div
+                  ref={cinemaPhoneRef}
+                  data-cinema-phone={cinema ? "" : undefined}
+                  className={cinema
+                    ? "absolute top-0 right-0 bottom-0 z-[2] overflow-y-auto overflow-x-hidden no-scrollbar"
+                    : `lg:flex-1 lg:min-h-0 lg:overflow-y-auto rounded-2xl ${aiBusy ? "pointer-events-none" : ""}`}
+                  style={cinema ? { width: cinemaPhoneW, background: doc.global.colors.background } : undefined}
+                  onClick={cinema ? undefined : () => setSelected(null)}
+                >
                   <ThemePreview
                     data={previewData}
                     colors={doc.global.colors}
@@ -2025,8 +2207,10 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     radius={doc.global.radius}
                     loading={previewLoading}
                     label={page === "home" ? t.themes.builderPageHome : t.themes.builderPageProduct}
-                    viewMode={viewMode}
-                    zoom={zoom}
+                    // Kino: immer Handy; Spalte wird exakt ausgefüllt (Einpassen
+                    // deckelt bei 100 % — alles darüber kommt über den Zoom).
+                    viewMode={cinema ? "mobile" : viewMode}
+                    zoom={cinema ? Math.max(1, cinemaPhoneW / 390) : zoom}
                     buyboxOrder={doc.buybox.order}
                     hiddenBlocks={doc.buybox.hidden}
                     shadow={doc.global.design.shadow}
@@ -2038,21 +2222,33 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     spacing={doc.buybox.spacing}
                     docSections={currentSections}
                     page={page}
-                    selectedUid={selected}
-                    onSelectSection={(uid) => setSelected(uid)}
-                    onInsertAt={(i) => setLibraryAt(i)}
-                    editTexts={editTexts && !aiBusy}
-                    onEditText={handleEditText}
-                    onEditBlockText={handleEditBlockText}
-                    focusUids={aiFocus}
-                    focusPick={focusPick && !aiBusy}
-                    onToggleFocus={toggleFocus}
+                    // Kino: reine Ansicht — keine Auswahlrahmen, „+"-Einfüger,
+                    // Fokus-Markierungen oder Text-Cursor im Bild.
+                    selectedUid={cinema ? null : selected}
+                    onSelectSection={cinema ? undefined : (uid) => setSelected(uid)}
+                    onInsertAt={cinema ? undefined : (i) => setLibraryAt(i)}
+                    editTexts={!cinema && editTexts && !aiBusy}
+                    onEditText={cinema ? undefined : handleEditText}
+                    onEditBlockText={cinema ? undefined : handleEditBlockText}
+                    focusUids={cinema ? [] : aiFocus}
+                    focusPick={!cinema && focusPick && !aiBusy}
+                    onToggleFocus={cinema ? undefined : toggleFocus}
                   />
                 </div>
                 {/* AI Co-Pilot — dünne Command-Leiste MITTIG unter der Vorschau (mit
                     Abstand). Während aiBusy (eigener Apply-Lauf ODER Genesis) gesperrt —
                     sonst könnten zwei Op-Ströme dasselbe Dokument überschreiben. */}
-                <div className={`mt-4 shrink-0 ${aiBusy ? "pointer-events-none opacity-70" : ""}`}>
+                <div
+                  className={cinema
+                    ? `absolute z-[3] ${aiBusy ? "pointer-events-none" : ""}`
+                    : `mt-4 shrink-0 ${aiBusy ? "pointer-events-none opacity-70" : ""}`}
+                  // Kino: unten im Greenscreen-Quadrat, horizontal zentriert.
+                  // KEINE Transparenz (auch nicht während aiBusy) — jede
+                  // durchscheinende Stelle würde der Chroma-Keyer mit wegrechnen.
+                  style={cinema
+                    ? { left: cinemaSquareLeft + (cinemaSquare - cinemaAiW) / 2, width: cinemaAiW, bottom: cinemaSquareTop + 24 }
+                    : undefined}
+                >
                   <AiCopilot
                     doc={doc}
                     dispatch={dispatch}
@@ -2070,6 +2266,9 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     focusPick={focusPick}
                     onToggleFocusPick={() => setFocusPick((v) => !v)}
                     onClearFocus={() => setAiFocus([])}
+                    planStyle={cinema
+                      ? { top: 24, right: cinemaPhoneW + 24, bottom: "auto", left: "auto", zIndex: 100 }
+                      : undefined}
                   />
                 </div>
               </div>
