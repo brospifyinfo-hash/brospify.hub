@@ -1,31 +1,51 @@
 "use client";
 
-// ─── Kino-Modus: Aufnahme der Handy-Ansicht als Video ──────────────────────
-// Nimmt NUR das Handy-Element auf (Bühne, Bluescreen und Steuerleiste sind
-// nicht im Video) und speichert es als Datei.
+// ─── Kino-Modus: Aufnahme als Video (Handy + Texteingabe) ─────────────────
+// Nimmt pro Start MEHRERE Bereiche gleichzeitig als getrennte Videos auf
+// (Handy-Ansicht und AI-Texteingabe) und speichert beide automatisch.
 //
 // Pipeline (bewusst so robust gebaut):
-//  1. Tab-Aufnahme per getDisplayMedia (preferCurrentTab → Chrome fragt nur
-//     „Diesen Tab teilen?"), zugeschnitten aufs Handy: Region Capture
-//     (cropTo, seit Chrome 104 stabil), Element Capture (restrictTo) nur als
-//     Ersatz — Element Capture liefert bei nicht „geeigneten" Elementen
-//     kommentarlos KEINE Bilder.
-//  2. Die zugeschnittenen Bilder laufen NICHT direkt in den Encoder, sondern
-//     werden im festen 60-Hz-Takt auf eine Leinwand FESTER Größe
-//     gezeichnet (HD: 1080×1920). Grund: Die Tab-Aufnahme ändert ihre
-//     Bildgröße (Zuschnitt greift, Chrome skaliert hoch) und liefert bei
-//     ruhender Seite kaum Bilder — beides lässt MP4/H.264-Aufnahmen in Chrome
-//     scheitern. Die Leinwand liefert konstante Größe + konstante 60 fps.
-//  3. MediaRecorder mit MIME-Kette MP4 → WebM: scheitert ein Format beim
-//     Start, wird automatisch das nächste genommen.
+//  1. EINE Tab-Aufnahme per getDisplayMedia (preferCurrentTab → Chrome fragt
+//     nur „Diesen Tab teilen?"). Chrome wendet einen Zuschnitt (cropTo) auf
+//     die ganze Quelle an (auch auf Klone) — zwei getrennte Zuschnitte aus
+//     einer Freigabe gehen nicht. Darum: EIN Zuschnitt auf einen Rahmen, der
+//     beide Bereiche umschließt (spart Übertragung: Bühne/Steuerleiste
+//     bleiben draußen), die einzelnen Bereiche schneiden wir selbst aus
+//     (Elementrechteck in CSS-px × Bildpunkte pro CSS-px). Klappt cropTo
+//     nicht, wird aus dem ganzen Tab ausgeschnitten — gleiches Ergebnis.
+//     Schärfe: Chromes HiDPI-Tab-Aufnahme rendert den Tab für die hohe
+//     Wunsch-Auflösung (3840×2160) mit bis zu 2× Pixeldichte.
+//  2. Pro Bereich eine Leinwand FESTER Größe (HD: Handy 1080×1920, Eingabe
+//     1920×1080), gezeichnet im festen 60-Hz-Takt. Grund: Die Tab-Aufnahme
+//     ändert ihre Bildgröße (HiDPI greift nach dem Start) und liefert bei
+//     ruhender Seite kaum Bilder — beides lässt MP4/H.264 in Chrome
+//     scheitern. Die Leinwände liefern konstante Größe + konstante 60 fps.
+//  3. Alle Encoder starten im SELBEN Moment (Videos laufen synchron) mit
+//     MIME-Kette MP4 → WebM: scheitert ein Format, versuchen alle das nächste.
 // Jeder Fehler trägt Stufe + technischen Grund (Diagnose ohne Rätselraten).
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 export type RecState = "idle" | "starting" | "recording" | "saving";
-export type RecOutput = "hd" | "view";
+
+/** Ein aufzunehmender Bereich. */
+export interface RecTarget {
+  /** Datei-Präfix, z. B. "brospify-handy". */
+  name: string;
+  /** Element, dessen Bildschirmbereich aufgenommen wird (bei jedem Bild neu vermessen). */
+  el: () => HTMLElement | null;
+  /** Ausgabegröße in Pixeln (wird auf gerade Zahlen gerundet). */
+  size: (rect: DOMRect, dpr: number) => { w: number; h: number };
+  /** Bitrate in bit/s. */
+  bitrate: number;
+  /** Bilder pro Sekunde (60 oder 30 — 30 halbiert die Last, reicht fürs Tippen). */
+  fps?: 60 | 30;
+  /** Pflicht-Bereich: fehlt das Element, scheitert der Start. Sonst übersprungen. */
+  required?: boolean;
+}
 
 export interface RecResult {
+  name: string;
   fileName: string;
   width: number;
   height: number;
@@ -39,10 +59,7 @@ type CaptureTarget = object;
 interface CaptureTargetFactory {
   fromElement(el: Element): Promise<CaptureTarget>;
 }
-type ZoomableTrack = MediaStreamTrack & {
-  restrictTo?: (t: CaptureTarget | null) => Promise<void>;
-  cropTo?: (t: CaptureTarget | null) => Promise<void>;
-};
+type CroppableTrack = MediaStreamTrack & { cropTo?: (t: CaptureTarget | null) => Promise<void> };
 
 // Reihenfolge = Präferenz. MP4/H.264 öffnet jedes Schnittprogramm direkt.
 const MIME_CANDIDATES = [
@@ -54,8 +71,6 @@ const MIME_CANDIDATES = [
   "video/webm",
 ];
 
-const HD_W = 1080;
-const HD_H = 1920;
 const FPS = 60;
 
 function supportedMimes(): string[] {
@@ -70,10 +85,6 @@ function stamp(d = new Date()): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}-${p(d.getMinutes())}-${p(d.getSeconds())}`;
 }
 
-function captureFactory(name: "RestrictionTarget" | "CropTarget"): CaptureTargetFactory | undefined {
-  return (window as unknown as Record<string, CaptureTargetFactory | undefined>)[name];
-}
-
 const even = (n: number) => Math.max(2, Math.round(n / 2) * 2);
 
 function describe(e: unknown): string {
@@ -86,7 +97,6 @@ export function recorderSupported(): boolean {
   return (
     !!navigator.mediaDevices?.getDisplayMedia &&
     typeof MediaRecorder !== "undefined" &&
-    !!(captureFactory("CropTarget") || captureFactory("RestrictionTarget")) &&
     supportedMimes().length > 0 &&
     typeof HTMLCanvasElement.prototype.captureStream === "function"
   );
@@ -143,30 +153,39 @@ function waitForFrames(video: HTMLVideoElement, ms: number): Promise<boolean> {
   });
 }
 
-/** Startet einen MediaRecorder; scheitert ein Format sofort (Konstruktor,
- *  start() oder Fehler vor dem ersten Datenpaket), wird das nächste versucht. */
-async function startRecorder(
-  stream: MediaStream,
+/** Startet für JEDEN Stream einen MediaRecorder — alle im selben Moment,
+ *  damit die Videos synchron laufen. Scheitert ein Format bei irgendeinem
+ *  Stream sofort (Konstruktor, start() oder Fehler vor dem ersten
+ *  Datenpaket), versuchen ALLE das nächste Format. */
+async function startRecorders(
+  streams: { stream: MediaStream; bitrate: number }[],
   mimes: string[],
-  onData: (b: Blob) => void,
-): Promise<{ rec: MediaRecorder; mime: string } | { error: string }> {
+  onData: (i: number, b: Blob) => void,
+): Promise<{ recs: MediaRecorder[]; mime: string } | { error: string }> {
   let lastErr = "kein Format verfügbar";
   for (const mime of mimes) {
-    let rec: MediaRecorder;
-    try {
-      // Hohe Bitrate: UI-Text und feine Linien bleiben auch nach dem
-      // erneuten Komprimieren durch TikTok/Reels gestochen scharf.
-      rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 20_000_000 });
-    } catch (e) {
-      lastErr = `${mime} → ${describe(e)}`;
+    const recs: MediaRecorder[] = [];
+    let ctorErr = "";
+    for (const { stream, bitrate } of streams) {
+      try {
+        // Hohe Bitrate: UI-Text und feine Linien bleiben auch nach dem
+        // erneuten Komprimieren durch TikTok/Reels gestochen scharf.
+        recs.push(new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: bitrate }));
+      } catch (e) {
+        ctorErr = `${mime} → ${describe(e)}`;
+        break;
+      }
+    }
+    if (ctorErr) {
+      lastErr = ctorErr;
       continue;
     }
-    const outcome = await new Promise<"ok" | string>((resolve) => {
+    const outcomes = await Promise.all(recs.map((rec, i) => new Promise<"ok" | string>((resolve) => {
       let finished = false;
       const finish = (v: "ok" | string) => { if (!finished) { finished = true; resolve(v); } };
       rec.onerror = (ev) => finish(`${mime} → ${describe((ev as unknown as { error?: unknown }).error ?? "Encoder-Fehler")}`);
       rec.ondataavailable = (e) => {
-        if (e.data && e.data.size) { onData(e.data); finish("ok"); }
+        if (e.data && e.data.size) { onData(i, e.data); finish("ok"); }
       };
       try {
         rec.start(250);
@@ -177,38 +196,55 @@ async function startRecorder(
       // Kommt nach 2,5 s kein Fehler, läuft der Encoder — auch falls das
       // erste Paket noch auf sich warten lässt.
       setTimeout(() => finish("ok"), 2500);
-    });
-    if (outcome === "ok") {
-      rec.ondataavailable = (e) => { if (e.data && e.data.size) onData(e.data); };
-      return { rec, mime };
+    })));
+    const bad = outcomes.find((o) => o !== "ok");
+    if (!bad) {
+      recs.forEach((rec, i) => { rec.ondataavailable = (e) => { if (e.data && e.data.size) onData(i, e.data); }; });
+      return { recs, mime };
     }
-    lastErr = outcome;
-    // Gescheiterten Versuch still beenden — sein letztes Datenpaket darf nicht
-    // in die Aufnahme des nächsten Formats rutschen.
-    rec.ondataavailable = null;
-    rec.onerror = null;
-    try { if (rec.state !== "inactive") rec.stop(); } catch { /* egal */ }
+    lastErr = bad;
+    // Gescheiterten Versuch still beenden — seine letzten Datenpakete dürfen
+    // nicht in die Aufnahme des nächsten Formats rutschen.
+    for (const rec of recs) {
+      rec.ondataavailable = null;
+      rec.onerror = null;
+      try { if (rec.state !== "inactive") rec.stop(); } catch { /* egal */ }
+    }
   }
   return { error: lastErr };
 }
 
-export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
+interface Lane {
+  target: RecTarget;
+  el: HTMLElement;
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
+  stream: MediaStream;
+  chunks: Blob[];
+  outW: number;
+  outH: number;
+  /** Nur jeden n-ten Takt zeichnen (30 fps → 2). */
+  every: number;
+}
+
+export function useCinemaRecorder() {
   const [state, setState] = useState<RecState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const [error, setError] = useState<RecError | null>(null);
   const [errorDetail, setErrorDetail] = useState("");
-  const [result, setResult] = useState<RecResult | null>(null);
+  const [results, setResults] = useState<RecResult[]>([]);
 
   const streamRef = useRef<MediaStream | null>(null);
-  const canvasStreamRef = useRef<MediaStream | null>(null);
+  const lanesRef = useRef<Lane[]>([]);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const drawTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const recRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
+  const recsRef = useRef<MediaRecorder[]>([]);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef(0);
   const stateRef = useRef<RecState>("idle");
   const restoreRef = useRef<(() => void) | undefined>(undefined);
+  /** Fertige Dateien (zum erneuten Speichern, falls Chrome eine blockiert hat). */
+  const blobsRef = useRef<Blob[]>([]);
   const setBoth = (s: RecState) => {
     stateRef.current = s;
     setState(s);
@@ -219,8 +255,7 @@ export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
     tickRef.current = null;
     if (drawTimerRef.current) clearInterval(drawTimerRef.current);
     drawTimerRef.current = null;
-    canvasStreamRef.current?.getTracks().forEach((t) => t.stop());
-    canvasStreamRef.current = null;
+    lanesRef.current.forEach((l) => l.stream.getTracks().forEach((t) => t.stop()));
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     const v = videoRef.current;
@@ -234,7 +269,8 @@ export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
 
   const fail = (kind: RecError, detail: string) => {
     teardown();
-    recRef.current = null;
+    lanesRef.current = [];
+    recsRef.current = [];
     setBoth("idle");
     setError(kind);
     setErrorDetail(detail);
@@ -242,20 +278,21 @@ export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
   };
 
   const stop = useCallback(() => {
-    const rec = recRef.current;
-    if (rec && rec.state !== "inactive") {
-      setBoth("saving");
-      rec.stop();
-    }
+    const recs = recsRef.current.filter((r) => r.state !== "inactive");
+    if (!recs.length || stateRef.current !== "recording") return;
+    setBoth("saving");
+    recs.forEach((r) => r.stop());
   }, []);
 
   /** onLayout: vor dem Start das Aufnahme-Layout setzen (die Vorschau
    *  skaliert per Layout-Effekt nach); onRestore: danach zurückstellen. */
-  const start = useCallback(async (opts: { output: RecOutput; onLayout?: () => void; onRestore?: () => void }) => {
+  /** area: optionaler Rahmen um ALLE Bereiche (Zuschnitt an der Quelle). */
+  const start = useCallback(async (opts: { targets: RecTarget[]; area?: () => HTMLElement | null; onLayout?: () => void; onRestore?: () => void }) => {
     if (stateRef.current !== "idle") return;
     setError(null);
     setErrorDetail("");
-    setResult(null);
+    setResults([]);
+    blobsRef.current = [];
     restoreRef.current = opts.onRestore;
     if (!recorderSupported()) {
       setError("unsupported");
@@ -266,7 +303,7 @@ export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
     await new Promise((r) => setTimeout(r, 250));
 
     // 1) Tab-Aufnahme anfordern (hohe Wunsch-Auflösung → Chrome rendert den
-    //    Tab für die Aufnahme mit höherer Pixeldichte, wo es das kann).
+    //    Tab für die Aufnahme mit höherer Pixeldichte).
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({
@@ -290,35 +327,33 @@ export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
       return;
     }
     streamRef.current = stream;
-    const track = stream.getVideoTracks()[0] as ZoomableTrack | undefined;
-    const target = getTarget();
-    if (!track || !target) return fail("failed", "Kein Videobild bzw. Handy-Element gefunden.");
+    const track = stream.getVideoTracks()[0];
+    if (!track) return fail("failed", "Kein Videobild erhalten.");
+    // Ausgeschnitten wird nach Bildschirm-Koordinaten dieses Tabs — ein
+    // anderes Fenster/ein ganzer Bildschirm würde falsche Bereiche liefern.
+    const surface = (track.getSettings() as MediaTrackSettings & { displaySurface?: string }).displaySurface;
+    if (surface && surface !== "browser") return fail("wrongSurface", `displaySurface = ${surface}`);
 
-    // 2) Aufs Handy zuschneiden: Region Capture zuerst (keine Eignungs-
-    //    Bedingungen), Element Capture als Ersatz.
-    let zoomed = false;
-    let zoomErr = "";
-    const crop = captureFactory("CropTarget");
-    if (crop && track.cropTo) {
-      try {
-        await track.cropTo(await crop.fromElement(target));
-        zoomed = true;
-      } catch (e) {
-        zoomErr = `cropTo → ${describe(e)}`;
-      }
-    }
-    const restrict = captureFactory("RestrictionTarget");
-    if (!zoomed && restrict && track.restrictTo) {
-      try {
-        await track.restrictTo(await restrict.fromElement(target));
-        zoomed = true;
-      } catch (e) {
-        zoomErr += `${zoomErr ? " · " : ""}restrictTo → ${describe(e)}`;
-      }
-    }
-    if (!zoomed) return fail("wrongSurface", zoomErr);
+    const picked = opts.targets
+      .map((target) => ({ target, el: target.el() }))
+      .filter((p): p is { target: RecTarget; el: HTMLElement } => !!p.el);
+    const missing = opts.targets.find((t) => t.required && !picked.some((p) => p.target === t));
+    if (missing || !picked.length) return fail("failed", `Aufnahme-Bereich „${(missing ?? opts.targets[0])?.name ?? "?"}“ nicht gefunden.`);
 
-    // 3) Zugeschnittene Bilder in ein unsichtbares Video leiten.
+    // Zuschnitt an der Quelle auf den Rahmen um alle Bereiche (weniger
+    // Pixel pro Bild → weniger Last). Scheitert er, bleibt der ganze Tab.
+    const area = opts.area?.() ?? null;
+    let cropped = false;
+    const crop = (window as unknown as { CropTarget?: CaptureTargetFactory }).CropTarget;
+    const ct = track as CroppableTrack;
+    if (area && crop && ct.cropTo) {
+      try {
+        await ct.cropTo(await crop.fromElement(area));
+        cropped = true;
+      } catch { /* ganzer Tab */ }
+    }
+
+    // 2) Tab-Bilder in ein unsichtbares Video leiten.
     const video = document.createElement("video");
     video.muted = true;
     video.playsInline = true;
@@ -333,99 +368,157 @@ export function useCinemaRecorder(getTarget: () => HTMLElement | null) {
     // hat ein festes Zeitlimit.
     let playErr = "";
     video.play().catch((e) => { playErr = describe(e); });
-    // Die erste Aufnahme-Vorlage kommt u. U. erst nach dem Zuschnitt — bis
-    // zu 4 s warten (bei ruhender Seite erzwingt ein Mini-Scroll ein Bild).
-    target.scrollBy({ top: 1 });
-    target.scrollBy({ top: -1 });
+    // Bei ruhender Seite erzwingt ein Mini-Scroll ein erstes Bild.
+    const nudge = picked[0].el;
+    nudge.scrollBy({ top: 1 });
+    nudge.scrollBy({ top: -1 });
     if (!(await waitForFrames(video, 4000))) {
-      return fail("noFrames", `Chrome hat innerhalb von 4 s kein Bild der Handy-Ansicht geliefert.${playErr ? ` (${playErr})` : ""}`);
+      return fail("noFrames", `Chrome hat innerhalb von 4 s kein Bild des Tabs geliefert.${playErr ? ` (${playErr})` : ""}`);
     }
 
-    // 4) Leinwand FESTER Größe: HD = 1080×1920; „Wie angezeigt" = aktuelle
-    //    Handy-Spalte in echten Bildschirm-Pixeln (gerade Zahlen für H.264).
-    const rect = target.getBoundingClientRect();
+    // 3) Pro Bereich eine Leinwand FESTER Größe.
     const dpr = window.devicePixelRatio || 1;
-    const outW = opts.output === "hd" ? HD_W : even(Math.min(rect.width * dpr, 2160));
-    const outH = opts.output === "hd" ? HD_H : even(Math.min(rect.height * dpr, 3840));
-    const canvas = document.createElement("canvas");
-    canvas.width = outW;
-    canvas.height = outH;
-    const ctx = canvas.getContext("2d", { alpha: false });
-    if (!ctx) return fail("failed", "Canvas-Kontext nicht verfügbar.");
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = "high";
+    const lanes: Lane[] = [];
+    for (const { target, el } of picked) {
+      const size = target.size(el.getBoundingClientRect(), dpr);
+      const outW = even(Math.min(size.w, 3840));
+      const outH = even(Math.min(size.h, 3840));
+      const canvas = document.createElement("canvas");
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (!ctx) return fail("failed", "Canvas-Kontext nicht verfügbar.");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      const fps = target.fps ?? FPS;
+      lanes.push({ target, el, canvas, ctx, stream: canvas.captureStream(fps), chunks: [], outW, outH, every: Math.max(1, Math.round(FPS / fps)) });
+    }
+    lanesRef.current = lanes;
+
+    let tick = 0;
     const draw = () => {
       const vw = video.videoWidth, vh = video.videoHeight;
-      if (vw && vh) {
+      // Bezug des Aufnahmebilds: der zugeschnittene Rahmen bzw. der ganze Tab.
+      const ref = cropped && area ? area.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      if (!vw || !vh || ref.width < 1 || ref.height < 1) return;
+      // Aufnahmebild ↔ Seite: gleichmäßig skaliert, ggf. mittig mit Rand.
+      const s = Math.min(vw / ref.width, vh / ref.height);
+      const ox = (vw - ref.width * s) / 2, oy = (vh - ref.height * s) / 2;
+      const t = tick++;
+      for (const l of lanes) {
+        if (t % l.every) continue;
+        const r = l.el.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) continue;
         // Cover-Fit: Seitenverhältnis exakt halten, Ränder minimal kappen.
-        const scale = Math.max(outW / vw, outH / vh);
-        const sw = outW / scale, sh = outH / scale;
-        ctx.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, outW, outH);
+        const k = Math.max(l.outW / r.width, l.outH / r.height);
+        const cw = l.outW / k, ch = l.outH / k;
+        let sx = ox + (r.left - ref.left + (r.width - cw) / 2) * s;
+        let sy = oy + (r.top - ref.top + (r.height - ch) / 2) * s;
+        let sw = cw * s, sh = ch * s;
+        // Nie über den Bildrand lesen (Rundung/Fenster-Kante).
+        sx = Math.max(0, Math.min(sx, vw - 1));
+        sy = Math.max(0, Math.min(sy, vh - 1));
+        sw = Math.min(sw, vw - sx);
+        sh = Math.min(sh, vh - sy);
+        l.ctx.drawImage(video, sx, sy, sw, sh, 0, 0, l.outW, l.outH);
       }
     };
     // Fester 60-Hz-Takt statt requestAnimationFrame: rAF pausiert, sobald
     // das Fenster verdeckt ist (z. B. OBS davor) — das Video würde stocken.
     draw();
     drawTimerRef.current = setInterval(draw, 1000 / FPS);
-    const canvasStream = canvas.captureStream(FPS);
-    canvasStreamRef.current = canvasStream;
 
-    // 5) Encoder starten (MP4 → WebM-Kette). Uhr läuft ab hier — der
-    //    Encoder schreibt schon während der Format-Prüfung mit.
-    chunksRef.current = [];
+    // 4) Encoder starten (alle gleichzeitig, MP4 → WebM-Kette). Uhr läuft ab
+    //    hier — die Encoder schreiben schon während der Format-Prüfung mit.
     startedAtRef.current = Date.now();
     setElapsed(0);
-    const started = await startRecorder(canvasStream, supportedMimes(), (b) => chunksRef.current.push(b));
+    const started = await startRecorders(
+      lanes.map((l) => ({ stream: l.stream, bitrate: l.target.bitrate })),
+      supportedMimes(),
+      (i, b) => lanes[i].chunks.push(b),
+    );
     if ("error" in started) return fail("failed", started.error);
-    const { rec, mime } = started;
+    const { recs, mime } = started;
+    const type = mime.split(";")[0] || "video/webm";
+    const ext = type.includes("mp4") ? "mp4" : "webm";
+    const ts = stamp();
 
-    rec.onerror = (ev) => {
-      setErrorDetail(`${mime} → ${describe((ev as unknown as { error?: unknown }).error ?? "Encoder-Fehler")}`);
-      setError("failed");
-      if (rec.state !== "inactive") rec.stop();
-    };
-    rec.onstop = async () => {
+    let pending = recs.length;
+    const finishAll = async () => {
       const seconds = (Date.now() - startedAtRef.current) / 1000;
       teardown();
-      recRef.current = null;
-      const type = mime.split(";")[0] || "video/webm";
-      const blob = new Blob(chunksRef.current, { type });
-      chunksRef.current = [];
+      recsRef.current = [];
+      lanesRef.current = [];
       restoreRef.current?.();
-      if (!blob.size) {
+      const files = lanes.map((l) => ({ lane: l, blob: new Blob(l.chunks, { type }), fileName: `${l.target.name}_${ts}.${ext}` }));
+      lanes.forEach((l) => { l.chunks = []; });
+      const ok = files.filter((f) => f.blob.size > 0);
+      if (!ok.length) {
         setBoth("idle");
         setError("failed");
         setErrorDetail("Die Aufnahme enthielt keine Daten.");
         return;
       }
-      const fileName = `brospify-handy_${stamp()}.${type.includes("mp4") ? "mp4" : "webm"}`;
-      download(blob, fileName);
-      const meta = await probe(blob);
-      setResult({ fileName, width: meta.width || outW, height: meta.height || outH, seconds: meta.seconds || seconds, bytes: blob.size });
+      // Nacheinander speichern — Chrome fragt beim zweiten Download einmalig
+      // „Mehrere Dateien herunterladen?" (einmal „Zulassen" genügt).
+      for (let i = 0; i < ok.length; i++) {
+        if (i) await new Promise((r) => setTimeout(r, 400));
+        download(ok[i].blob, ok[i].fileName);
+      }
+      blobsRef.current = ok.map((f) => f.blob);
+      const metas = await Promise.all(ok.map((f) => probe(f.blob)));
+      setResults(ok.map((f, i) => ({
+        name: f.lane.target.name,
+        fileName: f.fileName,
+        width: metas[i].width || f.lane.outW,
+        height: metas[i].height || f.lane.outH,
+        seconds: metas[i].seconds || seconds,
+        bytes: f.blob.size,
+      })));
       setBoth("idle");
     };
+    recs.forEach((rec) => {
+      rec.onerror = (ev) => {
+        setErrorDetail(`${mime} → ${describe((ev as unknown as { error?: unknown }).error ?? "Encoder-Fehler")}`);
+        setError("failed");
+        // Ein Encoder streikt → alle sauber beenden (Bisheriges bleibt erhalten).
+        if (stateRef.current === "recording") setBoth("saving");
+        recs.forEach((r) => { if (r.state !== "inactive") r.stop(); });
+      };
+      rec.onstop = () => {
+        pending -= 1;
+        if (pending === 0) void finishAll();
+      };
+    });
     // Nutzer beendet die Freigabe über Chromes Leiste → sauber speichern.
     track.addEventListener("ended", () => stop());
 
-    recRef.current = rec;
+    recsRef.current = recs;
     tickRef.current = setInterval(() => setElapsed(Math.floor((Date.now() - startedAtRef.current) / 1000)), 250);
     setBoth("recording");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getTarget, stop]);
+  }, [stop]);
 
   // Editor verlassen während der Aufnahme → nichts verlieren: speichern.
   useEffect(() => () => {
-    const rec = recRef.current;
-    if (rec && rec.state !== "inactive") rec.stop();
+    const recs = recsRef.current.filter((r) => r.state !== "inactive");
+    if (recs.length) recs.forEach((r) => r.stop());
     else teardown();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /** Datei i erneut speichern (falls Chrome den Mehrfach-Download blockiert hat). */
+  const saveAgain = useCallback((i: number) => {
+    const blob = blobsRef.current[i];
+    const r = results[i];
+    if (blob && r) download(blob, r.fileName);
+  }, [results]);
 
   const clearNotice = useCallback(() => {
     setError(null);
     setErrorDetail("");
-    setResult(null);
+    setResults([]);
+    blobsRef.current = [];
   }, []);
 
-  return { state, elapsed, error, errorDetail, result, start, stop, clearNotice };
+  return { state, elapsed, error, errorDetail, results, start, stop, clearNotice, saveAgain };
 }

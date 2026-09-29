@@ -10,7 +10,7 @@
 // per Kopfzeile einklappbar; der Status (Plan bereit / % beim Umsetzen)
 // bleibt auch eingeklappt in der Kopfzeile sichtbar.
 
-import { useEffect, useRef, useState, type CSSProperties, type DragEvent, type ClipboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type ClipboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -69,7 +69,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Modus-Auswahl im „Pro ⌄"-Stil (öffnet nach OBEN, da die Leiste unten sitzt).
  *  Standard = schnell, wendet direkt an · Expert = zeigt erst einen Plan. */
-function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMode) => void; disabled?: boolean }) {
+function ModeSelect({ mode, onPick, disabled, large = false }: { mode: AiMode; onPick: (m: AiMode) => void; disabled?: boolean; large?: boolean }) {
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   return (
@@ -80,10 +80,12 @@ function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMo
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.05] px-2.5 py-1.5 text-[12px] font-semibold text-zinc-100 hover:text-white hover:bg-white/[0.09] transition disabled:opacity-40"
+        className={`inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/[0.05] font-semibold text-zinc-100 hover:text-white hover:bg-white/[0.09] transition disabled:opacity-40 ${
+          large ? "px-4 py-2.5 text-[15px] leading-[22px]" : "px-2.5 py-1.5 text-[12px]"
+        }`}
       >
         {mode === "expert" ? t.themes.aiModeExpert : t.themes.aiModeStandard}
-        <ChevronDown className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
+        <ChevronDown className={`${large ? "w-4 h-4" : "w-3.5 h-3.5"} text-zinc-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <>
@@ -117,7 +119,7 @@ function ModeSelect({ mode, onPick, disabled }: { mode: AiMode; onPick: (m: AiMo
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange, locked = false,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
-  focusPick = false, onToggleFocusPick, onClearFocus, planStyle,
+  focusPick = false, onToggleFocusPick, onClearFocus, planStyle, large = false,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -146,11 +148,31 @@ export default function AiCopilot({
   /** Positions-Override der Plan-Karte (Kino-Modus: über der Vollbild-Ebene,
    *  links neben der Handy-Vorschau statt unten rechts darüber). */
   planStyle?: CSSProperties;
+  /** Große Eingabe (Kino-Modus/Aufnahme): größere Schrift, Knöpfe und
+   *  Maximalhöhe — die Leiste bleibt im Video gut lesbar. */
+  large?: boolean;
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
   const [phase, setPhase] = useState<Phase>("idle");
   const [prompt, setPrompt] = useState("");
+  // Eingabe wächst beim Tippen mit (bis zur Maximalhöhe, danach scrollt sie)
+  // und schrumpft nach dem Absenden wieder auf eine Zeile.
+  const taRef = useRef<HTMLTextAreaElement>(null);
+  const taMax = large ? 232 : 168;
+  useLayoutEffect(() => {
+    const el = taRef.current;
+    if (!el) return;
+    const fit = () => {
+      el.style.height = "auto";
+      const full = el.scrollHeight;
+      el.style.height = `${Math.min(full, taMax)}px`;
+      el.style.overflowY = full > taMax ? "auto" : "hidden";
+    };
+    fit();
+    window.addEventListener("resize", fit);
+    return () => window.removeEventListener("resize", fit);
+  }, [prompt, taMax]);
   const [mode, setMode] = useState<AiMode>("standard");
   useEffect(() => setMode(loadAiMode()), []);
   function pickMode(m: AiMode) {
@@ -358,13 +380,13 @@ export default function AiCopilot({
     <div className="flex items-end gap-2.5">
       {/* Bro — kleiner separater Kreis LINKS neben der Leiste (frisst keine
           Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm) */}
-      <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} />
+      <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} large={large} />
       <div
         data-ai-bar
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={onDrop}
-        className={`flex-1 min-w-0 rounded-2xl border transition ${
+        className={`flex-1 min-w-0 ${large ? "rounded-[28px]" : "rounded-2xl"} border transition ${
           drag
             ? "border-[#95BF47] bg-[#95BF47]/[0.07]"
             : focusPick
@@ -402,7 +424,7 @@ export default function AiCopilot({
           Plan aussteht/läuft). Die Plan-/Fortschritts-Karte schiebt sich als
           Panel unten RECHTS ins Bild (Portal unten) — die komplette
           Live-Preview bleibt frei sichtbar. ── */}
-      <div className="flex items-center gap-2 px-2.5 py-2">
+      <div className={`flex items-end ${large ? "gap-3 px-3.5 py-3" : "gap-2 px-2.5 py-2"}`}>
         <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
         {/* „+" — Datei/Bild anhängen (auch per Drag & Drop) */}
         <button
@@ -410,19 +432,20 @@ export default function AiCopilot({
           disabled={images.length >= 3 || inputLocked}
           title={t.themes.aiUploadHint}
           aria-label={t.themes.aiUploadHint}
-          className="shrink-0 w-8 h-8 rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition"
+          className={`shrink-0 ${large ? "w-11 h-11" : "w-8 h-8"} rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition`}
         >
-          <Plus className="w-4 h-4" />
+          <Plus className={large ? "w-5 h-5" : "w-4 h-4"} />
         </button>
         {/* Bild-Vorschauen inline (klein) */}
         {images.map((img, i) => (
           <span key={i} className="relative shrink-0">
-            <img src={img.dataUrl} alt={img.name} className="w-8 h-8 rounded-lg object-cover border border-white/15" />
+            <img src={img.dataUrl} alt={img.name} className={`${large ? "w-11 h-11" : "w-8 h-8"} rounded-lg object-cover border border-white/15`} />
             <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
           </span>
         ))}
         {/* Eingabe — kurzer Platzhalter, schrumpft mit (min-w-0) */}
         <textarea
+          ref={taRef}
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           onPaste={onPaste}
@@ -430,23 +453,29 @@ export default function AiCopilot({
           placeholder={inputPlaceholder}
           rows={1}
           disabled={inputLocked}
-          className="flex-1 min-w-0 resize-none bg-transparent px-1 text-[13.5px] text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 leading-relaxed"
-          style={{ scrollbarWidth: "thin", maxHeight: 72 }}
+          // Einzeilig exakt so hoch wie die Knöpfe (32 bzw. 44 px); die Zeile
+          // ist unten ausgerichtet, damit die Knöpfe beim Wachsen unten bleiben.
+          // Schriftgröße inline: die globale (ungelayerte) iOS-Zoom-Regel
+          // „textarea { font-size: 16px | inherit }" schlägt Tailwind-Klassen.
+          className={`flex-1 min-w-0 resize-none bg-transparent px-1 text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 ${
+            large ? "leading-[28px] py-2" : "leading-[22px] py-[5px]"
+          }`}
+          style={{ scrollbarWidth: "thin", maxHeight: taMax, fontSize: large ? 19 : 16 }}
         />
-        {phase === "planning" && <CircleDashed className="w-4 h-4 animate-spin text-[#cfe9a3] shrink-0" />}
+        {phase === "planning" && <CircleDashed className={`${large ? "w-5 h-5 mb-3" : "w-4 h-4 mb-2"} animate-spin text-[#cfe9a3] shrink-0`} />}
         {/* Modus-Dropdown (Standard/Expert) */}
-        <ModeSelect mode={mode} onPick={pickMode} disabled={inputLocked} />
+        <ModeSelect mode={mode} onPick={pickMode} disabled={inputLocked} large={large} />
         {/* Fokus-Icon (Hover erklärt es) */}
         <button
           onClick={() => onToggleFocusPick?.()}
           aria-pressed={focusPick}
           title={t.themes.aiFocusTooltip}
           aria-label={t.themes.aiFocusTooltip}
-          className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition ${
+          className={`shrink-0 ${large ? "w-11 h-11" : "w-8 h-8"} rounded-full flex items-center justify-center transition ${
             focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
           }`}
         >
-          <Target className="w-4 h-4" />
+          <Target className={large ? "w-5 h-5" : "w-4 h-4"} />
         </button>
       </div>
       </div>

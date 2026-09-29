@@ -29,12 +29,15 @@ export function BroMascot({
   state,
   stepTitle,
   showBubble = true,
+  large = false,
 }: {
   state: BroState;
   stepTitle?: string;
   /** false, solange die Plan-Karte sichtbar ist — die Blase würde sie sonst
    *  überdecken. Bro redet dann nur beim Nachdenken (dünne Zeile). */
   showBubble?: boolean;
+  /** Größerer Kreis neben der großen Kino-Eingabe. */
+  large?: boolean;
 }) {
   const { t } = useI18n();
   const [cfg, setCfg] = useState<BroCfg | null>(null);
@@ -103,7 +106,9 @@ export function BroMascot({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 3, scale: 0.95 }}
             transition={{ duration: 0.22 }}
-            className="absolute bottom-full left-0 mb-2 w-max max-w-[220px] truncate rounded-2xl rounded-bl-sm border border-white/12 bg-[#17171d] px-3 py-1.5 text-[11.5px] font-medium text-zinc-100 shadow-[0_12px_34px_-12px_rgba(0,0,0,0.85)]"
+            className={`absolute bottom-full left-0 mb-2 w-max truncate rounded-2xl rounded-bl-sm border border-white/12 bg-[#17171d] font-medium text-zinc-100 shadow-[0_12px_34px_-12px_rgba(0,0,0,0.85)] ${
+              large ? "max-w-[320px] px-4 py-2 text-[15px]" : "max-w-[220px] px-3 py-1.5 text-[11.5px]"
+            }`}
           >
             {bubble}
           </motion.span>
@@ -112,7 +117,7 @@ export function BroMascot({
 
       {/* Bro-Avatar (kleiner separater Kreis) */}
       <span
-        className={`relative block w-12 h-12 rounded-full overflow-hidden border flex items-center justify-center ${
+        className={`relative block ${large ? "w-[70px] h-[70px]" : "w-12 h-12"} rounded-full overflow-hidden border flex items-center justify-center ${
           active ? "border-[#95BF47]/60" : "border-white/15"
         } bg-white/[0.05]`}
         title="Bro"
@@ -122,7 +127,7 @@ export function BroMascot({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt="Bro" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <span className="text-2xl leading-none">{FALLBACK[state]}</span>
+          <span className={`${large ? "text-3xl" : "text-2xl"} leading-none`}>{FALLBACK[state]}</span>
         )}
         {active && (
           <motion.span
