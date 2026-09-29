@@ -63,8 +63,15 @@ interface PreviewResponse extends PreviewData {
 }
 
 // ─── Kino-Modus (Admin-Aufnahmen) ──────────────────────────────────
-// Reines Chroma-Grün: keyt in jedem Schnittprogramm am saubersten.
-const CINEMA_GREEN = "#00ff00";
+// Reines Digital-Blau: keyt in jedem Schnittprogramm sauber und beißt sich
+// nicht mit den grünen Akzenten (#95BF47) der AI-Leiste davor.
+const CINEMA_KEY = "#0000ff";
+// Handy-Größe relativ zur echten Handy-Breite (390 px). Unter 100 % passt
+// mehr Seite auf einmal in die volle Bildschirmhöhe.
+const CINEMA_SCALE_MIN = 0.5;
+const CINEMA_SCALE_MAX = 2;
+const CINEMA_SCALE_DEFAULT = 0.7;
+const CINEMA_SCALE_LS = "bspx-cinema-scale-v2";
 const CINEMA_STAGE_BG = "#060608";
 // Handy-Bildschirm randlos (keine Browser-Leiste, keine Rundung/Schatten)
 // und die AI-Leiste garantiert deckend — auch im Drag-Zustand, dessen
@@ -362,16 +369,17 @@ export default function ThemeEditorPage() {
   const [focusMode, setFocusMode] = useState(false);
   /** Kino-Modus (nur Admin, für Aufnahmen): die Vorschau-Spalte wird zur
    *  Vollbild-Ebene — Handy-Ansicht über die KOMPLETTE Bildschirmhöhe rechts,
-   *  links die AI-Eingabe vor einem Greenscreen-Quadrat. Bewusst KEIN zweites
+   *  links die AI-Eingabe vor einem Bluescreen-Quadrat. Bewusst KEIN zweites
    *  Overlay: dieselbe AI-Leiste (Zustand bleibt) und dieselbe Live-Vorschau. */
   const [cinema, setCinema] = useState(false);
   /** Größe der Handy-Ansicht relativ zur echten Handy-Breite (390 px). */
   const [cinemaScale, setCinemaScale] = useState(() => {
-    if (typeof window === "undefined") return 1;
+    if (typeof window === "undefined") return CINEMA_SCALE_DEFAULT;
     try {
-      const v = Number(localStorage.getItem("bspx-cinema-scale"));
-      return Number.isFinite(v) && v >= 0.8 && v <= 1.6 ? v : 1;
-    } catch { return 1; }
+      const raw = localStorage.getItem(CINEMA_SCALE_LS);
+      const v = raw === null ? NaN : Number(raw);
+      return Number.isFinite(v) && v >= CINEMA_SCALE_MIN && v <= CINEMA_SCALE_MAX ? v : CINEMA_SCALE_DEFAULT;
+    } catch { return CINEMA_SCALE_DEFAULT; }
   });
   /** Steuerleiste + Mauszeiger blenden sich im Kino-Modus bei Ruhe aus. */
   const [cinemaUi, setCinemaUi] = useState(true);
@@ -427,14 +435,14 @@ export default function ThemeEditorPage() {
   }, [cinema, isAdmin]);
 
   const changeCinemaScale = useCallback((v: number) => {
-    const next = Math.max(0.8, Math.min(1.6, Math.round(v * 100) / 100));
+    const next = Math.max(CINEMA_SCALE_MIN, Math.min(CINEMA_SCALE_MAX, Math.round(v * 100) / 100));
     setCinemaScale(next);
-    try { localStorage.setItem("bspx-cinema-scale", String(next)); } catch { /* privat */ }
+    try { localStorage.setItem(CINEMA_SCALE_LS, String(next)); } catch { /* privat */ }
   }, []);
 
   // Geometrie: Handy-Spalte rechts in voller Höhe (Breite = 390 px × Größe,
   // nie mehr als die halbe Bildschirmbreite), links die Bühne mit einem
-  // zentrierten Greenscreen-QUADRAT; die AI-Leiste sitzt unten im Quadrat.
+  // zentrierten Bluescreen-QUADRAT; die AI-Leiste sitzt unten im Quadrat.
   const cinemaPhoneW = Math.round(Math.min(390 * cinemaScale, viewport.w * 0.5 || 390 * cinemaScale));
   const cinemaStageW = Math.max(0, viewport.w - cinemaPhoneW);
   const cinemaSquare = Math.max(0, Math.min(cinemaStageW, viewport.h) - 80);
@@ -2048,12 +2056,12 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                 {cinema && (
                   <>
                     <style>{CINEMA_CSS}</style>
-                    {/* Greenscreen-Quadrat — reines Chroma-Grün, scharfe Kanten
+                    {/* Bluescreen-Quadrat — reines Digital-Blau, scharfe Kanten
                         (sauber keybar); die AI-Leiste liegt DAVOR. */}
                     <div
                       aria-hidden
                       className="absolute"
-                      style={{ left: cinemaSquareLeft, top: cinemaSquareTop, width: cinemaSquare, height: cinemaSquare, background: CINEMA_GREEN }}
+                      style={{ left: cinemaSquareLeft, top: cinemaSquareTop, width: cinemaSquare, height: cinemaSquare, background: CINEMA_KEY }}
                     />
                     {/* Steuerleiste (blendet sich bei Ruhe aus): Größe · Nach oben · Beenden */}
                     <div
@@ -2072,8 +2080,8 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                         {t.themes.editorCinemaSize}
                         <input
                           type="range"
-                          min={80}
-                          max={160}
+                          min={CINEMA_SCALE_MIN * 100}
+                          max={CINEMA_SCALE_MAX * 100}
                           step={5}
                           value={Math.round(cinemaScale * 100)}
                           onChange={(e) => changeCinemaScale(Number(e.target.value) / 100)}
@@ -2242,7 +2250,7 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                   className={cinema
                     ? `absolute z-[3] ${aiBusy ? "pointer-events-none" : ""}`
                     : `mt-4 shrink-0 ${aiBusy ? "pointer-events-none opacity-70" : ""}`}
-                  // Kino: unten im Greenscreen-Quadrat, horizontal zentriert.
+                  // Kino: unten im Bluescreen-Quadrat, horizontal zentriert.
                   // KEINE Transparenz (auch nicht während aiBusy) — jede
                   // durchscheinende Stelle würde der Chroma-Keyer mit wegrechnen.
                   style={cinema
