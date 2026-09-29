@@ -410,10 +410,11 @@ export default function ThemeEditorPage() {
   const recStopRef = useRef(recorder.stop);
   recStopRef.current = recorder.stop;
   const startCinemaRecording = useCallback(() => {
-    recorder.start(
-      () => { if (cinemaRecFormat === "hd") setCinemaRecLayout(true); },
-      () => setCinemaRecLayout(false),
-    );
+    recorder.start({
+      output: cinemaRecFormat,
+      onLayout: () => { if (cinemaRecFormat === "hd") setCinemaRecLayout(true); },
+      onRestore: () => setCinemaRecLayout(false),
+    });
   }, [recorder, cinemaRecFormat]);
   const pickCinemaRecFormat = useCallback((f: "hd" | "view") => {
     setCinemaRecFormat(f);
@@ -2225,8 +2226,10 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                           ? t.themes.editorCinemaRecUnsupported
                           : recorder.error === "wrongSurface"
                             ? t.themes.editorCinemaRecWrongSurface
-                            : recorder.error
-                              ? t.themes.editorCinemaRecFailed
+                            : recorder.error === "noFrames"
+                              ? t.themes.editorCinemaRecNoFrames
+                              : recorder.error
+                                ? `${t.themes.editorCinemaRecFailed}${recorder.errorDetail ? ` (${recorder.errorDetail})` : ""}`
                               : recorder.result
                                 ? `✓ ${t.themes.editorCinemaRecSaved}: ${recorder.result.fileName}${recorder.result.width ? ` · ${recorder.result.width}×${recorder.result.height} px` : ""} · ${fmtClock(recorder.result.seconds)} · ${(recorder.result.bytes / 1_048_576).toFixed(1)} MB`
                                 : null}
