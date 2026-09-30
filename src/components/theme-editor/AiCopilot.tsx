@@ -14,7 +14,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Sparkles, X, Check, CircleDashed, Coins, Undo2, Target, Plus, ChevronDown,
+  Sparkles, X, Check, CircleDashed, Coins, Undo2, Target, Plus, ChevronDown, Image as ImageIcon,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 import { useCredits } from "@/lib/credits";
@@ -119,7 +119,7 @@ function ModeSelect({ mode, onPick, disabled, large = false }: { mode: AiMode; o
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange, locked = false,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
-  focusPick = false, onToggleFocusPick, onClearFocus, planStyle, large = false, maxInputHeight,
+  focusPick = false, onToggleFocusPick, onClearFocus, planStyle, large = false, space,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -151,24 +151,38 @@ export default function AiCopilot({
   /** Große Eingabe (Kino-Modus/Aufnahme): größere Schrift, Knöpfe und
    *  Maximalhöhe — die Leiste bleibt im Video gut lesbar. */
   large?: boolean;
-  /** Maximale Höhe des Textfelds in px (Kino: bis zum oberen Rand des
-   *  aufgenommenen Eingabe-Ausschnitts). Standard: 45 % der Fensterhöhe. */
-  maxInputHeight?: number;
+  /** Kino: Höhe der ganzen AI-Spalte in px (oben abgeschickte Nachricht,
+   *  unten Eingabe). Ohne Angabe wächst die Eingabe bis 45 % Fensterhöhe. */
+  space?: number;
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
   const [phase, setPhase] = useState<Phase>("idle");
   const [prompt, setPrompt] = useState("");
+  // Kino: die abgeschickte Nachricht steigt aus der Eingabe in die Mitte des
+  // Bluescreens — eingeklappt (3 Zeilen), per Klick ausklappbar. Sie bleibt
+  // stehen, bis die nächste Nachricht sie ersetzt; bei Fehler/Verwerfen
+  // wandert der Text zurück in die Eingabe.
+  const [sent, setSent] = useState<{ id: number; text: string; images: number } | null>(null);
+  const [sentOpen, setSentOpen] = useState(false);
+  const [sentLong, setSentLong] = useState(false);
+  const sentTextRef = useRef<HTMLDivElement>(null);
+  const sentShown = large && !!sent;
+  // Während die AI an der Nachricht arbeitet, ist die Eingabe im Kino leer
+  // (der Text steht ja in der Mitte) — der Zustand `prompt` bleibt erhalten.
+  const typed = sentShown && (phase === "planning" || phase === "plan" || phase === "applying") ? "" : prompt;
   // Eingabe wächst mit JEDER Zeile mit — je mehr Text, desto größer die
   // Blase. Gescrollt wird erst, wenn wirklich kein Platz mehr ist (fast halbe
-  // Fensterhöhe bzw. im Kino der Rand des Aufnahme-Ausschnitts). Nach dem
-  // Absenden schrumpft sie wieder auf eine Zeile.
+  // Fensterhöhe bzw. im Kino die Höhe der AI-Spalte abzüglich Knopfzeile und
+  // eingeklappter Nachricht). Nach dem Absenden schrumpft sie wieder.
   const taRef = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
     const el = taRef.current;
     if (!el) return;
     const fit = () => {
-      const max = Math.max(large ? 232 : 168, maxInputHeight ?? Math.round(window.innerHeight * 0.45));
+      const max = space != null
+        ? Math.max(72, space - 80 - (sentShown ? 170 : 40))
+        : Math.max(168, Math.round(window.innerHeight * 0.45));
       el.style.height = "auto";
       const full = el.scrollHeight;
       el.style.height = `${Math.min(full, max)}px`;
@@ -177,7 +191,16 @@ export default function AiCopilot({
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [prompt, large, maxInputHeight]);
+  }, [typed, space, sentShown]);
+  // Knopf „Ganze Nachricht" nur, wenn die eingeklappte Nachricht wirklich
+  // abgeschnitten ist (gemessen, nicht geschätzt).
+  useEffect(() => {
+    const el = sentTextRef.current;
+    if (!el || sentOpen) return;
+    const ro = new ResizeObserver(() => setSentLong(el.scrollHeight > el.clientHeight + 2));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [sent, sentOpen, sentShown]);
   const [mode, setMode] = useState<AiMode>("standard");
   useEffect(() => setMode(loadAiMode()), []);
   function pickMode(m: AiMode) {
@@ -250,6 +273,8 @@ export default function AiCopilot({
     if (phase === "planning" || phase === "applying") return;
     if (!prompt.trim() && !images.length) return;
     clearDoneTimer();
+    setSent({ id: Date.now(), text: prompt.trim(), images: images.length });
+    setSentOpen(false);
     setPhase("planning");
     setError("");
     setNotice("");
@@ -276,6 +301,7 @@ export default function AiCopilot({
       if (!res.ok) {
         setError(res.status === 402 ? d?.error || t.themes.aiNoCredits : d?.error || t.themes.aiErr);
         setPhase("idle");
+        setSent(null);
         return;
       }
       // Credits werden JETZT (bei der Plan-Erstellung) abgezogen — Kontostand live nachziehen.
@@ -292,6 +318,7 @@ export default function AiCopilot({
     } catch {
       setError(t.themes.aiErr);
       setPhase("idle");
+      setSent(null);
     }
   }
 
@@ -356,6 +383,7 @@ export default function AiCopilot({
     setPlan(null);
     setPhase("idle");
     setError("");
+    setSent(null);
   }
 
   const stepForOp = (opIdx: number): number => {
@@ -381,7 +409,121 @@ export default function AiCopilot({
   const broState: BroState = phase === "planning" ? "thinking" : phase === "applying" ? "working" : "idle";
   const broStep = phase === "applying" ? plan?.steps[activeStep]?.title : undefined;
 
-  return (
+  // ── Bausteine der Eingabe: normal EINE Zeile (Knöpfe links/rechts vom
+  //    Textfeld); Kino = großes Eingabefeld über die volle Breite, Knöpfe in
+  //    einer eigenen Zeile darunter. ──
+  const fileInput = (
+    <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+  );
+  const plusBtn = (
+    // „+" — Datei/Bild anhängen (auch per Drag & Drop)
+    <button
+      onClick={() => fileRef.current?.click()}
+      disabled={images.length >= 3 || inputLocked}
+      title={t.themes.aiUploadHint}
+      aria-label={t.themes.aiUploadHint}
+      className={`shrink-0 ${large ? "w-11 h-11" : "w-8 h-8"} rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition`}
+    >
+      <Plus className={large ? "w-5 h-5" : "w-4 h-4"} />
+    </button>
+  );
+  const thumbs = images.map((img, i) => (
+    <span key={i} className="relative shrink-0">
+      <img src={img.dataUrl} alt={img.name} className={`${large ? "w-11 h-11" : "w-8 h-8"} rounded-lg object-cover border border-white/15`} />
+      <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
+    </span>
+  ));
+  const textareaEl = (
+    <textarea
+      ref={taRef}
+      value={typed}
+      onChange={(e) => setPrompt(e.target.value)}
+      onPaste={onPaste}
+      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); requestPlan(); } }}
+      placeholder={inputPlaceholder}
+      rows={1}
+      disabled={inputLocked}
+      // Normal einzeilig exakt so hoch wie die Knöpfe (32 px), die Zeile ist
+      // unten ausgerichtet — die Knöpfe bleiben beim Wachsen unten.
+      // Schriftgröße inline: die globale (ungelayerte) iOS-Zoom-Regel
+      // „textarea { font-size: 16px | inherit }" schlägt Tailwind-Klassen.
+      className={`resize-none bg-transparent px-1 text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 ${
+        large ? "block w-full leading-[28px] py-1" : "flex-1 min-w-0 leading-[22px] py-[5px]"
+      }`}
+      style={{ scrollbarWidth: "thin", fontSize: large ? 19 : 16 }}
+    />
+  );
+  const spinner = phase === "planning" && (
+    <CircleDashed className={`${large ? "w-5 h-5" : "w-4 h-4 mb-2"} animate-spin text-[#cfe9a3] shrink-0`} />
+  );
+  const modeSel = <ModeSelect mode={mode} onPick={pickMode} disabled={inputLocked} large={large} />;
+  const focusBtn = (
+    // Fokus-Icon (Hover erklärt es)
+    <button
+      onClick={() => onToggleFocusPick?.()}
+      aria-pressed={focusPick}
+      title={t.themes.aiFocusTooltip}
+      aria-label={t.themes.aiFocusTooltip}
+      className={`shrink-0 ${large ? "w-11 h-11" : "w-8 h-8"} rounded-full flex items-center justify-center transition ${
+        focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
+      }`}
+    >
+      <Target className={large ? "w-5 h-5" : "w-4 h-4"} />
+    </button>
+  );
+  // Kino: abgeschickte Nachricht — steigt aus der Eingabe in die Mitte,
+  // deckend weiß (sauber vor dem Bluescreen keybar, kein Schatten).
+  const sentBubble = (
+    <AnimatePresence mode="wait">
+      {sentShown && sent && (
+        <motion.div
+          key={sent.id}
+          initial={{ y: 240, scale: 0.94, opacity: 0 }}
+          animate={{ y: 0, scale: 1, opacity: 1 }}
+          exit={{ y: -24, opacity: 0, transition: { duration: 0.18 } }}
+          transition={{ type: "spring", stiffness: 170, damping: 22 }}
+          data-ai-sent
+          className="pointer-events-auto flex max-h-full max-w-full flex-col rounded-[28px] border"
+          style={{ background: "#ffffff", borderColor: "#e4e4e7", color: "#111114" }}
+        >
+          {sent.text && (
+            <div
+              ref={sentTextRef}
+              className="min-h-0 whitespace-pre-wrap break-words px-6 pt-5"
+              style={{
+                fontSize: 19,
+                lineHeight: "28px",
+                paddingBottom: sentLong ? 4 : 20,
+                ...(sentOpen
+                  ? { overflowY: "auto" as const }
+                  : { display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const, overflow: "hidden" }),
+              }}
+            >
+              {sent.text}
+            </div>
+          )}
+          {sent.images > 0 && (
+            <div className={`flex items-center gap-1.5 px-6 text-[15px] font-semibold ${sent.text ? "pt-1" : "pt-5"} ${sentLong ? "" : "pb-5"}`} style={{ color: "#52525b" }}>
+              <ImageIcon className="w-4 h-4" /> × {sent.images}
+            </div>
+          )}
+          {sentLong && (
+            <button
+              onClick={() => setSentOpen((o) => !o)}
+              aria-expanded={sentOpen}
+              className="shrink-0 self-center inline-flex items-center gap-1.5 px-4 pt-2 pb-4 text-[15px] font-semibold hover:opacity-70 transition"
+              style={{ color: "#52525b" }}
+            >
+              {sentOpen ? t.themes.aiSentCollapse : t.themes.aiSentExpand}
+              <ChevronDown className={`w-4 h-4 transition-transform ${sentOpen ? "rotate-180" : ""}`} />
+            </button>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  const barRow = (
     <div className="flex items-end gap-2.5">
       {/* Bro — kleiner separater Kreis LINKS neben der Leiste (frisst keine
           Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm) */}
@@ -425,65 +567,47 @@ export default function AiCopilot({
         </div>
       )}
 
-      {/* ── Dünne Command-Zeile: bleibt IMMER sichtbar (gesperrt, solange ein
-          Plan aussteht/läuft). Die Plan-/Fortschritts-Karte schiebt sich als
-          Panel unten RECHTS ins Bild (Portal unten) — die komplette
-          Live-Preview bleibt frei sichtbar. ── */}
-      <div className={`flex items-end ${large ? "gap-3 px-3.5 py-3" : "gap-2 px-2.5 py-2"}`}>
-        <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-        {/* „+" — Datei/Bild anhängen (auch per Drag & Drop) */}
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={images.length >= 3 || inputLocked}
-          title={t.themes.aiUploadHint}
-          aria-label={t.themes.aiUploadHint}
-          className={`shrink-0 ${large ? "w-11 h-11" : "w-8 h-8"} rounded-full border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-white hover:bg-white/[0.1] disabled:opacity-30 flex items-center justify-center transition`}
-        >
-          <Plus className={large ? "w-5 h-5" : "w-4 h-4"} />
-        </button>
-        {/* Bild-Vorschauen inline (klein) */}
-        {images.map((img, i) => (
-          <span key={i} className="relative shrink-0">
-            <img src={img.dataUrl} alt={img.name} className={`${large ? "w-11 h-11" : "w-8 h-8"} rounded-lg object-cover border border-white/15`} />
-            <button onClick={() => setImages(images.filter((_, x) => x !== i))} aria-label={t.themes.aiImageRemove} className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-black/80 border border-white/20 text-zinc-300 hover:text-white flex items-center justify-center"><X className="w-2.5 h-2.5" /></button>
-          </span>
-        ))}
-        {/* Eingabe — kurzer Platzhalter, schrumpft mit (min-w-0) */}
-        <textarea
-          ref={taRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onPaste={onPaste}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); requestPlan(); } }}
-          placeholder={inputPlaceholder}
-          rows={1}
-          disabled={inputLocked}
-          // Einzeilig exakt so hoch wie die Knöpfe (32 bzw. 44 px); die Zeile
-          // ist unten ausgerichtet, damit die Knöpfe beim Wachsen unten bleiben.
-          // Schriftgröße inline: die globale (ungelayerte) iOS-Zoom-Regel
-          // „textarea { font-size: 16px | inherit }" schlägt Tailwind-Klassen.
-          className={`flex-1 min-w-0 resize-none bg-transparent px-1 text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 ${
-            large ? "leading-[28px] py-2" : "leading-[22px] py-[5px]"
-          }`}
-          style={{ scrollbarWidth: "thin", fontSize: large ? 19 : 16 }}
-        />
-        {phase === "planning" && <CircleDashed className={`${large ? "w-5 h-5 mb-3" : "w-4 h-4 mb-2"} animate-spin text-[#cfe9a3] shrink-0`} />}
-        {/* Modus-Dropdown (Standard/Expert) */}
-        <ModeSelect mode={mode} onPick={pickMode} disabled={inputLocked} large={large} />
-        {/* Fokus-Icon (Hover erklärt es) */}
-        <button
-          onClick={() => onToggleFocusPick?.()}
-          aria-pressed={focusPick}
-          title={t.themes.aiFocusTooltip}
-          aria-label={t.themes.aiFocusTooltip}
-          className={`shrink-0 ${large ? "w-11 h-11" : "w-8 h-8"} rounded-full flex items-center justify-center transition ${
-            focusPick ? "bg-amber-400/25 text-amber-100 border border-amber-400/60" : "border border-white/12 bg-white/[0.05] text-zinc-300 hover:text-amber-200 hover:bg-amber-400/[0.12]"
-          }`}
-        >
-          <Target className={large ? "w-5 h-5" : "w-4 h-4"} />
-        </button>
+      {/* ── Command-Zeile: bleibt IMMER sichtbar (gesperrt, solange ein Plan
+          aussteht/läuft). Die Plan-/Fortschritts-Karte schiebt sich als Panel
+          ins Bild (Portal unten) — die Live-Preview bleibt frei sichtbar. ── */}
+      {large ? (
+        <div className="px-4 pt-3 pb-3">
+          {textareaEl}
+          <div className="mt-2 flex items-center gap-3">
+            {fileInput}
+            {plusBtn}
+            {thumbs}
+            <div className="flex-1" />
+            {spinner}
+            {modeSel}
+            {focusBtn}
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-end gap-2 px-2.5 py-2">
+          {fileInput}
+          {plusBtn}
+          {thumbs}
+          {textareaEl}
+          {spinner}
+          {modeSel}
+          {focusBtn}
+        </div>
+      )}
       </div>
-      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {large ? (
+        // Kino: Spalte über das ganze Quadrat — Nachricht mittig im freien
+        // Raum über der Eingabe, Eingabe unten.
+        <div className="flex h-full flex-col">
+          <div className="flex-1 min-h-0 flex items-center justify-center pb-5">{sentBubble}</div>
+          {barRow}
+        </div>
+      ) : barRow}
 
       {/* Plan-/Fortschritts-Panel — Portal nach <body>, animiert von unten
           rechts eingeschoben (Spring), damit die Preview nie verdeckt wird. */}
@@ -599,6 +723,6 @@ export default function AiCopilot({
         </AnimatePresence>,
         document.body,
       )}
-    </div>
+    </>
   );
 }
