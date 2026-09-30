@@ -125,7 +125,7 @@ export function BroMascot({
           : `relative block w-12 h-12 rounded-full overflow-hidden border flex items-center justify-center ${
               active ? "border-[#95BF47]/60" : "border-white/15"
             } bg-white/[0.05]`}
-        style={large ? { background: "#ffffff", borderColor: active ? "#95BF47" : "#e4e4e7" } : undefined}
+        style={large ? { background: "#ffffff", borderColor: "#95BF47" } : undefined}
         title="Bro"
       >
         {/* harter Schnitt beim Bildwechsel — KEIN Übergang/Fade */}
