@@ -2486,6 +2486,9 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                       ? { top: 24, right: cinemaPhoneW + 24, bottom: "auto", left: "auto", zIndex: 100 }
                       : undefined}
                     large={cinema}
+                    // Kino: wächst bis kurz unter den oberen Rand des Eingabe-
+                    // Ausschnitts (Leisten-Rahmen, Abstände, Fokus-Zeile abgezogen).
+                    maxInputHeight={cinema ? Math.max(232, cinemaInH - 110) : undefined}
                   />
                 </div>
               </div>

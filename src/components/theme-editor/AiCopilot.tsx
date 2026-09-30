@@ -119,7 +119,7 @@ function ModeSelect({ mode, onPick, disabled, large = false }: { mode: AiMode; o
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange, locked = false,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
-  focusPick = false, onToggleFocusPick, onClearFocus, planStyle, large = false,
+  focusPick = false, onToggleFocusPick, onClearFocus, planStyle, large = false, maxInputHeight,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -151,28 +151,33 @@ export default function AiCopilot({
   /** Große Eingabe (Kino-Modus/Aufnahme): größere Schrift, Knöpfe und
    *  Maximalhöhe — die Leiste bleibt im Video gut lesbar. */
   large?: boolean;
+  /** Maximale Höhe des Textfelds in px (Kino: bis zum oberen Rand des
+   *  aufgenommenen Eingabe-Ausschnitts). Standard: 45 % der Fensterhöhe. */
+  maxInputHeight?: number;
 }) {
   const { t, lang } = useI18n();
   const credits = useCredits();
   const [phase, setPhase] = useState<Phase>("idle");
   const [prompt, setPrompt] = useState("");
-  // Eingabe wächst beim Tippen mit (bis zur Maximalhöhe, danach scrollt sie)
-  // und schrumpft nach dem Absenden wieder auf eine Zeile.
+  // Eingabe wächst mit JEDER Zeile mit — je mehr Text, desto größer die
+  // Blase. Gescrollt wird erst, wenn wirklich kein Platz mehr ist (fast halbe
+  // Fensterhöhe bzw. im Kino der Rand des Aufnahme-Ausschnitts). Nach dem
+  // Absenden schrumpft sie wieder auf eine Zeile.
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const taMax = large ? 232 : 168;
   useLayoutEffect(() => {
     const el = taRef.current;
     if (!el) return;
     const fit = () => {
+      const max = Math.max(large ? 232 : 168, maxInputHeight ?? Math.round(window.innerHeight * 0.45));
       el.style.height = "auto";
       const full = el.scrollHeight;
-      el.style.height = `${Math.min(full, taMax)}px`;
-      el.style.overflowY = full > taMax ? "auto" : "hidden";
+      el.style.height = `${Math.min(full, max)}px`;
+      el.style.overflowY = full > max ? "auto" : "hidden";
     };
     fit();
     window.addEventListener("resize", fit);
     return () => window.removeEventListener("resize", fit);
-  }, [prompt, taMax]);
+  }, [prompt, large, maxInputHeight]);
   const [mode, setMode] = useState<AiMode>("standard");
   useEffect(() => setMode(loadAiMode()), []);
   function pickMode(m: AiMode) {
@@ -460,7 +465,7 @@ export default function AiCopilot({
           className={`flex-1 min-w-0 resize-none bg-transparent px-1 text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 ${
             large ? "leading-[28px] py-2" : "leading-[22px] py-[5px]"
           }`}
-          style={{ scrollbarWidth: "thin", maxHeight: taMax, fontSize: large ? 19 : 16 }}
+          style={{ scrollbarWidth: "thin", fontSize: large ? 19 : 16 }}
         />
         {phase === "planning" && <CircleDashed className={`${large ? "w-5 h-5 mb-3" : "w-4 h-4 mb-2"} animate-spin text-[#cfe9a3] shrink-0`} />}
         {/* Modus-Dropdown (Standard/Expert) */}
