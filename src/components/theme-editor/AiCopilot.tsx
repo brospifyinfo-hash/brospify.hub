@@ -180,7 +180,7 @@ export default function AiCopilot({
     if (!el) return;
     const fit = () => {
       const max = space != null
-        ? Math.max(72, space - 80 - (sentShown ? 250 : 40))
+        ? Math.max(72, space - 30 - (sentShown ? 250 : 40))
         : Math.max(168, Math.round(window.innerHeight * 0.45));
       el.style.height = "auto";
       const full = el.scrollHeight;
@@ -410,9 +410,8 @@ export default function AiCopilot({
   const broState: BroState = phase === "planning" ? "thinking" : phase === "applying" ? "working" : "idle";
   const broStep = phase === "applying" ? plan?.steps[activeStep]?.title : undefined;
 
-  // ── Bausteine der Eingabe: normal EINE Zeile (Knöpfe links/rechts vom
-  //    Textfeld); Kino = großes Eingabefeld über die volle Breite, Knöpfe in
-  //    einer eigenen Zeile darunter. ──
+  // ── Bausteine der Eingabe: EINE Zeile — „+" links, Textfeld daneben (wächst
+  //    nach oben), Modus/Fokus rechts. Kino: alles größer, ohne Fokus-Knopf. ──
   const fileInput = (
     <input ref={fileRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
   );
@@ -444,12 +443,12 @@ export default function AiCopilot({
       placeholder={inputPlaceholder}
       rows={1}
       disabled={inputLocked}
-      // Normal einzeilig exakt so hoch wie die Knöpfe (32 px), die Zeile ist
+      // Einzeilig exakt so hoch wie die Knöpfe (32 bzw. 44 px), die Zeile ist
       // unten ausgerichtet — die Knöpfe bleiben beim Wachsen unten.
       // Schriftgröße inline: die globale (ungelayerte) iOS-Zoom-Regel
       // „textarea { font-size: 16px | inherit }" schlägt Tailwind-Klassen.
-      className={`resize-none bg-transparent px-1 text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 ${
-        large ? "block w-full leading-[28px] py-1" : "flex-1 min-w-0 leading-[22px] py-[5px]"
+      className={`flex-1 min-w-0 resize-none bg-transparent px-1 text-white placeholder:text-zinc-500 outline-none disabled:opacity-60 ${
+        large ? "leading-[28px] py-2" : "leading-[22px] py-[5px]"
       }`}
       style={{ scrollbarWidth: "thin", fontSize: large ? 19 : 16 }}
     />
@@ -591,9 +590,8 @@ export default function AiCopilot({
     <div className="flex items-end gap-2.5">
       {/* Bro — kleiner separater Kreis LINKS neben der Leiste (frisst keine
           Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm).
-          Im Kino ausgeblendet: volle Breite für die Eingabe, der Status
-          steht unter der Nachricht. */}
-      {!large && <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} />}
+          Im Kino groß und deckend weiß. */}
+      <BroMascot state={broState} stepTitle={broStep} showBubble={large || !showPlanCard} large={large} />
       <div
         data-ai-bar
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -637,17 +635,14 @@ export default function AiCopilot({
           aussteht/läuft). Die Plan-/Fortschritts-Karte schiebt sich als Panel
           ins Bild (Portal unten) — die Live-Preview bleibt frei sichtbar. ── */}
       {large ? (
-        <div className="px-4 pt-3 pb-3">
+        // Kino: ohne Fokus-Knopf (Sections anklicken geht dort nicht) und
+        // ohne Spinner (Status steht unter der Nachricht).
+        <div className="flex items-end gap-3 px-3.5 py-3">
+          {fileInput}
+          {plusBtn}
+          {thumbs}
           {textareaEl}
-          {/* Kino: ohne Fokus-Knopf (Sections anklicken geht dort nicht)
-              und ohne Spinner (Status steht unter der Nachricht). */}
-          <div className="mt-2 flex items-center gap-3">
-            {fileInput}
-            {plusBtn}
-            {thumbs}
-            <div className="flex-1" />
-            {modeSel}
-          </div>
+          {modeSel}
         </div>
       ) : (
         <div className="flex items-end gap-2 px-2.5 py-2">

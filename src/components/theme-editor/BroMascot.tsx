@@ -29,12 +29,17 @@ export function BroMascot({
   state,
   stepTitle,
   showBubble = true,
+  large = false,
 }: {
   state: BroState;
   stepTitle?: string;
   /** false, solange die Plan-Karte sichtbar ist — die Blase würde sie sonst
    *  überdecken. Bro redet dann nur beim Nachdenken (dünne Zeile). */
   showBubble?: boolean;
+  /** Kino: größer und DECKEND weiß (Kreis + Sprechblase) — halbtransparente
+   *  Flächen würden vor dem Bluescreen dunkel/bläulich wirken und beim
+   *  Keyen ausfransen. */
+  large?: boolean;
 }) {
   const { t } = useI18n();
   const [cfg, setCfg] = useState<BroCfg | null>(null);
@@ -103,7 +108,10 @@ export function BroMascot({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 3, scale: 0.95 }}
             transition={{ duration: 0.22 }}
-            className="absolute bottom-full left-0 mb-2 w-max max-w-[220px] truncate rounded-2xl rounded-bl-sm border border-white/12 bg-[#17171d] px-3 py-1.5 text-[11.5px] font-medium text-zinc-100 shadow-[0_12px_34px_-12px_rgba(0,0,0,0.85)]"
+            className={large
+              ? "absolute bottom-full left-0 mb-2.5 w-max max-w-[340px] truncate rounded-2xl rounded-bl-sm border px-4 py-2 text-[15px] font-semibold"
+              : "absolute bottom-full left-0 mb-2 w-max max-w-[220px] truncate rounded-2xl rounded-bl-sm border border-white/12 bg-[#17171d] px-3 py-1.5 text-[11.5px] font-medium text-zinc-100 shadow-[0_12px_34px_-12px_rgba(0,0,0,0.85)]"}
+            style={large ? { background: "#ffffff", borderColor: "#e4e4e7", color: "#111114" } : undefined}
           >
             {bubble}
           </motion.span>
@@ -112,9 +120,12 @@ export function BroMascot({
 
       {/* Bro-Avatar (kleiner separater Kreis) */}
       <span
-        className={`relative block w-12 h-12 rounded-full overflow-hidden border flex items-center justify-center ${
-          active ? "border-[#95BF47]/60" : "border-white/15"
-        } bg-white/[0.05]`}
+        className={large
+          ? "relative block w-[70px] h-[70px] rounded-full overflow-hidden border-2 flex items-center justify-center"
+          : `relative block w-12 h-12 rounded-full overflow-hidden border flex items-center justify-center ${
+              active ? "border-[#95BF47]/60" : "border-white/15"
+            } bg-white/[0.05]`}
+        style={large ? { background: "#ffffff", borderColor: active ? "#95BF47" : "#e4e4e7" } : undefined}
         title="Bro"
       >
         {/* harter Schnitt beim Bildwechsel — KEIN Übergang/Fade */}
@@ -122,7 +133,7 @@ export function BroMascot({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={url} alt="Bro" className="absolute inset-0 w-full h-full object-cover" />
         ) : (
-          <span className="text-2xl leading-none">{FALLBACK[state]}</span>
+          <span className={`${large ? "text-[34px]" : "text-2xl"} leading-none`}>{FALLBACK[state]}</span>
         )}
         {active && (
           <motion.span

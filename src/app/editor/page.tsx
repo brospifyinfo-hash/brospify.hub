@@ -413,8 +413,7 @@ export default function ThemeEditorPage() {
   const [cinemaRecLayout, setCinemaRecLayout] = useState(false);
   /** Unsichtbarer Rahmen um die AI-Eingabe = Bildausschnitt des Eingabe-Videos. */
   const cinemaInputRef = useRef<HTMLDivElement>(null);
-  /** Unsichtbarer Rahmen um Eingabe UND Handy = Zuschnitt der Tab-Aufnahme. */
-  const cinemaRecAreaRef = useRef<HTMLDivElement>(null);
+
   const recorder = useCinemaRecorder();
   const recStateRef = useRef(recorder.state);
   recStateRef.current = recorder.state;
@@ -441,7 +440,7 @@ export default function ThemeEditorPage() {
           size: (r, dpr) => (hd ? { w: 1920, h: 1080 } : { w: r.width * dpr, h: r.height * dpr }),
         },
       ],
-      area: () => cinemaRecAreaRef.current,
+
       onLayout: () => { if (hd) setCinemaRecLayout(true); },
       onRestore: () => setCinemaRecLayout(false),
     });
@@ -2157,24 +2156,16 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                 {cinema && (
                   <>
                     <style>{CINEMA_CSS}</style>
-                    {/* Bluescreen-Quadrat — reines Digital-Blau, scharfe Kanten
-                        (sauber keybar); die AI-Leiste liegt DAVOR. */}
-                    {/* = Bildausschnitt des Eingabe-Videos (Nachricht + Eingabe, 16:9). */}
+
+                    {/* Bluescreen — reines Digital-Blau, scharfe Kanten (sauber
+                        keybar); die AI-Leiste liegt DAVOR.
+                        = Bildausschnitt des Eingabe-Videos (16:9). */}
                     <div
                       ref={cinemaInputRef}
                       aria-hidden
                       data-cinema-input
                       className="absolute"
                       style={{ left: cinemaKeyLeft, top: cinemaKeyTop, width: cinemaKeyW, height: cinemaKeyH, background: CINEMA_KEY }}
-                    />
-                    {/* Zuschnitt der Tab-Aufnahme (unsichtbar): vom Quadrat bis
-                        zum rechten Rand — Bühne und Steuerleiste bleiben draußen. */}
-                    <div
-                      ref={cinemaRecAreaRef}
-                      aria-hidden
-                      data-cinema-rec-area
-                      className="absolute top-0 right-0 bottom-0 pointer-events-none"
-                      style={{ left: cinemaKeyLeft }}
                     />
                     {/* Steuerleiste (blendet sich bei Ruhe aus): Größe · Nach oben · Beenden */}
                     <div

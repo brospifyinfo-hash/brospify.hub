@@ -6,15 +6,17 @@
 //
 // Pipeline (bewusst so robust gebaut):
 //  1. EINE Tab-Aufnahme per getDisplayMedia (preferCurrentTab → Chrome fragt
-//     nur „Diesen Tab teilen?"). Chrome wendet einen Zuschnitt (cropTo) auf
-//     die ganze Quelle an (auch auf Klone) — zwei getrennte Zuschnitte aus
-//     einer Freigabe gehen nicht. Darum: EIN Zuschnitt auf einen Rahmen, der
-//     beide Bereiche umschließt (spart Übertragung: Bühne/Steuerleiste
-//     bleiben draußen), die einzelnen Bereiche schneiden wir selbst aus
-//     (Elementrechteck in CSS-px × Bildpunkte pro CSS-px). Klappt cropTo
-//     nicht, wird aus dem ganzen Tab ausgeschnitten — gleiches Ergebnis.
-//     Schärfe: Chromes HiDPI-Tab-Aufnahme rendert den Tab für die hohe
-//     Wunsch-Auflösung (3840×2160) mit bis zu 2× Pixeldichte.
+//     nur „Diesen Tab teilen?"), OHNE Region Capture (cropTo): Chrome wendet
+//     einen Zuschnitt auf die ganze Quelle an (zwei Bereiche gehen damit eh
+//     nicht), und direkt nach dem ersten cropTo einer Seite lieferte Chrome
+//     154 im Test überhaupt KEIN Bild mehr („kein Bild geliefert"). Die
+//     Bereiche schneiden wir selbst aus dem ganzen Tab aus (Elementrechteck
+//     in CSS-px × Bildpunkte pro CSS-px).
+//     Schärfe vs. Stabilität: Chromes HiDPI-Tab-Aufnahme rendert den GANZEN
+//     Tab für eine hohe Wunsch-Auflösung mit bis zu 2× Pixeldichte. Auf
+//     schwacher Grafik (Intel UHD 620) kam das Neuzeichnen beim Scrollen
+//     nicht mehr hinterher → weiße, leere Flächen im Video. Deshalb wird
+//     gezielt 1,5× angefordert (Tab-Größe × Pixeldichte × 1,5).
 //  2. Pro Bereich eine Leinwand FESTER Größe (HD: Handy 1080×1920, Eingabe
 //     1920×1080), gezeichnet im festen 60-Hz-Takt. Grund: Die Tab-Aufnahme
 //     ändert ihre Bildgröße (HiDPI greift nach dem Start) und liefert bei
@@ -64,11 +66,6 @@ export interface RecResult {
 
 export type RecError = "unsupported" | "wrongSurface" | "noFrames" | "failed";
 
-type CaptureTarget = object;
-interface CaptureTargetFactory {
-  fromElement(el: Element): Promise<CaptureTarget>;
-}
-type CroppableTrack = MediaStreamTrack & { cropTo?: (t: CaptureTarget | null) => Promise<void> };
 
 // Reihenfolge = Präferenz. MP4/H.264 öffnet jedes Schnittprogramm direkt.
 const MIME_CANDIDATES = [
@@ -81,6 +78,8 @@ const MIME_CANDIDATES = [
 ];
 
 const FPS = 60;
+/** Aufnahme-Pixeldichte relativ zum Bildschirm (Chrome: 1–2, in ¼-Schritten). */
+const CAPTURE_BOOST = 1.5;
 
 function supportedMimes(): string[] {
   if (typeof MediaRecorder === "undefined") return [];
@@ -273,6 +272,7 @@ export function useCinemaRecorder() {
   const blobsRef = useRef<Blob[]>([]);
   /** Unsichtbarer Pixel außerhalb der Bereiche — erzwingt frische Bilder. */
   const dotRef = useRef<HTMLDivElement | null>(null);
+
   const setBoth = (s: RecState) => {
     stateRef.current = s;
     setState(s);
@@ -316,8 +316,7 @@ export function useCinemaRecorder() {
 
   /** onLayout: vor dem Start das Aufnahme-Layout setzen (die Vorschau
    *  skaliert per Layout-Effekt nach); onRestore: danach zurückstellen. */
-  /** area: optionaler Rahmen um ALLE Bereiche (Zuschnitt an der Quelle). */
-  const start = useCallback(async (opts: { targets: RecTarget[]; area?: () => HTMLElement | null; onLayout?: () => void; onRestore?: () => void }) => {
+  const start = useCallback(async (opts: { targets: RecTarget[]; onLayout?: () => void; onRestore?: () => void }) => {
     if (stateRef.current !== "idle") return;
     setError(null);
     setErrorDetail("");
@@ -333,17 +332,23 @@ export function useCinemaRecorder() {
     // Tab-Aufnahme meldet Chrome die HiDPI-Aufnahmedichte (z. B. 3 statt 1,5).
     const screenDpr = window.devicePixelRatio || 1;
 
-    // 1) Tab-Aufnahme anfordern (hohe Wunsch-Auflösung → Chrome rendert den
-    //    Tab für die Aufnahme mit höherer Pixeldichte).
+    // 1) Tab-Aufnahme anfordern. Wunsch-Auflösung = 1,5× der echten Tab-
+    //    Pixel → Chrome rendert den Tab für die Aufnahme mit 1,5× Dichte:
+    //    deutlich schärfer als nativ, aber ohne die 2×-Last, bei der
+    //    schwache Grafik beim Scrollen leere (weiße) Kacheln liefert.
+    const capW = Math.min(3840, Math.round(window.innerWidth * screenDpr * CAPTURE_BOOST));
+    const capH = Math.min(2160, Math.round(window.innerHeight * screenDpr * CAPTURE_BOOST));
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: {
           displaySurface: "browser",
           frameRate: { ideal: FPS, max: FPS },
-          width: { ideal: 3840 },
-          height: { ideal: 2160 },
-        },
+          width: { ideal: capW },
+          height: { ideal: capH },
+          // Mauszeiger nicht mit ins Video (wo Chrome das unterstützt).
+          cursor: "never",
+        } as MediaTrackConstraints,
         audio: false,
         preferCurrentTab: true,
         selfBrowserSurface: "include",
@@ -376,18 +381,6 @@ export function useCinemaRecorder() {
     const missing = opts.targets.find((t) => t.required && !picked.some((p) => p.target === t));
     if (missing || !picked.length) return fail("failed", `Aufnahme-Bereich „${(missing ?? opts.targets[0])?.name ?? "?"}“ nicht gefunden.`);
 
-    // Zuschnitt an der Quelle auf den Rahmen um alle Bereiche (weniger
-    // Pixel pro Bild → weniger Last). Scheitert er, bleibt der ganze Tab.
-    const area = opts.area?.() ?? null;
-    let cropped = false;
-    const crop = (window as unknown as { CropTarget?: CaptureTargetFactory }).CropTarget;
-    const ct = track as CroppableTrack;
-    if (area && crop && ct.cropTo) {
-      try {
-        await ct.cropTo(await crop.fromElement(area));
-        cropped = true;
-      } catch { /* ganzer Tab */ }
-    }
 
     // 2) Tab-Bilder in ein unsichtbares Video leiten.
     const video = document.createElement("video");
@@ -404,21 +397,24 @@ export function useCinemaRecorder() {
     // hat ein festes Zeitlimit.
     let playErr = "";
     video.play().catch((e) => { playErr = describe(e); });
-    // Bezug des Aufnahmebilds: der zugeschnittene Rahmen bzw. der ganze Tab.
-    const refRect = () => (cropped && area ? area.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight });
-    // Unsichtbarer Pixel oben links im Rahmen (Bühne, in KEINEM Bereich):
-    // seine Mini-Änderung erzwingt ein frisches Bild, wenn die Seite ruht.
+    // Bezug des Aufnahmebilds = der ganze Tab (Viewport).
+    const refRect = () => ({ left: 0, top: 0, width: window.innerWidth, height: window.innerHeight });
+    // Unsichtbarer Pixel ganz oben links (dunkle Bühne, in KEINEM Bereich):
+    // Chrome schickt bei ruhender Seite KEIN Bild — ein echter Farbwechsel
+    // (fast schwarz ↔ schwarz, fürs Auge unsichtbar) erzwingt ein frisches.
     const dot = document.createElement("div");
     dot.setAttribute("aria-hidden", "true");
-    dot.style.cssText = `position:fixed;left:${Math.round(refRect().left)}px;top:0;width:2px;height:2px;background:#000;opacity:0.01;pointer-events:none;z-index:2147483647`;
+    dot.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;background:#000000;pointer-events:none;z-index:2147483647";
     document.body.appendChild(dot);
     dotRef.current = dot;
     let lastNudge = 0;
+    let flip = false;
     const nudge = () => {
       const now = performance.now();
-      if (now - lastNudge < 250) return;
+      if (now - lastNudge < 150) return;
       lastNudge = now;
-      dot.style.opacity = dot.style.opacity === "0.01" ? "0.02" : "0.01";
+      flip = !flip;
+      dot.style.background = flip ? "#020202" : "#000000";
     };
     /** Passt das aktuelle Bild zum aktuellen Layout (Seitenverhältnis)? */
     const frameMatches = () => {
@@ -427,9 +423,14 @@ export function useCinemaRecorder() {
       if (!vw || !vh || r.width < 1 || r.height < 1) return false;
       return Math.abs(vw / vh / (r.width / r.height) - 1) < 0.015;
     };
+    // Während des Wartens laufend anstoßen (ein einzelner Anstoß kann vor dem
+    // Zuschnitt „verpuffen").
     nudge();
-    if (!(await waitForFrames(video, 4000))) {
-      return fail("noFrames", `Chrome hat innerhalb von 4 s kein Bild des Tabs geliefert.${playErr ? ` (${playErr})` : ""}`);
+    const nudgeTimer = setInterval(nudge, 160);
+    const gotFrames = await waitForFrames(video, 5000);
+    clearInterval(nudgeTimer);
+    if (!gotFrames) {
+      return fail("noFrames", `Chrome hat innerhalb von 5 s kein Bild des Tabs geliefert.${playErr ? ` (${playErr})` : ""}`);
     }
     // Erst starten, wenn das Bild zum Layout passt (max. 2,5 s, dann weiter
     // — z. B. falls Chrome das Bild mit Rand liefert).
