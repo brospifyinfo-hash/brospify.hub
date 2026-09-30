@@ -10,7 +10,7 @@
 // per Kopfzeile einklappbar; der Status (Plan bereit / % beim Umsetzen)
 // bleibt auch eingeklappt in der Kopfzeile sichtbar.
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type DragEvent, type ClipboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ClipboardEvent } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -119,7 +119,7 @@ function ModeSelect({ mode, onPick, disabled, large = false }: { mode: AiMode; o
 export default function AiCopilot({
   doc, dispatch, baseSections, capabilities, homeSections, productTitle, onBusyChange, locked = false,
   focus = [], onRemoveFocus, onSelectFocus, selectedFocusable = null, onFocusSelected,
-  focusPick = false, onToggleFocusPick, onClearFocus, planStyle, large = false, space,
+  focusPick = false, onToggleFocusPick, onClearFocus, large = false, space,
 }: {
   doc: ThemeDocument;
   dispatch: (a: EditorAction) => void;
@@ -145,9 +145,6 @@ export default function AiCopilot({
   focusPick?: boolean;
   onToggleFocusPick?: () => void;
   onClearFocus?: () => void;
-  /** Positions-Override der Plan-Karte (Kino-Modus: über der Vollbild-Ebene,
-   *  links neben der Handy-Vorschau statt unten rechts darüber). */
-  planStyle?: CSSProperties;
   /** Große Eingabe (Kino-Modus/Aufnahme): größere Schrift, Knöpfe und
    *  Maximalhöhe — die Leiste bleibt im Video gut lesbar. */
   large?: boolean;
@@ -167,7 +164,9 @@ export default function AiCopilot({
   const [sentOpen, setSentOpen] = useState(false);
   const [sentLong, setSentLong] = useState(false);
   const sentTextRef = useRef<HTMLDivElement>(null);
-  const sentShown = large && !!sent;
+  // Sichtbar, solange die AI an DIESER Nachricht arbeitet (inkl. kurzer
+  // „Fertig“-Phase) — danach verschwindet sie wieder.
+  const sentShown = large && !!sent && phase !== "idle";
   // Während die AI an der Nachricht arbeitet, ist die Eingabe im Kino leer
   // (der Text steht ja in der Mitte) — der Zustand `prompt` bleibt erhalten.
   const typed = sentShown && (phase === "planning" || phase === "plan" || phase === "applying") ? "" : prompt;
@@ -181,7 +180,7 @@ export default function AiCopilot({
     if (!el) return;
     const fit = () => {
       const max = space != null
-        ? Math.max(72, space - 80 - (sentShown ? 170 : 40))
+        ? Math.max(72, space - 80 - (sentShown ? 250 : 40))
         : Math.max(168, Math.round(window.innerHeight * 0.45));
       el.style.height = "auto";
       const full = el.scrollHeight;
@@ -397,8 +396,10 @@ export default function AiCopilot({
   // Eingabe gesperrt, solange ein Plan aussteht/läuft — die Plan-Karte lebt
   // als Slide-in-Panel unten RECHTS (Portal), damit die Preview frei bleibt.
   const inputLocked = locked || phase === "planning" || phase === "plan" || phase === "applying";
+  // Kino: der Status steht unter der Nachricht — die Eingabe bleibt ruhig.
   const inputPlaceholder =
-    phase === "planning" ? t.themes.aiPlanning
+    large ? t.themes.aiPlaceholderShort
+    : phase === "planning" ? t.themes.aiPlanning
     : phase === "applying" ? t.themes.aiApplying
     : phase === "plan" ? t.themes.aiPlanTitle
     : t.themes.aiPlaceholderShort;
@@ -483,7 +484,7 @@ export default function AiCopilot({
           exit={{ y: -24, opacity: 0, transition: { duration: 0.18 } }}
           transition={{ type: "spring", stiffness: 170, damping: 22 }}
           data-ai-sent
-          className="pointer-events-auto flex max-h-full max-w-full flex-col rounded-[28px] border"
+          className="pointer-events-auto flex min-h-0 max-h-full max-w-full flex-col rounded-[28px] border"
           style={{ background: "#ffffff", borderColor: "#e4e4e7", color: "#111114" }}
         >
           {sent.text && (
@@ -523,11 +524,76 @@ export default function AiCopilot({
     </AnimatePresence>
   );
 
+  // Kino: kompakte Status-Zeile unter der Nachricht statt der großen
+  // Plan-Karte (plant → Schritt + Fortschritt → Fertig; Expert: Umsetzen/
+  // Verwerfen). Deckend weiß, keine Schatten — sauber keybar.
+  const statusLabel =
+    phase === "planning" ? t.themes.aiPlanning
+    : phase === "plan" ? t.themes.aiPlanTitle
+    : phase === "applying" ? (plan?.steps[activeStep]?.title || t.themes.aiApplying)
+    : t.themes.aiDone;
+  const statusPill = (
+    <AnimatePresence>
+      {sentShown && (
+        <motion.div
+          key="ai-status"
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.18 } }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          data-ai-status
+          className="pointer-events-auto shrink-0 w-full max-w-[520px] rounded-[22px] border px-5 py-3.5"
+          style={{ background: "#ffffff", borderColor: "#e4e4e7", color: "#111114" }}
+        >
+          <div className="flex items-center gap-2.5 text-[16px] font-semibold leading-snug">
+            {phase === "done"
+              ? <Check className="w-5 h-5 shrink-0" style={{ color: ACCENT }} />
+              : <CircleDashed className="w-5 h-5 shrink-0 animate-spin" style={{ color: ACCENT }} />}
+            <span className="min-w-0 truncate">{statusLabel}</span>
+            {phase === "applying" && plan && (
+              <span className="ml-auto shrink-0 tabular-nums text-[14px] font-medium" style={{ color: "#71717a" }}>{applyPct}%</span>
+            )}
+          </div>
+          {phase === "applying" && (
+            <div className="mt-2.5 h-1.5 rounded-full overflow-hidden" style={{ background: "#ececef" }}>
+              <motion.div
+                className="h-full rounded-full"
+                style={{ background: ACCENT }}
+                animate={{ width: `${applyPct}%` }}
+                transition={{ duration: 0.25, ease: "easeOut" }}
+              />
+            </div>
+          )}
+          {phase === "plan" && (
+            <div className="mt-3 flex gap-2">
+              <button
+                onClick={() => confirmPlan()}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 rounded-xl px-4 py-2.5 text-[15px] font-bold hover:brightness-110 transition"
+                style={{ background: ACCENT, color: "#ffffff" }}
+              >
+                <Sparkles className="w-4 h-4" /> {t.themes.aiApply}
+              </button>
+              <button
+                onClick={discard}
+                className="shrink-0 rounded-xl px-4 py-2.5 text-[15px] font-semibold hover:opacity-80 transition"
+                style={{ background: "#f1f1f3", color: "#3f3f46" }}
+              >
+                {t.themes.aiDiscard}
+              </button>
+            </div>
+          )}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
   const barRow = (
     <div className="flex items-end gap-2.5">
       {/* Bro — kleiner separater Kreis LINKS neben der Leiste (frisst keine
-          Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm) */}
-      <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} large={large} />
+          Höhe in der Leiste, Sprechblase schwebt beim Arbeiten über ihm).
+          Im Kino ausgeblendet: volle Breite für die Eingabe, der Status
+          steht unter der Nachricht. */}
+      {!large && <BroMascot state={broState} stepTitle={broStep} showBubble={!showPlanCard} />}
       <div
         data-ai-bar
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
@@ -573,14 +639,14 @@ export default function AiCopilot({
       {large ? (
         <div className="px-4 pt-3 pb-3">
           {textareaEl}
+          {/* Kino: ohne Fokus-Knopf (Sections anklicken geht dort nicht)
+              und ohne Spinner (Status steht unter der Nachricht). */}
           <div className="mt-2 flex items-center gap-3">
             {fileInput}
             {plusBtn}
             {thumbs}
             <div className="flex-1" />
-            {spinner}
             {modeSel}
-            {focusBtn}
           </div>
         </div>
       ) : (
@@ -604,7 +670,10 @@ export default function AiCopilot({
         // Kino: Spalte über das ganze Quadrat — Nachricht mittig im freien
         // Raum über der Eingabe, Eingabe unten.
         <div className="flex h-full flex-col">
-          <div className="flex-1 min-h-0 flex items-center justify-center pb-5">{sentBubble}</div>
+          <div className="flex-1 min-h-0 flex flex-col items-center justify-center gap-3 pb-5">
+            {sentBubble}
+            {statusPill}
+          </div>
           {barRow}
         </div>
       ) : barRow}
@@ -613,14 +682,13 @@ export default function AiCopilot({
           rechts eingeschoben (Spring), damit die Preview nie verdeckt wird. */}
       {typeof document !== "undefined" && createPortal(
         <AnimatePresence>
-          {showPlanCard && plan && (
+          {showPlanCard && plan && !large && (
             <motion.div
               initial={{ y: 140, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 140, opacity: 0 }}
               transition={{ type: "spring", stiffness: 300, damping: 30 }}
               className="fixed right-3 bottom-24 lg:right-6 lg:bottom-6 z-[60] w-[min(400px,calc(100vw-1.5rem))]"
-              style={planStyle}
             >
               <div className="max-h-[62vh] overflow-y-auto rounded-2xl border border-white/[0.12] bg-[#101014]/95 backdrop-blur-xl shadow-[0_24px_70px_-18px_rgba(0,0,0,0.85)] p-2.5">
                 <div

@@ -22,6 +22,15 @@
 //     scheitern. Die Leinwände liefern konstante Größe + konstante 60 fps.
 //  3. Alle Encoder starten im SELBEN Moment (Videos laufen synchron) mit
 //     MIME-Kette MP4 → WebM: scheitert ein Format, versuchen alle das nächste.
+//  4. BILD ↔ LAYOUT SYNCHRON HALTEN: Chrome blendet nach der Freigabe die
+//     Leiste „Dieser Tab wird geteilt" ein (Fenster wird niedriger → das
+//     Layout springt) und liefert bei ruhender Seite noch sekundenlang das
+//     ALTE Bild. Würde mit den neuen Rechtecken ausgeschnitten, entstünde
+//     ein verrutschter, vergrößerter Handy-Ausschnitt. Deshalb: Aufnahme-
+//     Layout erst NACH der Freigabe setzen und warten, bis es steht; ein
+//     Bild wird nur gezeichnet, wenn sein Seitenverhältnis zum aktuellen
+//     Rahmen passt (sonst bleibt das letzte richtige Bild stehen), und ein
+//     unsichtbarer Pixel erzwingt ein frisches Bild.
 // Jeder Fehler trägt Stufe + technischen Grund (Diagnose ohne Rätselraten).
 
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -135,6 +144,23 @@ function download(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+/** Wartet, bis sich die Fenstergröße nicht mehr ändert (Chromes Freigabe-
+ *  Leiste erscheint erst nach dem Dialog) und React neu gelayoutet hat. */
+async function settleLayout(maxMs = 1800): Promise<void> {
+  const t0 = performance.now();
+  let last = `${window.innerWidth}x${window.innerHeight}`;
+  let stableSince = performance.now();
+  while (performance.now() - t0 < maxMs) {
+    await new Promise((r) => setTimeout(r, 50));
+    const now = `${window.innerWidth}x${window.innerHeight}`;
+    if (now !== last) {
+      last = now;
+      stableSince = performance.now();
+    } else if (performance.now() - stableSince >= 350) break;
+  }
+  await new Promise((r) => setTimeout(r, 120));
+}
+
 /** Wartet, bis das Video wirklich Bilder zeigt (Maße bekannt). */
 function waitForFrames(video: HTMLVideoElement, ms: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -245,6 +271,8 @@ export function useCinemaRecorder() {
   const restoreRef = useRef<(() => void) | undefined>(undefined);
   /** Fertige Dateien (zum erneuten Speichern, falls Chrome eine blockiert hat). */
   const blobsRef = useRef<Blob[]>([]);
+  /** Unsichtbarer Pixel außerhalb der Bereiche — erzwingt frische Bilder. */
+  const dotRef = useRef<HTMLDivElement | null>(null);
   const setBoth = (s: RecState) => {
     stateRef.current = s;
     setState(s);
@@ -265,6 +293,8 @@ export function useCinemaRecorder() {
       v.remove();
     }
     videoRef.current = null;
+    dotRef.current?.remove();
+    dotRef.current = null;
   };
 
   const fail = (kind: RecError, detail: string) => {
@@ -299,8 +329,9 @@ export function useCinemaRecorder() {
       return;
     }
     setBoth("starting");
-    opts.onLayout?.();
-    await new Promise((r) => setTimeout(r, 250));
+    // Echte Bildschirm-Pixeldichte VOR der Aufnahme merken — während der
+    // Tab-Aufnahme meldet Chrome die HiDPI-Aufnahmedichte (z. B. 3 statt 1,5).
+    const screenDpr = window.devicePixelRatio || 1;
 
     // 1) Tab-Aufnahme anfordern (hohe Wunsch-Auflösung → Chrome rendert den
     //    Tab für die Aufnahme mit höherer Pixeldichte).
@@ -333,6 +364,11 @@ export function useCinemaRecorder() {
     // anderes Fenster/ein ganzer Bildschirm würde falsche Bereiche liefern.
     const surface = (track.getSettings() as MediaTrackSettings & { displaySurface?: string }).displaySurface;
     if (surface && surface !== "browser") return fail("wrongSurface", `displaySurface = ${surface}`);
+
+    // Aufnahme-Layout erst JETZT setzen: Chromes Freigabe-Leiste ist da,
+    // das Fenster hat seine endgültige Höhe — danach springt nichts mehr.
+    opts.onLayout?.();
+    await settleLayout();
 
     const picked = opts.targets
       .map((target) => ({ target, el: target.el() }))
@@ -368,19 +404,44 @@ export function useCinemaRecorder() {
     // hat ein festes Zeitlimit.
     let playErr = "";
     video.play().catch((e) => { playErr = describe(e); });
-    // Bei ruhender Seite erzwingt ein Mini-Scroll ein erstes Bild.
-    const nudge = picked[0].el;
-    nudge.scrollBy({ top: 1 });
-    nudge.scrollBy({ top: -1 });
+    // Bezug des Aufnahmebilds: der zugeschnittene Rahmen bzw. der ganze Tab.
+    const refRect = () => (cropped && area ? area.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight });
+    // Unsichtbarer Pixel oben links im Rahmen (Bühne, in KEINEM Bereich):
+    // seine Mini-Änderung erzwingt ein frisches Bild, wenn die Seite ruht.
+    const dot = document.createElement("div");
+    dot.setAttribute("aria-hidden", "true");
+    dot.style.cssText = `position:fixed;left:${Math.round(refRect().left)}px;top:0;width:2px;height:2px;background:#000;opacity:0.01;pointer-events:none;z-index:2147483647`;
+    document.body.appendChild(dot);
+    dotRef.current = dot;
+    let lastNudge = 0;
+    const nudge = () => {
+      const now = performance.now();
+      if (now - lastNudge < 250) return;
+      lastNudge = now;
+      dot.style.opacity = dot.style.opacity === "0.01" ? "0.02" : "0.01";
+    };
+    /** Passt das aktuelle Bild zum aktuellen Layout (Seitenverhältnis)? */
+    const frameMatches = () => {
+      const vw = video.videoWidth, vh = video.videoHeight;
+      const r = refRect();
+      if (!vw || !vh || r.width < 1 || r.height < 1) return false;
+      return Math.abs(vw / vh / (r.width / r.height) - 1) < 0.015;
+    };
+    nudge();
     if (!(await waitForFrames(video, 4000))) {
       return fail("noFrames", `Chrome hat innerhalb von 4 s kein Bild des Tabs geliefert.${playErr ? ` (${playErr})` : ""}`);
     }
+    // Erst starten, wenn das Bild zum Layout passt (max. 2,5 s, dann weiter
+    // — z. B. falls Chrome das Bild mit Rand liefert).
+    for (let t0 = performance.now(); !frameMatches() && performance.now() - t0 < 2500; ) {
+      nudge();
+      await new Promise((r) => setTimeout(r, 60));
+    }
 
     // 3) Pro Bereich eine Leinwand FESTER Größe.
-    const dpr = window.devicePixelRatio || 1;
     const lanes: Lane[] = [];
     for (const { target, el } of picked) {
-      const size = target.size(el.getBoundingClientRect(), dpr);
+      const size = target.size(el.getBoundingClientRect(), screenDpr);
       const outW = even(Math.min(size.w, 3840));
       const outH = even(Math.min(size.h, 3840));
       const canvas = document.createElement("canvas");
@@ -396,11 +457,21 @@ export function useCinemaRecorder() {
     lanesRef.current = lanes;
 
     let tick = 0;
+    let mismatchSince = 0;
     const draw = () => {
       const vw = video.videoWidth, vh = video.videoHeight;
-      // Bezug des Aufnahmebilds: der zugeschnittene Rahmen bzw. der ganze Tab.
-      const ref = cropped && area ? area.getBoundingClientRect() : { left: 0, top: 0, width: window.innerWidth, height: window.innerHeight };
+      const ref = refRect();
       if (!vw || !vh || ref.width < 1 || ref.height < 1) return;
+      // Bild noch vom alten Layout → NICHT ausschneiden (das letzte richtige
+      // Bild bleibt stehen) und ein frisches anfordern. Hält der Zustand
+      // > 1,5 s an, liefert Chrome offenbar mit Rand → dann trotzdem zeichnen.
+      if (!frameMatches()) {
+        if (!mismatchSince) mismatchSince = performance.now();
+        if (performance.now() - mismatchSince < 1500) {
+          nudge();
+          return;
+        }
+      } else mismatchSince = 0;
       // Aufnahmebild ↔ Seite: gleichmäßig skaliert, ggf. mittig mit Rand.
       const s = Math.min(vw / ref.width, vh / ref.height);
       const ox = (vw - ref.width * s) / 2, oy = (vh - ref.height * s) / 2;

@@ -81,17 +81,13 @@ const CINEMA_STAGE_BG = "#060608";
 const CINEMA_REC_FORMAT_LS = "bspx-cinema-rec-format";
 const CINEMA_REC_MAX_W = 780;
 // Jede Aufnahme speichert ZWEI Videos: das Handy und die AI-Texteingabe
-// (16:9-Ausschnitt des Bluescreens rund um die Eingabe — keybar, die
-// Eingabe wächst darin beim Tippen nach oben).
+// (der ganze 16:9-Bluescreen mit Nachricht, Status und Eingabe — keybar).
 const CINEMA_REC_PHONE = "brospify-handy";
 const CINEMA_REC_INPUT = "brospify-eingabe";
-// Bühnen-Raster: Quadrat beginnt UNTER der Steuerleiste (die so nie im
-// Eingabe-Video landet); rechts daneben — wenn Platz ist — eine Spalte für
-// die Plan-Karte, damit sie die mittig stehende Nachricht nie überdeckt.
+// Bühnen-Raster: der Bluescreen (16:9, so groß wie möglich) beginnt UNTER
+// der Steuerleiste — die landet so nie im Eingabe-Video.
 const CINEMA_TOP = 76;
 const CINEMA_GAP = 24;
-const CINEMA_CARD_MIN = 280;
-const CINEMA_CARD_MAX = 400;
 // Handy-Bildschirm randlos (keine Browser-Leiste, keine Rundung/Schatten)
 // und die AI-Leiste garantiert deckend — auch im Drag-Zustand, dessen
 // halbtransparente Tönung sonst vom Keyer mit weggerechnet würde.
@@ -442,7 +438,7 @@ export default function ThemeEditorPage() {
           el: () => cinemaInputRef.current,
           bitrate: 12_000_000,
           fps: 30,
-          size: (r, dpr) => (hd ? { w: 1080, h: 1080 } : { w: r.width * dpr, h: r.height * dpr }),
+          size: (r, dpr) => (hd ? { w: 1920, h: 1080 } : { w: r.width * dpr, h: r.height * dpr }),
         },
       ],
       area: () => cinemaRecAreaRef.current,
@@ -531,25 +527,18 @@ export default function ThemeEditorPage() {
     ? cinemaRecW
     : Math.round(Math.min(390 * cinemaScale, viewport.w * 0.5 || 390 * cinemaScale));
   const cinemaStageW = Math.max(0, viewport.w - cinemaPhoneW);
-  // Quadrat so groß wie möglich unter der Steuerleiste; reicht der Platz
-  // rechts nicht für die Plan-Karte, wird es (bis 380 px) etwas kleiner,
-  // sonst liegt die Karte wie früher oben rechts über der Bühne.
-  let cinemaSquare = Math.max(0, Math.min(viewport.h - CINEMA_TOP - CINEMA_GAP, cinemaStageW - 2 * CINEMA_GAP));
-  let cinemaCardW = Math.min(CINEMA_CARD_MAX, cinemaStageW - cinemaSquare - 3 * CINEMA_GAP);
-  if (cinemaCardW < CINEMA_CARD_MIN) {
-    const shrunk = cinemaStageW - 3 * CINEMA_GAP - CINEMA_CARD_MIN;
-    if (shrunk >= 380) {
-      cinemaSquare = shrunk;
-      cinemaCardW = CINEMA_CARD_MIN;
-    } else cinemaCardW = 0;
-  }
-  const cinemaGroupW = cinemaSquare + (cinemaCardW ? CINEMA_GAP + cinemaCardW : 0);
-  const cinemaSquareLeft = Math.max(CINEMA_GAP, (cinemaStageW - cinemaGroupW) / 2);
-  const cinemaSquareTop = CINEMA_TOP + Math.max(0, (viewport.h - CINEMA_TOP - CINEMA_GAP - cinemaSquare) / 2);
-  // AI-Spalte füllt das Quadrat (24 px Rand): oben die abgeschickte
-  // Nachricht (mittig), unten die Eingabe.
-  const cinemaAiW = Math.max(0, Math.min(cinemaSquare - 48, 820));
-  const cinemaAiLeft = cinemaSquareLeft + (cinemaSquare - cinemaAiW) / 2;
+  // Bluescreen 16:9, so groß wie möglich unter der Steuerleiste — breit
+  // genug für eine lange Eingabeleiste (Nachricht + Status darüber).
+  const cinemaAvailW = Math.max(0, cinemaStageW - 2 * CINEMA_GAP);
+  const cinemaAvailH = Math.max(0, viewport.h - CINEMA_TOP - CINEMA_GAP);
+  const cinemaKeyW = Math.floor(Math.min(cinemaAvailW, (cinemaAvailH * 16) / 9));
+  const cinemaKeyH = Math.floor((cinemaKeyW * 9) / 16);
+  const cinemaKeyLeft = (cinemaStageW - cinemaKeyW) / 2;
+  const cinemaKeyTop = CINEMA_TOP + (cinemaAvailH - cinemaKeyH) / 2;
+  // AI-Spalte füllt den Bluescreen (24 px Rand): Nachricht + Status mittig,
+  // Eingabe unten über die volle Breite.
+  const cinemaAiW = Math.max(0, Math.min(cinemaKeyW - 48, 900));
+  const cinemaAiLeft = cinemaKeyLeft + (cinemaKeyW - cinemaAiW) / 2;
   const recResults = recorder.results;
   const cinemaUiShown = cinemaUi || recorder.state !== "idle" || recResults.length > 0 || !!recorder.error;
   const recNotice = recResults.length > 0 || !!recorder.error;
@@ -2170,13 +2159,13 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     <style>{CINEMA_CSS}</style>
                     {/* Bluescreen-Quadrat — reines Digital-Blau, scharfe Kanten
                         (sauber keybar); die AI-Leiste liegt DAVOR. */}
-                    {/* = Bildausschnitt des Eingabe-Videos (Nachricht + Eingabe, 1:1). */}
+                    {/* = Bildausschnitt des Eingabe-Videos (Nachricht + Eingabe, 16:9). */}
                     <div
                       ref={cinemaInputRef}
                       aria-hidden
                       data-cinema-input
                       className="absolute"
-                      style={{ left: cinemaSquareLeft, top: cinemaSquareTop, width: cinemaSquare, height: cinemaSquare, background: CINEMA_KEY }}
+                      style={{ left: cinemaKeyLeft, top: cinemaKeyTop, width: cinemaKeyW, height: cinemaKeyH, background: CINEMA_KEY }}
                     />
                     {/* Zuschnitt der Tab-Aufnahme (unsichtbar): vom Quadrat bis
                         zum rechten Rand — Bühne und Steuerleiste bleiben draußen. */}
@@ -2185,7 +2174,7 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                       aria-hidden
                       data-cinema-rec-area
                       className="absolute top-0 right-0 bottom-0 pointer-events-none"
-                      style={{ left: cinemaSquareLeft }}
+                      style={{ left: cinemaKeyLeft }}
                     />
                     {/* Steuerleiste (blendet sich bei Ruhe aus): Größe · Nach oben · Beenden */}
                     <div
@@ -2474,7 +2463,7 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                   // KEINE Transparenz (auch nicht während aiBusy) — jede
                   // durchscheinende Stelle würde der Chroma-Keyer mit wegrechnen.
                   style={cinema
-                    ? { left: cinemaAiLeft, width: cinemaAiW, top: cinemaSquareTop + 24, height: Math.max(0, cinemaSquare - 48) }
+                    ? { left: cinemaAiLeft, width: cinemaAiW, top: cinemaKeyTop + 24, height: Math.max(0, cinemaKeyH - 48) }
                     : undefined}
                 >
                   <AiCopilot
@@ -2494,15 +2483,10 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                     focusPick={focusPick}
                     onToggleFocusPick={() => setFocusPick((v) => !v)}
                     onClearFocus={() => setAiFocus([])}
-                    planStyle={cinema
-                      ? cinemaCardW
-                        ? { top: cinemaSquareTop, left: cinemaSquareLeft + cinemaSquare + CINEMA_GAP, width: cinemaCardW, right: "auto", bottom: "auto", zIndex: 100 }
-                        : { top: 24, right: cinemaPhoneW + 24, bottom: "auto", left: "auto", zIndex: 100 }
-                      : undefined}
                     large={cinema}
                     // Kino: Höhe der ganzen AI-Spalte — die Eingabe wächst darin,
-                    // soweit die abgeschickte Nachricht Platz lässt.
-                    space={cinema ? Math.max(0, cinemaSquare - 48) : undefined}
+                    // soweit Nachricht + Status Platz lassen.
+                    space={cinema ? Math.max(0, cinemaKeyH - 48) : undefined}
                   />
                 </div>
               </div>
