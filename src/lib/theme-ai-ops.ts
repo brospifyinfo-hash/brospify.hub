@@ -12,7 +12,9 @@ import {
   type ThemeDocument,
   type SectionInstance,
   type EditorPage,
+  newSectionUid,
 } from "@/lib/theme-doc";
+import { CUSTOM_SECTION_TYPE, sanitizeCustomSpec, type CustomSpec } from "@/lib/theme-custom";
 import {
   SECTION_LIBRARY,
   getSectionDef,
@@ -64,7 +66,12 @@ export type AiOp =
   | { op: "set_block_text"; blockType: string; field: string; value: string }
   | { op: "set_block_setting"; blockType: string; key: string; value: string | number | boolean }
   | { op: "set_gallery"; presetId?: string; badge?: string }
-  | { op: "set_buybox_spacing"; spacing: number };
+  | { op: "set_buybox_spacing"; spacing: number }
+  // KI-Sections: eine NEUE, frei aufgebaute Section (gibt es im Katalog
+  // nicht) bzw. eine bestehende Section komplett neu aufbauen/umbauen
+  // (auch Katalog-Sections — sie werden dabei zur KI-Section).
+  | { op: "add_custom_section"; page: EditorPage; position?: number; uid?: string; spec: CustomSpec }
+  | { op: "set_custom_section"; uid: string; spec: CustomSpec };
 
 export interface AiPlanStep {
   title: string;
@@ -102,6 +109,8 @@ const SECTION_SETTING_KEYS = new Set(["icon_1", "icon_2", "icon_3", "icon_4"]);
 // (neutrale Flächen), keine Inhalts-Bremse.
 const MAX_OPS = 48;
 const MAX_TEXT = 600;
+/** KI-Sections pro Plan (Größe der Antwort + des Dokuments begrenzen). */
+const MAX_CUSTOM_OPS = 4;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
 const clampInt = (v: unknown, min: number, max: number, fb: number): number => {
@@ -140,6 +149,7 @@ export function validateAiOps(raw: unknown, doc: ThemeDocument, capabilities: st
   // add_section eingefügte Sections zeigen kann (Platzhalter-uid "new:<n>").
   let uids = hasFullStyle ? new Set<string>() : docUids(doc);
   const newUids = new Set<string>();
+  let customOps = 0;
 
   for (const r of raw.slice(0, MAX_OPS)) {
     if (!r || typeof r !== "object") continue;
@@ -322,6 +332,30 @@ export function validateAiOps(raw: unknown, doc: ThemeDocument, capabilities: st
       case "set_buybox_spacing":
         out.push({ op: "set_buybox_spacing", spacing: clampInt(o.spacing, 4, 40, 15) });
         break;
+      case "add_custom_section": {
+        if (customOps >= MAX_CUSTOM_OPS) break;
+        const spec = sanitizeCustomSpec(o.spec);
+        if (!spec) break;
+        const placeholderUid = isStr(o.uid) && /^new:/.test(o.uid) ? o.uid : undefined;
+        if (placeholderUid) newUids.add(placeholderUid);
+        customOps += 1;
+        out.push({
+          op: "add_custom_section",
+          page: o.page === "home" ? "home" : "product",
+          position: typeof o.position === "number" ? clampInt(o.position, 0, 50, 0) : undefined,
+          uid: placeholderUid,
+          spec,
+        });
+        break;
+      }
+      case "set_custom_section": {
+        if (customOps >= MAX_CUSTOM_OPS || !uidOk(o.uid)) break;
+        const spec = sanitizeCustomSpec(o.spec);
+        if (!spec) break;
+        customOps += 1;
+        out.push({ op: "set_custom_section", uid: o.uid, spec });
+        break;
+      }
       default:
         break;
     }
@@ -557,6 +591,40 @@ export function applyAiOpToDoc(doc: ThemeDocument, op: AiOp, ctx: AiApplyCtx): T
       };
     case "set_buybox_spacing":
       return { ...doc, buybox: { ...doc.buybox, spacing: op.spacing } };
+    case "add_custom_section": {
+      const spec = sanitizeCustomSpec(op.spec);
+      if (!spec) return doc;
+      const instance: SectionInstance = {
+        uid: newSectionUid(),
+        type: CUSTOM_SECTION_TYPE,
+        presetId: "",
+        source: "library",
+        texts: {},
+        settings: {},
+        custom: spec,
+      };
+      if (op.uid) ctx.uidMap.set(op.uid, instance.uid);
+      const key = op.page === "home" ? "home" : "sections";
+      const list = [...(doc[key] || [])];
+      const at = typeof op.position === "number" ? Math.max(0, Math.min(list.length, op.position)) : list.length;
+      list.splice(at, 0, instance);
+      return { ...doc, [key]: list };
+    }
+    case "set_custom_section": {
+      // Neu-/Umbau an Ort und Stelle: uid + Position bleiben, der Inhalt ist
+      // danach der neue Bauplan (auch eine Katalog-Section wird so zur
+      // KI-Section). Eigene Text-Änderungen gehörten zum alten Aufbau → weg.
+      const spec = sanitizeCustomSpec(op.spec);
+      const uid = resolveUid(op.uid);
+      if (!spec || !findInstance(doc, uid)) return doc;
+      const mapList = (list: SectionInstance[]) =>
+        list.map((s) =>
+          s.uid === uid
+            ? { uid: s.uid, type: CUSTOM_SECTION_TYPE, presetId: "", source: "library" as const, texts: {}, settings: {}, custom: spec }
+            : s,
+        );
+      return { ...doc, sections: mapList(doc.sections), home: mapList(doc.home || []) };
+    }
     default:
       return doc;
   }
@@ -589,6 +657,7 @@ const OP_WEIGHTS: Record<AiOp["op"], number> = {
   set_section_tone: 1, set_section_setting: 1, set_benefit_icons: 1,
   add_buybox_block: 2, remove_buybox_block: 2, reorder_buybox: 2,
   add_section: 3, remove_section: 2, move_section: 2,
+  add_custom_section: 4, set_custom_section: 3,
   set_style: 4,
 };
 

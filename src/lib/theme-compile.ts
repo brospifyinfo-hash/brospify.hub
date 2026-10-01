@@ -1,5 +1,6 @@
 import "server-only";
 import AdmZip from "adm-zip";
+import { CUSTOM_SECTION_TYPE, sanitizeCustomSpec, customSectionLiquid, customSectionFileType } from "@/lib/theme-custom";
 import {
   getPlaceholderValues,
   type ThemeCopy,
@@ -152,6 +153,26 @@ export function readBaseManifest(baseZip: Buffer, cacheKey = "base"): BaseManife
     homeSections: readManagedSections(zip, "templates/index.json"),
     capabilities,
   };
+}
+
+
+// ─── KI-Sections (vom AI Co-Pilot gebaut) ───────────────────────────
+// Jede KI-Section wird zu EINER eigenen Section-Datei im Theme
+// (sections/bspx-ai-<id>.liquid) — gerendert vom selben Renderer wie die
+// Editor-Vorschau (theme-custom). Storefront-Render und Download nutzen
+// denselben kompilierten Zip → überall identisch.
+function compileCustomSection(zip: AdmZip, instance: SectionInstance, doc: ThemeDocument, palette: ColorPalette): any | null {
+  const spec = sanitizeCustomSpec(instance.custom);
+  if (!spec) return null;
+  const fileType = customSectionFileType(instance.uid);
+  setZipFile(zip, `sections/${fileType}.liquid`, customSectionLiquid(spec, {
+    uid: instance.uid,
+    palette,
+    radius: doc.global.radius,
+    texts: instance.texts,
+    tone: typeof instance.settings?.cx_tone === "string" ? instance.settings.cx_tone : "",
+  }));
+  return { type: fileType, settings: {} };
 }
 
 // ─── Dokument → product.json ───────────────────────────────────────
@@ -311,6 +332,14 @@ function compileProductTemplate(
     let section: any = null;
     let sid = instance.uid;
     let fresh = false;
+    if (instance.type === CUSTOM_SECTION_TYPE) {
+      const custom = compileCustomSection(zip, instance, doc, palette);
+      if (!custom) continue;
+      sid = instance.uid.startsWith("hub_") ? instance.uid : `hub_${instance.uid}`;
+      sections[sid] = custom;
+      docIds.push(sid);
+      continue;
+    }
     if (instance.source === "template" && sections[instance.uid]) {
       section = sections[instance.uid];
       keptTemplateIds.add(instance.uid);
@@ -581,6 +610,14 @@ function compileHomeTemplate(
     let section: any = null;
     let sid = instance.uid;
     let fresh = false;
+    if (instance.type === CUSTOM_SECTION_TYPE) {
+      const custom = compileCustomSection(zip, instance, doc, palette);
+      if (!custom) continue;
+      sid = instance.uid.startsWith("hub_") ? instance.uid : `hub_${instance.uid}`;
+      sections[sid] = custom;
+      docIds.push(sid);
+      continue;
+    }
     if (instance.source === "template" && sections[instance.uid]) {
       section = sections[instance.uid];
       keptTemplateIds.add(instance.uid);

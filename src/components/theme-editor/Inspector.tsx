@@ -28,6 +28,7 @@ import { getBuyboxMeta } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
 import { getIconAny, searchIcons } from "@/lib/theme-icon-resolver";
 import { MONO } from "@/lib/theme-color";
+import { CUSTOM_SECTION_TYPE } from "@/lib/theme-custom";
 import { useI18n } from "@/lib/i18n";
 import { EDITOR_FONTS, segCls, ACCENT } from "@/components/theme-editor/editor-ui";
 import { PresetPill, FieldLabel, TextField, Segmented, ColorField, SliderField } from "@/components/theme-editor/ui";
@@ -236,6 +237,8 @@ export default function Inspector({
   const section = sectionList ? sectionList.find((s) => s.uid === selected) : null;
   if (section && sectionList) {
     const def = getSectionDef(section.type);
+    const isAi = section.type === CUSTOM_SECTION_TYPE;
+    const aiTone = String(section.settings?.cx_tone || section.custom?.tone || "page");
     const idx = sectionList.findIndex((s) => s.uid === section.uid);
     const cat = def ? CATEGORY_LABELS[def.category] : null;
     const toneVal = String(section.settings?.sec_tone || (section.settings?.sec_bg ? "custom" : "none"));
@@ -248,8 +251,15 @@ export default function Inspector({
               <LayoutPanelTop className="w-4 h-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <div className="text-[12.5px] font-bold text-white truncate leading-tight">{def ? (lang === "en" ? def.labelEn : def.label) : section.type}</div>
-              <div className="text-[9.5px] text-zinc-400 leading-snug mt-0.5">{def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
+              <div className="text-[12.5px] font-bold text-white truncate leading-tight">
+                {isAi ? section.custom?.name || t.themes.editorAiSection : def ? (lang === "en" ? def.labelEn : def.label) : section.type}
+              </div>
+              <div className="text-[9.5px] text-zinc-400 leading-snug mt-0.5">{isAi ? t.themes.editorAiSectionDesc : def ? (lang === "en" ? def.descEn : def.desc) : ""}</div>
+              {isAi && (
+                <span className="inline-block mt-1 rounded-full border border-[#95BF47]/40 bg-[#95BF47]/10 px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-wider text-[#95BF47]">
+                  {t.themes.editorAiSection}
+                </span>
+              )}
               {cat && (
                 <span className="inline-block mt-1 rounded-full border border-white/10 bg-white/[0.05] px-1.5 py-[1px] text-[8.5px] font-semibold uppercase tracking-wider text-zinc-400">
                   {lang === "en" ? cat.en : cat.de}
@@ -266,7 +276,7 @@ export default function Inspector({
             <button onClick={() => dispatch({ type: "duplicateSection", uid: section.uid })} title={t.themes.editorSecDuplicateHint} className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-1 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition">
               <Copy className="w-3 h-3" /> {t.themes.editorSecDuplicate}
             </button>
-            <button onClick={() => dispatch({ type: "resetSection", uid: section.uid })} title={t.themes.editorSecResetHint} className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-1 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition">
+            <button onClick={() => dispatch({ type: "resetSection", uid: section.uid })} title={isAi ? t.themes.editorAiSectionReset : t.themes.editorSecResetHint} className="flex items-center justify-center gap-1 rounded-md border border-white/10 bg-white/[0.04] px-1 py-1 text-[10px] font-semibold text-zinc-300 hover:text-white hover:bg-white/[0.08] transition">
               <RotateCcw className="w-3 h-3" /> {t.themes.editorSecReset}
             </button>
             <button onClick={() => { dispatch({ type: "removeSection", uid: section.uid }); onClearSelect(); }} title={t.themes.editorRemove} className="flex items-center justify-center gap-1 rounded-md border border-red-400/25 bg-red-500/[0.08] px-1 py-1 text-[10px] font-semibold text-red-300 hover:bg-red-500/[0.16] transition">
@@ -288,6 +298,24 @@ export default function Inspector({
                   onClick={() => dispatch({ type: "setPreset", uid: section.uid, presetId: p.id })}
                 />
               ))}
+            </div>
+          </SecGroup>
+        )}
+
+        {/* KI-Section: Fläche direkt wählbar (neutral, wie bei allen Sections) */}
+        {isAi && (
+          <SecGroup icon={<Paintbrush className="w-3 h-3" />} title={t.themes.editorSecDesign} help={t.themes.editorSecDesignHelp}>
+            <div>
+              <FieldLabel>{t.themes.editorSecTone}</FieldLabel>
+              <Segmented
+                options={[
+                  ["page", lang === "en" ? "Page" : "Seite"],
+                  ["subtle", lang === "en" ? "Subtle" : "Dezent"],
+                  ["contrast", lang === "en" ? "Contrast" : "Kontrast"],
+                ]}
+                value={aiTone}
+                onChange={(tone) => dispatch({ type: "setSectionSetting", uid: section.uid, key: "cx_tone", value: tone })}
+              />
             </div>
           </SecGroup>
         )}
@@ -323,7 +351,7 @@ export default function Inspector({
 
         {/* Texte werden NICHT mehr hier bearbeitet — nur noch direkt in der
             Vorschau anklicken (klarer Schnitt: Einstellungen = Look/Design). */}
-        {def && def.fields.length > 0 && (
+        {((def && def.fields.length > 0) || isAi) && (
           <div className="flex items-start gap-1.5 rounded-lg border border-white/[0.07] bg-white/[0.015] px-2 py-1.5">
             <Pencil className="w-3 h-3 shrink-0 mt-[1px] text-[#95BF47]/70" />
             <p className="text-[9.5px] leading-snug text-zinc-500">{t.themes.editorTextInlineTip}</p>

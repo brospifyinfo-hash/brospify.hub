@@ -2218,7 +2218,23 @@ export async function saveBuyboxPlan(code: string, user: string, productId: stri
 // Designs, sieht deren Codes im Editor und wechselt das Live-Design im
 // Shop, indem er einen anderen Code in den Shopify-Block einträgt.
 //   A=Code, B=User, C=ProductId, D=Name, E=DocJson, F=UpdatedAt
-const DESIGN_HEADERS = ["Code", "User", "ProductId", "Name", "DocJson", "UpdatedAt"];
+const DESIGN_HEADERS = ["Code", "User", "ProductId", "Name", "DocJson", "UpdatedAt", "DocJson2", "DocJson3", "DocJson4", "DocJson5", "DocJson6"];
+// Google Sheets: max. 50.000 Zeichen pro Zelle. KI-Sections machen Dokumente
+// größer — lange DocJsons werden deshalb auf DocJson (E) + DocJson2–6 (G–K)
+// verteilt (bis ~270k Zeichen) und beim Lesen wieder zusammengesetzt.
+const DOC_CHUNK = 45000;
+const DOC_EXTRA_COLS = 5;
+function splitDocJson(docJson: string): { head: string; extra: string[] } {
+  const parts: string[] = [];
+  for (let i = 0; i < docJson.length; i += DOC_CHUNK) parts.push(docJson.slice(i, i + DOC_CHUNK));
+  if (parts.length > 1 + DOC_EXTRA_COLS) throw new Error("Design-Dokument zu groß zum Speichern.");
+  const extra = parts.slice(1);
+  while (extra.length < DOC_EXTRA_COLS) extra.push("");
+  return { head: parts[0] || "", extra };
+}
+function joinDocJson(row: unknown[]): string {
+  return [row[4], ...row.slice(6, 6 + DOC_EXTRA_COLS)].map((c) => String(c ?? "")).join("");
+}
 
 export interface ThemeDesignMeta {
   code: string;
@@ -2256,12 +2272,12 @@ export async function getThemeDesignStrict(code: string): Promise<{ user: string
   await ensureSheet("ThemeDesigns", DESIGN_HEADERS);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SHEET_ID(),
-    range: "ThemeDesigns!A2:F",
+    range: "ThemeDesigns!A2:K",
   });
   const rows = res.data.values || [];
   const hit = rows.find((r) => (r[0] || "") === code);
   if (!hit || !hit[4]) return null;
-  return { user: String(hit[1] || ""), productId: String(hit[2] || ""), name: String(hit[3] || ""), docJson: String(hit[4]) };
+  return { user: String(hit[1] || ""), productId: String(hit[2] || ""), name: String(hit[3] || ""), docJson: joinDocJson(hit) };
 }
 
 export async function getThemeDesign(code: string): Promise<{ user: string; productId: string; name: string; docJson: string } | null> {
@@ -2283,19 +2299,22 @@ export async function saveThemeDesign(code: string, user: string, productId: str
   });
   const rows = res.data.values || [];
   const idx = rows.findIndex((r) => (r[0] || "") === code);
-  const rowValues = [code, user, productId, name, docJson, new Date().toISOString()];
+  const { head, extra } = splitDocJson(docJson);
+  // Nicht genutzte Zusatz-Spalten werden mit "" überschrieben — sonst
+  // hingen Reste eines früher größeren Dokuments hinten dran.
+  const rowValues = [code, user, productId, name, head, new Date().toISOString(), ...extra];
   if (idx >= 0) {
     const rowNumber = idx + 2;
     await sheets.spreadsheets.values.update({
       spreadsheetId: SHEET_ID(),
-      range: `ThemeDesigns!A${rowNumber}:F${rowNumber}`,
+      range: `ThemeDesigns!A${rowNumber}:K${rowNumber}`,
       valueInputOption: "RAW",
       requestBody: { values: [rowValues] },
     });
   } else {
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID(),
-      range: "ThemeDesigns!A:F",
+      range: "ThemeDesigns!A:K",
       valueInputOption: "RAW",
       requestBody: { values: [rowValues] },
     });
@@ -2319,9 +2338,9 @@ export async function deleteThemeDesign(code: string, user: string): Promise<boo
   const rowNumber = idx + 2;
   await sheets.spreadsheets.values.update({
     spreadsheetId: SHEET_ID(),
-    range: `ThemeDesigns!A${rowNumber}:F${rowNumber}`,
+    range: `ThemeDesigns!A${rowNumber}:K${rowNumber}`,
     valueInputOption: "RAW",
-    requestBody: { values: [["", "", "", "", "", ""]] },
+    requestBody: { values: [Array(11).fill("")] },
   });
   return true;
 }

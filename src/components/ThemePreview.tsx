@@ -193,8 +193,9 @@ export default function ThemePreview({
         const uid = secEl.getAttribute("data-section-uid") || "";
         const inst = docSections?.find((s) => s.uid === uid);
         if (!inst || !onEditText) return null;
+        // KI-Sections markieren mehrzeilige Texte selbst (data-ml).
         const kind = getSectionDef(inst.type)?.fields.find((f) => f.id === field)?.kind;
-        return { multiline: kind === "textarea", commit: (v) => onEditText(uid, field, v) };
+        return { multiline: kind === "textarea" || leaf.hasAttribute("data-ml"), commit: (v) => onEditText(uid, field, v) };
       }
       const blkEl = leaf.closest<HTMLElement>("[data-blk-type]");
       if (blkEl) {

@@ -12,6 +12,7 @@ import { monoPalette } from "@/lib/theme-color";
 import { DEFAULT_DESIGN, type StyleDesign } from "@/lib/theme-styles";
 import { BUYBOX_DEFAULT_ORDER } from "@/lib/theme-sections";
 import { DEFAULT_BENEFIT_ICONS } from "@/lib/theme-icons";
+import type { CustomSpec } from "@/lib/theme-custom";
 
 export interface GlobalStyles {
   /** Gewählter Theme-Stil (Architektur-Preset aus theme-styles). */
@@ -39,6 +40,9 @@ export interface SectionInstance {
    *  v. a. der Design-Layer: Hintergrund-Ton, Übergänge/Fades, Divider,
    *  Icon-Wahl. Werte dürfen Palette-Refs ("@accent" …) enthalten. */
   settings?: Record<string, string | number | boolean>;
+  /** KI-Section (type "bspx-custom"): vom AI Co-Pilot gebauter Bauplan.
+   *  Eigene Text-Änderungen liegen als texts["cx:…"] darüber. */
+  custom?: CustomSpec;
 }
 
 /** Konfiguration EINES Kaufbox-Bausteins: Style-Art + kuratierte Texte +

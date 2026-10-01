@@ -20,6 +20,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { recordUsd, anthropicCostUsd } from "@/lib/provider-usage";
 import type { ThemeDocument } from "@/lib/theme-doc";
+import { CUSTOM_SECTION_TYPE, CUSTOM_TEXT_PREFIX, applyCustomOverrides } from "@/lib/theme-custom";
 import {
   SECTION_LIBRARY,
   BUYBOX_LIBRARY,
@@ -73,82 +74,17 @@ export interface ThemeAiRawPlan {
   operations: unknown[];
 }
 
-// ─── Struktur-Schema der Antwort (Structured Output) ───────────────
-// Alle Objekte mit additionalProperties:false (Pflicht bei json_schema);
-// die Ops-Items tragen ALLE möglichen Felder als optionale Properties —
-// die harte Validierung passiert danach in validateAiOps.
 
-const OP_ITEM_SCHEMA: Record<string, unknown> = {
-  type: "object",
-  additionalProperties: false,
-  required: ["op"],
-  properties: {
-    op: { type: "string" },
-    styleId: { type: "string" },
-    mode: { type: "string", enum: ["design", "full"] },
-    colors: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        button: { type: "string" },
-        buttonText: { type: "string" },
-        background: { type: "string" },
-        text: { type: "string" },
-        accent: { type: "string" },
-      },
-    },
-    headingFont: { type: "string" },
-    bodyFont: { type: "string" },
-    radius: { type: "integer" },
-    shadow: { type: "integer" },
-    border: { type: "integer" },
-    iconStyle: { type: "string" },
-    page: { type: "string", enum: ["product", "home"] },
-    type: { type: "string" },
-    presetId: { type: "string" },
-    position: { type: "integer" },
-    uid: { type: "string" },
-    to: { type: "integer" },
-    field: { type: "string" },
-    value: { anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }] },
-    texts: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["field", "value"],
-        properties: { field: { type: "string" }, value: { type: "string" } },
-      },
-    },
-    blockType: { type: "string" },
-    order: { type: "array", items: { type: "string" } },
-    key: { type: "string" },
-    badge: { type: "string" },
-    spacing: { type: "integer" },
-    // Mono: nur noch neutrale Flächen-Stufen (keine Verläufe/Formen-Kanten).
-    tone: { type: "string", enum: ["none", "tint", "deep"] },
-    icons: { type: "array", items: { type: "string" } },
-  },
-};
-
-const PLAN_SCHEMA: Record<string, unknown> = {
-  type: "object",
-  additionalProperties: false,
-  required: ["summary", "steps", "operations"],
-  properties: {
-    summary: { type: "string" },
-    steps: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: false,
-        required: ["title", "detail"],
-        properties: { title: { type: "string" }, detail: { type: "string" } },
-      },
-    },
-    operations: { type: "array", items: OP_ITEM_SCHEMA },
-  },
-};
+// ─── Antwort-Format: Freitext-JSON (KEIN Structured Output) ─────────
+// Structured Outputs erlauben max. 24 optionale Felder pro Schema. Die
+// Operationen sind ein flexibles Format mit ~30 optionalen Feldern (plus
+// Bauplan der KI-Sections) — die API lehnte das Schema deshalb bei JEDEM
+// Aufruf mit 400 ab („too many optional parameters (30) … limit: 24", in
+// den Produktions-Logs bei jedem Plan zu sehen), erst der zweite Aufruf ohne
+// Schema lieferte. Jetzt direkt Freitext-JSON: ein Aufruf statt zwei. Das
+// Format steht im System-Prompt; validateAiOps/sanitizeCustomSpec prüfen
+// danach jede Operation streng (Whitelist), extractJson findet das JSON.
+const JSON_ONLY = "\n\nAntworte AUSSCHLIESSLICH mit einem JSON-Objekt {summary, steps:[{title,detail}], operations:[…]} — kein Text davor oder danach.";
 
 // ─── Katalog: was die AI verwenden darf (kompakt, aus den Bibliotheken) ──
 
@@ -212,15 +148,17 @@ OPERATIONEN (Feld "op", nur diese):
 - add_buybox_block {blockType, position?, presetId?} · remove_buybox_block {blockType} · reorder_buybox {order:[blockType,…]}.
 - set_block_preset {blockType, presetId} · set_block_text {blockType, field, value} · set_block_setting {blockType, key, value}.
 - set_gallery {presetId?, badge?} · set_buybox_spacing {spacing:4-40}.
+- add_custom_section {page, position?, uid?:"new:1", spec} — baut eine NEUE Section frei aus Bausteinen (Bauplan "spec", siehe KI-SECTIONS unten). Für Sections, die es im Katalog NICHT gibt.
+- set_custom_section {uid, spec} — baut eine BESTEHENDE Section (Katalog- ODER KI-Section) an Ort und Stelle komplett neu auf („umprogrammieren"): uid und Position bleiben, der Inhalt ist danach dein neuer Bauplan.
 
 HARTE REGELN:
-1. Verwende AUSSCHLIESSLICH styleIds, Section-Typen, presetIds, Feld-IDs, blockTypes, Setting-Keys und Schriften aus dem Katalog unten. Icons dürfen zusätzlich freie englische Keywords sein.
+1. Verwende AUSSCHLIESSLICH styleIds, Section-Typen, presetIds, Feld-IDs, blockTypes, Setting-Keys und Schriften aus dem Katalog unten. Icons dürfen zusätzlich freie englische Keywords sein. Einzige Ausnahme: KI-Sections (add_custom_section/set_custom_section) — deren Aufbau bestimmst du frei über den Bauplan.
 2. Section-uids nur aus dem Dokument übernehmen — neue Sections bekommen "new:1", "new:2", ….
 3. Farben immer als #rrggbb. MONO-REGEL (unverhandelbar): Der Shop läuft in genau ZWEI Modi — WEISS (background #ffffff, text #111114) oder BLACK (background #000000, text #f5f5f7). Etwas anderes darfst du bei set_colors für background/text NICHT vorschlagen (das System zieht es sonst automatisch gerade). Farbe kommt AUSSCHLIESSLICH über accent + button/buttonText: Sub-Texte, Buttons, Icons, Badges, Sterne, feine Linien. NIE als Fläche.
 4. Produktbild dabei + keine expliziten Farbwünsche? → Leite den Akzent aus dem Bild ab (markante Produkt-/Markenfarbe) und wähle den Modus: Standard ist WEISS, BLACK nur wenn das Produkt/die Nische klar danach verlangt (Tech-Gadget, Luxus, Streetwear) oder der Nutzer es wünscht.
 5. set_style (falls genutzt) steht IMMER als erste Operation — Detail-Ops danach, damit sie den Stil verfeinern. Max. 48 Operationen — nutze das Budget aus, statt eine Seite halbfertig zu lassen.
 6. summary (1–2 Sätze) und steps (2–8) auf ${answerLang}, für Laien verständlich — KEINE technischen op-Namen oder IDs in den Schritten. Jeder Schritt beschreibt eine sichtbare Veränderung.
-7. Ist der Wunsch mit den verfügbaren Operationen nicht umsetzbar, liefere die nächstbeste sinnvolle Annäherung — operations darf nur leer sein, wenn wirklich gar nichts passt (das erklärst du dann in summary).
+7. Ist der Wunsch mit Katalog-Sections nicht umsetzbar, BAUE die fehlende Section als KI-Section, statt auszuweichen — operations darf nur leer sein, wenn wirklich gar nichts passt (das erklärst du dann in summary).
 
 ART-DIRECTION (so entsteht ein Ergebnis auf Agentur-Niveau — dein Anspruch bei JEDEM Plan):
 A. VOLLSTÄNDIGE SEITE als Funnel: Bei Nischen-/Umbau-Wünschen baue die Produktseite mit 8–10 Sections (weniger als 8 wirkt dünn und lässt Verkaufsargumente liegen; mehr als 10 wirkt überladen) entlang der Funnel-Rollen (Reihenfolge = Rollen-Reihenfolge): hero → benefits → authority → story → proof → objections → urgency/offer → guarantee → closing. Decke die Rollen möglichst vollständig ab — wähle die 8–10 STÄRKSTEN für diese Nische, pro Rolle EINE Section aus den Alternativen im Katalog (Feld "rolle"). Eine Seite ohne Social Proof, ohne Einwand-Behandlung oder ohne Abschluss-CTA ist unvollständig; jede Section muss aber ein eigenes Verkaufsargument tragen (keine Wiederholung). STRUKTUR-PFLICHT (harte Regeln): (1) OBEN gehören Hero, Features/Benefits und starke Bilder hin. (2) Bewertungen/Social Proof (rolle proof) stehen IMMER in der UNTEREN Seitenhälfte — nie direkt nach dem Hero. (3) FAQ/Einwände (rolle objections, z. B. qanda) stehen GANZ UNTEN, direkt vor Garantie/Abschluss-CTA. (4) NIEMALS zwei Sections derselben Rolle direkt untereinander — besonders NIE zwei Feature-/Benefit-Sections aufeinander (bro-icon-benefits, bro-benefit-cards, bro-feature-grid, bro-step-cards, benefits, multicolumn): willst du zwei davon, muss IMMER eine anders-rollige Section (Story/Bild/Authority) dazwischen. Das gilt auch für move_section/add_section-Positionen bei kleinen Umbauten. (5) GENAU EIN HERO pro Seite (bro-hero-luxe ODER bro-hero-split ODER slideshow2) — zwei Heros sind ein schwerer Fehler. (6) NIE zwei BILDLASTIGE Sections direkt untereinander (Hero, scrollingbild/Parallax, photo, collage, video, bro-image-cards, bro-circle-gallery, bro-transformation, bro-compare-slider): zwischen zwei große Bilder gehört IMMER eine Text-/Feature-/Review-Section.
@@ -230,6 +168,12 @@ D. ICONS (wichtig, aber dosiert): Icons sind das visuelle Mittel der Wahl, weil 
 E. SCHRIFTEN (Pflicht bei Umbauten): Setze set_fonts passend zur Nische — Paarungs-Leitfaden: edel/Beauty → playfair_n4|cormorant_n4|lora_n4 + lato_n4|karla_n4; modern/Tech → inter_n4|archivo_n4 + inter_n4|dmsans_n4; freundlich/Familie/Baby → quicksand_n4|poppins_n4|cabin_n4 + nunito_n4|karla_n4; Sport/Street/Deal → anton_n4|oswald_n4|bebas_neue_n4 + rubik_n4|roboto_n4|work_sans_n4; Natur/Editorial → alegreya_n4|merriweather_n4 + lato_n4|raleway_n4. Überschrift und Fließtext dürfen sich unterscheiden (Kontrast-Paarung wirkt hochwertiger als zweimal dieselbe Schrift).
 F. COPY-QUALITÄT + TEXT-PFLICHT: JEDE Section, die du hinzufügst oder behältst, bekommt VOLLSTÄNDIG aufs Produkt geschriebene Texte (texts direkt im add_section oder set_section_text danach — alle Textfelder der Section, nicht nur die Überschrift). Beispieltexte/Platzhalter stehen lassen ist ein Fehler. Texte konkret, sensorisch und glaubwürdig — Zahlen und Alltagssituationen statt Floskeln. SINN-PFLICHT: NIE gegenteilige/sinnwidrige Aussagen — jede Aussage stellt den echten NUTZEN korrekt dar (ein Kraft-/Muskel-Produkt baut Muskeln AUF, NIE „zurückbilden"/„abbauen"; ein Anti-Aging-Produkt lässt Falten verschwinden, nicht entstehen). Widersprüchliche/negative Formulierungen sind ein schwerer Fehler. VERBOTEN: "revolutionär", "einzigartig", "Game-Changer", "unglaublich", generisches "Premium-Qualität". Kurze Sätze, aktive Verben, ${answerLang}. Überschriften max. 7 Wörter; Subtexte/Beschreibungen 12–24 Wörter (ein Halbsatz ist zu wenig — nenne konkreten Nutzen oder eine Alltagssituation).
 G. STIMMIGKEIT: Ein Look pro Seite — Flächen/Icons/Presets/Schriften zahlen alle auf dieselbe Nische ein. „Clean" heißt RUHIG IM DESIGN (neutrale Flächen, keine Deko), NICHT arm an Inhalt: die Seite soll vollständig verkaufen — Nutzen, Beweise, Einwände, Garantie, Abschluss. Lieber 10 präzise Ops mehr als ein halbfertiger Umbau. Ändert der Nutzer nur ein Detail, fass auch nur dieses Detail an.
+I. KI-SECTIONS (Bauplan "spec" für add_custom_section / set_custom_section):
+WANN: (1) Der Nutzer wünscht eine Section, die es im Katalog NICHT gibt (z. B. Vergleichstabelle, Größen-/Maßtabelle, Inhaltsstoffe/Zutaten, Technische Daten, Anwendungs-Anleitung, Timeline/Ablauf, Preis- oder Bundle-Übersicht, „Was ist in der Box", Mythos-vs-Fakt, Vorher/Nachher-Liste …). (2) Der Nutzer will eine bestehende Section anders AUFGEBAUT haben, als es ihre Presets und Textfelder erlauben („mach daraus …", „bau um", „andere Struktur", „programmiere um", zweispaltig statt Liste, Tabelle statt Karten …) → set_custom_section auf ihre uid. (3) Eine vorhandene KI-Section soll geändert werden → set_custom_section mit dem KOMPLETTEN neuen Bauplan (übernimm den vorhandenen spec aus dem Dokument und ändere nur das Gewünschte). Gibt es eine passende Katalog-Section, nimm IMMER die Katalog-Section (sie ist bewährt). Max. 4 KI-Sections pro Plan.
+AUFBAU: spec = {name (2–4 Wörter, z. B. "Vergleich"), tone:"page"|"subtle"|"contrast" (Fläche — IMMER neutral, gleiche Flächen-Rhythmus-Regeln wie oben), width:"narrow"|"normal"|"wide", align:"center"|"left", space:"s"|"m"|"l", nodes:[…]}. Jeder Baustein {t, …}: eyebrow{text} (kleine Akzent-Zeile über der Überschrift) · heading{text, size:"s"|"m"|"l"|"xl", accent?} · text{text, size?, muted?} · badge{text} · button{text, link:"buy"(zur Kaufbox)|"shop"|"cart", style:"primary"|"secondary"|"link"} · image{image:1–6 (Produktbild Nr., 1 = Hauptbild; 0 = neutrale Fläche), ratio:"1:1"|"4:3"|"3:4"|"4:5"|"16:9"} · icon{icon:englisches Keyword, size?, boxed?} · list{items:[{text, sub?, icon?}], mark:"check"|"cross"|"dot"|"number"|"icon"} · stat{value (z. B. "98 %"), label} · rating{value:"4.9", label} · quote{text, author, meta?} · faq{qa:[{q,a}]} · table{head:[…], rows:[[…]], highlight:Spalten-Index} (Zellen "✓"/"✗" werden zu Akzent-Haken/Kreuzen; erste Spalte = Merkmal) · price{} (echter Produktpreis) · divider{}. CONTAINER: grid{cols:2|3|4, mcols:1|2 (Handy), gap?, children} · columns{split:"1:1"|"2:1"|"1:2", reverse? (Handy-Reihenfolge tauschen), valign?, children: GENAU 2} · card{card:"surface"|"outline"|"plain", align?, children} · scroller{children} (horizontal wischbar). TIEFE max. 3: nodes → Container.children → card.children → Blätter.
+QUALITÄT: Baue wie eine Agentur — typisch: eyebrow + heading + kurzer text als Kopf, dann der eigentliche Inhalt (Raster aus Karten mit Icon + Überschrift + Text, zweispaltig Bild + Liste, Tabelle, FAQ …), optional ein Abschluss-Button (link "buy"). Texte vollständig und konkret aufs Produkt (Regel F gilt), keine Platzhalter. Farben gibt es im Bauplan NICHT — Farbe entsteht nur über accent-Hervorhebungen, Icons, Sterne, Haken und Buttons (Mono-Regel C). Bilder NUR über image-Nummern (keine URLs). Auf dem Handy stapeln sich Spalten automatisch — mcols:2 nur für kleine Kacheln (Stats, Icons).
+BEISPIEL: {"name":"Vergleich","tone":"page","width":"normal","align":"center","space":"m","nodes":[{"t":"eyebrow","text":"Der Unterschied"},{"t":"heading","text":"Warum Kunden wechseln","size":"l"},{"t":"table","head":["","Wärmepad Pro","Handwärmer"],"rows":[["Warm in 15 Sekunden","✓","✗"],["Bis zu 8 Stunden Wärme","✓","✗"],["Per USB-C aufladbar","✓","✗"]],"highlight":1},{"t":"button","text":"Jetzt sichern","link":"buy","style":"primary"}]}
+
 H. KAUFBOX: Die Reihenfolge snappt das System IMMER automatisch aufs bewährte Funnel-Muster (Dringlichkeit/Titel/Bewertung/Social-Proof/Preis/Knappheit ÜBER dem Kaufen-Button — Zahlarten/Vorteile/Garantie/Versand/Details DARUNTER). Deine Aufgabe ist die AUSWAHL, nicht die Position: ergänze per add_buybox_block 2–3 zur Nische passende Vertrauens-Bausteine, entferne Unpassendes (remove_buybox_block) und personalisiere JEDEN sichtbaren Baustein-Text auf die Nische (set_block_text, Emojis passend). Nicht stapeln: max. 3 neue Vertrauens-Bausteine, keine Dopplung mit vorhandenen. AUSNAHME NEUBAU: Ist das Dokument fast leer (kaum Sections — z. B. „Eigenes Produkt" im Start-Fenster), ist die Kaufbox-Personalisierung PFLICHTPROGRAMM mit höchster Priorität: set_benefit_icons (4 nischen-passende Icons), set_block_text für JEDEN sichtbaren Text-Baustein (sale_banner, urgency_text, benefits_list, stock_indicator, bundle_selector, free_gift, delivery_timeline — alles konkret aufs Produkt), 2–3 nischen-passende Vertrauens-Bausteine ergänzen (add_buybox_block + set_block_text). Eine generisch gelassene Kaufbox ist bei einem Neubau ein schwerer Fehler — sie ist das Erste, was der Kunde sieht.
 
 KATALOG:
@@ -278,10 +222,19 @@ function compactDocForAi(doc: ThemeDocument): ThemeDocument {
   const cut = (s: string) => (s.length > COMPACT_TEXT ? s.slice(0, COMPACT_TEXT) + "…" : s);
   const cutTexts = (t: Record<string, string> | undefined) =>
     t ? Object.fromEntries(Object.entries(t).map(([k, v]) => [k, typeof v === "string" ? cut(v) : v])) : t;
+  // KI-Sections: eigene Text-Änderungen (texts "cx:…") in den Bauplan
+  // einarbeiten — die AI sieht den aktuellen Stand und baut darauf auf.
+  const compactSection = (s: ThemeDocument["sections"][number]) => {
+    if (s.type === CUSTOM_SECTION_TYPE && s.custom) {
+      const rest = Object.fromEntries(Object.entries(s.texts || {}).filter(([k]) => !k.startsWith(CUSTOM_TEXT_PREFIX)));
+      return { ...s, texts: rest, custom: applyCustomOverrides(s.custom, s.texts) };
+    }
+    return { ...s, texts: cutTexts(s.texts) as Record<string, string> };
+  };
   return {
     ...doc,
-    sections: doc.sections.map((s) => ({ ...s, texts: cutTexts(s.texts) as Record<string, string> })),
-    home: (doc.home || []).map((s) => ({ ...s, texts: cutTexts(s.texts) as Record<string, string> })),
+    sections: doc.sections.map(compactSection),
+    home: (doc.home || []).map(compactSection),
     buybox: {
       ...doc.buybox,
       blocks: Object.fromEntries(
@@ -392,6 +345,10 @@ function focusNote(input: ThemeAiInput): string {
     const s = all.find((x) => x.uid === uid);
     if (!s) continue;
     const firstText = Object.values(s.texts || {}).find((v) => typeof v === "string" && v.trim());
+    if (s.type === CUSTOM_SECTION_TYPE) {
+      lines.push(`- uid "${uid}" · KI-Section „${s.custom?.name || "KI-Section"}" — ändern per set_custom_section mit dem KOMPLETTEN neuen Bauplan (spec steht im Dokument)`);
+      continue;
+    }
     lines.push(`- uid "${uid}" · Typ ${s.type}${firstText ? ` · aktueller Text: „${String(firstText).slice(0, 60)}"` : ""}`);
   }
   if (!lines.length) return "";
@@ -448,44 +405,19 @@ export async function generateThemePlan(input: ThemeAiInput, opts?: { signal?: A
   const model = THEME_AI_MODELS[input.mode] || THEME_AI_MODELS.standard;
   // System-Prompt als Block mit cache_control: der statische Teil (Regeln +
   // Katalog, ~6k Tokens) wird gecacht — Folge-Calls zahlen ~10 % dafür.
+  // (statisch → bleibt cachebar; Format-Hinweis siehe JSON_ONLY oben)
   const system: Anthropic.TextBlockParam[] = [
-    { type: "text", text: buildSystem(input.lang), cache_control: { type: "ephemeral" } },
+    { type: "text", text: buildSystem(input.lang) + JSON_ONLY, cache_control: { type: "ephemeral" } },
   ];
   const content = buildUserContent(input);
 
-  let msg: Anthropic.Message;
-  try {
-    msg = await client.messages.create({
-      model,
-      max_tokens: 16000,
-      thinking: { type: "disabled" },
-      output_config: { format: { type: "json_schema", schema: PLAN_SCHEMA } },
-      system,
-      messages: [{ role: "user", content }],
-    }, { signal: opts?.signal });
-  } catch (err) {
-    // Fallback ohne Structured Output NUR bei 400/invalid_request (Feature/
-    // SDK-Feld auf der Plattform nicht verfügbar). Bei 429/529/5xx/Auth-
-    // Fehlern KEIN Zweit-Call — das SDK hat bereits intern retried; ein
-    // weiterer voller Call (inkl. Bilder + System-Prompt) würde Overload
-    // verschärfen und die eigentliche Ursache im Log maskieren.
-    const status = (err as { status?: number } | null)?.status;
-    if (status !== 400) throw err;
-    console.warn("[theme-ai] structured output fehlgeschlagen (400), Fallback auf Freitext-JSON:", err);
-    msg = await client.messages.create({
-      model,
-      max_tokens: 16000,
-      thinking: { type: "disabled" },
-      system: [
-        {
-          type: "text",
-          text: `${buildSystem(input.lang)}\n\nAntworte AUSSCHLIESSLICH mit einem JSON-Objekt {summary, steps:[{title,detail}], operations:[…]} — kein Text davor oder danach.`,
-          cache_control: { type: "ephemeral" },
-        },
-      ],
-      messages: [{ role: "user", content }],
-    }, { signal: opts?.signal });
-  }
+  const msg: Anthropic.Message = await client.messages.create({
+    model,
+    max_tokens: 16000,
+    thinking: { type: "disabled" },
+    system,
+    messages: [{ role: "user", content }],
+  }, { signal: opts?.signal });
 
   try {
     await recordUsd("anthropic", anthropicCostUsd(model, msg.usage));

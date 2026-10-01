@@ -7,12 +7,13 @@
 // Farben/Schriften kommen über die --pv-* CSS-Variablen des Vorschau-Canvas;
 // preset-eigene Farben (bg_color …) werden direkt gerendert.
 
-import type { CSSProperties, ReactNode } from "react";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import type { SectionInstance } from "@/lib/theme-doc";
 import type { ColorPalette } from "@/lib/theme-placeholders";
 import { resolveTexts, resolvePresetSettings, getSectionDef, getPresetDef, sectionSupportsDesign, isDarkColor } from "@/lib/theme-library";
 import { monoTokens, MONO } from "@/lib/theme-color";
 import { getIconAny, resolveIconId } from "@/lib/theme-icon-resolver";
+import { CUSTOM_SECTION_TYPE, sanitizeCustomSpec, renderCustomSection } from "@/lib/theme-custom";
 
 /** SVG-Line-Icon aus der Icon-Bibliothek inkl. Lucide-Katalog
  *  (identische Pfade wie im beim Export generierten Liquid-Snippet). */
@@ -75,9 +76,31 @@ function DesignFrame({ s, children }: { s: Record<string, string | number | bool
   );
 }
 
-/** Rendert die Replica einer Bibliotheks-Section (inkl. Design-Frame).
- *  Unbekannter Typ → null. */
+/** KI-Section: gleicher Renderer wie der Theme-Export (Vorschau = Download).
+ *  Das HTML entsteht aus dem geprüften Bauplan — jeder Text ist maskiert. */
+function CustomReplica({ instance, ctx }: { instance: SectionInstance; ctx: ReplicaCtx }) {
+  const { images, price, palette } = ctx;
+  const html = useMemo(() => {
+    const spec = sanitizeCustomSpec(instance.custom);
+    if (!spec) return "";
+    return renderCustomSection(spec, {
+      uid: instance.uid,
+      mode: "preview",
+      palette,
+      images,
+      price,
+      texts: instance.texts,
+      tone: typeof instance.settings?.cx_tone === "string" ? instance.settings.cx_tone : "",
+    });
+  }, [instance, palette, images, price]);
+  if (!html) return null;
+  return <div className="te-custom" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
+/** Rendert die Replica einer Bibliotheks-Section (inkl. Design-Frame) bzw.
+ *  einer KI-Section. Unbekannter Typ → null. */
 export default function SectionReplica({ instance, ctx }: { instance: SectionInstance; ctx: ReplicaCtx }) {
+  if (instance.type === CUSTOM_SECTION_TYPE) return <CustomReplica instance={instance} ctx={ctx} />;
   if (!getSectionDef(instance.type)) return null;
   const body = <SectionBody instance={instance} ctx={ctx} />;
   // Frame nur für Typen, deren Liquid den Design-Layer versteht — sonst

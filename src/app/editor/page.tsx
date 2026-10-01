@@ -45,8 +45,9 @@ import { ACCENT, EDITOR_FONTS } from "@/components/theme-editor/editor-ui";
 import { blankDocument, buildRevealTimeline, type RevealLabels } from "@/lib/theme-genesis";
 import { applyAiOpToDoc, newAiApplyCtx, type AiOp } from "@/lib/theme-ai-ops";
 import {
-  editorReducer, initialEditorState, emptyDocument, type ThemeDocument, type EditorPage,
+  editorReducer, initialEditorState, emptyDocument, type ThemeDocument, type EditorPage, type SectionInstance,
 } from "@/lib/theme-doc";
+import { CUSTOM_SECTION_TYPE } from "@/lib/theme-custom";
 import {
   buildInitialDocument, createLibraryInstance, getSectionDef, shuffleComposition,
   normalizeSectionFlow, type BaseSectionInfo,
@@ -1359,6 +1360,9 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
     const def = getSectionDef(type);
     return def ? (lang === "en" ? def.labelEn : def.label) : type;
   };
+  /** Name einer Instanz — KI-Sections tragen ihren eigenen Namen. */
+  const sectionLabelOf = (inst: SectionInstance) =>
+    inst.type === CUSTOM_SECTION_TYPE ? inst.custom?.name || t.themes.editorAiSection : sectionLabel(inst.type);
   const presetLabel = (type: string, presetId: string) => {
     const def = getSectionDef(type);
     const p = def?.presets.find((x) => x.id === presetId) || def?.presets[0];
@@ -1366,11 +1370,11 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
   };
   // Fokus-Chips (Sections ODER Kaufbox) für den AI Co-Pilot + die aktuell
   // ausgewählte, noch nicht fokussierte Section/Kaufbox (Schnell-Fokus).
-  const secTypeByUid = new Map([...doc.sections, ...(doc.home || [])].map((s) => [s.uid, s.type]));
+  const secByUid = new Map([...doc.sections, ...(doc.home || [])].map((s) => [s.uid, s]));
   const focusLabel = (uid: string): string | null =>
-    uid === "__buybox" ? t.themes.editorBuybox : secTypeByUid.has(uid) ? sectionLabel(secTypeByUid.get(uid)!) : null;
+    uid === "__buybox" ? t.themes.editorBuybox : secByUid.has(uid) ? sectionLabelOf(secByUid.get(uid)!) : null;
   const focusChips = aiFocus.map((u) => ({ uid: u, label: focusLabel(u) })).filter((c): c is { uid: string; label: string } => c.label !== null);
-  const selectedFocusUid = selected && (selected === "__buybox" || secTypeByUid.has(selected)) ? selected : null;
+  const selectedFocusUid = selected && (selected === "__buybox" || secByUid.has(selected)) ? selected : null;
   const selectedFocusable =
     selectedFocusUid && !aiFocus.includes(selectedFocusUid)
       ? { uid: selectedFocusUid, label: focusLabel(selectedFocusUid)! }
@@ -1379,7 +1383,8 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
   const CAT_ICON: Record<string, LucideIcon> = {
     conversion: ShoppingCart, social: Star, content: AlignLeft, media: ImageIcon, info: Info,
   };
-  const sectionIcon = (type: string): LucideIcon => CAT_ICON[getSectionDef(type)?.category || "info"] || Info;
+  const sectionIcon = (type: string): LucideIcon =>
+    type === CUSTOM_SECTION_TYPE ? Sparkles : CAT_ICON[getSectionDef(type)?.category || "info"] || Info;
 
   // ── Schritt 1: Produkt wählen (Bilder-Grid) ──
   const showPicker = !doc.productId || pickerOpen;
@@ -2121,8 +2126,8 @@ PFLICHT für diesen Neubau: (1) Schriften und Akzentfarbe aus den Produktfotos a
                           key={s.uid}
                           uid={s.uid}
                           Ico={Ico}
-                          name={sectionLabel(s.type)}
-                          presetText={presetLabel(s.type, s.presetId)}
+                          name={sectionLabelOf(s)}
+                          presetText={s.type === CUSTOM_SECTION_TYPE ? t.themes.editorAiSection : presetLabel(s.type, s.presetId)}
                           on={on}
                           onClick={() => setSelected(on ? null : s.uid)}
                           dragTitle={t.themes.editorBuyboxDragHint}
